@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from room_ui.settings import load_settings, save_settings
+from room_ui.theme import colors
 
 GEMINI_MODELS = [
     "gemini-2.5-flash-native-audio-preview-12-2025",
@@ -72,8 +73,14 @@ def _list_audio_devices() -> tuple[list[tuple[int, str]], list[tuple[int, str]]]
 # ---------------------------------------------------------------------------
 
 
+THEMES = [
+    ("Dark", "dark"),
+    ("Light", "light"),
+]
+
+
 class _GeneralPage(QWidget):
-    """General settings: audio device selection."""
+    """General settings: audio device selection + theme."""
 
     def __init__(self, settings: dict, parent=None) -> None:
         super().__init__(parent)
@@ -81,15 +88,39 @@ class _GeneralPage(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(16)
 
+        c = colors()
+
         title = QLabel("General")
         title.setStyleSheet("font-size: 18px; font-weight: 600; background: transparent;")
         layout.addWidget(title)
 
+        # Theme selector
+        theme_section = QLabel("Appearance")
+        theme_section.setStyleSheet(
+            f"font-size: 12px; font-weight: 600; color: {c['TEXT_SECONDARY']};"
+            f" text-transform: uppercase; letter-spacing: 1px; background: transparent;"
+        )
+        layout.addWidget(theme_section)
+
+        theme_form = QFormLayout()
+        theme_form.setSpacing(10)
+        theme_form.setLabelAlignment(Qt.AlignRight)
+        self.theme_combo = QComboBox()
+        for label, _value in THEMES:
+            self.theme_combo.addItem(label)
+        current_theme = settings.get("theme", "dark")
+        for i, (_, val) in enumerate(THEMES):
+            if val == current_theme:
+                self.theme_combo.setCurrentIndex(i)
+                break
+        theme_form.addRow("Theme", self.theme_combo)
+        layout.addLayout(theme_form)
+
         # Audio devices
         section = QLabel("Audio Devices")
         section.setStyleSheet(
-            "font-size: 12px; font-weight: 600; color: #8E8E93;"
-            " text-transform: uppercase; letter-spacing: 1px; background: transparent;"
+            f"font-size: 12px; font-weight: 600; color: {c['TEXT_SECONDARY']};"
+            f" text-transform: uppercase; letter-spacing: 1px; background: transparent;"
         )
         layout.addWidget(section)
 
@@ -240,6 +271,8 @@ class _AIPage(QWidget):
         )
         layout.addWidget(section)
         self.prompt = QTextEdit()
+        self.prompt.setLineWrapMode(QTextEdit.WidgetWidth)
+        self.prompt.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.prompt.setPlainText(
             settings.get(
                 "system_prompt",
@@ -393,18 +426,19 @@ class _MCPPage(QWidget):
         list_row = QHBoxLayout()
         self._server_list = QListWidget()
         self._server_list.setFixedHeight(90)
+        c = colors()
         self._server_list.setStyleSheet(
-            "QListWidget { border: 1px solid #2C2C2E; border-radius: 6px; }"
+            f"QListWidget {{ border: 1px solid {c['SEPARATOR']}; border-radius: 6px; }}"
         )
         list_row.addWidget(self._server_list, 1)
 
         _btn_style = (
-            "QPushButton { font-size: 18px; font-weight: 700;"
-            " color: #FFFFFF; background-color: #2C2C2E;"
-            " border: 1px solid #3A3A3C; border-radius: 6px;"
-            " padding: 0px; margin: 0px;"
-            " min-width: 28px; min-height: 28px; }"
-            "QPushButton:hover { background-color: #3A3A3C; }"
+            f"QPushButton {{ font-size: 18px; font-weight: 700;"
+            f" color: {c['TEXT_PRIMARY']}; background-color: {c['BG_SECONDARY']};"
+            f" border: 1px solid {c['BG_TERTIARY']}; border-radius: 6px;"
+            f" padding: 0px; margin: 0px;"
+            f" min-width: 28px; min-height: 28px; }}"
+            f"QPushButton:hover {{ background-color: {c['BG_TERTIARY']}; }}"
         )
         btn_col = QVBoxLayout()
         btn_col.setSpacing(4)
@@ -565,6 +599,7 @@ class _AboutPage(QWidget):
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
+        c = colors()
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(20)
@@ -582,10 +617,10 @@ class _AboutPage(QWidget):
 
         desc = QLabel("A desktop voice assistant powered by RoomKit.")
         desc.setWordWrap(True)
-        desc.setStyleSheet("font-size: 13px; color: #8E8E93; background: transparent;")
+        desc.setStyleSheet(f"font-size: 13px; color: {c['TEXT_SECONDARY']}; background: transparent;")
         layout.addWidget(desc)
 
-        website = QLabel('<a href="https://www.roomkit.live" style="color: #0A84FF;">www.roomkit.live</a>')
+        website = QLabel(f'<a href="https://www.roomkit.live" style="color: {c["ACCENT_BLUE"]};">www.roomkit.live</a>')
         website.setOpenExternalLinks(True)
         website.setStyleSheet("font-size: 13px; background: transparent;")
         layout.addWidget(website)
@@ -593,14 +628,14 @@ class _AboutPage(QWidget):
         # Separator
         sep = QWidget()
         sep.setFixedHeight(1)
-        sep.setStyleSheet("background-color: #2C2C2E;")
+        sep.setStyleSheet(f"background-color: {c['SEPARATOR']};")
         layout.addWidget(sep)
 
         # License
         license_title = QLabel("License")
         license_title.setStyleSheet(
-            "font-size: 12px; font-weight: 600; color: #8E8E93;"
-            " text-transform: uppercase; letter-spacing: 1px; background: transparent;"
+            f"font-size: 12px; font-weight: 600; color: {c['TEXT_SECONDARY']};"
+            f" text-transform: uppercase; letter-spacing: 1px; background: transparent;"
         )
         layout.addWidget(license_title)
 
@@ -621,8 +656,8 @@ class _AboutPage(QWidget):
         )
         license_text.setWordWrap(True)
         license_text.setStyleSheet(
-            "font-size: 12px; color: #AEAEB2; line-height: 1.5; background: transparent;"
-            " padding: 12px; border: 1px solid #2C2C2E; border-radius: 8px;"
+            f"font-size: 12px; color: {c['TEXT_SECONDARY']}; line-height: 1.5; background: transparent;"
+            f" padding: 12px; border: 1px solid {c['SEPARATOR']}; border-radius: 8px;"
         )
         layout.addWidget(license_text)
 
@@ -640,27 +675,28 @@ class SettingsPanel(QDialog):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Settings")
-        self.setFixedSize(640, 480)
+        self.setFixedSize(740, 540)
         self.setModal(True)
 
         settings = load_settings()
+        c = colors()
 
         # ── Sidebar ──
         self._sidebar = QListWidget()
         self._sidebar.setFixedWidth(150)
         self._sidebar.setFrameShape(QListWidget.NoFrame)
         self._sidebar.setStyleSheet(
-            "QListWidget { background: transparent; border: none; outline: none; }"
-            "QListWidget::item {"
-            "  padding: 10px 14px; border-radius: 8px; color: #8E8E93;"
-            "  font-size: 13px; font-weight: 500;"
-            "}"
-            "QListWidget::item:selected {"
-            "  background-color: #2C2C2E; color: #FFFFFF;"
-            "}"
-            "QListWidget::item:hover:!selected {"
-            "  background-color: rgba(44, 44, 46, 0.5);"
-            "}"
+            f"QListWidget {{ background: transparent; border: none; outline: none; }}"
+            f"QListWidget::item {{"
+            f"  padding: 10px 14px; border-radius: 8px; color: {c['TEXT_SECONDARY']};"
+            f"  font-size: 13px; font-weight: 500;"
+            f"}}"
+            f"QListWidget::item:selected {{"
+            f"  background-color: {c['BG_TERTIARY']}; color: {c['TEXT_PRIMARY']};"
+            f"}}"
+            f"QListWidget::item:hover:!selected {{"
+            f"  background-color: rgba(142, 142, 147, 0.12);"
+            f"}}"
         )
 
         for label in ("General", "AI Provider", "Dictation", "MCP Servers", "About"):
@@ -693,9 +729,9 @@ class SettingsPanel(QDialog):
         cancel_btn.clicked.connect(self.reject)
         save_btn = QPushButton("Save")
         save_btn.setStyleSheet(
-            "QPushButton { background-color: #0A84FF; color: white;"
-            " font-weight: 600; padding: 8px 24px; border-radius: 10px; }"
-            "QPushButton:hover { background-color: #0070E0; }"
+            f"QPushButton {{ background-color: {c['ACCENT_BLUE']}; color: white;"
+            f" font-weight: 600; padding: 8px 24px; border-radius: 10px; }}"
+            f"QPushButton:hover {{ background-color: #0070E0; }}"
         )
         save_btn.clicked.connect(self._save)
         btn_row.addWidget(cancel_btn)
@@ -709,11 +745,12 @@ class SettingsPanel(QDialog):
         # Vertical separator
         sep = QWidget()
         sep.setFixedWidth(1)
-        sep.setStyleSheet("background-color: #2C2C2E;")
+        sep.setStyleSheet(f"background-color: {c['SEPARATOR']};")
         content.addWidget(sep)
 
         right = QVBoxLayout()
         right.setContentsMargins(20, 16, 20, 16)
+        right.setSpacing(12)
         right.addWidget(self._stack, 1)
         right.addLayout(btn_row)
         content.addLayout(right, 1)
@@ -723,7 +760,10 @@ class SettingsPanel(QDialog):
         root.addLayout(content)
 
     def _save(self) -> None:
+        from room_ui.theme import get_stylesheet
+
         settings = {
+            "theme": THEMES[self._general.theme_combo.currentIndex()][1],
             "provider": PROVIDERS[self._ai.provider.currentIndex()][1],
             "api_key": self._ai.gemini_api_key.text().strip(),
             "openai_api_key": (
@@ -745,4 +785,11 @@ class SettingsPanel(QDialog):
             "mcp_servers": self._mcp.get_servers_json(),
         }
         save_settings(settings)
+
+        # Apply the new theme stylesheet immediately
+        from PySide6.QtWidgets import QApplication
+        app = QApplication.instance()
+        if app is not None:
+            app.setStyleSheet(get_stylesheet(settings["theme"]))
+
         self.accept()

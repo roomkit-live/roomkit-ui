@@ -16,7 +16,7 @@ from qasync import QEventLoop
 from room_ui.hotkey import HotkeyListener
 from room_ui.settings import load_settings
 from room_ui.stt_engine import STTEngine
-from room_ui.theme import STYLESHEET
+from room_ui.theme import get_stylesheet
 from room_ui.tray import TrayService
 from room_ui.widgets.dictation_log import DictationLog
 from room_ui.widgets.main_window import MainWindow
@@ -42,7 +42,8 @@ def main() -> None:
     app.setApplicationName("RoomKit UI")
     app.setOrganizationName("RoomKit")
     app.setQuitOnLastWindowClosed(False)
-    app.setStyleSheet(STYLESHEET)
+    settings = load_settings()
+    app.setStyleSheet(get_stylesheet(settings.get("theme", "dark")))
 
     icon_path = Path(__file__).resolve().parent.parent.parent / "assets" / "icon.png"
     if icon_path.exists():
@@ -56,7 +57,6 @@ def main() -> None:
     window.show()
 
     # -- System-wide STT dictation --
-    settings = load_settings()
     stt = STTEngine()
     tray = TrayService()
 

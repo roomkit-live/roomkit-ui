@@ -7,6 +7,49 @@ from datetime import datetime
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout
 
+from room_ui.theme import colors
+
+
+def _markdown_to_html(text: str, c: dict[str, str]) -> str:
+    """Convert markdown *text* to inline-styled HTML suitable for QLabel.
+
+    QLabel only supports a subset of HTML (no <style> blocks), so we inject
+    inline ``style=`` attributes via simple string replacements.
+    """
+    import re
+
+    from markdown_it import MarkdownIt
+
+    md = MarkdownIt().enable("table")
+    body = md.render(text)
+
+    code_bg = c["CODE_BG"]
+    accent = c["ACCENT_BLUE"]
+
+    # Inject inline styles — QLabel ignores <style> blocks.
+    replacements = {
+        "<pre>": f'<pre style="background:{code_bg}; padding:8px 10px;'
+                 f' font-family:monospace; font-size:12px; white-space:pre-wrap;">',
+        "<code>": f'<code style="background:{code_bg}; font-family:monospace;'
+                  f' font-size:12px; padding:1px 4px;">',
+        "<table>": '<table style="border-collapse:collapse; margin:4px 0;" cellpadding="4">',
+        "<th>": '<th style="border-bottom:1px solid; padding:4px 8px; text-align:left;">',
+        "<td>": '<td style="padding:4px 8px;">',
+        "<a ": f'<a style="color:{accent};" ',
+    }
+    for old, new in replacements.items():
+        body = body.replace(old, new)
+
+    # Strip background from <code> inside <pre> (already has bg)
+    body = re.sub(
+        r'(<pre[^>]*>)\s*<code[^>]*>',
+        r'\1<code style="font-family:monospace; font-size:12px;">',
+        body,
+    )
+
+    text_color = c["BUBBLE_AI_TEXT"]
+    return f'<div style="color:{text_color}; font-size:13px;">{body}</div>'
+
 
 class ChatBubble(QFrame):
     """A rounded chat bubble — blue/right for user, gray/left for AI."""
@@ -21,13 +64,15 @@ class ChatBubble(QFrame):
         self._role = role
         self._finalized = False
         self._created = datetime.now()
+        self._raw_text = text
 
+        c = colors()
         is_user = role == "user"
 
         # ── Bubble container ──
         self._bubble = QFrame()
         self._bubble.setObjectName("bubbleFrame")
-        bg = "#0A84FF" if is_user else "#2C2C2E"
+        bg = c["BUBBLE_USER_BG"] if is_user else c["BUBBLE_AI_BG"]
         self._bubble.setStyleSheet(
             f"QFrame#bubbleFrame {{"
             f"  background-color: {bg};"
@@ -37,18 +82,19 @@ class ChatBubble(QFrame):
         )
 
         # ── Message text ──
+        text_color = c["BUBBLE_USER_TEXT"] if is_user else c["BUBBLE_AI_TEXT"]
         self._label = QLabel(text)
         self._label.setWordWrap(True)
         self._label.setTextFormat(Qt.PlainText)
         self._label.setMaximumWidth(270)
         self._label.setStyleSheet(
-            "QLabel {"
-            "  color: #FFFFFF;"
-            "  font-size: 13px;"
-            "  line-height: 1.4;"
-            "  padding: 10px 14px 8px 14px;"
-            "  background: transparent;"
-            "}"
+            f"QLabel {{"
+            f"  color: {text_color};"
+            f"  font-size: 13px;"
+            f"  line-height: 1.4;"
+            f"  padding: 10px 14px 8px 14px;"
+            f"  background: transparent;"
+            f"}}"
         )
 
         bubble_layout = QVBoxLayout(self._bubble)
@@ -107,15 +153,28 @@ class ChatBubble(QFrame):
         return self._finalized
 
     def set_text(self, text: str) -> None:
+        self._raw_text = text
         self._label.setText(text)
 
     def append_text(self, text: str) -> None:
-        self._label.setText(self._label.text() + text)
+        self._raw_text += text
+        self._label.setText(self._raw_text)
 
     def text(self) -> str:
-        return self._label.text()
+        return self._raw_text
 
     def finalize(self) -> None:
         self._finalized = True
         # Update timestamp to finalization time
         self._time_label.setText(datetime.now().strftime("%H:%M"))
+
+        # Render markdown for assistant bubbles only
+        if self._role != "user":
+            try:
+                c = colors()
+                html = _markdown_to_html(self._raw_text, c)
+                self._label.setTextFormat(Qt.RichText)
+                self._label.setText(html)
+                self._label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+            except Exception:
+                pass  # keep plain text on failure

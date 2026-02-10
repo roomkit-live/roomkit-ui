@@ -5,8 +5,10 @@ from __future__ import annotations
 import math
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen, QRadialGradient
+from PySide6.QtGui import QColor, QLinearGradient, QPainter, QPainterPath, QPen, QRadialGradient
 from PySide6.QtWidgets import QWidget
+
+from room_ui.theme import colors
 
 
 class VUMeter(QWidget):
@@ -89,8 +91,8 @@ class VUMeter(QWidget):
         h = self.height()
         cy = h * 0.5
 
-        # Dark background
-        p.fillRect(0, 0, w, h, QColor(28, 28, 30))
+        # Background from theme
+        p.fillRect(0, 0, w, h, QColor(colors()["BG_PRIMARY"]))
 
         mic = self._mic_display
         spk = self._spk_display
@@ -145,6 +147,29 @@ class VUMeter(QWidget):
             a = int(30 + 40 * any_level)
             p.setPen(QPen(QColor(255, 255, 255, a), 0.5))
             p.drawLine(0, int(cy), w, int(cy))
+
+        # ── Edge fade: blend into surrounding background ──
+        bg = QColor(colors()["BG_PRIMARY"])
+        fade_h = int(h * 0.35)
+        p.setPen(Qt.NoPen)
+
+        # Top fade
+        top_grad = QLinearGradient(0, 0, 0, fade_h)
+        bg_opaque = QColor(bg)
+        bg_opaque.setAlpha(255)
+        bg_transparent = QColor(bg)
+        bg_transparent.setAlpha(0)
+        top_grad.setColorAt(0.0, bg_opaque)
+        top_grad.setColorAt(1.0, bg_transparent)
+        p.setBrush(top_grad)
+        p.drawRect(0, 0, w, fade_h)
+
+        # Bottom fade
+        bot_grad = QLinearGradient(0, h - fade_h, 0, h)
+        bot_grad.setColorAt(0.0, bg_transparent)
+        bot_grad.setColorAt(1.0, bg_opaque)
+        p.setBrush(bot_grad)
+        p.drawRect(0, h - fade_h, w, fade_h)
 
         p.end()
 

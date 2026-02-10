@@ -13,6 +13,7 @@ dependencies = [
     "roomkit[realtime-gemini,realtime-openai,local-audio,webrtc-aec]",
     "pynput>=1.7",
     "mcp>=1.0",
+    "markdown-it-py>=3.0",
 ]
 
 [project.optional-dependencies]

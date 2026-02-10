@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from room_ui.theme import colors
 from room_ui.widgets.chat_bubble import ChatBubble
 
 
@@ -37,12 +38,14 @@ class ChatView(QScrollArea):
 
         self._current_bubble: ChatBubble | None = None
 
+        c = colors()
+
         # Empty state (shown before conversation starts, centered vertically)
         self._empty_state = QWidget()
         self._empty_state.setStyleSheet("background: transparent;")
         empty_layout = QVBoxLayout(self._empty_state)
         empty_layout.setAlignment(Qt.AlignCenter)
-        empty_layout.setSpacing(12)
+        empty_layout.setSpacing(20)
 
         icon = QLabel()
         icon.setAlignment(Qt.AlignCenter)
@@ -66,14 +69,14 @@ class ChatView(QScrollArea):
         heading = QLabel("RoomKit UI")
         heading.setAlignment(Qt.AlignCenter)
         heading.setStyleSheet(
-            "font-size: 18px; font-weight: 600; color: #FFFFFF; background: transparent;"
+            f"font-size: 18px; font-weight: 600; color: {c['TEXT_PRIMARY']}; background: transparent;"
         )
         empty_layout.addWidget(heading)
 
         hint = QLabel("Press Start to begin a voice conversation")
         hint.setAlignment(Qt.AlignCenter)
         hint.setStyleSheet(
-            "font-size: 13px; color: #636366; background: transparent;"
+            f"font-size: 15px; color: {c['TEXT_SECONDARY']}; background: transparent;"
         )
         empty_layout.addWidget(hint)
 
@@ -85,8 +88,8 @@ class ChatView(QScrollArea):
         self._status_label = QLabel()
         self._status_label.setAlignment(Qt.AlignCenter)
         self._status_label.setStyleSheet(
-            "QLabel { color: #8E8E93; font-size: 12px; font-style: italic;"
-            " background: transparent; padding: 4px; }"
+            f"QLabel {{ color: {c['TEXT_SECONDARY']}; font-size: 12px; font-style: italic;"
+            f" background: transparent; padding: 4px; }}"
         )
         self._status_label.hide()
         self._layout.addWidget(self._status_label)
@@ -154,18 +157,20 @@ class ChatView(QScrollArea):
             self._current_bubble.finalize()
             self._current_bubble = None
 
+        c = colors()
         label = QLabel(message)
         label.setWordWrap(True)
         label.setAlignment(Qt.AlignCenter)
         label.setStyleSheet(
-            "QLabel {"
-            "  color: #8E8E93;"
-            "  font-size: 12px;"
-            "  background: rgba(142, 142, 147, 0.1);"
-            "  border-radius: 8px;"
-            "  padding: 8px 16px;"
-            "  margin: 4px 20px;"
-            "}"
+            f"QLabel {{"
+            f"  color: {c['TEXT_SECONDARY']};"
+            f"  font-size: 12px;"
+            f"  background: {c['BG_TERTIARY']};"
+            f"  border: 1px solid {c['SEPARATOR']};"
+            f"  border-radius: 8px;"
+            f"  padding: 8px 16px;"
+            f"  margin: 4px 20px;"
+            f"}}"
         )
         idx = self._layout.count() - 2
         if idx < 0:
@@ -180,18 +185,20 @@ class ChatView(QScrollArea):
             self._current_bubble.finalize()
             self._current_bubble = None
 
+        c = colors()
         label = QLabel(f"\u2699  {name}({arguments})")
         label.setWordWrap(True)
         label.setAlignment(Qt.AlignCenter)
         label.setStyleSheet(
-            "QLabel {"
-            "  color: #BF5AF2;"
-            "  font-size: 12px;"
-            "  background: rgba(191, 90, 242, 0.1);"
-            "  border-radius: 8px;"
-            "  padding: 8px 16px;"
-            "  margin: 4px 20px;"
-            "}"
+            f"QLabel {{"
+            f"  color: #BF5AF2;"
+            f"  font-size: 12px;"
+            f"  background: {c['BG_TERTIARY']};"
+            f"  border: 1px solid {c['SEPARATOR']};"
+            f"  border-radius: 8px;"
+            f"  padding: 8px 16px;"
+            f"  margin: 4px 20px;"
+            f"}}"
         )
         idx = self._layout.count() - 2
         if idx < 0:
@@ -206,18 +213,20 @@ class ChatView(QScrollArea):
             self._current_bubble.finalize()
             self._current_bubble = None
 
+        c = colors()
         label = QLabel(message)
         label.setWordWrap(True)
         label.setAlignment(Qt.AlignCenter)
         label.setStyleSheet(
-            "QLabel {"
-            "  color: #FF453A;"
-            "  font-size: 12px;"
-            "  background: rgba(255, 69, 58, 0.1);"
-            "  border-radius: 8px;"
-            "  padding: 8px 16px;"
-            "  margin: 4px 20px;"
-            "}"
+            f"QLabel {{"
+            f"  color: {c['ACCENT_RED']};"
+            f"  font-size: 12px;"
+            f"  background: {c['BG_TERTIARY']};"
+            f"  border: 1px solid {c['SEPARATOR']};"
+            f"  border-radius: 8px;"
+            f"  padding: 8px 16px;"
+            f"  margin: 4px 20px;"
+            f"}}"
         )
         idx = self._layout.count() - 2
         if idx < 0:

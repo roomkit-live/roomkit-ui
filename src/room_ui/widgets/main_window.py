@@ -9,6 +9,7 @@ from PySide6.QtWidgets import QMainWindow, QVBoxLayout, QWidget
 
 from room_ui.engine import Engine
 from room_ui.settings import load_settings
+from room_ui.theme import colors
 from room_ui.widgets.chat_view import ChatView
 from room_ui.widgets.control_bar import ControlBar
 from room_ui.widgets.settings_panel import SettingsPanel
@@ -26,6 +27,7 @@ class MainWindow(QMainWindow):
         self.resize(420, 700)
 
         self._engine = Engine(self)
+        c = colors()
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -44,11 +46,14 @@ class MainWindow(QMainWindow):
         # ── Separator ──
         sep = QWidget()
         sep.setFixedHeight(1)
-        sep.setStyleSheet("background-color: #2C2C2E;")
+        sep.setStyleSheet(f"background-color: {c['SEPARATOR']};")
         root.addWidget(sep)
 
         # ── Control bar ──
         self._controls = ControlBar()
+        self._controls.setStyleSheet(
+            f"ControlBar {{ background-color: {c['BG_SECONDARY']}; }}"
+        )
         root.addWidget(self._controls)
 
         # ── Signals ──

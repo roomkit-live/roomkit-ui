@@ -7,6 +7,7 @@ from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from room_ui.icons import svg_icon
+from room_ui.theme import colors
 
 
 class _CircleButton(QPushButton):
@@ -87,14 +88,15 @@ class _MuteButton(QPushButton):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
         d = self._diameter
+        c = colors()
 
         if self._muted:
             # Red-tinted background
             bg = QColor(255, 69, 58, 40) if not self._hover else QColor(255, 69, 58, 60)
-            border = QColor("#FF453A")
+            border = QColor(c["ACCENT_RED"])
         else:
-            bg = QColor(58, 58, 60, 180) if not self._hover else QColor(72, 72, 74, 200)
-            border = QColor(72, 72, 74)
+            bg = QColor(c["BG_TERTIARY"]) if not self._hover else QColor(c["SEPARATOR"])
+            border = QColor(c["SEPARATOR"])
 
         p.setPen(QPen(border, 1.5))
         p.setBrush(bg)
@@ -116,17 +118,20 @@ class ControlBar(QWidget):
         super().__init__(parent)
         self.setFixedHeight(56)
         self._is_active = False
+        c = colors()
+        icon_color = c["TEXT_PRIMARY"]
+        icon_secondary = c["TEXT_SECONDARY"]
 
         # ── Mic mute ──
         self._mute_btn = _MuteButton(36)
-        self._mute_btn.setIcon(svg_icon("microphone", "#FFFFFF", 18))
+        self._mute_btn.setIcon(svg_icon("microphone", icon_color, 18))
         self._mute_btn.setIconSize(self._mute_btn.size() * 0.48)
         self._mute_btn.setToolTip("Mute microphone")
         self._mute_btn.clicked.connect(self._toggle_mute)
 
         # ── Main call button ──
         self._call_btn = _CircleButton(44)
-        self._call_btn.set_bg("#30D158", "#28c04e")
+        self._call_btn.set_bg(c["ACCENT_GREEN"], "#28c04e")
         self._call_btn.setIcon(svg_icon("phone", "#FFFFFF", 20))
         self._call_btn.setIconSize(self._call_btn.size() * 0.45)
         self._call_btn.setToolTip("Start voice session")
@@ -134,14 +139,14 @@ class ControlBar(QWidget):
 
         # ── Reset button ──
         self._reset_btn = _MuteButton(36)
-        self._reset_btn.setIcon(svg_icon("arrow-path", "#8E8E93", 18))
+        self._reset_btn.setIcon(svg_icon("arrow-path", icon_secondary, 18))
         self._reset_btn.setIconSize(self._reset_btn.size() * 0.48)
         self._reset_btn.setToolTip("Reset conversation")
         self._reset_btn.clicked.connect(self.reset_requested.emit)
 
         # ── Settings button ──
         self._gear_btn = _MuteButton(36)
-        self._gear_btn.setIcon(svg_icon("cog-6-tooth", "#8E8E93", 18))
+        self._gear_btn.setIcon(svg_icon("cog-6-tooth", icon_secondary, 18))
         self._gear_btn.setIconSize(self._gear_btn.size() * 0.48)
         self._gear_btn.setToolTip("Settings")
         self._gear_btn.clicked.connect(self.settings_requested.emit)
@@ -192,11 +197,12 @@ class ControlBar(QWidget):
             self.start_requested.emit()
 
     def _toggle_mute(self) -> None:
+        c = colors()
         self._mute_btn.muted = not self._mute_btn.muted
         if self._mute_btn.muted:
-            self._mute_btn.setIcon(svg_icon("microphone-slash", "#FF453A", 20))
+            self._mute_btn.setIcon(svg_icon("microphone-slash", c["ACCENT_RED"], 20))
             self._mute_btn.setToolTip("Unmute microphone")
         else:
-            self._mute_btn.setIcon(svg_icon("microphone", "#FFFFFF", 20))
+            self._mute_btn.setIcon(svg_icon("microphone", c["TEXT_PRIMARY"], 20))
             self._mute_btn.setToolTip("Mute microphone")
         self.mute_toggled.emit(self._mute_btn.muted)

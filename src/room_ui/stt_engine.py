@@ -44,8 +44,30 @@ def _copy_to_clipboard(text: str) -> None:
         )
 
 
+def _is_terminal_focused() -> bool:
+    """Check if the focused X11 window is a terminal emulator."""
+    try:
+        result = subprocess.run(
+            ["xdotool", "getactivewindow", "getwindowclassname"],
+            capture_output=True, text=True, timeout=3,
+        )
+        wm_class = result.stdout.strip().lower()
+        terminal_classes = (
+            "terminal", "konsole", "alacritty", "kitty", "xterm",
+            "urxvt", "tilix", "terminator", "gnome-terminal",
+            "xfce4-terminal", "mate-terminal", "sakura", "st",
+            "wezterm", "foot", "claude",
+        )
+        return any(t in wm_class for t in terminal_classes)
+    except Exception:
+        return False
+
+
 def _simulate_paste() -> None:
-    """Simulate paste keystroke into the focused window."""
+    """Simulate paste keystroke into the focused window.
+
+    Terminals typically use Ctrl+Shift+V, while other apps use Ctrl+V.
+    """
     if sys.platform == "darwin":
         import Quartz
 
@@ -63,6 +85,8 @@ def _simulate_paste() -> None:
         Quartz.CGEventPost(Quartz.kCGAnnotatedSessionEventTap, up)
     elif _is_wayland():
         subprocess.run(["wtype", "-M", "ctrl", "v", "-m", "ctrl"], check=True, timeout=5)
+    elif _is_terminal_focused():
+        subprocess.run(["xdotool", "key", "ctrl+shift+v"], check=True, timeout=5)
     else:
         subprocess.run(["xdotool", "key", "ctrl+v"], check=True, timeout=5)
 
