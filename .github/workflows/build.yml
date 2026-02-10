@@ -1,0 +1,144 @@
+name: Build
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            artifact: RoomKit-UI-macOS
+          - os: ubuntu-latest
+            artifact: RoomKit-UI-Linux
+          - os: windows-latest
+            artifact: RoomKit-UI-Windows
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Linux: install PortAudio and audio libs
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libportaudio2 libasound2-dev libgl1
+
+      - name: Install Python dependencies
+        run: |
+          uv sync
+          uv pip install pyinstaller
+
+      # macOS / Linux
+      - name: Build (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          SEP=":"
+          EXTRA_ARGS=""
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            EXTRA_ARGS="--windowed"
+          fi
+          uv run pyinstaller \
+            --name "RoomKit UI" \
+            --noconfirm \
+            --clean \
+            $EXTRA_ARGS \
+            --hidden-import=google.genai \
+            --hidden-import=google.genai.live \
+            --hidden-import=openai \
+            --hidden-import=websockets \
+            --hidden-import=sounddevice \
+            --hidden-import=_sounddevice_data \
+            --hidden-import=roomkit.providers.gemini.realtime \
+            --hidden-import=roomkit.providers.openai.realtime \
+            --hidden-import=roomkit.voice.realtime.local_transport \
+            --hidden-import=roomkit.voice.pipeline.aec.webrtc \
+            --hidden-import=roomkit.voice.pipeline.aec.speex \
+            --hidden-import=roomkit.voice.pipeline.denoiser.rnnoise \
+            --add-data "src/room_ui${SEP}room_ui" \
+            src/room_ui/__main__.py
+
+      # macOS: patch Info.plist for mic permission
+      - name: Patch Info.plist (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          /usr/libexec/PlistBuddy -c \
+            "Add :NSMicrophoneUsageDescription string 'RoomKit UI needs microphone access for voice conversations.'" \
+            "dist/RoomKit UI.app/Contents/Info.plist" 2>/dev/null || true
+
+      # Windows
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          uv run pyinstaller `
+            --name "RoomKit UI" `
+            --noconfirm `
+            --clean `
+            --windowed `
+            --hidden-import=google.genai `
+            --hidden-import=google.genai.live `
+            --hidden-import=openai `
+            --hidden-import=websockets `
+            --hidden-import=sounddevice `
+            --hidden-import=_sounddevice_data `
+            --hidden-import=roomkit.providers.gemini.realtime `
+            --hidden-import=roomkit.providers.openai.realtime `
+            --hidden-import=roomkit.voice.realtime.local_transport `
+            --hidden-import=roomkit.voice.pipeline.aec.webrtc `
+            --hidden-import=roomkit.voice.pipeline.aec.speex `
+            --hidden-import=roomkit.voice.pipeline.denoiser.rnnoise `
+            --add-data "src/room_ui;room_ui" `
+            src/room_ui/__main__.py
+
+      # Package artifacts
+      - name: Archive (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          cd dist
+          zip -r "${{ matrix.artifact }}.zip" "RoomKit UI.app"
+
+      - name: Archive (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          cd dist
+          tar czf "${{ matrix.artifact }}.tar.gz" "RoomKit UI"
+
+      - name: Archive (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "dist/RoomKit UI" -DestinationPath "dist/${{ matrix.artifact }}.zip"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            dist/${{ matrix.artifact }}.zip
+            dist/${{ matrix.artifact }}.tar.gz
+
+      # Attach to release when triggered by a tag
+      - name: Upload to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/${{ matrix.artifact }}.zip
+            dist/${{ matrix.artifact }}.tar.gz
