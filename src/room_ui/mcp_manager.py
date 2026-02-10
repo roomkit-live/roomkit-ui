@@ -72,6 +72,7 @@ class MCPManager:
                     for tool in result.tools:
                         self._tool_to_session[tool.name] = session
                         self._tools.append({
+                            "type": "function",
                             "name": tool.name,
                             "description": tool.description or "",
                             "parameters": tool.inputSchema,
