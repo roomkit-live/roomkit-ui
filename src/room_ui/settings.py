@@ -17,6 +17,9 @@ _DEFAULTS = {
     "denoise": False,
     "input_device": None,
     "output_device": None,
+    "stt_enabled": True,
+    "stt_hotkey": "<ctrl>+<shift>+h",
+    "stt_language": "",
 }
 
 

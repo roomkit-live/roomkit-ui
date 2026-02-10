@@ -11,6 +11,7 @@ dependencies = [
     "PySide6>=6.7",
     "qasync>=0.27",
     "roomkit[realtime-gemini,realtime-openai,local-audio]",
+    "pynput>=1.7",
 ]
 
 [project.optional-dependencies]

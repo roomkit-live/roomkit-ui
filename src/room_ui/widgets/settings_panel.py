@@ -270,6 +270,89 @@ class _AIPage(QWidget):
         self.openai_voice.setVisible(not is_gemini)
 
 
+STT_LANGUAGES = [
+    ("Auto-detect", ""),
+    ("English", "en"),
+    ("French", "fr"),
+    ("Spanish", "es"),
+    ("German", "de"),
+    ("Italian", "it"),
+    ("Portuguese", "pt"),
+    ("Dutch", "nl"),
+    ("Japanese", "ja"),
+    ("Chinese", "zh"),
+    ("Korean", "ko"),
+    ("Russian", "ru"),
+    ("Arabic", "ar"),
+    ("Hindi", "hi"),
+]
+
+
+class _DictationPage(QWidget):
+    """Dictation settings: enable, hotkey, language."""
+
+    def __init__(self, settings: dict, parent=None) -> None:
+        super().__init__(parent)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(16)
+
+        title = QLabel("Dictation")
+        title.setStyleSheet("font-size: 18px; font-weight: 600; background: transparent;")
+        layout.addWidget(title)
+
+        desc = QLabel(
+            "Press a global hotkey to record speech and paste the "
+            "transcription into the focused input field. Uses OpenAI "
+            "Realtime for speech-to-text."
+        )
+        desc.setWordWrap(True)
+        desc.setStyleSheet("font-size: 13px; color: #8E8E93; background: transparent;")
+        layout.addWidget(desc)
+
+        form = QFormLayout()
+        form.setSpacing(10)
+        form.setLabelAlignment(Qt.AlignRight)
+
+        # Enable
+        self.enabled = QCheckBox("Enable dictation")
+        self.enabled.setChecked(bool(settings.get("stt_enabled", True)))
+        form.addRow("", self.enabled)
+
+        # OpenAI API key (required for STT regardless of main provider)
+        self.openai_api_key = QLineEdit(settings.get("openai_api_key", ""))
+        self.openai_api_key.setEchoMode(QLineEdit.Password)
+        self.openai_api_key.setPlaceholderText("Required for dictation STT")
+        form.addRow("OpenAI Key", self.openai_api_key)
+
+        # Hotkey
+        self.hotkey = QLineEdit(settings.get("stt_hotkey", "<ctrl>+<shift>+h"))
+        self.hotkey.setPlaceholderText("<ctrl>+<shift>+h")
+        form.addRow("Hotkey", self.hotkey)
+
+        # Language
+        self.language = QComboBox()
+        for label, _value in STT_LANGUAGES:
+            self.language.addItem(label)
+        current_lang = settings.get("stt_language", "")
+        for i, (_, val) in enumerate(STT_LANGUAGES):
+            if val == current_lang:
+                self.language.setCurrentIndex(i)
+                break
+        form.addRow("Language", self.language)
+
+        layout.addLayout(form)
+
+        hint = QLabel(
+            "Hotkey format uses pynput syntax, e.g. &lt;ctrl&gt;+&lt;shift&gt;+h"
+        )
+        hint.setWordWrap(True)
+        hint.setStyleSheet("font-size: 11px; color: #636366; background: transparent;")
+        layout.addWidget(hint)
+
+        layout.addStretch()
+
+
 class _AboutPage(QWidget):
     """About page with license and credits."""
 
@@ -373,7 +456,7 @@ class SettingsPanel(QDialog):
             "}"
         )
 
-        for label in ("General", "AI Provider", "About"):
+        for label in ("General", "AI Provider", "Dictation", "About"):
             item = QListWidgetItem(label)
             item.setSizeHint(item.sizeHint().expandedTo(QSize(0, 38)))
             self._sidebar.addItem(item)
@@ -382,8 +465,9 @@ class SettingsPanel(QDialog):
         self._stack = QStackedWidget()
         self._general = _GeneralPage(settings)
         self._ai = _AIPage(settings)
+        self._dictation = _DictationPage(settings)
         self._about = _AboutPage()
-        for page in (self._general, self._ai, self._about):
+        for page in (self._general, self._ai, self._dictation, self._about):
             scroll = QScrollArea()
             scroll.setWidget(page)
             scroll.setWidgetResizable(True)
@@ -434,7 +518,10 @@ class SettingsPanel(QDialog):
         settings = {
             "provider": PROVIDERS[self._ai.provider.currentIndex()][1],
             "api_key": self._ai.gemini_api_key.text().strip(),
-            "openai_api_key": self._ai.openai_api_key.text().strip(),
+            "openai_api_key": (
+                self._ai.openai_api_key.text().strip()
+                or self._dictation.openai_api_key.text().strip()
+            ),
             "model": self._ai.gemini_model.currentText().strip(),
             "openai_model": self._ai.openai_model.currentText().strip(),
             "voice": self._ai.gemini_voice.currentText(),
@@ -444,6 +531,9 @@ class SettingsPanel(QDialog):
             "denoise": self._ai.denoise.isChecked(),
             "input_device": self._general.input_combo.currentData(),
             "output_device": self._general.output_combo.currentData(),
+            "stt_enabled": self._dictation.enabled.isChecked(),
+            "stt_hotkey": self._dictation.hotkey.text().strip(),
+            "stt_language": STT_LANGUAGES[self._dictation.language.currentIndex()][1],
         }
         save_settings(settings)
         self.accept()

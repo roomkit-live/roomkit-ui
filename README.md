@@ -39,6 +39,7 @@ Then double-click the app to open it. You'll also need to grant microphone permi
 - [uv](https://docs.astral.sh/uv/) (recommended) or pip
 - A Google API key (for Gemini) and/or an OpenAI API key
 - PortAudio (`libportaudio2` on Linux, included on macOS)
+- **Linux dictation deps** — `xclip` + `xdotool` (X11) or `wl-copy` + `wtype` (Wayland) for the system-wide STT dictation feature
 
 ## Run from source
 
@@ -69,9 +70,12 @@ uv pip install aec-audio-processing
 src/room_ui/
 ├── app.py              # QApplication + qasync event loop
 ├── engine.py           # Async engine bridging roomkit <> Qt signals
+├── hotkey.py           # Global hotkey listener (pynput)
 ├── icons.py            # Heroicons SVG rendering
 ├── settings.py         # QSettings persistence
+├── stt_engine.py       # STT dictation engine + text pasting
 ├── theme.py            # Dark theme stylesheet
+├── tray.py             # System tray icon for dictation
 └── widgets/
     ├── main_window.py  # Main window layout
     ├── settings_panel.py # Tabbed settings dialog
