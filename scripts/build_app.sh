@@ -29,7 +29,7 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
 fi
 
 echo "==> Running PyInstaller..."
-pyinstaller \
+uv run pyinstaller \
     --name "RoomKit UI" \
     --noconfirm \
     --clean \
