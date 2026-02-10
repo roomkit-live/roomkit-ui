@@ -6,6 +6,7 @@ import asyncio
 import logging
 import os
 import subprocess
+import sys
 from typing import Any
 
 from PySide6.QtCore import QObject, Signal
@@ -21,7 +22,14 @@ def _is_wayland() -> bool:
 
 def _copy_to_clipboard(text: str) -> None:
     """Copy *text* to the system clipboard."""
-    if _is_wayland():
+    if sys.platform == "darwin":
+        subprocess.run(
+            ["pbcopy"],
+            input=text.encode(),
+            check=True,
+            timeout=5,
+        )
+    elif _is_wayland():
         subprocess.run(
             ["wl-copy", "--", text],
             check=True,
@@ -37,8 +45,19 @@ def _copy_to_clipboard(text: str) -> None:
 
 
 def _simulate_paste() -> None:
-    """Simulate Ctrl+V to paste clipboard contents into the focused window."""
-    if _is_wayland():
+    """Simulate paste keystroke into the focused window."""
+    if sys.platform == "darwin":
+        # Cmd+V via AppleScript
+        subprocess.run(
+            [
+                "osascript",
+                "-e",
+                'tell application "System Events" to keystroke "v" using command down',
+            ],
+            check=True,
+            timeout=5,
+        )
+    elif _is_wayland():
         subprocess.run(["wtype", "-M", "ctrl", "v", "-m", "ctrl"], check=True, timeout=5)
     else:
         subprocess.run(["xdotool", "key", "ctrl+v"], check=True, timeout=5)

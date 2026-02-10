@@ -50,16 +50,26 @@ uv run pyinstaller \
     --hidden-import=roomkit.voice.pipeline.aec.speex \
     --hidden-import=roomkit.voice.pipeline.denoiser.rnnoise \
     --hidden-import=certifi \
+    --hidden-import=aec_audio_processing \
+    --collect-binaries=aec_audio_processing \
+    --hidden-import=pynput \
+    --hidden-import=pynput.keyboard \
+    --hidden-import=pynput.keyboard._darwin \
     --add-data "src/room_ui${SEP}room_ui" \
     src/room_ui/__main__.py
 
-# macOS: add microphone usage description to Info.plist
+# macOS: patch Info.plist and re-sign
 APP_PLIST="dist/RoomKit UI.app/Contents/Info.plist"
 if [ -f "$APP_PLIST" ]; then
     /usr/libexec/PlistBuddy -c \
+        "Set :CFBundleIdentifier com.roomkit.ui" \
+        "$APP_PLIST" 2>/dev/null || true
+    /usr/libexec/PlistBuddy -c \
         "Add :NSMicrophoneUsageDescription string 'RoomKit UI needs microphone access for voice conversations.'" \
         "$APP_PLIST" 2>/dev/null || true
-    echo "==> Added NSMicrophoneUsageDescription to Info.plist"
+    echo "==> Patched Info.plist (bundle ID + mic permission)"
+    codesign --force --deep --sign - "dist/RoomKit UI.app"
+    echo "==> Re-signed app bundle"
 fi
 
 echo "==> Build complete: dist/RoomKit UI"

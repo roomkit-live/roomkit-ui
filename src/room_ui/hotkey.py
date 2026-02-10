@@ -12,10 +12,15 @@ logger = logging.getLogger(__name__)
 class HotkeyListener(QObject):
     """Listens for a global keyboard shortcut and emits *hotkey_pressed*.
 
-    Uses ``pynput.keyboard.GlobalHotKeys`` running in a daemon thread so the
-    Qt event loop is never blocked.  The signal is emitted on the pynput
-    thread but connected via Qt's auto-connection, which safely queues the
-    call onto the main thread when the receiver lives there.
+    Runs a pynput listener in a daemon thread so the Qt event loop is never
+    blocked.  The signal is emitted on the pynput thread but connected via Qt's
+    auto-connection, which safely queues the call onto the main thread when the
+    receiver lives there.
+
+    For multi-key combos (e.g. ``<ctrl>+<shift>+h``) we use ``GlobalHotKeys``.
+    For single modifier keys (e.g. ``<cmd_r>``) we use a raw ``Listener`` that
+    fires on key release — this avoids issues with GlobalHotKeys treating
+    modifier-only hotkeys inconsistently.
     """
 
     hotkey_pressed = Signal()
@@ -29,19 +34,51 @@ class HotkeyListener(QObject):
         self._hotkey = hotkey
         self._listener = None
 
+    def _is_single_key(self) -> bool:
+        """Return True if the hotkey is a single key (no ``+`` combos)."""
+        return "+" not in self._hotkey
+
     def start(self) -> None:
         if self._listener is not None:
             return
         try:
-            from pynput.keyboard import GlobalHotKeys
+            from pynput import keyboard
         except ImportError:
             logger.error("pynput is not installed — global hotkey disabled")
             return
 
-        self._listener = GlobalHotKeys({self._hotkey: self._on_activate})
+        if self._is_single_key():
+            self._start_single_key(keyboard)
+        else:
+            self._start_combo(keyboard)
+
+        logger.info("Global hotkey listener started: %s", self._hotkey)
+
+    def _start_combo(self, keyboard) -> None:  # noqa: ANN001
+        """Use GlobalHotKeys for multi-key combos."""
+        self._listener = keyboard.GlobalHotKeys(
+            {self._hotkey: self._on_activate}
+        )
         self._listener.daemon = True
         self._listener.start()
-        logger.info("Global hotkey listener started: %s", self._hotkey)
+
+    def _start_single_key(self, keyboard) -> None:  # noqa: ANN001
+        """Use a raw Listener for a single modifier key (fires on release)."""
+        from pynput.keyboard import HotKey, Key
+
+        parsed = HotKey.parse(self._hotkey)
+        if not parsed:
+            logger.error("Could not parse hotkey: %s", self._hotkey)
+            return
+        target_key = parsed[0]
+
+        def on_release(key: Key) -> None:
+            if key == target_key:
+                self._on_activate()
+
+        self._listener = keyboard.Listener(on_release=on_release)
+        self._listener.daemon = True
+        self._listener.start()
 
     def stop(self) -> None:
         if self._listener is not None:

@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import sys
+
 from PySide6.QtCore import QSettings
+
+_DEFAULT_HOTKEY = "<cmd_r>" if sys.platform == "darwin" else "<ctrl>+<shift>+h"
 
 _DEFAULTS = {
     "provider": "gemini",
@@ -18,7 +22,7 @@ _DEFAULTS = {
     "input_device": None,
     "output_device": None,
     "stt_enabled": True,
-    "stt_hotkey": "<ctrl>+<shift>+h",
+    "stt_hotkey": _DEFAULT_HOTKEY,
     "stt_language": "",
 }
 

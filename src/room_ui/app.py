@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import sys
 
 from PySide6.QtWidgets import QApplication
@@ -17,9 +18,18 @@ from room_ui.tray import TrayService
 from room_ui.widgets.dictation_log import DictationLog
 from room_ui.widgets.main_window import MainWindow
 
+# Log to file so we can diagnose issues when launched from Finder (no console).
+_log_dir = os.path.join(os.path.expanduser("~"), "Library", "Logs", "RoomKit UI")
+os.makedirs(_log_dir, exist_ok=True)
+_log_file = os.path.join(_log_dir, "roomkit-ui.log")
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(name)s %(levelname)s %(message)s",
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler(_log_file, mode="w"),
+    ],
     force=True,
 )
 
