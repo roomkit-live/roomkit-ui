@@ -290,10 +290,15 @@ class _AboutPage(QWidget):
         )
         layout.addWidget(app_name)
 
-        desc = QLabel("A desktop voice assistant powered by Google Gemini and RoomKit.")
+        desc = QLabel("A desktop voice assistant powered by RoomKit.")
         desc.setWordWrap(True)
         desc.setStyleSheet("font-size: 13px; color: #8E8E93; background: transparent;")
         layout.addWidget(desc)
+
+        website = QLabel('<a href="https://www.roomkit.live" style="color: #0A84FF;">www.roomkit.live</a>')
+        website.setOpenExternalLinks(True)
+        website.setStyleSheet("font-size: 13px; background: transparent;")
+        layout.addWidget(website)
 
         # Separator
         sep = QWidget()
