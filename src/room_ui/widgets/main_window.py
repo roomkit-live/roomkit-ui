@@ -56,6 +56,7 @@ class MainWindow(QMainWindow):
         self._controls.stop_requested.connect(self._on_stop)
         self._controls.mute_toggled.connect(self._engine.set_mic_muted)
         self._controls.settings_requested.connect(self._open_settings)
+        self._controls.reset_requested.connect(self._on_reset)
 
         self._engine.state_changed.connect(self._on_state_changed)
         self._engine.transcription.connect(self._on_transcription)
@@ -64,9 +65,16 @@ class MainWindow(QMainWindow):
         self._engine.user_speaking.connect(self._on_user_speaking)
         self._engine.ai_speaking.connect(self._on_ai_speaking)
         self._engine.error_occurred.connect(self._on_error)
+        self._engine.tool_use.connect(self._on_tool_use)
+        self._engine.mcp_status.connect(self._on_mcp_status)
 
     def _open_settings(self) -> None:
         SettingsPanel(self).exec()
+
+    def _on_reset(self) -> None:
+        if self._engine.state != "idle":
+            asyncio.ensure_future(self._engine.stop())
+        self._chat.reset()
 
     def _on_start(self) -> None:
         self._chat.clear()
@@ -104,6 +112,13 @@ class MainWindow(QMainWindow):
             self._chat.show_thinking()
         else:
             self._chat.hide_status()
+
+    def _on_mcp_status(self, message: str) -> None:
+        self._chat.add_info(message)
+
+    def _on_tool_use(self, name: str, arguments: str) -> None:
+        logger.info("Tool call: %s(%s)", name, arguments)
+        self._chat.add_tool_call(name, arguments)
 
     def _on_error(self, msg: str) -> None:
         logger.error("Engine error: %s", msg)

@@ -6,7 +6,9 @@ import asyncio
 import logging
 import os
 import sys
+from pathlib import Path
 
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 from qasync import QEventLoop
 
@@ -40,6 +42,10 @@ def main() -> None:
     app.setOrganizationName("RoomKit")
     app.setQuitOnLastWindowClosed(False)
     app.setStyleSheet(STYLESHEET)
+
+    icon_path = Path(__file__).resolve().parent.parent.parent / "assets" / "icon.png"
+    if icon_path.exists():
+        app.setWindowIcon(QIcon(str(icon_path)))
 
     loop = QEventLoop(app)
     asyncio.set_event_loop(loop)

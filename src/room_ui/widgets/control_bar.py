@@ -110,6 +110,7 @@ class ControlBar(QWidget):
     stop_requested = Signal()
     mute_toggled = Signal(bool)
     settings_requested = Signal()
+    reset_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -131,6 +132,13 @@ class ControlBar(QWidget):
         self._call_btn.setToolTip("Start voice session")
         self._call_btn.clicked.connect(self._on_action)
 
+        # ── Reset button ──
+        self._reset_btn = _MuteButton(36)
+        self._reset_btn.setIcon(svg_icon("arrow-path", "#8E8E93", 18))
+        self._reset_btn.setIconSize(self._reset_btn.size() * 0.48)
+        self._reset_btn.setToolTip("Reset conversation")
+        self._reset_btn.clicked.connect(self.reset_requested.emit)
+
         # ── Settings button ──
         self._gear_btn = _MuteButton(36)
         self._gear_btn.setIcon(svg_icon("cog-6-tooth", "#8E8E93", 18))
@@ -145,6 +153,7 @@ class ControlBar(QWidget):
         row.addStretch()
         row.addWidget(self._call_btn, alignment=Qt.AlignVCenter)
         row.addStretch()
+        row.addWidget(self._reset_btn, alignment=Qt.AlignVCenter)
         row.addWidget(self._gear_btn, alignment=Qt.AlignVCenter)
 
     # -- public API ----------------------------------------------------------

@@ -24,6 +24,7 @@ _DEFAULTS = {
     "stt_enabled": True,
     "stt_hotkey": _DEFAULT_HOTKEY,
     "stt_language": "",
+    "mcp_servers": "[]",
 }
 
 

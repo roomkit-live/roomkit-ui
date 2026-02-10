@@ -12,6 +12,7 @@ dependencies = [
     "qasync>=0.27",
     "roomkit[realtime-gemini,realtime-openai,local-audio,webrtc-aec]",
     "pynput>=1.7",
+    "mcp>=1.0",
 ]
 
 [project.optional-dependencies]

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -353,6 +355,211 @@ class _DictationPage(QWidget):
         layout.addStretch()
 
 
+MCP_TRANSPORTS = [
+    ("Stdio", "stdio"),
+    ("SSE", "sse"),
+    ("Streamable HTTP", "streamable_http"),
+]
+
+
+class _MCPPage(QWidget):
+    """MCP Servers configuration page."""
+
+    def __init__(self, settings: dict, parent=None) -> None:
+        super().__init__(parent)
+        self._servers: list[dict] = []
+        try:
+            self._servers = json.loads(settings.get("mcp_servers", "[]"))
+        except (json.JSONDecodeError, TypeError):
+            self._servers = []
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(12)
+
+        title = QLabel("MCP Servers")
+        title.setStyleSheet("font-size: 18px; font-weight: 600; background: transparent;")
+        layout.addWidget(title)
+
+        desc = QLabel(
+            "Configure Model Context Protocol servers to give the "
+            "voice assistant access to external tools."
+        )
+        desc.setWordWrap(True)
+        desc.setStyleSheet("font-size: 13px; color: #8E8E93; background: transparent;")
+        layout.addWidget(desc)
+
+        # Server list + buttons
+        list_row = QHBoxLayout()
+        self._server_list = QListWidget()
+        self._server_list.setFixedHeight(90)
+        self._server_list.setStyleSheet(
+            "QListWidget { border: 1px solid #2C2C2E; border-radius: 6px; }"
+        )
+        list_row.addWidget(self._server_list, 1)
+
+        _btn_style = (
+            "QPushButton { font-size: 18px; font-weight: 700;"
+            " color: #FFFFFF; background-color: #2C2C2E;"
+            " border: 1px solid #3A3A3C; border-radius: 6px;"
+            " padding: 0px; margin: 0px;"
+            " min-width: 28px; min-height: 28px; }"
+            "QPushButton:hover { background-color: #3A3A3C; }"
+        )
+        btn_col = QVBoxLayout()
+        btn_col.setSpacing(4)
+        add_btn = QPushButton("+")
+        add_btn.setFixedSize(28, 28)
+        add_btn.setStyleSheet(_btn_style)
+        add_btn.clicked.connect(self._add_server)
+        remove_btn = QPushButton("\u2212")
+        remove_btn.setFixedSize(28, 28)
+        remove_btn.setStyleSheet(_btn_style)
+        remove_btn.clicked.connect(self._remove_server)
+        btn_col.addWidget(add_btn)
+        btn_col.addWidget(remove_btn)
+        btn_col.addStretch()
+        list_row.addLayout(btn_col)
+        layout.addLayout(list_row)
+
+        # Per-server config form
+        self._form_container = QWidget()
+        form = QFormLayout(self._form_container)
+        form.setSpacing(8)
+        form.setLabelAlignment(Qt.AlignRight)
+
+        self._name_edit = QLineEdit()
+        self._name_edit.setPlaceholderText("e.g. Filesystem")
+        form.addRow("Name", self._name_edit)
+
+        self._transport_combo = QComboBox()
+        for label, _val in MCP_TRANSPORTS:
+            self._transport_combo.addItem(label)
+        form.addRow("Transport", self._transport_combo)
+
+        self._command_edit = QLineEdit()
+        self._command_edit.setPlaceholderText("e.g. npx")
+        self._command_label = QLabel("Command")
+        form.addRow(self._command_label, self._command_edit)
+
+        self._args_edit = QLineEdit()
+        self._args_edit.setPlaceholderText("e.g. -y @modelcontextprotocol/server-filesystem /home")
+        self._args_label = QLabel("Args")
+        form.addRow(self._args_label, self._args_edit)
+
+        self._url_edit = QLineEdit()
+        self._url_edit.setPlaceholderText("e.g. http://localhost:8000/mcp")
+        self._url_label = QLabel("URL")
+        form.addRow(self._url_label, self._url_edit)
+
+        self._env_edit = QTextEdit()
+        self._env_edit.setPlaceholderText("KEY=VALUE (one per line)")
+        self._env_edit.setFixedHeight(48)
+        form.addRow("Env", self._env_edit)
+
+        layout.addWidget(self._form_container)
+        self._form_container.setVisible(False)
+
+        layout.addStretch()
+
+        # Populate list
+        for srv in self._servers:
+            self._server_list.addItem(srv.get("name", "Unnamed"))
+
+        # Connections
+        self._server_list.currentRowChanged.connect(self._on_selection_changed)
+        self._transport_combo.currentIndexChanged.connect(self._on_transport_changed)
+        self._name_edit.textChanged.connect(self._sync_to_model)
+        self._command_edit.textChanged.connect(self._sync_to_model)
+        self._args_edit.textChanged.connect(self._sync_to_model)
+        self._url_edit.textChanged.connect(self._sync_to_model)
+        self._env_edit.textChanged.connect(self._sync_to_model)
+
+    def _add_server(self) -> None:
+        srv = {
+            "name": "New Server",
+            "transport": "stdio",
+            "command": "",
+            "args": "",
+            "url": "",
+            "env": "",
+        }
+        self._servers.append(srv)
+        self._server_list.addItem(srv["name"])
+        self._server_list.setCurrentRow(len(self._servers) - 1)
+
+    def _remove_server(self) -> None:
+        row = self._server_list.currentRow()
+        if row < 0:
+            return
+        self._servers.pop(row)
+        self._server_list.takeItem(row)
+
+    def _on_selection_changed(self, row: int) -> None:
+        if row < 0 or row >= len(self._servers):
+            self._form_container.setVisible(False)
+            return
+        self._form_container.setVisible(True)
+        srv = self._servers[row]
+
+        # Block signals while populating to avoid feedback loop
+        for w in (self._name_edit, self._command_edit, self._args_edit,
+                  self._url_edit, self._env_edit, self._transport_combo):
+            w.blockSignals(True)
+
+        self._name_edit.setText(srv.get("name", ""))
+        self._command_edit.setText(srv.get("command", ""))
+        self._args_edit.setText(srv.get("args", ""))
+        self._url_edit.setText(srv.get("url", ""))
+        self._env_edit.setPlainText(srv.get("env", ""))
+
+        transport = srv.get("transport", "stdio")
+        for i, (_label, val) in enumerate(MCP_TRANSPORTS):
+            if val == transport:
+                self._transport_combo.setCurrentIndex(i)
+                break
+
+        for w in (self._name_edit, self._command_edit, self._args_edit,
+                  self._url_edit, self._env_edit, self._transport_combo):
+            w.blockSignals(False)
+
+        self._update_field_visibility(transport)
+
+    def _on_transport_changed(self, _index: int) -> None:
+        transport = MCP_TRANSPORTS[self._transport_combo.currentIndex()][1]
+        self._update_field_visibility(transport)
+        self._sync_to_model()
+
+    def _update_field_visibility(self, transport: str) -> None:
+        is_stdio = transport == "stdio"
+        self._command_label.setVisible(is_stdio)
+        self._command_edit.setVisible(is_stdio)
+        self._args_label.setVisible(is_stdio)
+        self._args_edit.setVisible(is_stdio)
+        self._url_label.setVisible(not is_stdio)
+        self._url_edit.setVisible(not is_stdio)
+
+    def _sync_to_model(self) -> None:
+        row = self._server_list.currentRow()
+        if row < 0 or row >= len(self._servers):
+            return
+        srv = self._servers[row]
+        srv["name"] = self._name_edit.text().strip()
+        srv["transport"] = MCP_TRANSPORTS[self._transport_combo.currentIndex()][1]
+        srv["command"] = self._command_edit.text().strip()
+        srv["args"] = self._args_edit.text().strip()
+        srv["url"] = self._url_edit.text().strip()
+        srv["env"] = self._env_edit.toPlainText()
+        # Update list item text
+        item = self._server_list.item(row)
+        if item:
+            item.setText(srv["name"] or "Unnamed")
+
+    def get_servers_json(self) -> str:
+        """Return server configs as a JSON string for saving."""
+        return json.dumps(self._servers)
+
+
 class _AboutPage(QWidget):
     """About page with license and credits."""
 
@@ -456,7 +663,7 @@ class SettingsPanel(QDialog):
             "}"
         )
 
-        for label in ("General", "AI Provider", "Dictation", "About"):
+        for label in ("General", "AI Provider", "Dictation", "MCP Servers", "About"):
             item = QListWidgetItem(label)
             item.setSizeHint(item.sizeHint().expandedTo(QSize(0, 38)))
             self._sidebar.addItem(item)
@@ -466,8 +673,9 @@ class SettingsPanel(QDialog):
         self._general = _GeneralPage(settings)
         self._ai = _AIPage(settings)
         self._dictation = _DictationPage(settings)
+        self._mcp = _MCPPage(settings)
         self._about = _AboutPage()
-        for page in (self._general, self._ai, self._dictation, self._about):
+        for page in (self._general, self._ai, self._dictation, self._mcp, self._about):
             scroll = QScrollArea()
             scroll.setWidget(page)
             scroll.setWidgetResizable(True)
@@ -534,6 +742,7 @@ class SettingsPanel(QDialog):
             "stt_enabled": self._dictation.enabled.isChecked(),
             "stt_hotkey": self._dictation.hotkey.text().strip(),
             "stt_language": STT_LANGUAGES[self._dictation.language.currentIndex()][1],
+            "mcp_servers": self._mcp.get_servers_json(),
         }
         save_settings(settings)
         self.accept()

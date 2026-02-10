@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, QTimer
+from pathlib import Path
+
+from PySide6.QtCore import QByteArray, QRectF, Qt, QTimer
+from PySide6.QtGui import QColor, QPixmap
+from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
     QFrame,
     QLabel,
@@ -28,10 +32,54 @@ class ChatView(QScrollArea):
         self._layout = QVBoxLayout(self._container)
         self._layout.setContentsMargins(4, 8, 4, 8)
         self._layout.setSpacing(4)
-        self._layout.addStretch()  # pushes bubbles to the bottom
+        self._layout.addStretch()  # index 0: pushes content down
         self.setWidget(self._container)
 
         self._current_bubble: ChatBubble | None = None
+
+        # Empty state (shown before conversation starts, centered vertically)
+        self._empty_state = QWidget()
+        self._empty_state.setStyleSheet("background: transparent;")
+        empty_layout = QVBoxLayout(self._empty_state)
+        empty_layout.setAlignment(Qt.AlignCenter)
+        empty_layout.setSpacing(12)
+
+        icon = QLabel()
+        icon.setAlignment(Qt.AlignCenter)
+        icon.setStyleSheet("background: transparent;")
+        logo_path = Path(__file__).resolve().parent.parent.parent.parent / "assets" / "logo.svg"
+        if logo_path.exists():
+            svg_data = QByteArray(logo_path.read_bytes())
+            renderer = QSvgRenderer(svg_data)
+            pixmap = QPixmap(64, 64)
+            pixmap.fill(QColor(0, 0, 0, 0))
+            from PySide6.QtGui import QPainter
+            painter = QPainter(pixmap)
+            renderer.render(painter, QRectF(0, 0, 64, 64))
+            painter.end()
+            icon.setPixmap(pixmap)
+        else:
+            icon.setText("\U0001F399")
+            icon.setStyleSheet("font-size: 48px; background: transparent;")
+        empty_layout.addWidget(icon)
+
+        heading = QLabel("RoomKit UI")
+        heading.setAlignment(Qt.AlignCenter)
+        heading.setStyleSheet(
+            "font-size: 18px; font-weight: 600; color: #FFFFFF; background: transparent;"
+        )
+        empty_layout.addWidget(heading)
+
+        hint = QLabel("Press Start to begin a voice conversation")
+        hint.setAlignment(Qt.AlignCenter)
+        hint.setStyleSheet(
+            "font-size: 13px; color: #636366; background: transparent;"
+        )
+        empty_layout.addWidget(hint)
+
+        # Center the empty state: stretch - widget - stretch
+        self._layout.insertWidget(1, self._empty_state)
+        self._layout.addStretch()  # bottom stretch for centering
 
         # Status indicator (Listening… / Thinking…)
         self._status_label = QLabel()
@@ -99,6 +147,58 @@ class ChatView(QScrollArea):
     def hide_status(self) -> None:
         self._hide_status()
 
+    def add_info(self, message: str) -> None:
+        """Show a neutral info message in the chat area."""
+        self._hide_status()
+        if self._current_bubble and not self._current_bubble.finalized:
+            self._current_bubble.finalize()
+            self._current_bubble = None
+
+        label = QLabel(message)
+        label.setWordWrap(True)
+        label.setAlignment(Qt.AlignCenter)
+        label.setStyleSheet(
+            "QLabel {"
+            "  color: #8E8E93;"
+            "  font-size: 12px;"
+            "  background: rgba(142, 142, 147, 0.1);"
+            "  border-radius: 8px;"
+            "  padding: 8px 16px;"
+            "  margin: 4px 20px;"
+            "}"
+        )
+        idx = self._layout.count() - 2
+        if idx < 0:
+            idx = 0
+        self._layout.insertWidget(idx, label)
+        self._scroll_to_bottom()
+
+    def add_tool_call(self, name: str, arguments: str) -> None:
+        """Show a tool-call indicator in the chat area."""
+        self._hide_status()
+        if self._current_bubble and not self._current_bubble.finalized:
+            self._current_bubble.finalize()
+            self._current_bubble = None
+
+        label = QLabel(f"\u2699  {name}({arguments})")
+        label.setWordWrap(True)
+        label.setAlignment(Qt.AlignCenter)
+        label.setStyleSheet(
+            "QLabel {"
+            "  color: #BF5AF2;"
+            "  font-size: 12px;"
+            "  background: rgba(191, 90, 242, 0.1);"
+            "  border-radius: 8px;"
+            "  padding: 8px 16px;"
+            "  margin: 4px 20px;"
+            "}"
+        )
+        idx = self._layout.count() - 2
+        if idx < 0:
+            idx = 0
+        self._layout.insertWidget(idx, label)
+        self._scroll_to_bottom()
+
     def add_error(self, message: str) -> None:
         """Show a centered error message in the chat area."""
         self._hide_status()
@@ -126,13 +226,34 @@ class ChatView(QScrollArea):
         self._scroll_to_bottom()
 
     def clear(self) -> None:
-        """Remove all bubbles and error labels."""
-        while self._layout.count() > 2:  # keep stretch + status_label
+        """Remove all bubbles and error labels, switch to chat layout."""
+        self._empty_state.hide()
+        # Remove everything from layout
+        while self._layout.count():
             item = self._layout.takeAt(0)
             w = item.widget()
-            if w and isinstance(w, (ChatBubble, QLabel)):
+            if w and w not in (self._empty_state, self._status_label):
+                w.deleteLater()
+        # Rebuild base layout: stretch (pushes to bottom) + status_label
+        self._layout.addStretch()
+        self._layout.addWidget(self._status_label)
+        self._current_bubble = None
+
+    def reset(self) -> None:
+        """Clear conversation and show empty state again."""
+        self._hide_status()
+        while self._layout.count():
+            item = self._layout.takeAt(0)
+            w = item.widget()
+            if w and w not in (self._empty_state, self._status_label):
                 w.deleteLater()
         self._current_bubble = None
+        # Rebuild with empty state centered
+        self._layout.addStretch()
+        self._layout.insertWidget(1, self._empty_state)
+        self._layout.addStretch()
+        self._layout.addWidget(self._status_label)
+        self._empty_state.show()
 
     # -- internal ------------------------------------------------------------
 

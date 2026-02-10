@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import collections
+import datetime
+import json
 import logging
 import math
 import struct
 from typing import Any
 
 from PySide6.QtCore import QObject, QTimer, Signal
+
+from room_ui.mcp_manager import MCPManager
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +40,40 @@ def _compute_rms(data: bytes) -> float:
 
 
 # ---------------------------------------------------------------------------
+# Built-in tools (always available)
+# ---------------------------------------------------------------------------
+
+_BUILTIN_TOOLS = [
+    {
+        "name": "get_current_date",
+        "description": "Get today's date and day of the week.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "get_current_time",
+        "description": "Get the current local time.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+]
+
+
+def _handle_builtin_tool(name: str) -> str | None:
+    """Handle a built-in tool call. Returns JSON string or None if not built-in."""
+    now = datetime.datetime.now()
+    if name == "get_current_date":
+        return json.dumps({
+            "date": now.strftime("%Y-%m-%d"),
+            "day": now.strftime("%A"),
+        })
+    if name == "get_current_time":
+        return json.dumps({
+            "time": now.strftime("%H:%M:%S"),
+            "timezone": now.astimezone().tzname(),
+        })
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Engine
 # ---------------------------------------------------------------------------
 
@@ -49,6 +87,8 @@ class Engine(QObject):
     user_speaking = Signal(bool)
     ai_speaking = Signal(bool)
     error_occurred = Signal(str)
+    tool_use = Signal(str, str)            # tool_name, arguments_json
+    mcp_status = Signal(str)               # status message
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -56,6 +96,7 @@ class Engine(QObject):
         self._channel: Any = None
         self._session: Any = None
         self._transport: Any = None
+        self._mcp: MCPManager | None = None
         self._mic_muted = False
         self._state = "idle"
 
@@ -164,6 +205,26 @@ class Engine(QObject):
         except Exception:
             pass
 
+    # -- tool calls ----------------------------------------------------------
+
+    async def _handle_tool_call(
+        self, session: Any, name: str, arguments: dict[str, Any],
+    ) -> str:
+        """Handle built-in tools or forward to MCP manager."""
+        try:
+            self.tool_use.emit(name, json.dumps(arguments))
+        except Exception:
+            pass
+
+        # Try built-in tools first
+        builtin_result = _handle_builtin_tool(name)
+        if builtin_result is not None:
+            return builtin_result
+
+        if self._mcp is None:
+            return '{"error": "Unknown tool"}'
+        return await self._mcp.handle_tool_call(session, name, arguments)
+
     # -- lifecycle -----------------------------------------------------------
 
     async def start(self, settings: dict) -> None:
@@ -254,6 +315,37 @@ class Engine(QObject):
             self._transport = transport
             self._register_callbacks(provider, transport)
 
+            # -- MCP tools -------------------------------------------------------
+            mcp_servers: list[dict] = []
+            try:
+                mcp_servers = json.loads(settings.get("mcp_servers", "[]"))
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+            # Always start with built-in tools
+            tools: list[dict] = list(_BUILTIN_TOOLS)
+            tool_handler = self._handle_tool_call
+
+            if mcp_servers:
+                self._mcp = MCPManager(mcp_servers)
+                await self._mcp.connect_all()
+                discovered = self._mcp.get_tools()
+
+                if self._mcp.failed_servers:
+                    failed = ", ".join(self._mcp.failed_servers)
+                    self.mcp_status.emit(f"MCP failed: {failed}")
+
+                if discovered:
+                    tools.extend(discovered)
+                    names = ", ".join(t["name"] for t in discovered)
+                    logger.info("MCP tools: %s", names)
+                    self.mcp_status.emit(f"MCP tools: {names}")
+                elif not self._mcp.failed_servers:
+                    self.mcp_status.emit("MCP: no tools available")
+
+            all_names = ", ".join(t["name"] for t in tools)
+            logger.info("Tools: %s", all_names)
+
             self._channel = RealtimeVoiceChannel(
                 "voice",
                 provider=provider,
@@ -261,6 +353,8 @@ class Engine(QObject):
                 system_prompt=system_prompt,
                 voice=voice,
                 input_sample_rate=sample_rate,
+                tools=tools,
+                tool_handler=tool_handler,
             )
             self._kit.register_channel(self._channel)
 
@@ -309,7 +403,13 @@ class Engine(QObject):
                 await self._kit.close()
             except Exception:
                 pass
+        if self._mcp:
+            try:
+                await self._mcp.close_all()
+            except Exception:
+                pass
         self._channel = None
         self._session = None
         self._kit = None
         self._transport = None
+        self._mcp = None
