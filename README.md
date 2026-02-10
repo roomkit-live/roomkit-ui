@@ -1,9 +1,27 @@
 # RoomKit UI
 
+<p align="center">
+  <img src="assets/logo.svg" width="80" height="80" alt="RoomKit UI">
+</p>
+
 A desktop voice assistant built with [PySide6](https://doc.qt.io/qtforpython-6/) and [RoomKit](https://github.com/roomkit-live/roomkit). Supports real-time voice conversations with **Google Gemini** and **OpenAI** realtime APIs.
 
 ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue)
 ![License MIT](https://img.shields.io/badge/license-MIT-green)
+
+## Download
+
+Pre-built binaries are available for macOS, Linux, and Windows on the [Releases](https://github.com/roomkit-live/roomkit-ui/releases) page.
+
+### macOS
+
+After downloading and extracting, macOS may block the app because it's not notarized. To fix this, open a terminal and run:
+
+```bash
+xattr -cr "RoomKit UI.app"
+```
+
+Then double-click the app to open it. You'll also need to grant microphone permission when prompted.
 
 ## Features
 
@@ -22,12 +40,13 @@ A desktop voice assistant built with [PySide6](https://doc.qt.io/qtforpython-6/)
 - A Google API key (for Gemini) and/or an OpenAI API key
 - PortAudio (`libportaudio2` on Linux, included on macOS)
 
-## Installation
+## Run from source
 
 ```bash
 git clone https://github.com/roomkit-live/roomkit-ui.git
 cd roomkit-ui
 uv sync
+uv run python -m room_ui
 ```
 
 For WebRTC echo cancellation (recommended):
@@ -37,10 +56,6 @@ uv pip install aec-audio-processing
 ```
 
 ## Usage
-
-```bash
-uv run python -m room_ui
-```
 
 1. Click the gear icon to open **Settings**
 2. Go to **AI Provider**, select your provider and enter your API key
@@ -53,7 +68,7 @@ uv run python -m room_ui
 ```
 src/room_ui/
 ├── app.py              # QApplication + qasync event loop
-├── engine.py           # Async engine bridging roomkit ↔ Qt signals
+├── engine.py           # Async engine bridging roomkit <> Qt signals
 ├── icons.py            # Heroicons SVG rendering
 ├── settings.py         # QSettings persistence
 ├── theme.py            # Dark theme stylesheet
@@ -66,13 +81,19 @@ src/room_ui/
     └── control_bar.py  # Call button + mic mute + settings
 ```
 
-## Building a macOS .app
+## Building
 
 ```bash
 ./scripts/build_app.sh
 ```
 
-Requires [PyInstaller](https://pyinstaller.org/).
+Or generate icons and build manually:
+
+```bash
+pip install pyinstaller Pillow cairosvg
+python scripts/generate_icons.py
+pyinstaller --name "RoomKit UI" --windowed --icon=assets/icon.icns src/room_ui/__main__.py
+```
 
 ## License
 

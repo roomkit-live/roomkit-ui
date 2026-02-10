@@ -33,17 +33,26 @@ jobs:
         with:
           python-version: "3.12"
 
-      # Linux: install PortAudio and audio libs
+      # Linux: install system deps
       - name: Install system dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libportaudio2 libasound2-dev libgl1
+          sudo apt-get install -y libportaudio2 libasound2-dev libgl1 librsvg2-bin
+
+      # macOS: install rsvg-convert for icon generation
+      - name: Install system dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install librsvg
 
       - name: Install Python dependencies
         run: |
           uv sync
-          uv pip install pyinstaller
+          uv pip install pyinstaller Pillow cairosvg
+
+      # Generate app icons from SVG
+      - name: Generate icons
+        run: uv run python scripts/generate_icons.py
 
       # macOS / Linux
       - name: Build (Unix)
@@ -51,14 +60,23 @@ jobs:
         run: |
           SEP=":"
           EXTRA_ARGS=""
+          ICON_ARG=""
           if [ "$RUNNER_OS" = "macOS" ]; then
             EXTRA_ARGS="--windowed"
+            if [ -f assets/icon.icns ]; then
+              ICON_ARG="--icon=assets/icon.icns"
+            fi
+          else
+            if [ -f assets/icon.png ]; then
+              ICON_ARG="--icon=assets/icon.png"
+            fi
           fi
           uv run pyinstaller \
             --name "RoomKit UI" \
             --noconfirm \
             --clean \
             $EXTRA_ARGS \
+            $ICON_ARG \
             --hidden-import=google.genai \
             --hidden-import=google.genai.live \
             --hidden-import=openai \
@@ -74,38 +92,48 @@ jobs:
             --add-data "src/room_ui${SEP}room_ui" \
             src/room_ui/__main__.py
 
-      # macOS: patch Info.plist for mic permission
-      - name: Patch Info.plist (macOS)
+      # macOS: patch Info.plist + ad-hoc codesign
+      - name: Sign and patch (macOS)
         if: runner.os == 'macOS'
         run: |
+          APP="dist/RoomKit UI.app"
           /usr/libexec/PlistBuddy -c \
             "Add :NSMicrophoneUsageDescription string 'RoomKit UI needs microphone access for voice conversations.'" \
-            "dist/RoomKit UI.app/Contents/Info.plist" 2>/dev/null || true
+            "$APP/Contents/Info.plist" 2>/dev/null || true
+          # Ad-hoc codesign so Gatekeeper doesn't block immediately
+          codesign --force --deep --sign - "$APP"
 
       # Windows
       - name: Build (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          uv run pyinstaller `
-            --name "RoomKit UI" `
-            --noconfirm `
-            --clean `
-            --windowed `
-            --hidden-import=google.genai `
-            --hidden-import=google.genai.live `
-            --hidden-import=openai `
-            --hidden-import=websockets `
-            --hidden-import=sounddevice `
-            --hidden-import=_sounddevice_data `
-            --hidden-import=roomkit.providers.gemini.realtime `
-            --hidden-import=roomkit.providers.openai.realtime `
-            --hidden-import=roomkit.voice.realtime.local_transport `
-            --hidden-import=roomkit.voice.pipeline.aec.webrtc `
-            --hidden-import=roomkit.voice.pipeline.aec.speex `
-            --hidden-import=roomkit.voice.pipeline.denoiser.rnnoise `
-            --add-data "src/room_ui;room_ui" `
-            src/room_ui/__main__.py
+          $iconArg = ""
+          if (Test-Path "assets/icon.ico") { $iconArg = "--icon=assets/icon.ico" }
+          $args = @(
+            "--name", "RoomKit UI",
+            "--noconfirm",
+            "--clean",
+            "--windowed"
+          )
+          if ($iconArg) { $args += $iconArg }
+          $args += @(
+            "--hidden-import=google.genai",
+            "--hidden-import=google.genai.live",
+            "--hidden-import=openai",
+            "--hidden-import=websockets",
+            "--hidden-import=sounddevice",
+            "--hidden-import=_sounddevice_data",
+            "--hidden-import=roomkit.providers.gemini.realtime",
+            "--hidden-import=roomkit.providers.openai.realtime",
+            "--hidden-import=roomkit.voice.realtime.local_transport",
+            "--hidden-import=roomkit.voice.pipeline.aec.webrtc",
+            "--hidden-import=roomkit.voice.pipeline.aec.speex",
+            "--hidden-import=roomkit.voice.pipeline.denoiser.rnnoise",
+            "--add-data", "src/room_ui;room_ui",
+            "src/room_ui/__main__.py"
+          )
+          uv run pyinstaller @args
 
       # Package artifacts
       - name: Archive (macOS)
