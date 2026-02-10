@@ -289,10 +289,16 @@ class STTEngine(QObject):
             else:
                 logger.info("No transcription captured")
         finally:
-            # Cleanup in background so the engine is immediately ready
-            # for the next recording cycle.
+            # Snapshot the objects and clear self._ immediately so a new
+            # recording cycle won't be affected by the background cleanup.
             if not os.environ.get("STT_FAKE"):
-                asyncio.ensure_future(self._cleanup_safe())
+                snap = (self._kit, self._channel, self._session, self._transport)
+                self._kit = None
+                self._channel = None
+                self._session = None
+                self._provider = None
+                self._transport = None
+                asyncio.ensure_future(self._cleanup_snapshot(*snap))
 
     async def _commit_and_wait(self) -> None:
         """Send input_audio_buffer.commit and wait for the transcription."""
@@ -327,44 +333,47 @@ class STTEngine(QObject):
         finally:
             self._transcription_event = None
 
-    async def _cleanup_safe(self) -> None:
-        """Cleanup in the background — never blocks the next recording."""
+    async def _cleanup_snapshot(
+        self, kit: Any, channel: Any, session: Any, transport: Any,
+    ) -> None:
+        """Clean up a previous session's objects without touching self._."""
         try:
-            await self._cleanup()
+            if channel and session:
+                try:
+                    await channel.end_session(session)
+                except Exception:
+                    pass
+            if transport is not None:
+                try:
+                    for stream in transport._input_streams.values():
+                        if stream.active:
+                            stream.stop()
+                except Exception:
+                    pass
+                try:
+                    for stream in transport._output_streams.values():
+                        if stream.active:
+                            stream.stop()
+                except Exception:
+                    pass
+            if kit:
+                try:
+                    await kit.close()
+                except Exception:
+                    pass
         except Exception:
             logger.exception("Error during STT cleanup")
 
     async def _cleanup(self) -> None:
-        if self._channel and self._session:
-            try:
-                await self._channel.end_session(self._session)
-            except Exception:
-                pass
-        # Stop the local audio transport explicitly so PortAudio streams
-        # are closed and no more audio/VAD events are produced.
-        if self._transport is not None:
-            try:
-                for stream in self._transport._input_streams.values():
-                    if stream.active:
-                        stream.stop()
-            except Exception:
-                pass
-            try:
-                for stream in self._transport._output_streams.values():
-                    if stream.active:
-                        stream.stop()
-            except Exception:
-                pass
-        if self._kit:
-            try:
-                await self._kit.close()
-            except Exception:
-                pass
+        """Cleanup using self._ — only used on start failure."""
+        await self._cleanup_snapshot(
+            self._kit, self._channel, self._session, self._transport,
+        )
+        self._kit = None
         self._channel = None
         self._session = None
         self._provider = None
         self._transport = None
-        self._kit = None
 
     # -- paste -----------------------------------------------------------------
 

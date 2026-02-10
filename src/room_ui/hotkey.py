@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import sys
-import threading
 
 from PySide6.QtCore import QObject, QTimer, Signal
 
@@ -22,24 +21,25 @@ _MAC_KEYCODES = {
     "<alt_l>": 0x3A,   # Left Option
 }
 
-# Map keycodes to their modifier flag mask
-_KEYCODE_TO_MASK = {
-    0x36: "kCGEventFlagMaskCommand",
-    0x37: "kCGEventFlagMaskCommand",
-    0x3C: "kCGEventFlagMaskShift",
-    0x38: "kCGEventFlagMaskShift",
-    0x3E: "kCGEventFlagMaskControl",
-    0x3B: "kCGEventFlagMaskControl",
-    0x3D: "kCGEventFlagMaskAlternate",
-    0x3A: "kCGEventFlagMaskAlternate",
+# Map keycodes to their modifier flag mask (NSEvent constants)
+_KEYCODE_TO_FLAG = {
+    0x36: "NSEventModifierFlagCommand",
+    0x37: "NSEventModifierFlagCommand",
+    0x3C: "NSEventModifierFlagShift",
+    0x38: "NSEventModifierFlagShift",
+    0x3E: "NSEventModifierFlagControl",
+    0x3B: "NSEventModifierFlagControl",
+    0x3D: "NSEventModifierFlagOption",
+    0x3A: "NSEventModifierFlagOption",
 }
 
 
 class HotkeyListener(QObject):
     """Listens for a global keyboard shortcut and emits *hotkey_pressed*.
 
-    On macOS, uses a ``CGEventTap`` for reliable global key monitoring in
-    packaged apps.  Falls back to ``pynput`` on other platforms.
+    On macOS, uses ``NSEvent.addGlobalMonitorForEventsMatchingMask`` for
+    reliable global key monitoring.  Falls back to ``pynput`` on other
+    platforms.
     """
 
     hotkey_pressed = Signal()
@@ -52,108 +52,79 @@ class HotkeyListener(QObject):
         super().__init__(parent)
         self._hotkey = hotkey
         self._listener = None
-        self._tap = None
-        self._loop_ref = None
-        # Thread-safe flag: CGEventTap callback sets it, QTimer polls it
-        self._pending = False
-        self._poll_timer: QTimer | None = None
+        self._monitor = None  # NSEvent global monitor
 
     def start(self) -> None:
-        if self._listener is not None or self._tap is not None:
+        if self._listener is not None or self._monitor is not None:
             return
 
         if sys.platform == "darwin" and self._hotkey in _MAC_KEYCODES:
-            self._start_cgevent()
+            self._start_nsevent()
         else:
             self._start_pynput()
 
-    def _start_cgevent(self) -> None:
-        """Use CGEventTap to monitor a single key (macOS native)."""
+    def _start_nsevent(self) -> None:
+        """Use NSEvent global monitor for modifier key (macOS native)."""
         try:
-            import Quartz
+            from AppKit import NSEvent, NSFlagsChangedMask
         except ImportError:
-            logger.error("PyObjC/Quartz not available — falling back to pynput")
+            logger.error("PyObjC/AppKit not available — falling back to pynput")
             self._start_pynput()
             return
 
         target_keycode = _MAC_KEYCODES[self._hotkey]
-        mask_name = _KEYCODE_TO_MASK[target_keycode]
-        mask_value = getattr(Quartz, mask_name)
+        flag_name = _KEYCODE_TO_FLAG[target_keycode]
 
-        # Keep a reference to self for the callback closure
+        try:
+            from AppKit import (
+                NSEventModifierFlagCommand,
+                NSEventModifierFlagControl,
+                NSEventModifierFlagOption,
+                NSEventModifierFlagShift,
+            )
+            flag_map = {
+                "NSEventModifierFlagCommand": NSEventModifierFlagCommand,
+                "NSEventModifierFlagShift": NSEventModifierFlagShift,
+                "NSEventModifierFlagControl": NSEventModifierFlagControl,
+                "NSEventModifierFlagOption": NSEventModifierFlagOption,
+            }
+            mask_value = flag_map[flag_name]
+        except (ImportError, KeyError):
+            logger.error("Could not resolve modifier flag %s", flag_name)
+            self._start_pynput()
+            return
+
         listener = self
 
-        def callback(proxy, event_type, event, refcon):
+        def handler(event):
             try:
-                # macOS disables taps on timeout — re-enable immediately
-                if event_type == Quartz.kCGEventTapDisabledByTimeout:
-                    logger.warning("CGEventTap disabled by timeout — re-enabling")
-                    Quartz.CGEventTapEnable(listener._tap, True)
-                    return event
-
-                if event_type == Quartz.kCGEventFlagsChanged:
-                    keycode = Quartz.CGEventGetIntegerValueField(
-                        event, Quartz.kCGKeyboardEventKeycode
-                    )
-                    if keycode == target_keycode:
-                        flags = Quartz.CGEventGetFlags(event)
-                        # Fire on release: modifier flag is no longer set
-                        if not (flags & mask_value):
-                            listener._pending = True
+                if event.keyCode() == target_keycode:
+                    flags = event.modifierFlags()
+                    # Fire on release: modifier flag is no longer set
+                    if not (flags & mask_value):
+                        # Defer signal emission to the next Qt event loop tick
+                        # so the handler returns immediately.
+                        QTimer.singleShot(0, listener._on_activate)
             except Exception:
-                pass  # never let the callback fail
-            return event
+                pass
 
-        # kCGEventTapDisabledByTimeout is delivered automatically — no need
-        # to include it in the mask.
-        tap = Quartz.CGEventTapCreate(
-            Quartz.kCGSessionEventTap,
-            Quartz.kCGHeadInsertEventTap,
-            Quartz.kCGEventTapOptionListenOnly,
-            Quartz.CGEventMaskBit(Quartz.kCGEventFlagsChanged),
-            callback,
-            None,
+        self._monitor = NSEvent.addGlobalMonitorForEventsMatchingMask_handler_(
+            NSFlagsChangedMask,
+            handler,
         )
 
-        if tap is None:
+        if self._monitor is None:
             logger.error(
-                "CGEventTap creation failed — Accessibility permission required. "
+                "NSEvent monitor creation failed — Accessibility permission required. "
                 "Go to System Settings → Privacy & Security → Accessibility and add this app."
             )
             return
 
-        self._tap = tap
-        run_loop_source = Quartz.CFMachPortCreateRunLoopSource(None, tap, 0)
-
-        def run():
-            loop = Quartz.CFRunLoopGetCurrent()
-            self._loop_ref = loop
-            Quartz.CFRunLoopAddSource(loop, run_loop_source, Quartz.kCFRunLoopCommonModes)
-            Quartz.CGEventTapEnable(tap, True)
-            logger.info(
-                "CGEventTap hotkey listener started: %s (keycode 0x%02X)",
-                self._hotkey,
-                target_keycode,
-            )
-            Quartz.CFRunLoopRun()
-
-        t = threading.Thread(target=run, daemon=True)
-        t.start()
-
-        # Poll the flag from the Qt main thread — avoids emitting signals
-        # from the CGEventTap callback thread which can cause the tap to
-        # be disabled by macOS due to timeout.
-        self._poll_timer = QTimer(self)
-        self._poll_timer.setInterval(50)  # 50ms polling
-        self._poll_timer.timeout.connect(self._poll_pending)
-        self._poll_timer.start()
-
-    def _poll_pending(self) -> None:
-        """Check if the CGEventTap callback flagged a hotkey press."""
-        if self._pending:
-            self._pending = False
-            logger.info("Hotkey activated: %s", self._hotkey)
-            self.hotkey_pressed.emit()
+        logger.info(
+            "NSEvent hotkey listener started: %s (keycode 0x%02X)",
+            self._hotkey,
+            target_keycode,
+        )
 
     def _start_pynput(self) -> None:
         """Fallback: use pynput for multi-key combos or non-macOS."""
@@ -187,18 +158,16 @@ class HotkeyListener(QObject):
         logger.info("pynput hotkey listener started: %s", self._hotkey)
 
     def stop(self) -> None:
-        if self._poll_timer is not None:
-            self._poll_timer.stop()
-            self._poll_timer = None
+        if self._monitor is not None:
+            try:
+                from AppKit import NSEvent
+                NSEvent.removeMonitor_(self._monitor)
+            except Exception:
+                pass
+            self._monitor = None
         if self._listener is not None:
             self._listener.stop()
             self._listener = None
-        if self._loop_ref is not None:
-            import Quartz
-
-            Quartz.CFRunLoopStop(self._loop_ref)
-            self._loop_ref = None
-            self._tap = None
         logger.info("Global hotkey listener stopped")
 
     def _on_activate(self) -> None:
