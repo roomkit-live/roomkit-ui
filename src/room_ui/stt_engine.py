@@ -47,16 +47,20 @@ def _copy_to_clipboard(text: str) -> None:
 def _simulate_paste() -> None:
     """Simulate paste keystroke into the focused window."""
     if sys.platform == "darwin":
-        # Cmd+V via AppleScript
-        subprocess.run(
-            [
-                "osascript",
-                "-e",
-                'tell application "System Events" to keystroke "v" using command down',
-            ],
-            check=True,
-            timeout=5,
-        )
+        import Quartz
+
+        # Cmd+V via CGEvent — works when Accessibility permission is granted
+        # (same permission the CGEventTap hotkey listener already requires).
+        v_keycode = 0x09  # macOS virtual keycode for 'v'
+        cmd_flag = Quartz.kCGEventFlagMaskCommand
+
+        down = Quartz.CGEventCreateKeyboardEvent(None, v_keycode, True)
+        Quartz.CGEventSetFlags(down, cmd_flag)
+        Quartz.CGEventPost(Quartz.kCGAnnotatedSessionEventTap, down)
+
+        up = Quartz.CGEventCreateKeyboardEvent(None, v_keycode, False)
+        Quartz.CGEventSetFlags(up, cmd_flag)
+        Quartz.CGEventPost(Quartz.kCGAnnotatedSessionEventTap, up)
     elif _is_wayland():
         subprocess.run(["wtype", "-M", "ctrl", "v", "-m", "ctrl"], check=True, timeout=5)
     else:
@@ -92,6 +96,11 @@ class STTEngine(QObject):
         return self._recording
 
     def toggle_recording(self) -> None:
+        logger.info(
+            "toggle_recording: recording=%s busy=%s",
+            self._recording,
+            self._busy,
+        )
         if self._recording:
             asyncio.ensure_future(self._stop_recording())
         else:
@@ -112,6 +121,7 @@ class STTEngine(QObject):
 
     async def _start_recording(self) -> None:
         if self._recording or self._busy:
+            logger.warning("_start_recording skipped: recording=%s busy=%s", self._recording, self._busy)
             return
 
         self._busy = True
@@ -223,7 +233,6 @@ class STTEngine(QObject):
             self.recording_changed.emit(False)
             return
 
-        self._busy = True
         self._recording = False
         self.recording_changed.emit(False)
         logger.info("STT recording stopped")
@@ -245,14 +254,11 @@ class STTEngine(QObject):
                 self.text_ready.emit(text)
             else:
                 logger.info("No transcription captured")
-
-            if not os.environ.get("STT_FAKE"):
-                try:
-                    await self._cleanup()
-                except Exception:
-                    logger.exception("Error during STT cleanup")
         finally:
-            self._busy = False
+            # Cleanup in background so the engine is immediately ready
+            # for the next recording cycle.
+            if not os.environ.get("STT_FAKE"):
+                asyncio.ensure_future(self._cleanup_safe())
 
     async def _commit_and_wait(self) -> None:
         """Send input_audio_buffer.commit and wait for the transcription."""
@@ -286,6 +292,13 @@ class STTEngine(QObject):
             logger.warning("Timed out waiting for transcription after commit")
         finally:
             self._transcription_event = None
+
+    async def _cleanup_safe(self) -> None:
+        """Cleanup in the background — never blocks the next recording."""
+        try:
+            await self._cleanup()
+        except Exception:
+            logger.exception("Error during STT cleanup")
 
     async def _cleanup(self) -> None:
         if self._channel and self._session:
