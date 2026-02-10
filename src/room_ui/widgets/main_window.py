@@ -70,10 +70,18 @@ class MainWindow(QMainWindow):
 
     def _on_start(self) -> None:
         self._chat.clear()
-        asyncio.ensure_future(self._engine.start(load_settings()))
+        try:
+            asyncio.ensure_future(self._engine.start(load_settings()))
+        except Exception as e:
+            logger.exception("Failed to schedule engine start")
+            self._chat.add_error(str(e))
 
     def _on_stop(self) -> None:
-        asyncio.ensure_future(self._engine.stop())
+        try:
+            asyncio.ensure_future(self._engine.stop())
+        except Exception as e:
+            logger.exception("Failed to schedule engine stop")
+            self._chat.add_error(str(e))
 
     def _on_state_changed(self, state: str) -> None:
         self._controls.set_state(state)
@@ -99,6 +107,7 @@ class MainWindow(QMainWindow):
 
     def _on_error(self, msg: str) -> None:
         logger.error("Engine error: %s", msg)
+        self._chat.add_error(msg)
 
     def closeEvent(self, event) -> None:  # noqa: N802
         if self._engine.state != "idle":

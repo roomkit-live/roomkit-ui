@@ -99,12 +99,38 @@ class ChatView(QScrollArea):
     def hide_status(self) -> None:
         self._hide_status()
 
+    def add_error(self, message: str) -> None:
+        """Show a centered error message in the chat area."""
+        self._hide_status()
+        if self._current_bubble and not self._current_bubble.finalized:
+            self._current_bubble.finalize()
+            self._current_bubble = None
+
+        label = QLabel(message)
+        label.setWordWrap(True)
+        label.setAlignment(Qt.AlignCenter)
+        label.setStyleSheet(
+            "QLabel {"
+            "  color: #FF453A;"
+            "  font-size: 12px;"
+            "  background: rgba(255, 69, 58, 0.1);"
+            "  border-radius: 8px;"
+            "  padding: 8px 16px;"
+            "  margin: 4px 20px;"
+            "}"
+        )
+        idx = self._layout.count() - 2
+        if idx < 0:
+            idx = 0
+        self._layout.insertWidget(idx, label)
+        self._scroll_to_bottom()
+
     def clear(self) -> None:
-        """Remove all bubbles."""
+        """Remove all bubbles and error labels."""
         while self._layout.count() > 2:  # keep stretch + status_label
             item = self._layout.takeAt(0)
             w = item.widget()
-            if w and isinstance(w, ChatBubble):
+            if w and isinstance(w, (ChatBubble, QLabel)):
                 w.deleteLater()
         self._current_bubble = None
 
