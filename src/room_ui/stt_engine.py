@@ -101,13 +101,19 @@ def _simulate_paste() -> None:
 
 
 def _get_frontmost_bundle() -> str | None:
-    """Return the bundle ID of the frontmost app (macOS only)."""
+    """Return the bundle ID of the frontmost app (macOS only).
+
+    Returns None if the frontmost app is our own process, since restoring
+    focus to ourselves would cause the paste to go to the wrong window.
+    """
     if sys.platform != "darwin":
         return None
     try:
         from AppKit import NSWorkspace
         front = NSWorkspace.sharedWorkspace().frontmostApplication()
-        return front.bundleIdentifier() if front else None
+        if front and front.processIdentifier() != os.getpid():
+            return front.bundleIdentifier()
+        return None
     except Exception:
         return None
 
@@ -117,12 +123,14 @@ def _activate_bundle(bundle_id: str) -> None:
     if sys.platform != "darwin" or not bundle_id:
         return
     try:
-        from AppKit import NSRunningApplication, NSWorkspace
+        from AppKit import NSRunningApplication
         apps = NSRunningApplication.runningApplicationsWithBundleIdentifier_(bundle_id)
         if apps:
-            apps[0].activateWithOptions_(0)
+            # 3 = NSApplicationActivateAllWindows | NSApplicationActivateIgnoringOtherApps
+            apps[0].activateWithOptions_(3)
+            logger.info("Activated app: %s", bundle_id)
     except Exception:
-        pass
+        logger.exception("Failed to activate app: %s", bundle_id)
 
 
 class STTEngine(QObject):
@@ -413,7 +421,8 @@ class STTEngine(QObject):
     def paste_text(self, text: str) -> None:
         """Copy *text* to clipboard and simulate Ctrl+V."""
         try:
-            logger.info("Pasting text: %s", text[:80])
+            front = _get_frontmost_bundle()
+            logger.info("Pasting text to %s: %s", front or "(self)", text[:80])
             _copy_to_clipboard(text)
             _simulate_paste()
             logger.info("Paste succeeded")
