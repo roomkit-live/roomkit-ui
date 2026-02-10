@@ -44,6 +44,7 @@ class TrayService(QObject):
 
         self._tray.setContextMenu(menu)
         self._tray.setToolTip("RoomKit Dictation — idle")
+        self._tray.activated.connect(self._on_activated)
         self._tray.show()
 
     @property
@@ -55,6 +56,11 @@ class TrayService(QObject):
     def log_action(self) -> QAction:
         """Expose the log action so ``app.py`` can connect it."""
         return self._log_action
+
+    def _on_activated(self, reason: QSystemTrayIcon.ActivationReason) -> None:
+        """Left-click the tray icon to toggle dictation."""
+        if reason == QSystemTrayIcon.ActivationReason.Trigger:
+            self._dictate_action.trigger()
 
     @Slot(bool)
     def on_recording_changed(self, recording: bool) -> None:

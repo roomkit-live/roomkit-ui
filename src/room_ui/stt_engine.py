@@ -67,6 +67,31 @@ def _simulate_paste() -> None:
         subprocess.run(["xdotool", "key", "ctrl+v"], check=True, timeout=5)
 
 
+def _get_frontmost_bundle() -> str | None:
+    """Return the bundle ID of the frontmost app (macOS only)."""
+    if sys.platform != "darwin":
+        return None
+    try:
+        from AppKit import NSWorkspace
+        front = NSWorkspace.sharedWorkspace().frontmostApplication()
+        return front.bundleIdentifier() if front else None
+    except Exception:
+        return None
+
+
+def _activate_bundle(bundle_id: str) -> None:
+    """Bring an app to the front by bundle ID (macOS only)."""
+    if sys.platform != "darwin" or not bundle_id:
+        return
+    try:
+        from AppKit import NSRunningApplication, NSWorkspace
+        apps = NSRunningApplication.runningApplicationsWithBundleIdentifier_(bundle_id)
+        if apps:
+            apps[0].activateWithOptions_(0)
+    except Exception:
+        pass
+
+
 class STTEngine(QObject):
     """Records speech via an OpenAI Realtime STT room and pastes the result.
 
@@ -90,6 +115,7 @@ class STTEngine(QObject):
         self._transport: Any = None
         self._accumulated_text: list[str] = []
         self._transcription_event: asyncio.Event | None = None
+        self._prev_app: str | None = None  # bundle ID of app that was focused before recording
 
     @property
     def recording(self) -> bool:
@@ -128,6 +154,8 @@ class STTEngine(QObject):
         self._recording = True
         self.recording_changed.emit(True)
         self._accumulated_text.clear()
+        self._prev_app = _get_frontmost_bundle()
+        logger.info("Saved frontmost app: %s", self._prev_app)
 
         # --- Fake mode: skip roomkit, just use hardcoded text ---
         if os.environ.get("STT_FAKE"):
@@ -241,16 +269,22 @@ class STTEngine(QObject):
             if os.environ.get("STT_FAKE"):
                 self._accumulated_text.append("Hello, this is a test transcription.")
             else:
-                # Commit any buffered audio so OpenAI returns the transcription
-                # before we tear down the session.
-                await self._commit_and_wait()
+                # Only commit if we don't already have text from VAD —
+                # committing an empty buffer causes a harmless but noisy error.
+                if not self._accumulated_text:
+                    await self._commit_and_wait()
 
             # Emit / paste the text BEFORE cleanup (cleanup is slow).
             text = " ".join(self._accumulated_text).strip()
             if text:
                 logger.info("Emitting text_ready: %s", text[:80])
-                # Small delay so the hotkey release doesn't interfere with pasting.
-                await asyncio.sleep(0.15)
+                # Restore focus to the app that was active before recording,
+                # then give it a moment to come forward before pasting.
+                if self._prev_app:
+                    _activate_bundle(self._prev_app)
+                    await asyncio.sleep(0.25)
+                else:
+                    await asyncio.sleep(0.15)
                 self.text_ready.emit(text)
             else:
                 logger.info("No transcription captured")
