@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import signal
 import sys
 from pathlib import Path
 
@@ -85,6 +86,9 @@ def main() -> None:
         hotkey = HotkeyListener(hotkey=hotkey_str)
         hotkey.hotkey_pressed.connect(stt.toggle_recording)
         hotkey.start()
+
+    # Let Ctrl+C quit cleanly instead of being swallowed by the Qt loop.
+    signal.signal(signal.SIGINT, lambda *_: app.quit())
 
     with loop:
         loop.run_forever()
