@@ -69,6 +69,7 @@ class MainWindow(QMainWindow):
         SettingsPanel(self).exec()
 
     def _on_start(self) -> None:
+        self._chat.clear()
         asyncio.ensure_future(self._engine.start(load_settings()))
 
     def _on_stop(self) -> None:
