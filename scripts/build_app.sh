@@ -26,6 +26,9 @@ fi
 EXTRA_ARGS=()
 if [[ "$OSTYPE" == "darwin"* ]]; then
     EXTRA_ARGS+=(--windowed)  # .app bundle on macOS
+    [[ -f assets/icon.icns ]] && EXTRA_ARGS+=(--icon=assets/icon.icns)
+elif [[ "$OSTYPE" == "linux"* ]]; then
+    [[ -f assets/icon.png ]] && EXTRA_ARGS+=(--icon=assets/icon.png)
 fi
 
 echo "==> Running PyInstaller..."
