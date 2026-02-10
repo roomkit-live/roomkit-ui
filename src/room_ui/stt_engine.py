@@ -78,10 +78,12 @@ class STTEngine(QObject):
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
         self._recording = False
+        self._busy = False  # guards against overlapping start/stop
         self._kit: Any = None
         self._channel: Any = None
         self._session: Any = None
         self._provider: Any = None
+        self._transport: Any = None
         self._accumulated_text: list[str] = []
         self._transcription_event: asyncio.Event | None = None
 
@@ -109,9 +111,10 @@ class STTEngine(QObject):
     # -- lifecycle -------------------------------------------------------------
 
     async def _start_recording(self) -> None:
-        if self._recording:
+        if self._recording or self._busy:
             return
 
+        self._busy = True
         self._recording = True
         self.recording_changed.emit(True)
         self._accumulated_text.clear()
@@ -119,6 +122,7 @@ class STTEngine(QObject):
         # --- Fake mode: skip roomkit, just use hardcoded text ---
         if os.environ.get("STT_FAKE"):
             logger.info("STT fake mode — will paste test text on stop")
+            self._busy = False
             return
 
         settings = load_settings()
@@ -128,6 +132,7 @@ class STTEngine(QObject):
                 "OpenAI API key is required for dictation. Open Settings to enter it."
             )
             self._recording = False
+            self._busy = False
             self.recording_changed.emit(False)
             return
 
@@ -155,6 +160,7 @@ class STTEngine(QObject):
                 mute_mic_during_playback=False,
                 input_device=input_device,
             )
+            self._transport = transport
 
             self._channel = RealtimeVoiceChannel(
                 "stt",
@@ -204,37 +210,49 @@ class STTEngine(QObject):
             self.recording_changed.emit(False)
             self.error_occurred.emit(str(exc))
             await self._cleanup()
+        finally:
+            self._busy = False
 
     async def _stop_recording(self) -> None:
         if not self._recording:
             return
+        if self._busy:
+            # Start is still in progress; just flag recording off so it
+            # won't continue once start finishes.
+            self._recording = False
+            self.recording_changed.emit(False)
+            return
 
+        self._busy = True
         self._recording = False
         self.recording_changed.emit(False)
         logger.info("STT recording stopped")
 
-        if os.environ.get("STT_FAKE"):
-            self._accumulated_text.append("Hello, this is a test transcription.")
-        else:
-            # Commit any buffered audio so OpenAI returns the transcription
-            # before we tear down the session.
-            await self._commit_and_wait()
+        try:
+            if os.environ.get("STT_FAKE"):
+                self._accumulated_text.append("Hello, this is a test transcription.")
+            else:
+                # Commit any buffered audio so OpenAI returns the transcription
+                # before we tear down the session.
+                await self._commit_and_wait()
 
-        # Emit / paste the text BEFORE cleanup (cleanup is slow).
-        text = " ".join(self._accumulated_text).strip()
-        if text:
-            logger.info("Emitting text_ready: %s", text[:80])
-            # Small delay so the hotkey release doesn't interfere with pasting.
-            await asyncio.sleep(0.15)
-            self.text_ready.emit(text)
-        else:
-            logger.info("No transcription captured")
+            # Emit / paste the text BEFORE cleanup (cleanup is slow).
+            text = " ".join(self._accumulated_text).strip()
+            if text:
+                logger.info("Emitting text_ready: %s", text[:80])
+                # Small delay so the hotkey release doesn't interfere with pasting.
+                await asyncio.sleep(0.15)
+                self.text_ready.emit(text)
+            else:
+                logger.info("No transcription captured")
 
-        if not os.environ.get("STT_FAKE"):
-            try:
-                await self._cleanup()
-            except Exception:
-                logger.exception("Error during STT cleanup")
+            if not os.environ.get("STT_FAKE"):
+                try:
+                    await self._cleanup()
+                except Exception:
+                    logger.exception("Error during STT cleanup")
+        finally:
+            self._busy = False
 
     async def _commit_and_wait(self) -> None:
         """Send input_audio_buffer.commit and wait for the transcription."""
@@ -275,6 +293,21 @@ class STTEngine(QObject):
                 await self._channel.end_session(self._session)
             except Exception:
                 pass
+        # Stop the local audio transport explicitly so PortAudio streams
+        # are closed and no more audio/VAD events are produced.
+        if self._transport is not None:
+            try:
+                for stream in self._transport._input_streams.values():
+                    if stream.active:
+                        stream.stop()
+            except Exception:
+                pass
+            try:
+                for stream in self._transport._output_streams.values():
+                    if stream.active:
+                        stream.stop()
+            except Exception:
+                pass
         if self._kit:
             try:
                 await self._kit.close()
@@ -283,6 +316,7 @@ class STTEngine(QObject):
         self._channel = None
         self._session = None
         self._provider = None
+        self._transport = None
         self._kit = None
 
     # -- paste -----------------------------------------------------------------
