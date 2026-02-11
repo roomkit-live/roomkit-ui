@@ -91,6 +91,14 @@ def main() -> None:
     stt = STTEngine()
     tray = TrayService()
 
+    # tray → show/raise main window
+    def _show_window() -> None:
+        window.showNormal()
+        window.raise_()
+        window.activateWindow()
+
+    tray.show_action.triggered.connect(_show_window)
+
     # hotkey / menu → toggle recording
     tray.dictate_action.triggered.connect(stt.toggle_recording)
 

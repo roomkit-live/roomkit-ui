@@ -40,6 +40,9 @@ class TrayService(QObject):
 
         # --- Context menu ---
         menu = QMenu()
+        self._show_action = QAction("Show Window", menu)
+        menu.addAction(self._show_action)
+        menu.addSeparator()
         self._dictate_action = QAction("Start Dictation", menu)
         menu.addAction(self._dictate_action)
         self._log_action = QAction("Show Log", menu)
@@ -55,6 +58,11 @@ class TrayService(QObject):
         self._tray.show()
 
     @property
+    def show_action(self) -> QAction:
+        """Expose the show-window action so ``app.py`` can connect it."""
+        return self._show_action
+
+    @property
     def dictate_action(self) -> QAction:
         """Expose the menu action so ``app.py`` can connect it."""
         return self._dictate_action
@@ -65,9 +73,9 @@ class TrayService(QObject):
         return self._log_action
 
     def _on_activated(self, reason: QSystemTrayIcon.ActivationReason) -> None:
-        """Left-click the tray icon to toggle dictation."""
+        """Left-click the tray icon to show the main window."""
         if reason == QSystemTrayIcon.ActivationReason.Trigger:
-            self._dictate_action.trigger()
+            self._show_action.trigger()
 
     @Slot(bool)
     def on_recording_changed(self, recording: bool) -> None:
