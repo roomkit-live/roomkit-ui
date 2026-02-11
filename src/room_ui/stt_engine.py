@@ -425,6 +425,7 @@ class STTEngine(QObject):
                 stt=stt_provider,
                 backend=backend,
                 pipeline=AudioPipelineConfig(),
+                batch_mode=self._batch_mode,
             )
             self._channel = voice
 
