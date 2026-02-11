@@ -117,9 +117,18 @@ class MCPManager:
             logger.exception("MCP manager task failed")
         finally:
             ready.set()  # unblock caller if we failed early
-            # Clean up all successfully-connected servers
+            # Clean up all successfully-connected servers.
+            # Shield from cancellation so the subprocess gets properly
+            # terminated even if close_all() is impatient.
             for stack in server_stacks:
-                await self._safe_close_stack(stack, "<cleanup>")
+                try:
+                    await asyncio.shield(
+                        self._safe_close_stack(stack, "<cleanup>")
+                    )
+                except asyncio.CancelledError:
+                    # shield was cancelled but the inner coro may still
+                    # be running — give it one more chance
+                    await self._safe_close_stack(stack, "<cleanup>")
 
     @staticmethod
     async def _safe_close_stack(stack: AsyncExitStack, name: str) -> None:
@@ -144,9 +153,10 @@ class MCPManager:
         transport = cfg.get("transport", "stdio")
 
         if transport == "stdio":
-            command = cfg.get("command", "")
+            command_parts = cfg.get("command", "").split()
+            command = command_parts[0] if command_parts else ""
             args = cfg.get("args", "")
-            arg_list = args.split() if args else []
+            arg_list = command_parts[1:] + (args.split() if args else [])
 
             env: dict[str, str] | None = None
             env_str = cfg.get("env", "")
@@ -198,15 +208,18 @@ class MCPManager:
             self._close_event.set()
         if self._task:
             try:
-                await asyncio.wait_for(self._task, timeout=10)
-            except TimeoutError:
-                logger.warning("MCP shutdown timed out, cancelling task")
-                self._task.cancel()
-                try:
-                    await self._task
-                except asyncio.CancelledError:
-                    pass
-            except BaseException:
+                # Use asyncio.wait (not wait_for) to avoid auto-cancelling
+                # the task on timeout — the task needs uninterrupted time
+                # to properly terminate MCP subprocesses.
+                done, _ = await asyncio.wait([self._task], timeout=15)
+                if not done:
+                    logger.warning("MCP shutdown timed out, cancelling task")
+                    self._task.cancel()
+                    try:
+                        await self._task
+                    except asyncio.CancelledError:
+                        pass
+            except Exception:
                 logger.exception("Error during MCP shutdown")
             self._task = None
         self._tools.clear()

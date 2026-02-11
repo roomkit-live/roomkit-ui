@@ -9,6 +9,7 @@ import signal
 import sys
 from pathlib import Path
 
+from PySide6.QtCore import QTimer
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 from qasync import QEventLoop
@@ -117,7 +118,12 @@ def main() -> None:
     window.settings_saved.connect(hotkey.reload)
 
     # Let Ctrl+C quit cleanly instead of being swallowed by the Qt loop.
+    # The Qt event loop runs in C, so Python signal handlers never fire
+    # unless we periodically give the interpreter control via a timer.
     signal.signal(signal.SIGINT, lambda *_: app.quit())
+    _signal_timer = QTimer()
+    _signal_timer.start(200)
+    _signal_timer.timeout.connect(lambda: None)
 
     with loop:
         loop.run_forever()
