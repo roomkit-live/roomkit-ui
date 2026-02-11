@@ -330,7 +330,7 @@ class Engine(QObject):
                 except ImportError:
                     logger.warning("Speex AEC not available — install libspeexdsp")
 
-            denoiser = None
+            denoiser: Any = None
             if denoise_mode == "rnnoise":
                 try:
                     from roomkit.voice.pipeline.denoiser.rnnoise import RNNoiseDenoiserProvider
@@ -376,7 +376,10 @@ class Engine(QObject):
             denoise_label = type(denoiser).__name__ if denoiser else "none"
             logger.info(
                 "Audio pipeline: aec=%s, denoiser=%s, rate=%dHz, block=%dms",
-                aec_label, denoise_label, sample_rate, block_ms,
+                aec_label,
+                denoise_label,
+                sample_rate,
+                block_ms,
             )
 
             self._register_callbacks(provider, transport)
@@ -385,7 +388,8 @@ class Engine(QObject):
             mcp_servers: list[dict] = []
             try:
                 mcp_servers = [
-                    s for s in json.loads(settings.get("mcp_servers", "[]"))
+                    s
+                    for s in json.loads(settings.get("mcp_servers", "[]"))
                     if s.get("enabled", True)
                 ]
             except (json.JSONDecodeError, TypeError):
@@ -415,22 +419,32 @@ class Engine(QObject):
             has_mcp_tools = len(tools) > len(_BUILTIN_TOOLS)
 
             self._session = await self._start_session(
-                RoomKit, RealtimeVoiceChannel,
-                provider, transport, system_prompt, voice,
-                sample_rate, tools, tool_handler,
+                RoomKit,
+                RealtimeVoiceChannel,
+                provider,
+                transport,
+                system_prompt,
+                voice,
+                sample_rate,
+                tools,
+                tool_handler,
             )
             if self._session is None and has_mcp_tools:
                 # MCP tools broke the session — retry without them
                 logger.warning("Retrying session without MCP tools")
                 self._session = await self._start_session(
-                    RoomKit, RealtimeVoiceChannel,
-                    provider, transport, system_prompt, voice,
-                    sample_rate, list(_BUILTIN_TOOLS), tool_handler,
+                    RoomKit,
+                    RealtimeVoiceChannel,
+                    provider,
+                    transport,
+                    system_prompt,
+                    voice,
+                    sample_rate,
+                    list(_BUILTIN_TOOLS),
+                    tool_handler,
                 )
                 if self._session is not None:
-                    self.mcp_status.emit(
-                        "MCP tools disabled — incompatible with this provider"
-                    )
+                    self.mcp_status.emit("MCP tools disabled — incompatible with this provider")
                     tools = list(_BUILTIN_TOOLS)
 
             if self._session is None:
@@ -444,8 +458,7 @@ class Engine(QObject):
 
             # Emit structured session info for the UI info bar
             tool_info = [
-                {"name": t.get("name", ""), "description": t.get("description", "")}
-                for t in tools
+                {"name": t.get("name", ""), "description": t.get("description", "")} for t in tools
             ]
             info: dict = {
                 "provider": provider_name,
@@ -492,7 +505,9 @@ class Engine(QObject):
             await self._kit.create_room(room_id="local-demo")
             await self._kit.attach_channel("local-demo", "voice")
             return await self._channel.start_session(
-                "local-demo", "local-user", connection=None,
+                "local-demo",
+                "local-user",
+                connection=None,
             )
         except Exception:
             logger.exception("_start_session failed")
@@ -567,9 +582,7 @@ class Engine(QObject):
         We also purge cancelled timer callbacks and stale asyncio handles.
         """
         loop = asyncio.get_event_loop()
-        self_pipe_fd = getattr(
-            getattr(loop, "_ssock", None), "fileno", lambda: -1
-        )()
+        self_pipe_fd = getattr(getattr(loop, "_ssock", None), "fileno", lambda: -1)()
 
         removed = 0
 
@@ -585,9 +598,7 @@ class Engine(QObject):
                     target = os.readlink(f"/proc/self/fd/{fd}")
                 except OSError:
                     target = "?"
-                logger.warning(
-                    "cleanup L1: removing %s FD %d → %s", attr, fd, target
-                )
+                logger.warning("cleanup L1: removing %s FD %d → %s", attr, fd, target)
                 notifier = notifiers.pop(fd, None)
                 if notifier is not None:
                     notifier.setEnabled(False)
@@ -607,9 +618,7 @@ class Engine(QObject):
                 for fd in list(sel_notifiers):
                     if fd == self_pipe_fd:
                         continue
-                    logger.warning(
-                        "cleanup L2: removing %s FD %d", mangled, fd
-                    )
+                    logger.warning("cleanup L2: removing %s FD %d", mangled, fd)
                     notifier = sel_notifiers.pop(fd, None)
                     if notifier is not None:
                         notifier.setEnabled(False)
@@ -655,7 +664,8 @@ class Engine(QObject):
                 if isinstance(cb_self, asyncio.Task) and cb_self not in live_tasks:
                     logger.warning(
                         "cleanup L3: killing orphaned task timer %s → %s",
-                        tid, cb_self,
+                        tid,
+                        cb_self,
                     )
                     handle.cancel()
                     kill_tids.append(tid)
@@ -685,7 +695,11 @@ class Engine(QObject):
         logger.info(
             "cleanup: removed %d items, %d read + %d write notifiers remain "
             "(self-pipe=%d), %d live tasks",
-            removed, r_count, w_count, self_pipe_fd, len(tasks),
+            removed,
+            r_count,
+            w_count,
+            self_pipe_fd,
+            len(tasks),
         )
         for t in tasks:
             logger.info("cleanup: live task: %s", t)
@@ -700,52 +714,53 @@ class Engine(QObject):
             t1 = resource.getrusage(resource.RUSAGE_SELF)
             cpu = (t1.ru_utime - t0.ru_utime) + (t1.ru_stime - t0.ru_stime)
             logger.info(
-                "cpu-monitor[%d]: %.2fs CPU in 3s", i, cpu,
+                "cpu-monitor[%d]: %.2fs CPU in 3s",
+                i,
+                cpu,
             )
             if cpu > 1.0:
                 # Dump everything that could be spinning
                 timer = getattr(loop, "_timer", None)
                 if timer is not None:
                     cbs = getattr(timer, "_SimpleTimer__callbacks", {})
-                    logger.warning(
-                        "cpu-monitor: %d timer callbacks", len(cbs)
-                    )
+                    logger.warning("cpu-monitor: %d timer callbacks", len(cbs))
                     for tid_k, handle in list(cbs.items())[:5]:
-                        logger.warning("  timer %s → %s (cancelled=%s)",
-                                       tid_k, handle, handle._cancelled)
+                        logger.warning(
+                            "  timer %s → %s (cancelled=%s)", tid_k, handle, handle._cancelled
+                        )
 
                 ready = getattr(loop, "_ready", None)
                 if ready is not None:
                     logger.warning("cpu-monitor: %d _ready items", len(ready))
                     for h in list(ready)[:5]:
-                        logger.warning("  ready → %s (cancelled=%s)",
-                                       h, h._cancelled)
+                        logger.warning("  ready → %s (cancelled=%s)", h, h._cancelled)
 
                 # Layer 1 notifiers
                 for attr in ("_read_notifiers", "_write_notifiers"):
                     notifiers = getattr(loop, attr, {})
                     for fd, notifier in list(notifiers.items()):
                         logger.warning(
-                            "  L1 %s FD %d enabled=%s", attr, fd,
+                            "  L1 %s FD %d enabled=%s",
+                            attr,
+                            fd,
                             notifier.isEnabled(),
                         )
 
                 # Layer 2 notifiers (Selector)
                 selector = getattr(loop, "_selector", None)
                 if selector:
-                    for mangled in ("_Selector__read_notifiers",
-                                    "_Selector__write_notifiers"):
+                    for mangled in ("_Selector__read_notifiers", "_Selector__write_notifiers"):
                         sel_n = getattr(selector, mangled, {})
                         for fd, notifier in list(sel_n.items()):
                             logger.warning(
-                                "  L2 %s FD %d enabled=%s", mangled, fd,
+                                "  L2 %s FD %d enabled=%s",
+                                mangled,
+                                fd,
                                 notifier.isEnabled(),
                             )
                     fd_to_key = getattr(selector, "_fd_to_key", {})
                     if fd_to_key:
-                        logger.warning(
-                            "  L2 _fd_to_key: %s", list(fd_to_key.keys())
-                        )
+                        logger.warning("  L2 _fd_to_key: %s", list(fd_to_key.keys()))
 
                 tasks = [t for t in asyncio.all_tasks(loop) if not t.done()]
                 logger.warning("cpu-monitor: %d live tasks", len(tasks))

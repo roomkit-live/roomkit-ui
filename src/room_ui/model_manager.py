@@ -13,9 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 _RAW_URL = "https://raw.githubusercontent.com/anganyAI/edge-ai-models/main"
-_LFS_BATCH_URL = (
-    "https://github.com/anganyAI/edge-ai-models.git/info/lfs/objects/batch"
-)
+_LFS_BATCH_URL = "https://github.com/anganyAI/edge-ai-models.git/info/lfs/objects/batch"
 
 # Progress callback: (bytes_downloaded, total_bytes)
 ProgressCallback = Callable[[int, int], None]
@@ -144,7 +142,7 @@ def _lfs_download_url(oid: str, size: int) -> str:
     obj = data["objects"][0]
     if "error" in obj:
         raise RuntimeError(f"LFS error: {obj['error']}")
-    return obj["actions"]["download"]["href"]
+    return str(obj["actions"]["download"]["href"])
 
 
 _CHUNK = 256 * 1024  # 256 KB read chunks
@@ -161,13 +159,13 @@ def _download_file(
     try:
         req = urllib.request.Request(url)  # noqa: S310
         with urllib.request.urlopen(req) as resp, open(tmp, "wb") as fp:  # noqa: S310
-                while True:
-                    chunk = resp.read(_CHUNK)
-                    if not chunk:
-                        break
-                    fp.write(chunk)
-                    if on_bytes is not None:
-                        on_bytes(len(chunk))
+            while True:
+                chunk = resp.read(_CHUNK)
+                if not chunk:
+                    break
+                fp.write(chunk)
+                if on_bytes is not None:
+                    on_bytes(len(chunk))
         tmp.rename(target)
     except Exception:
         tmp.unlink(missing_ok=True)

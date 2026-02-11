@@ -49,9 +49,7 @@ class SessionInfoBar(QWidget):
         self._header = QWidget()
         self._header.setFixedHeight(_COLLAPSED_HEIGHT)
         self._header.setCursor(Qt.PointingHandCursor)
-        self._header.setStyleSheet(
-            f"background-color: {c['BG_TERTIARY']};"
-        )
+        self._header.setStyleSheet(f"background-color: {c['BG_TERTIARY']};")
 
         header_layout = QHBoxLayout(self._header)
         header_layout.setContentsMargins(12, 0, 12, 0)
@@ -89,9 +87,7 @@ class SessionInfoBar(QWidget):
         self._detail_area.hide()
 
         self._detail_container = QWidget()
-        self._detail_container.setStyleSheet(
-            f"background-color: {c['BG_TERTIARY']};"
-        )
+        self._detail_container.setStyleSheet(f"background-color: {c['BG_TERTIARY']};")
         self._detail_layout = QVBoxLayout(self._detail_container)
         self._detail_layout.setContentsMargins(12, 4, 12, 8)
         self._detail_layout.setSpacing(2)
@@ -105,7 +101,7 @@ class SessionInfoBar(QWidget):
         border.setStyleSheet(f"background-color: {c['SEPARATOR']};")
         outer.addWidget(border)
 
-        self._header.mousePressEvent = lambda _e: self._toggle()
+        self._header.mousePressEvent = lambda _e: self._toggle()  # type: ignore[method-assign]
 
     # -- public API ----------------------------------------------------------
 
@@ -134,9 +130,7 @@ class SessionInfoBar(QWidget):
         c = colors()
 
         if failed:
-            failed_label = QLabel(
-                f"\u26a0  Failed: {', '.join(failed)}"
-            )
+            failed_label = QLabel(f"\u26a0  Failed: {', '.join(failed)}")
             failed_label.setWordWrap(True)
             failed_label.setStyleSheet(
                 f"color: {c['ACCENT_RED']}; font-size: 12px;"
@@ -206,8 +200,7 @@ class SessionInfoBar(QWidget):
         # Ease-out quadratic
         eased = 1.0 - (1.0 - progress) ** 2
         current = int(
-            self._anim_start_height
-            + (self._target_height - self._anim_start_height) * eased
+            self._anim_start_height + (self._target_height - self._anim_start_height) * eased
         )
         self.setFixedHeight(current)
 

@@ -363,8 +363,7 @@ class STTEngine(QObject):
 
         if not is_model_downloaded(model_id):
             self.error_occurred.emit(
-                f"Model '{model_id}' is not downloaded. "
-                "Go to Settings → AI Models to download it."
+                f"Model '{model_id}' is not downloaded. Go to Settings → AI Models to download it."
             )
             self._recording = False
             self._busy = False
@@ -386,8 +385,7 @@ class STTEngine(QObject):
             from roomkit.voice.stt.sherpa_onnx import SherpaOnnxSTTProvider
         except ImportError as exc:
             self.error_occurred.emit(
-                f"Missing dependency for local STT: {exc}. "
-                "Install with: pip install sherpa-onnx"
+                f"Missing dependency for local STT: {exc}. Install with: pip install sherpa-onnx"
             )
             self._recording = False
             self._busy = False
@@ -399,7 +397,10 @@ class STTEngine(QObject):
             translate = bool(settings.get("stt_translate", False))
             inference_device = settings.get("inference_device", "cpu")
             config = build_stt_config(
-                model_id, language, translate=translate, provider=inference_device,
+                model_id,
+                language,
+                translate=translate,
+                provider=inference_device,
             )
             # Dictation: the user controls start/stop, so disable endpoint
             # detection — we get one single final result on flush instead
@@ -440,7 +441,8 @@ class STTEngine(QObject):
                 accumulated = self._accumulated_text
 
                 @self._kit.hook(
-                    HookTrigger.ON_PARTIAL_TRANSCRIPTION, execution=HookExecution.ASYNC,
+                    HookTrigger.ON_PARTIAL_TRANSCRIPTION,
+                    execution=HookExecution.ASYNC,
                 )
                 async def _on_partial(result, ctx):
                     logger.info("Local STT partial: %s", result.text)
@@ -469,9 +471,10 @@ class STTEngine(QObject):
             mode = "batch" if self._batch_mode else "streaming"
             task = "translate" if translate else "transcribe"
             logger.info(
-                "Dictation started: provider=local, model=%s, mode=%s,"
-                " task=%s, rate=16000Hz",
-                model_id, mode, task,
+                "Dictation started: provider=local, model=%s, mode=%s, task=%s, rate=16000Hz",
+                model_id,
+                mode,
+                task,
             )
 
         except Exception as exc:

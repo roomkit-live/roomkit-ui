@@ -89,9 +89,7 @@ class MCPManager:
                                 "type": "function",
                                 "name": tool.name,
                                 "description": tool.description or "",
-                                "parameters": _clean_schema(
-                                    tool.inputSchema or {}
-                                ),
+                                "parameters": _clean_schema(tool.inputSchema or {}),
                             }
                         )
                     server_stacks.append(stack)
@@ -138,9 +136,7 @@ class MCPManager:
             for i, stack in enumerate(server_stacks):
                 logger.info("_run finally: closing stack %d/%d …", i + 1, len(server_stacks))
                 try:
-                    await asyncio.shield(
-                        self._safe_close_stack(stack, "<cleanup>")
-                    )
+                    await asyncio.shield(self._safe_close_stack(stack, "<cleanup>"))
                 except asyncio.CancelledError:
                     # shield was cancelled but the inner coro may still
                     # be running — give it one more chance

@@ -427,9 +427,7 @@ class _ModelRow(QWidget):
         top.addWidget(self.radio)
 
         name_label = QLabel(model.name)
-        name_label.setStyleSheet(
-            "font-size: 13px; font-weight: 500; background: transparent;"
-        )
+        name_label.setStyleSheet("font-size: 13px; font-weight: 500; background: transparent;")
         top.addWidget(name_label)
 
         type_label = QLabel(model.type)
@@ -495,8 +493,7 @@ class _ModelRow(QWidget):
         if downloaded:
             self.status_label.setText("\u2713 Ready")
             self.status_label.setStyleSheet(
-                f"font-size: 12px; color: {c['ACCENT_GREEN']};"
-                f" background: transparent;"
+                f"font-size: 12px; color: {c['ACCENT_GREEN']}; background: transparent;"
             )
             self.action_btn.hide()
             self.delete_btn.show()
@@ -522,8 +519,7 @@ class _ModelRow(QWidget):
         self.progress_bar.show()
         self.status_label.setText(f"{pct}%")
         self.status_label.setStyleSheet(
-            f"font-size: 12px; color: {self._c['TEXT_SECONDARY']};"
-            f" background: transparent;"
+            f"font-size: 12px; color: {self._c['TEXT_SECONDARY']}; background: transparent;"
         )
 
     def set_resolving(self) -> None:
@@ -533,8 +529,7 @@ class _ModelRow(QWidget):
         self.progress_bar.show()
         self.status_label.setText("Resolving…")
         self.status_label.setStyleSheet(
-            f"font-size: 12px; color: {self._c['TEXT_SECONDARY']};"
-            f" background: transparent;"
+            f"font-size: 12px; color: {self._c['TEXT_SECONDARY']}; background: transparent;"
         )
 
     def set_downloaded(self) -> None:
@@ -559,8 +554,7 @@ class _ModelRow(QWidget):
         self.action_btn.show()
         self.status_label.setText("Error")
         self.status_label.setStyleSheet(
-            f"font-size: 12px; color: {self._c['ACCENT_RED']};"
-            f" background: transparent;"
+            f"font-size: 12px; color: {self._c['ACCENT_RED']}; background: transparent;"
         )
 
 
@@ -643,7 +637,10 @@ class _ModelsPage(QWidget):
             size: str
 
         gtcrn_info = _DenoiserModel(
-            id=GTCRN_MODEL_ID, name="GTCRN", type="denoiser", size=GTCRN_SIZE,
+            id=GTCRN_MODEL_ID,
+            name="GTCRN",
+            type="denoiser",
+            size=GTCRN_SIZE,
         )
 
         denoise_frame = QWidget()
@@ -1011,9 +1008,7 @@ class _MCPPage(QWidget):
         form.addRow(self._command_label, self._command_edit)
 
         self._args_edit = QLineEdit()
-        self._args_edit.setPlaceholderText(
-            "e.g. -y @modelcontextprotocol/server-filesystem /home"
-        )
+        self._args_edit.setPlaceholderText("e.g. -y @modelcontextprotocol/server-filesystem /home")
         self._args_label = QLabel("Args")
         form.addRow(self._args_label, self._args_edit)
 
