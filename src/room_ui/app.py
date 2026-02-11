@@ -43,6 +43,9 @@ logging.basicConfig(
     force=True,
 )
 
+# Enable MCP SDK debug logging to trace subprocess cleanup
+logging.getLogger("mcp").setLevel(logging.DEBUG)
+
 
 def main() -> None:
     app = QApplication(sys.argv)

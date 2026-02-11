@@ -19,7 +19,19 @@ from typing import Any
 
 _CONNECT_TIMEOUT = 30  # seconds per server
 
+# JSON Schema keys that voice providers (especially Gemini) reject.
+_STRIP_SCHEMA_KEYS = {"$schema", "additionalProperties"}
+
 logger = logging.getLogger(__name__)
+
+
+def _clean_schema(obj: Any) -> Any:
+    """Recursively strip JSON Schema keys that voice providers reject."""
+    if isinstance(obj, dict):
+        return {k: _clean_schema(v) for k, v in obj.items() if k not in _STRIP_SCHEMA_KEYS}
+    if isinstance(obj, list):
+        return [_clean_schema(v) for v in obj]
+    return obj
 
 
 class MCPManager:
@@ -76,7 +88,9 @@ class MCPManager:
                                 "type": "function",
                                 "name": tool.name,
                                 "description": tool.description or "",
-                                "parameters": tool.inputSchema,
+                                "parameters": _clean_schema(
+                                    tool.inputSchema or {}
+                                ),
                             }
                         )
                     server_stacks.append(stack)
@@ -120,7 +134,8 @@ class MCPManager:
             # Clean up all successfully-connected servers.
             # Shield from cancellation so the subprocess gets properly
             # terminated even if close_all() is impatient.
-            for stack in server_stacks:
+            for i, stack in enumerate(server_stacks):
+                logger.info("_run finally: closing stack %d/%d …", i + 1, len(server_stacks))
                 try:
                     await asyncio.shield(
                         self._safe_close_stack(stack, "<cleanup>")
@@ -128,7 +143,10 @@ class MCPManager:
                 except asyncio.CancelledError:
                     # shield was cancelled but the inner coro may still
                     # be running — give it one more chance
+                    logger.info("_run finally: shield cancelled for stack %d, retrying", i + 1)
                     await self._safe_close_stack(stack, "<cleanup>")
+                logger.info("_run finally: stack %d closed", i + 1)
+            logger.info("_run finally: all stacks closed")
 
     @staticmethod
     async def _safe_close_stack(stack: AsyncExitStack, name: str) -> None:
@@ -204,26 +222,31 @@ class MCPManager:
 
     async def close_all(self) -> None:
         """Signal the background task to exit and wait for cleanup."""
+        logger.info("close_all: signalling shutdown")
         if self._close_event:
             self._close_event.set()
         if self._task:
+            logger.info("close_all: waiting for _run task (timeout=15s) …")
             try:
                 # Use asyncio.wait (not wait_for) to avoid auto-cancelling
                 # the task on timeout — the task needs uninterrupted time
                 # to properly terminate MCP subprocesses.
                 done, _ = await asyncio.wait([self._task], timeout=15)
-                if not done:
-                    logger.warning("MCP shutdown timed out, cancelling task")
+                if done:
+                    logger.info("close_all: _run task finished normally")
+                else:
+                    logger.warning("close_all: timed out after 15s, cancelling task")
                     self._task.cancel()
                     try:
                         await self._task
                     except asyncio.CancelledError:
-                        pass
+                        logger.info("close_all: task cancelled")
             except Exception:
                 logger.exception("Error during MCP shutdown")
             self._task = None
         self._tools.clear()
         self._tool_to_session.clear()
+        logger.info("close_all: done")
 
     # -- tools ---------------------------------------------------------------
 

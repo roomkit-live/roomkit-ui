@@ -474,6 +474,10 @@ class _MCPPage(QWidget):
         form.setSpacing(8)
         form.setLabelAlignment(Qt.AlignRight)
 
+        self._enabled_check = QCheckBox("Enabled")
+        self._enabled_check.setChecked(True)
+        form.addRow("", self._enabled_check)
+
         self._name_edit = QLineEdit()
         self._name_edit.setPlaceholderText("e.g. Filesystem")
         form.addRow("Name", self._name_edit)
@@ -510,11 +514,12 @@ class _MCPPage(QWidget):
 
         # Populate list
         for srv in self._servers:
-            self._server_list.addItem(srv.get("name", "Unnamed"))
+            self._server_list.addItem(self._display_name(srv))
 
         # Connections
         self._server_list.currentRowChanged.connect(self._on_selection_changed)
         self._transport_combo.currentIndexChanged.connect(self._on_transport_changed)
+        self._enabled_check.toggled.connect(self._sync_to_model)
         self._name_edit.textChanged.connect(self._sync_to_model)
         self._command_edit.textChanged.connect(self._sync_to_model)
         self._args_edit.textChanged.connect(self._sync_to_model)
@@ -523,6 +528,7 @@ class _MCPPage(QWidget):
 
     def _add_server(self) -> None:
         srv = {
+            "enabled": True,
             "name": "New Server",
             "transport": "stdio",
             "command": "",
@@ -550,6 +556,7 @@ class _MCPPage(QWidget):
 
         # Block signals while populating to avoid feedback loop
         for w in (
+            self._enabled_check,
             self._name_edit,
             self._command_edit,
             self._args_edit,
@@ -559,6 +566,7 @@ class _MCPPage(QWidget):
         ):
             w.blockSignals(True)
 
+        self._enabled_check.setChecked(srv.get("enabled", True))
         self._name_edit.setText(srv.get("name", ""))
         self._command_edit.setText(srv.get("command", ""))
         self._args_edit.setText(srv.get("args", ""))
@@ -572,6 +580,7 @@ class _MCPPage(QWidget):
                 break
 
         for w in (
+            self._enabled_check,
             self._name_edit,
             self._command_edit,
             self._args_edit,
@@ -602,6 +611,7 @@ class _MCPPage(QWidget):
         if row < 0 or row >= len(self._servers):
             return
         srv = self._servers[row]
+        srv["enabled"] = self._enabled_check.isChecked()
         srv["name"] = self._name_edit.text().strip()
         srv["transport"] = MCP_TRANSPORTS[self._transport_combo.currentIndex()][1]
         srv["command"] = self._command_edit.text().strip()
@@ -611,7 +621,14 @@ class _MCPPage(QWidget):
         # Update list item text
         item = self._server_list.item(row)
         if item:
-            item.setText(srv["name"] or "Unnamed")
+            item.setText(self._display_name(srv))
+
+    @staticmethod
+    def _display_name(srv: dict) -> str:
+        name = srv.get("name") or "Unnamed"
+        if not srv.get("enabled", True):
+            return f"{name} (disabled)"
+        return name
 
     def get_servers_json(self) -> str:
         """Return server configs as a JSON string for saving."""
