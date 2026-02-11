@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QMainWindow, QVBoxLayout, QWidget
 
 from room_ui.engine import Engine
@@ -19,6 +20,8 @@ logger = logging.getLogger(__name__)
 
 
 class MainWindow(QMainWindow):
+    settings_saved = Signal()
+
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("RoomKit UI")
@@ -74,7 +77,9 @@ class MainWindow(QMainWindow):
         self._engine.mcp_status.connect(self._on_mcp_status)
 
     def _open_settings(self) -> None:
-        SettingsPanel(self).exec()
+        dlg = SettingsPanel(self)
+        if dlg.exec():
+            self.settings_saved.emit()
 
     def _on_reset(self) -> None:
         if self._engine.state != "idle":

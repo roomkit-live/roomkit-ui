@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 
 from room_ui.settings import load_settings, save_settings
 from room_ui.theme import colors
+from room_ui.widgets.hotkey_button import HotkeyButton
 
 GEMINI_MODELS = [
     "gemini-2.5-flash-native-audio-preview-12-2025",
@@ -361,8 +362,8 @@ class _DictationPage(QWidget):
         form.addRow("OpenAI Key", self.openai_api_key)
 
         # Hotkey
-        self.hotkey = QLineEdit(settings.get("stt_hotkey", "<ctrl>+<shift>+h"))
-        self.hotkey.setPlaceholderText("<ctrl>+<shift>+h")
+        self.hotkey = HotkeyButton()
+        self.hotkey.set_value(settings.get("stt_hotkey", "<ctrl>+<shift>+h"))
         form.addRow("Hotkey", self.hotkey)
 
         # Language
@@ -378,9 +379,7 @@ class _DictationPage(QWidget):
 
         layout.addLayout(form)
 
-        hint = QLabel(
-            "Hotkey format uses pynput syntax, e.g. &lt;ctrl&gt;+&lt;shift&gt;+h"
-        )
+        hint = QLabel("Click the button above, then press your desired key combination.")
         hint.setWordWrap(True)
         hint.setStyleSheet("font-size: 11px; color: #636366; background: transparent;")
         layout.addWidget(hint)
@@ -780,7 +779,7 @@ class SettingsPanel(QDialog):
             "input_device": self._general.input_combo.currentData(),
             "output_device": self._general.output_combo.currentData(),
             "stt_enabled": self._dictation.enabled.isChecked(),
-            "stt_hotkey": self._dictation.hotkey.text().strip(),
+            "stt_hotkey": self._dictation.hotkey.value(),
             "stt_language": STT_LANGUAGES[self._dictation.language.currentIndex()][1],
             "mcp_servers": self._mcp.get_servers_json(),
         }

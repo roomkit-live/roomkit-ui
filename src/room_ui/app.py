@@ -79,13 +79,15 @@ def main() -> None:
     # engine → paste into focused input
     stt.text_ready.connect(stt.paste_text)
 
-    # Global hotkey (when enabled)
-    hotkey = None
+    # Global hotkey (always created, reload picks up settings changes)
+    hotkey_str = settings.get("stt_hotkey", "<ctrl>+<shift>+h")
+    hotkey = HotkeyListener(hotkey=hotkey_str)
+    hotkey.hotkey_pressed.connect(stt.toggle_recording)
     if settings.get("stt_enabled", True):
-        hotkey_str = settings.get("stt_hotkey", "<ctrl>+<shift>+h")
-        hotkey = HotkeyListener(hotkey=hotkey_str)
-        hotkey.hotkey_pressed.connect(stt.toggle_recording)
         hotkey.start()
+
+    # Reload hotkey when settings are saved
+    window.settings_saved.connect(hotkey.reload)
 
     # Let Ctrl+C quit cleanly instead of being swallowed by the Qt loop.
     signal.signal(signal.SIGINT, lambda *_: app.quit())

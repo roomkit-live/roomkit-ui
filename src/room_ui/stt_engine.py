@@ -47,8 +47,17 @@ def _copy_to_clipboard(text: str) -> None:
 def _is_terminal_focused() -> bool:
     """Check if the focused X11 window is a terminal emulator."""
     try:
+        # Get active window ID
+        wid_result = subprocess.run(
+            ["xdotool", "getactivewindow"],
+            capture_output=True, text=True, timeout=3,
+        )
+        wid = wid_result.stdout.strip()
+        if not wid:
+            return False
+        # Get WM_CLASS via xprop (works on all xdotool versions)
         result = subprocess.run(
-            ["xdotool", "getactivewindow", "getwindowclassname"],
+            ["xprop", "-id", wid, "WM_CLASS"],
             capture_output=True, text=True, timeout=3,
         )
         wm_class = result.stdout.strip().lower()
@@ -86,9 +95,9 @@ def _simulate_paste() -> None:
     elif _is_wayland():
         subprocess.run(["wtype", "-M", "ctrl", "v", "-m", "ctrl"], check=True, timeout=5)
     elif _is_terminal_focused():
-        subprocess.run(["xdotool", "key", "ctrl+shift+v"], check=True, timeout=5)
+        subprocess.run(["xdotool", "key", "--clearmodifiers", "ctrl+shift+v"], check=True, timeout=5)
     else:
-        subprocess.run(["xdotool", "key", "ctrl+v"], check=True, timeout=5)
+        subprocess.run(["xdotool", "key", "--clearmodifiers", "ctrl+v"], check=True, timeout=5)
 
 
 def _get_frontmost_bundle() -> str | None:

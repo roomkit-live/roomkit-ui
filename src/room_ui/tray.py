@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
@@ -16,6 +17,9 @@ logger = logging.getLogger(__name__)
 _COLOR_IDLE = "#AAAAAA"
 _COLOR_RECORDING = "#FF4444"
 
+# RoomKit logo for the tray (falls back to microphone SVG if missing)
+_LOGO_PATH = Path(__file__).resolve().parent.parent.parent / "assets" / "icon.png"
+
 
 class TrayService(QObject):
     """Manages a ``QSystemTrayIcon`` showing dictation status."""
@@ -26,7 +30,10 @@ class TrayService(QObject):
         self._recording = False
 
         # --- Icon ---
-        self._icon_idle = svg_icon("microphone", color=_COLOR_IDLE, size=64)
+        if _LOGO_PATH.exists():
+            self._icon_idle = QIcon(str(_LOGO_PATH))
+        else:
+            self._icon_idle = svg_icon("microphone", color=_COLOR_IDLE, size=64)
         self._icon_recording = svg_icon("microphone", color=_COLOR_RECORDING, size=64)
 
         self._tray = QSystemTrayIcon(self._icon_idle, self)

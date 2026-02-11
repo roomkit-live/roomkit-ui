@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import sys
 
-from PySide6.QtCore import QObject, QTimer, Signal
+from PySide6.QtCore import QMetaObject, QObject, Qt, QTimer, Signal, Slot
 
 logger = logging.getLogger(__name__)
 
@@ -134,8 +134,13 @@ class HotkeyListener(QObject):
             logger.error("pynput is not installed — global hotkey disabled")
             return
 
+        # All pynput callbacks run in a background thread — use
+        # QMetaObject.invokeMethod to safely call back into the Qt main thread.
+        def _safe_activate(*_args):
+            QMetaObject.invokeMethod(self, "_on_activate", Qt.QueuedConnection)
+
         if "+" not in self._hotkey:
-            from pynput.keyboard import HotKey
+            from pynput.keyboard import HotKey, Key, KeyCode
 
             parsed = HotKey.parse(self._hotkey)
             if not parsed:
@@ -143,14 +148,30 @@ class HotkeyListener(QObject):
                 return
             target_key = parsed[0]
 
+            # Build a set of keys that should match — include both
+            # left/right variants for generic modifiers (e.g. <ctrl>
+            # should match both ctrl_l and ctrl_r).
+            # AltGr on many Linux keyboards reports as ISO_Level3_Shift
+            # (vk 65027) instead of pynput's Key.alt_gr (vk 65406).
+            _VARIANTS = {
+                Key.ctrl: {Key.ctrl, Key.ctrl_l, Key.ctrl_r},
+                Key.shift: {Key.shift, Key.shift_l, Key.shift_r},
+                Key.alt: {Key.alt, Key.alt_l, Key.alt_r, Key.alt_gr,
+                          KeyCode.from_vk(65027)},
+                Key.alt_gr: {Key.alt_gr, Key.alt_r,
+                             KeyCode.from_vk(65027)},
+                Key.cmd: {Key.cmd, Key.cmd_l, Key.cmd_r},
+            }
+            match_keys = _VARIANTS.get(target_key, {target_key})
+
             def on_release(key):
-                if key == target_key:
-                    self._on_activate()
+                if key in match_keys:
+                    _safe_activate()
 
             self._listener = keyboard.Listener(on_release=on_release)
         else:
             self._listener = keyboard.GlobalHotKeys(
-                {self._hotkey: self._on_activate}
+                {self._hotkey: _safe_activate}
             )
 
         self._listener.daemon = True
@@ -170,6 +191,25 @@ class HotkeyListener(QObject):
             self._listener = None
         logger.info("Global hotkey listener stopped")
 
+    def reload(self) -> None:
+        """Restart the listener with fresh settings."""
+        from room_ui.settings import load_settings
+
+        settings = load_settings()
+        enabled = settings.get("stt_enabled", True)
+        new_hotkey = settings.get("stt_hotkey", "<ctrl>+<shift>+h")
+
+        self.stop()
+
+        if not enabled:
+            logger.info("Hotkey disabled by settings")
+            return
+
+        self._hotkey = new_hotkey
+        self.start()
+        logger.info("Hotkey reloaded: %s", new_hotkey)
+
+    @Slot()
     def _on_activate(self) -> None:
         logger.info("Hotkey activated: %s", self._hotkey)
         self.hotkey_pressed.emit()
