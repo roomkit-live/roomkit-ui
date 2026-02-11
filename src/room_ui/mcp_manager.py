@@ -71,27 +71,32 @@ class MCPManager:
                     )
                     for tool in result.tools:
                         self._tool_to_session[tool.name] = session
-                        self._tools.append({
-                            "type": "function",
-                            "name": tool.name,
-                            "description": tool.description or "",
-                            "parameters": tool.inputSchema,
-                        })
+                        self._tools.append(
+                            {
+                                "type": "function",
+                                "name": tool.name,
+                                "description": tool.description or "",
+                                "parameters": tool.inputSchema,
+                            }
+                        )
                     server_stacks.append(stack)
                     logger.info(
                         "MCP server %r: %d tools",
-                        name, len(result.tools),
+                        name,
+                        len(result.tools),
                     )
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     logger.error(
                         "MCP server %r: timed out after %ds",
-                        name, _CONNECT_TIMEOUT,
+                        name,
+                        _CONNECT_TIMEOUT,
                     )
                     self.failed_servers.append(name)
                     await self._safe_close_stack(stack, name)
                 except BaseException:
                     logger.exception(
-                        "Failed to connect to MCP server %r", name,
+                        "Failed to connect to MCP server %r",
+                        name,
                     )
                     self.failed_servers.append(name)
                     await self._safe_close_stack(stack, name)
@@ -100,7 +105,7 @@ class MCPManager:
             ready.set()
 
             # Keep context managers alive until close is requested
-            if server_stacks:
+            if server_stacks and self._close_event is not None:
                 await self._close_event.wait()
                 logger.info("MCP manager shutting down")
             else:
@@ -123,11 +128,14 @@ class MCPManager:
             await stack.__aexit__(None, None, None)
         except BaseException:
             logger.debug(
-                "Suppressed error closing MCP stack for %r", name,
+                "Suppressed error closing MCP stack for %r",
+                name,
             )
 
     async def _connect_one(
-        self, cfg: dict[str, Any], stack: AsyncExitStack,
+        self,
+        cfg: dict[str, Any],
+        stack: AsyncExitStack,
     ) -> Any:
         """Open transport + ClientSession for a single server config."""
         from mcp import ClientSession, StdioServerParameters
@@ -150,7 +158,9 @@ class MCPManager:
                         env[k.strip()] = v.strip()
 
             params = StdioServerParameters(
-                command=command, args=arg_list, env=env,
+                command=command,
+                args=arg_list,
+                env=env,
             )
             streams = await stack.enter_async_context(
                 stdio_client(params),
@@ -189,7 +199,7 @@ class MCPManager:
         if self._task:
             try:
                 await asyncio.wait_for(self._task, timeout=10)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.warning("MCP shutdown timed out, cancelling task")
                 self._task.cancel()
                 try:

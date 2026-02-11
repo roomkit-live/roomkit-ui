@@ -100,8 +100,11 @@ class VUMeter(QWidget):
         # ── Radial glow: mic (green, left-of-center) ──
         if mic > 0.008:
             self._paint_glow(
-                p, w, h,
-                cx=w * 0.35, cy=cy,
+                p,
+                w,
+                h,
+                cx=w * 0.35,
+                cy=cy,
                 base_radius=w * 0.20 + w * 0.30 * mic,
                 color_inner=QColor(48, 209, 88),
                 color_outer=QColor(36, 180, 72),
@@ -111,8 +114,11 @@ class VUMeter(QWidget):
         # ── Radial glow: speaker (blue → indigo, right-of-center) ──
         if spk > 0.008:
             self._paint_glow(
-                p, w, h,
-                cx=w * 0.65, cy=cy,
+                p,
+                w,
+                h,
+                cx=w * 0.65,
+                cy=cy,
                 base_radius=w * 0.20 + w * 0.30 * spk,
                 color_inner=QColor(10, 132, 255),
                 color_outer=QColor(94, 92, 230),
@@ -122,8 +128,12 @@ class VUMeter(QWidget):
         # ── Waveform: mic (left half) ──
         if mic > 0.015:
             self._paint_wave(
-                p, w, h, cy,
-                x0=int(w * 0.04), x1=int(w * 0.50),
+                p,
+                w,
+                h,
+                cy,
+                x0=int(w * 0.04),
+                x1=int(w * 0.50),
                 level=mic,
                 color=QColor(48, 209, 88),
                 freq=8.0,
@@ -133,8 +143,12 @@ class VUMeter(QWidget):
         # ── Waveform: speaker (right half) ──
         if spk > 0.015:
             self._paint_wave(
-                p, w, h, cy,
-                x0=int(w * 0.50), x1=int(w * 0.96),
+                p,
+                w,
+                h,
+                cy,
+                x0=int(w * 0.50),
+                x1=int(w * 0.96),
                 level=spk,
                 color=QColor(10, 132, 255),
                 freq=6.0,

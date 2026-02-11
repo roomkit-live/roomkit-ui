@@ -57,19 +57,21 @@ class ChatView(QScrollArea):
             pixmap = QPixmap(64, 64)
             pixmap.fill(QColor(0, 0, 0, 0))
             from PySide6.QtGui import QPainter
+
             painter = QPainter(pixmap)
             renderer.render(painter, QRectF(0, 0, 64, 64))
             painter.end()
             icon.setPixmap(pixmap)
         else:
-            icon.setText("\U0001F399")
+            icon.setText("\U0001f399")
             icon.setStyleSheet("font-size: 48px; background: transparent;")
         empty_layout.addWidget(icon)
 
         heading = QLabel("RoomKit UI")
         heading.setAlignment(Qt.AlignCenter)
         heading.setStyleSheet(
-            f"font-size: 18px; font-weight: 600; color: {c['TEXT_PRIMARY']}; background: transparent;"
+            f"font-size: 18px; font-weight: 600;"
+            f" color: {c['TEXT_PRIMARY']}; background: transparent;"
         )
         empty_layout.addWidget(heading)
 
@@ -240,6 +242,8 @@ class ChatView(QScrollArea):
         # Remove everything from layout
         while self._layout.count():
             item = self._layout.takeAt(0)
+            if item is None:
+                continue
             w = item.widget()
             if w and w not in (self._empty_state, self._status_label):
                 w.deleteLater()
@@ -253,6 +257,8 @@ class ChatView(QScrollArea):
         self._hide_status()
         while self._layout.count():
             item = self._layout.takeAt(0)
+            if item is None:
+                continue
             w = item.widget()
             if w and w not in (self._empty_state, self._status_label):
                 w.deleteLater()
@@ -284,6 +290,6 @@ class ChatView(QScrollArea):
         self._status_label.setText(self._pulse_base + dots)
 
     def _scroll_to_bottom(self) -> None:
-        QTimer.singleShot(10, lambda: self.verticalScrollBar().setValue(
-            self.verticalScrollBar().maximum()
-        ))
+        QTimer.singleShot(
+            10, lambda: self.verticalScrollBar().setValue(self.verticalScrollBar().maximum())
+        )

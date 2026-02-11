@@ -10,7 +10,6 @@ Requires: Pillow, cairosvg (or falls back to a simple PNG generation).
 
 from __future__ import annotations
 
-import struct
 import subprocess
 import sys
 from pathlib import Path
@@ -26,6 +25,7 @@ def svg_to_png(size: int = 1024) -> None:
     """Convert SVG to PNG using cairosvg or rsvg-convert."""
     try:
         import cairosvg
+
         cairosvg.svg2png(
             url=str(SVG),
             write_to=str(PNG),
@@ -51,7 +51,8 @@ def svg_to_png(size: int = 1024) -> None:
         # sips can't read SVG, but we can try qlmanage
         subprocess.run(
             ["qlmanage", "-t", "-s", str(size), "-o", str(ASSETS), str(SVG)],
-            check=True, capture_output=True,
+            check=True,
+            capture_output=True,
         )
         generated = ASSETS / (SVG.stem + ".svg.png")
         if generated.exists():
@@ -68,6 +69,7 @@ def png_to_ico() -> None:
     """Convert PNG to ICO using Pillow."""
     try:
         from PIL import Image
+
         img = Image.open(PNG)
         img.save(ICO, sizes=[(16, 16), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
     except ImportError:
@@ -81,6 +83,7 @@ def png_to_icns() -> None:
         iconset.mkdir(exist_ok=True)
         try:
             from PIL import Image
+
             img = Image.open(PNG)
             for size in [16, 32, 64, 128, 256, 512]:
                 resized = img.resize((size, size), Image.LANCZOS)
@@ -94,6 +97,7 @@ def png_to_icns() -> None:
         subprocess.run(["iconutil", "-c", "icns", str(iconset), "-o", str(ICNS)], check=True)
         # Cleanup iconset
         import shutil
+
         shutil.rmtree(iconset)
     else:
         print("NOTE: .icns generation requires macOS, skipping")

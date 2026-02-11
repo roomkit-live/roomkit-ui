@@ -19,10 +19,18 @@ _QT_MOD_TO_PYNPUT = [
 # ── Qt.Key → pynput token (special keys) ────────────────────────────────
 
 _QT_KEY_TO_PYNPUT: dict[int, str] = {
-    Qt.Key_F1: "<F1>", Qt.Key_F2: "<F2>", Qt.Key_F3: "<F3>",
-    Qt.Key_F4: "<F4>", Qt.Key_F5: "<F5>", Qt.Key_F6: "<F6>",
-    Qt.Key_F7: "<F7>", Qt.Key_F8: "<F8>", Qt.Key_F9: "<F9>",
-    Qt.Key_F10: "<F10>", Qt.Key_F11: "<F11>", Qt.Key_F12: "<F12>",
+    Qt.Key_F1: "<F1>",
+    Qt.Key_F2: "<F2>",
+    Qt.Key_F3: "<F3>",
+    Qt.Key_F4: "<F4>",
+    Qt.Key_F5: "<F5>",
+    Qt.Key_F6: "<F6>",
+    Qt.Key_F7: "<F7>",
+    Qt.Key_F8: "<F8>",
+    Qt.Key_F9: "<F9>",
+    Qt.Key_F10: "<F10>",
+    Qt.Key_F11: "<F11>",
+    Qt.Key_F12: "<F12>",
     Qt.Key_Space: "<space>",
     Qt.Key_Tab: "<tab>",
     Qt.Key_Return: "<enter>",
@@ -42,9 +50,15 @@ _QT_KEY_TO_PYNPUT: dict[int, str] = {
 
 # Pure modifier keys — can be used alone as a hotkey
 _MODIFIER_KEYS = {
-    Qt.Key_Control, Qt.Key_Shift, Qt.Key_Alt, Qt.Key_Meta,
-    Qt.Key_AltGr, Qt.Key_Super_L, Qt.Key_Super_R,
-    Qt.Key_Hyper_L, Qt.Key_Hyper_R,
+    Qt.Key_Control,
+    Qt.Key_Shift,
+    Qt.Key_Alt,
+    Qt.Key_Meta,
+    Qt.Key_AltGr,
+    Qt.Key_Super_L,
+    Qt.Key_Super_R,
+    Qt.Key_Hyper_L,
+    Qt.Key_Hyper_R,
 }
 
 # Map Qt modifier Key_* → pynput token for single-modifier hotkeys
@@ -80,17 +94,32 @@ def pynput_to_display(pynput_str: str) -> str:
     if not pynput_str:
         return ""
     names = {
-        "<ctrl>": "Ctrl", "<ctrl_l>": "Ctrl L", "<ctrl_r>": "Ctrl R",
-        "<alt>": "Alt", "<alt_l>": "Alt L", "<alt_r>": "Alt R",
+        "<ctrl>": "Ctrl",
+        "<ctrl_l>": "Ctrl L",
+        "<ctrl_r>": "Ctrl R",
+        "<alt>": "Alt",
+        "<alt_l>": "Alt L",
+        "<alt_r>": "Alt R",
         "<alt_gr>": "AltGr",
-        "<shift>": "Shift", "<shift_l>": "Shift L", "<shift_r>": "Shift R",
-        "<cmd>": "Cmd", "<cmd_l>": "Cmd L", "<cmd_r>": "Cmd R",
-        "<space>": "Space", "<tab>": "Tab", "<enter>": "Enter",
-        "<backspace>": "Backspace", "<delete>": "Delete",
-        "<home>": "Home", "<end>": "End",
-        "<page_up>": "PageUp", "<page_down>": "PageDown",
-        "<up>": "Up", "<down>": "Down",
-        "<left>": "Left", "<right>": "Right",
+        "<shift>": "Shift",
+        "<shift_l>": "Shift L",
+        "<shift_r>": "Shift R",
+        "<cmd>": "Cmd",
+        "<cmd_l>": "Cmd L",
+        "<cmd_r>": "Cmd R",
+        "<space>": "Space",
+        "<tab>": "Tab",
+        "<enter>": "Enter",
+        "<backspace>": "Backspace",
+        "<delete>": "Delete",
+        "<home>": "Home",
+        "<end>": "End",
+        "<page_up>": "PageUp",
+        "<page_down>": "PageDown",
+        "<up>": "Up",
+        "<down>": "Down",
+        "<left>": "Left",
+        "<right>": "Right",
         "<insert>": "Insert",
     }
     parts: list[str] = []

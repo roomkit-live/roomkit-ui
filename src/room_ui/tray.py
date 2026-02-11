@@ -5,9 +5,9 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+from PySide6.QtCore import QObject, Slot
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
-from PySide6.QtCore import QObject, Slot
 
 from room_ui.icons import svg_icon
 

@@ -12,17 +12,15 @@ from PySide6.QtWidgets import QHBoxLayout, QPushButton, QWidget
 from room_ui.icons import svg_icon
 from room_ui.theme import colors
 
-
 # ---------------------------------------------------------------------------
 # Base circle button
 # ---------------------------------------------------------------------------
 
+
 class _CircleButton(QPushButton):
     """A perfectly round button with custom painted background."""
 
-    def __init__(
-        self, diameter: int, padding: int = 0, parent: QWidget | None = None
-    ) -> None:
+    def __init__(self, diameter: int, padding: int = 0, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._diameter = diameter
         self._padding = padding
@@ -157,9 +155,11 @@ class _CenterButton(_CircleButton):
         elif self._pulsing:
             elapsed = now - self._pulse_t0
             phase = math.sin(elapsed * 3.0)  # ~0.33 Hz oscillation
-            ring_radius = r_button + self._PULSE_MIN + (
-                self._PULSE_MAX - self._PULSE_MIN
-            ) * (phase * 0.5 + 0.5)
+            ring_radius = (
+                r_button
+                + self._PULSE_MIN
+                + (self._PULSE_MAX - self._PULSE_MIN) * (phase * 0.5 + 0.5)
+            )
             ring_alpha = 0.10 + 0.08 * (phase * 0.5 + 0.5)
 
         if ring_radius is not None and ring_alpha > 0.005:
@@ -192,6 +192,7 @@ class _CenterButton(_CircleButton):
 # ---------------------------------------------------------------------------
 # Side button (small circle with subtle drop shadow)
 # ---------------------------------------------------------------------------
+
 
 class _SideButton(QPushButton):
     """36 px circular side button with border and subtle drop shadow."""
@@ -250,6 +251,7 @@ class _SideButton(QPushButton):
 # ---------------------------------------------------------------------------
 # Context button (left) — switches between reset and mute modes
 # ---------------------------------------------------------------------------
+
 
 class _ContextButton(_SideButton):
     """Left button: 'reset' mode when idle/error, 'mute' mode in session."""

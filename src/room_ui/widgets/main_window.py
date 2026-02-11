@@ -54,9 +54,7 @@ class MainWindow(QMainWindow):
 
         # ── Control bar ──
         self._controls = ControlBar()
-        self._controls.setStyleSheet(
-            f"ControlBar {{ background-color: {c['BG_SECONDARY']}; }}"
-        )
+        self._controls.setStyleSheet(f"ControlBar {{ background-color: {c['BG_SECONDARY']}; }}")
         root.addWidget(self._controls)
 
         # ── Signals ──

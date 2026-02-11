@@ -17,7 +17,81 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pyinstaller>=6.0"]
+dev = [
+    "pyinstaller>=6.0",
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "bandit>=1.7",
+]
 
 [project.scripts]
 room-ui = "room_ui.app:main"
+
+# ── Ruff ──────────────────────────────────────────────────────────────────
+[tool.ruff]
+target-version = "py312"
+line-length = 99
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "SIM"]
+ignore = ["SIM105"]  # try/except/pass used intentionally for Qt signal safety
+
+[tool.ruff.lint.isort]
+known-first-party = ["room_ui"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/room_ui/widgets/control_bar.py" = ["N802"]  # Qt paintEvent/enterEvent overrides
+"src/room_ui/widgets/vu_meter.py" = ["N802"]
+"src/room_ui/widgets/hotkey_button.py" = ["N802"]
+"src/room_ui/widgets/main_window.py" = ["N802"]
+
+# ── Mypy ──────────────────────────────────────────────────────────────────
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+# PySide6 enums (Qt.AlignCenter, QPainter.Antialiasing, etc.) are dynamically
+# generated at runtime and not reflected in type stubs — suppress attr-defined.
+disable_error_code = ["attr-defined"]
+
+[[tool.mypy.overrides]]
+module = ["PySide6", "PySide6.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["qasync", "qasync.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["roomkit", "roomkit.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["pynput", "pynput.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["mcp", "mcp.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["markdown_it", "markdown_it.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["AppKit", "AppKit.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["Quartz", "Quartz.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["sounddevice", "sounddevice.*"]
+ignore_missing_imports = true
+
+# ── Bandit ────────────────────────────────────────────────────────────────
+[tool.bandit]
+exclude_dirs = ["tests"]
+skips = ["B101", "B110", "B404", "B603", "B607"]

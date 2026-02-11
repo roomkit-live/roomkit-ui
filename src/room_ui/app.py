@@ -67,7 +67,10 @@ def main() -> None:
             post = CGPreflightPostEventAccess()
             logger.info(
                 "macOS permissions: AXTrusted=%s PostEvent=%s pid=%d exe=%s",
-                ax, post, os.getpid(), sys.executable,
+                ax,
+                post,
+                os.getpid(),
+                sys.executable,
             )
             if not post:
                 CGRequestPostEventAccess()

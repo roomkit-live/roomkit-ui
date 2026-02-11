@@ -53,13 +53,14 @@ def get_colors(theme: str = "dark") -> dict[str, str]:
 def colors() -> dict[str, str]:
     """Shortcut: return the palette for the currently persisted theme."""
     qs = QSettings()
-    theme = qs.value("room/theme", "dark")
+    theme = str(qs.value("room/theme", "dark"))
     return get_colors(theme)
 
 
 # ---------------------------------------------------------------------------
 # Stylesheet generator
 # ---------------------------------------------------------------------------
+
 
 def get_stylesheet(theme: str = "dark") -> str:
     """Generate the full application QSS for *theme*."""
@@ -73,9 +74,6 @@ def get_stylesheet(theme: str = "dark") -> str:
         stop_hover = "#E0352B"
         stop_pressed = "#C42E25"
         mute_hover_border = "#C7C7CC"
-        mute_unmuted_bg = "rgba(0, 0, 0, 0.06)"
-        mute_unmuted_hover = "rgba(0, 0, 0, 0.10)"
-        mute_unmuted_border = "#D1D1D6"
     else:
         btn_pressed = "#48484A"
         start_hover = "#28c04e"
@@ -83,9 +81,6 @@ def get_stylesheet(theme: str = "dark") -> str:
         stop_hover = "#e03e34"
         stop_pressed = "#c4352c"
         mute_hover_border = "#48484A"
-        mute_unmuted_bg = "rgba(58, 58, 60, 0.70)"
-        mute_unmuted_hover = "rgba(72, 72, 74, 0.78)"
-        mute_unmuted_border = "#48484A"
 
     # Light mode needs visible borders on buttons
     btn_border = f"border: 1px solid {c['SEPARATOR']};" if theme == "light" else "border: none;"

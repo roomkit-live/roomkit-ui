@@ -11,14 +11,14 @@ logger = logging.getLogger(__name__)
 
 # macOS virtual key codes for modifier keys
 _MAC_KEYCODES = {
-    "<cmd_r>": 0x36,   # Right Command
-    "<cmd_l>": 0x37,   # Left Command
-    "<shift_r>": 0x3C, # Right Shift
-    "<shift_l>": 0x38, # Left Shift
+    "<cmd_r>": 0x36,  # Right Command
+    "<cmd_l>": 0x37,  # Left Command
+    "<shift_r>": 0x3C,  # Right Shift
+    "<shift_l>": 0x38,  # Left Shift
     "<ctrl_r>": 0x3E,  # Right Control
     "<ctrl_l>": 0x3B,  # Left Control
-    "<alt_r>": 0x3D,   # Right Option
-    "<alt_l>": 0x3A,   # Left Option
+    "<alt_r>": 0x3D,  # Right Option
+    "<alt_l>": 0x3A,  # Left Option
 }
 
 # Map keycodes to their modifier flag mask (NSEvent constants)
@@ -82,6 +82,7 @@ class HotkeyListener(QObject):
                 NSEventModifierFlagOption,
                 NSEventModifierFlagShift,
             )
+
             flag_map = {
                 "NSEventModifierFlagCommand": NSEventModifierFlagCommand,
                 "NSEventModifierFlagShift": NSEventModifierFlagShift,
@@ -153,16 +154,14 @@ class HotkeyListener(QObject):
             # should match both ctrl_l and ctrl_r).
             # AltGr on many Linux keyboards reports as ISO_Level3_Shift
             # (vk 65027) instead of pynput's Key.alt_gr (vk 65406).
-            _VARIANTS = {
+            variants = {
                 Key.ctrl: {Key.ctrl, Key.ctrl_l, Key.ctrl_r},
                 Key.shift: {Key.shift, Key.shift_l, Key.shift_r},
-                Key.alt: {Key.alt, Key.alt_l, Key.alt_r, Key.alt_gr,
-                          KeyCode.from_vk(65027)},
-                Key.alt_gr: {Key.alt_gr, Key.alt_r,
-                             KeyCode.from_vk(65027)},
+                Key.alt: {Key.alt, Key.alt_l, Key.alt_r, Key.alt_gr, KeyCode.from_vk(65027)},
+                Key.alt_gr: {Key.alt_gr, Key.alt_r, KeyCode.from_vk(65027)},
                 Key.cmd: {Key.cmd, Key.cmd_l, Key.cmd_r},
             }
-            match_keys = _VARIANTS.get(target_key, {target_key})
+            match_keys = variants.get(target_key, {target_key})
 
             def on_release(key):
                 if key in match_keys:
@@ -170,9 +169,7 @@ class HotkeyListener(QObject):
 
             self._listener = keyboard.Listener(on_release=on_release)
         else:
-            self._listener = keyboard.GlobalHotKeys(
-                {self._hotkey: _safe_activate}
-            )
+            self._listener = keyboard.GlobalHotKeys({self._hotkey: _safe_activate})
 
         self._listener.daemon = True
         self._listener.start()
@@ -182,6 +179,7 @@ class HotkeyListener(QObject):
         if self._monitor is not None:
             try:
                 from AppKit import NSEvent
+
                 NSEvent.removeMonitor_(self._monitor)
             except Exception:
                 pass

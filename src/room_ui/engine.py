@@ -63,15 +63,19 @@ def _handle_builtin_tool(name: str) -> str | None:
     """Handle a built-in tool call. Returns JSON string or None if not built-in."""
     now = datetime.datetime.now()
     if name == "get_current_date":
-        return json.dumps({
-            "date": now.strftime("%Y-%m-%d"),
-            "day": now.strftime("%A"),
-        })
+        return json.dumps(
+            {
+                "date": now.strftime("%Y-%m-%d"),
+                "day": now.strftime("%A"),
+            }
+        )
     if name == "get_current_time":
-        return json.dumps({
-            "time": now.strftime("%H:%M:%S"),
-            "timezone": now.astimezone().tzname(),
-        })
+        return json.dumps(
+            {
+                "time": now.strftime("%H:%M:%S"),
+                "timezone": now.astimezone().tzname(),
+            }
+        )
     return None
 
 
@@ -79,18 +83,19 @@ def _handle_builtin_tool(name: str) -> str | None:
 # Engine
 # ---------------------------------------------------------------------------
 
+
 class Engine(QObject):
     """Manages a roomkit voice session and bridges events to Qt signals."""
 
-    state_changed = Signal(str)            # idle / connecting / active / error
+    state_changed = Signal(str)  # idle / connecting / active / error
     transcription = Signal(str, str, bool)  # text, role, is_final
-    mic_audio_level = Signal(float)        # 0.0-1.0
-    speaker_audio_level = Signal(float)    # 0.0-1.0
+    mic_audio_level = Signal(float)  # 0.0-1.0
+    speaker_audio_level = Signal(float)  # 0.0-1.0
     user_speaking = Signal(bool)
     ai_speaking = Signal(bool)
     error_occurred = Signal(str)
-    tool_use = Signal(str, str)            # tool_name, arguments_json
-    mcp_status = Signal(str)               # status message
+    tool_use = Signal(str, str)  # tool_name, arguments_json
+    mcp_status = Signal(str)  # status message
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -210,7 +215,10 @@ class Engine(QObject):
     # -- tool calls ----------------------------------------------------------
 
     async def _handle_tool_call(
-        self, session: Any, name: str, arguments: dict[str, Any],
+        self,
+        session: Any,
+        name: str,
+        arguments: dict[str, Any],
     ) -> str:
         """Handle built-in tools or forward to MCP manager."""
         try:
@@ -251,6 +259,7 @@ class Engine(QObject):
 
             self._kit = RoomKit()
 
+            provider: Any
             if provider_name == "openai":
                 api_key = settings.get("openai_api_key", "")
                 if not api_key:
@@ -258,6 +267,7 @@ class Engine(QObject):
                 model = settings.get("openai_model", "gpt-4o-realtime-preview")
                 voice = settings.get("openai_voice", "alloy")
                 from roomkit.providers.openai.realtime import OpenAIRealtimeProvider
+
                 provider = OpenAIRealtimeProvider(api_key=api_key, model=model)
             else:
                 api_key = settings.get("api_key", "")
@@ -266,22 +276,25 @@ class Engine(QObject):
                 model = settings.get("model", "gemini-2.5-flash-native-audio-preview-12-2025")
                 voice = settings.get("voice", "Aoede")
                 from roomkit.providers.gemini.realtime import GeminiLiveProvider
+
                 provider = GeminiLiveProvider(api_key=api_key, model=model)
 
             sample_rate = 24000
             block_ms = 20
             frame_size = sample_rate * block_ms // 1000
 
-            aec = None
+            aec: Any = None
             if aec_mode in ("webrtc", "1"):
                 try:
                     from roomkit.voice.pipeline.aec.webrtc import WebRTCAECProvider
+
                     aec = WebRTCAECProvider(sample_rate=sample_rate)
                 except ImportError:
                     logger.warning("WebRTC AEC not available — install aec-audio-processing")
             elif aec_mode == "speex":
                 try:
                     from roomkit.voice.pipeline.aec.speex import SpeexAECProvider
+
                     aec = SpeexAECProvider(
                         frame_size=frame_size,
                         filter_length=frame_size * 10,
@@ -294,6 +307,7 @@ class Engine(QObject):
             if use_denoise:
                 try:
                     from roomkit.voice.pipeline.denoiser.rnnoise import RNNoiseDenoiserProvider
+
                     denoiser = RNNoiseDenoiserProvider(sample_rate=sample_rate)
                 except ImportError:
                     logger.warning("RNNoise denoiser not available")
@@ -364,7 +378,9 @@ class Engine(QObject):
             await self._kit.attach_channel("local-demo", "voice")
 
             self._session = await self._channel.start_session(
-                "local-demo", "local-user", connection=None,
+                "local-demo",
+                "local-user",
+                connection=None,
             )
 
             self._spk_rms_queue.clear()

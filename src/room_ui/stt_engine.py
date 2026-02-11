@@ -50,7 +50,9 @@ def _is_terminal_focused() -> bool:
         # Get active window ID
         wid_result = subprocess.run(
             ["xdotool", "getactivewindow"],
-            capture_output=True, text=True, timeout=3,
+            capture_output=True,
+            text=True,
+            timeout=3,
         )
         wid = wid_result.stdout.strip()
         if not wid:
@@ -58,14 +60,28 @@ def _is_terminal_focused() -> bool:
         # Get WM_CLASS via xprop (works on all xdotool versions)
         result = subprocess.run(
             ["xprop", "-id", wid, "WM_CLASS"],
-            capture_output=True, text=True, timeout=3,
+            capture_output=True,
+            text=True,
+            timeout=3,
         )
         wm_class = result.stdout.strip().lower()
         terminal_classes = (
-            "terminal", "konsole", "alacritty", "kitty", "xterm",
-            "urxvt", "tilix", "terminator", "gnome-terminal",
-            "xfce4-terminal", "mate-terminal", "sakura", "st",
-            "wezterm", "foot", "claude",
+            "terminal",
+            "konsole",
+            "alacritty",
+            "kitty",
+            "xterm",
+            "urxvt",
+            "tilix",
+            "terminator",
+            "gnome-terminal",
+            "xfce4-terminal",
+            "mate-terminal",
+            "sakura",
+            "st",
+            "wezterm",
+            "foot",
+            "claude",
         )
         return any(t in wm_class for t in terminal_classes)
     except Exception:
@@ -108,7 +124,11 @@ def _simulate_paste() -> None:
     elif _is_wayland():
         subprocess.run(["wtype", "-M", "ctrl", "v", "-m", "ctrl"], check=True, timeout=5)
     elif _is_terminal_focused():
-        subprocess.run(["xdotool", "key", "--clearmodifiers", "ctrl+shift+v"], check=True, timeout=5)
+        subprocess.run(
+            ["xdotool", "key", "--clearmodifiers", "ctrl+shift+v"],
+            check=True,
+            timeout=5,
+        )
     else:
         subprocess.run(["xdotool", "key", "--clearmodifiers", "ctrl+v"], check=True, timeout=5)
 
@@ -123,6 +143,7 @@ def _get_frontmost_bundle() -> str | None:
         return None
     try:
         from AppKit import NSWorkspace
+
         front = NSWorkspace.sharedWorkspace().frontmostApplication()
         if front and front.processIdentifier() != os.getpid():
             return front.bundleIdentifier()
@@ -137,6 +158,7 @@ def _activate_bundle(bundle_id: str) -> None:
         return
     try:
         from AppKit import NSRunningApplication
+
         apps = NSRunningApplication.runningApplicationsWithBundleIdentifier_(bundle_id)
         if apps:
             # 3 = NSApplicationActivateAllWindows | NSApplicationActivateIgnoringOtherApps
@@ -188,9 +210,7 @@ class STTEngine(QObject):
 
     # -- transcription callback ------------------------------------------------
 
-    def _on_transcription(
-        self, _session: Any, text: str, role: str, is_final: bool
-    ) -> None:
+    def _on_transcription(self, _session: Any, text: str, role: str, is_final: bool) -> None:
         if role == "user" and is_final and text.strip():
             logger.info("STT transcription (final): %s", text)
             self._accumulated_text.append(text.strip())
@@ -201,7 +221,11 @@ class STTEngine(QObject):
 
     async def _start_recording(self) -> None:
         if self._recording or self._busy:
-            logger.warning("_start_recording skipped: recording=%s busy=%s", self._recording, self._busy)
+            logger.warning(
+                "_start_recording skipped: recording=%s busy=%s",
+                self._recording,
+                self._busy,
+            )
             return
 
         self._busy = True
@@ -281,17 +305,22 @@ class STTEngine(QObject):
             stt_language = settings.get("stt_language", "")
             if stt_language:
                 import json
+
                 ws = self._provider._connections.get(self._session.id)
                 if ws:
-                    await ws.send(json.dumps({
-                        "type": "session.update",
-                        "session": {
-                            "input_audio_transcription": {
-                                "model": "gpt-4o-transcribe",
-                                "language": stt_language,
-                            },
-                        },
-                    }))
+                    await ws.send(
+                        json.dumps(
+                            {
+                                "type": "session.update",
+                                "session": {
+                                    "input_audio_transcription": {
+                                        "model": "gpt-4o-transcribe",
+                                        "language": stt_language,
+                                    },
+                                },
+                            }
+                        )
+                    )
                     logger.info("Set STT language: %s", stt_language)
 
             logger.info("STT session started")
@@ -382,13 +411,17 @@ class STTEngine(QObject):
         try:
             await asyncio.wait_for(self._transcription_event.wait(), timeout=5.0)
             logger.info("Transcription ready")
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning("Timed out waiting for transcription after commit")
         finally:
             self._transcription_event = None
 
     async def _cleanup_snapshot(
-        self, kit: Any, channel: Any, session: Any, transport: Any,
+        self,
+        kit: Any,
+        channel: Any,
+        session: Any,
+        transport: Any,
     ) -> None:
         """Clean up a previous session's objects without touching self._."""
         try:
@@ -421,7 +454,10 @@ class STTEngine(QObject):
     async def _cleanup(self) -> None:
         """Cleanup using self._ — only used on start failure."""
         await self._cleanup_snapshot(
-            self._kit, self._channel, self._session, self._transport,
+            self._kit,
+            self._channel,
+            self._session,
+            self._transport,
         )
         self._kit = None
         self._channel = None

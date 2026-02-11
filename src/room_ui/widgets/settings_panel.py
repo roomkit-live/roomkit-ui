@@ -540,8 +540,14 @@ class _MCPPage(QWidget):
         srv = self._servers[row]
 
         # Block signals while populating to avoid feedback loop
-        for w in (self._name_edit, self._command_edit, self._args_edit,
-                  self._url_edit, self._env_edit, self._transport_combo):
+        for w in (
+            self._name_edit,
+            self._command_edit,
+            self._args_edit,
+            self._url_edit,
+            self._env_edit,
+            self._transport_combo,
+        ):
             w.blockSignals(True)
 
         self._name_edit.setText(srv.get("name", ""))
@@ -556,8 +562,14 @@ class _MCPPage(QWidget):
                 self._transport_combo.setCurrentIndex(i)
                 break
 
-        for w in (self._name_edit, self._command_edit, self._args_edit,
-                  self._url_edit, self._env_edit, self._transport_combo):
+        for w in (
+            self._name_edit,
+            self._command_edit,
+            self._args_edit,
+            self._url_edit,
+            self._env_edit,
+            self._transport_combo,
+        ):
             w.blockSignals(False)
 
         self._update_field_visibility(transport)
@@ -613,17 +625,19 @@ class _AboutPage(QWidget):
 
         # App name + version
         app_name = QLabel("RoomKit UI")
-        app_name.setStyleSheet(
-            "font-size: 24px; font-weight: 700; background: transparent;"
-        )
+        app_name.setStyleSheet("font-size: 24px; font-weight: 700; background: transparent;")
         layout.addWidget(app_name)
 
         desc = QLabel("A desktop voice assistant powered by RoomKit.")
         desc.setWordWrap(True)
-        desc.setStyleSheet(f"font-size: 13px; color: {c['TEXT_SECONDARY']}; background: transparent;")
+        desc.setStyleSheet(
+            f"font-size: 13px; color: {c['TEXT_SECONDARY']}; background: transparent;"
+        )
         layout.addWidget(desc)
 
-        website = QLabel(f'<a href="https://www.roomkit.live" style="color: {c["ACCENT_BLUE"]};">www.roomkit.live</a>')
+        url = "https://www.roomkit.live"
+        color = c["ACCENT_BLUE"]
+        website = QLabel(f'<a href="{url}" style="color: {color};">www.roomkit.live</a>')
         website.setOpenExternalLinks(True)
         website.setStyleSheet("font-size: 13px; background: transparent;")
         layout.addWidget(website)
@@ -659,8 +673,10 @@ class _AboutPage(QWidget):
         )
         license_text.setWordWrap(True)
         license_text.setStyleSheet(
-            f"font-size: 12px; color: {c['TEXT_SECONDARY']}; line-height: 1.5; background: transparent;"
-            f" padding: 12px; border: 1px solid {c['SEPARATOR']}; border-radius: 8px;"
+            f"font-size: 12px; color: {c['TEXT_SECONDARY']};"
+            f" line-height: 1.5; background: transparent;"
+            f" padding: 12px; border: 1px solid {c['SEPARATOR']};"
+            f" border-radius: 8px;"
         )
         layout.addWidget(license_text)
 
@@ -791,6 +807,7 @@ class SettingsPanel(QDialog):
 
         # Apply the new theme stylesheet immediately
         from PySide6.QtWidgets import QApplication
+
         app = QApplication.instance()
         if app is not None:
             app.setStyleSheet(get_stylesheet(settings["theme"]))

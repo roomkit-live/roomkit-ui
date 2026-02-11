@@ -36,14 +36,13 @@ def load_settings() -> dict:
     for key, default in _DEFAULTS.items():
         val = qs.value(f"room/{key}", default)
         # QSettings returns strings for bools
-        if isinstance(default, bool):
-            if isinstance(val, str):
-                val = val.lower() in ("true", "1", "yes")
+        if isinstance(default, bool) and isinstance(val, str):
+            val = val.lower() in ("true", "1", "yes")
         # QSettings returns strings for ints stored as device indices
         if key in ("input_device", "output_device"):
             if val is not None and val != "":
                 try:
-                    val = int(val)
+                    val = int(val)  # type: ignore[call-overload]
                 except (TypeError, ValueError):
                     val = None
             else:
