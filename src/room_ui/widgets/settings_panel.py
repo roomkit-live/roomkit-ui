@@ -46,6 +46,22 @@ PROVIDERS = [
     ("OpenAI", "openai"),
 ]
 
+CONVERSATION_MODES = [
+    ("Speech-to-Speech (Realtime)", "realtime"),
+    ("Voice Channel (STT \u2192 LLM \u2192 TTS)", "voice_channel"),
+]
+
+VC_LLM_PROVIDERS = [
+    ("Anthropic", "anthropic"),
+    ("OpenAI", "openai"),
+    ("Google Gemini", "gemini"),
+]
+
+VC_ANTHROPIC_MODELS = ["claude-sonnet-4-20250514", "claude-haiku-4-5-20251001"]
+VC_OPENAI_MODELS = ["gpt-4o", "gpt-4o-mini"]
+VC_GEMINI_MODELS = ["gemini-2.0-flash", "gemini-2.5-flash"]
+
+
 AEC_MODES = [
     ("WebRTC (recommended)", "webrtc"),
     ("Speex", "speex"),
@@ -247,7 +263,7 @@ class _GeneralPage(QWidget):
 
 
 class _AIPage(QWidget):
-    """AI settings: provider selector, API key, model, voice, AEC, denoise, prompt."""
+    """AI settings: conversation mode, provider, API key, model, voice, prompt."""
 
     def __init__(self, settings: dict, parent=None) -> None:
         super().__init__(parent)
@@ -255,14 +271,46 @@ class _AIPage(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
 
+        c = colors()
+
         title = QLabel("AI Provider")
         title.setStyleSheet("font-size: 18px; font-weight: 600; background: transparent;")
         layout.addWidget(title)
 
-        form = QFormLayout()
-        form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
-        form.setSpacing(10)
-        form.setLabelAlignment(Qt.AlignRight)
+        # -- Conversation mode selector --
+        mode_form = QFormLayout()
+        mode_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        mode_form.setSpacing(10)
+        mode_form.setLabelAlignment(Qt.AlignRight)
+
+        self.mode_combo = QComboBox()
+        for label, _value in CONVERSATION_MODES:
+            self.mode_combo.addItem(label)
+        current_mode = settings.get("conversation_mode", "realtime")
+        for i, (_, val) in enumerate(CONVERSATION_MODES):
+            if val == current_mode:
+                self.mode_combo.setCurrentIndex(i)
+                break
+        mode_form.addRow("Mode", self.mode_combo)
+        layout.addLayout(mode_form)
+
+        # ── Speech-to-Speech (Realtime) section ──
+        self._realtime_section = QWidget()
+        rt_layout = QVBoxLayout(self._realtime_section)
+        rt_layout.setContentsMargins(0, 0, 0, 0)
+        rt_layout.setSpacing(10)
+
+        rt_section_label = QLabel("Realtime Provider")
+        rt_section_label.setStyleSheet(
+            f"font-size: 12px; font-weight: 600; color: {c['TEXT_SECONDARY']};"
+            f" text-transform: uppercase; letter-spacing: 1px; background: transparent;"
+        )
+        rt_layout.addWidget(rt_section_label)
+
+        rt_form = QFormLayout()
+        rt_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        rt_form.setSpacing(10)
+        rt_form.setLabelAlignment(Qt.AlignRight)
 
         # Provider selector
         self.provider = QComboBox()
@@ -273,20 +321,20 @@ class _AIPage(QWidget):
             if val == current_provider:
                 self.provider.setCurrentIndex(i)
                 break
-        form.addRow("Provider", self.provider)
+        rt_form.addRow("Provider", self.provider)
 
         # API keys (one per provider, shown/hidden)
         self.gemini_api_key = QLineEdit(settings.get("api_key", ""))
         self.gemini_api_key.setEchoMode(QLineEdit.Password)
         self.gemini_api_key.setPlaceholderText("Enter your Google API key")
         self._gemini_key_label = QLabel("API Key")
-        form.addRow(self._gemini_key_label, self.gemini_api_key)
+        rt_form.addRow(self._gemini_key_label, self.gemini_api_key)
 
         self.openai_api_key = QLineEdit(settings.get("openai_api_key", ""))
         self.openai_api_key.setEchoMode(QLineEdit.Password)
         self.openai_api_key.setPlaceholderText("Enter your OpenAI API key")
         self._openai_key_label = QLabel("API Key")
-        form.addRow(self._openai_key_label, self.openai_api_key)
+        rt_form.addRow(self._openai_key_label, self.openai_api_key)
 
         # Model (Gemini)
         self.gemini_model = QComboBox()
@@ -299,7 +347,7 @@ class _AIPage(QWidget):
         else:
             self.gemini_model.setCurrentText(current_model)
         self._gemini_model_label = QLabel("Model")
-        form.addRow(self._gemini_model_label, self.gemini_model)
+        rt_form.addRow(self._gemini_model_label, self.gemini_model)
 
         # Model (OpenAI)
         self.openai_model = QComboBox()
@@ -312,7 +360,7 @@ class _AIPage(QWidget):
         else:
             self.openai_model.setCurrentText(current_oai_model)
         self._openai_model_label = QLabel("Model")
-        form.addRow(self._openai_model_label, self.openai_model)
+        rt_form.addRow(self._openai_model_label, self.openai_model)
 
         # Voice (Gemini)
         self.gemini_voice = QComboBox()
@@ -322,7 +370,7 @@ class _AIPage(QWidget):
         if vidx >= 0:
             self.gemini_voice.setCurrentIndex(vidx)
         self._gemini_voice_label = QLabel("Voice")
-        form.addRow(self._gemini_voice_label, self.gemini_voice)
+        rt_form.addRow(self._gemini_voice_label, self.gemini_voice)
 
         # Voice (OpenAI)
         self.openai_voice = QComboBox()
@@ -332,12 +380,143 @@ class _AIPage(QWidget):
         if ovidx >= 0:
             self.openai_voice.setCurrentIndex(ovidx)
         self._openai_voice_label = QLabel("Voice")
-        form.addRow(self._openai_voice_label, self.openai_voice)
+        rt_form.addRow(self._openai_voice_label, self.openai_voice)
 
-        layout.addLayout(form)
+        rt_layout.addLayout(rt_form)
+        layout.addWidget(self._realtime_section)
 
-        # System prompt
-        c = colors()
+        # ── Voice Channel (STT → LLM → TTS) section ──
+        self._vc_section = QWidget()
+        vc_layout = QVBoxLayout(self._vc_section)
+        vc_layout.setContentsMargins(0, 0, 0, 0)
+        vc_layout.setSpacing(10)
+
+        vc_section_label = QLabel("Voice Channel")
+        vc_section_label.setStyleSheet(
+            f"font-size: 12px; font-weight: 600; color: {c['TEXT_SECONDARY']};"
+            f" text-transform: uppercase; letter-spacing: 1px; background: transparent;"
+        )
+        vc_layout.addWidget(vc_section_label)
+
+        vc_form = QFormLayout()
+        vc_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        vc_form.setSpacing(10)
+        vc_form.setLabelAlignment(Qt.AlignRight)
+
+        # LLM Provider
+        self.vc_provider = QComboBox()
+        for label, _value in VC_LLM_PROVIDERS:
+            self.vc_provider.addItem(label)
+        current_vc_provider = settings.get("vc_llm_provider", "anthropic")
+        for i, (_, val) in enumerate(VC_LLM_PROVIDERS):
+            if val == current_vc_provider:
+                self.vc_provider.setCurrentIndex(i)
+                break
+        vc_form.addRow("LLM Provider", self.vc_provider)
+
+        # Anthropic API key
+        self.anthropic_api_key = QLineEdit(settings.get("anthropic_api_key", ""))
+        self.anthropic_api_key.setEchoMode(QLineEdit.Password)
+        self.anthropic_api_key.setPlaceholderText("Enter your Anthropic API key")
+        self._anthropic_key_label = QLabel("API Key")
+        vc_form.addRow(self._anthropic_key_label, self.anthropic_api_key)
+
+        # OpenAI key for VC (reuse field, shown when vc_provider=openai)
+        self.vc_openai_api_key = QLineEdit(settings.get("openai_api_key", ""))
+        self.vc_openai_api_key.setEchoMode(QLineEdit.Password)
+        self.vc_openai_api_key.setPlaceholderText("Enter your OpenAI API key")
+        self._vc_openai_key_label = QLabel("API Key")
+        vc_form.addRow(self._vc_openai_key_label, self.vc_openai_api_key)
+
+        # Gemini key for VC (reuse field, shown when vc_provider=gemini)
+        self.vc_gemini_api_key = QLineEdit(settings.get("api_key", ""))
+        self.vc_gemini_api_key.setEchoMode(QLineEdit.Password)
+        self.vc_gemini_api_key.setPlaceholderText("Enter your Google API key")
+        self._vc_gemini_key_label = QLabel("API Key")
+        vc_form.addRow(self._vc_gemini_key_label, self.vc_gemini_api_key)
+
+        # Model combos (one per provider, shown/hidden)
+        self.vc_anthropic_model = QComboBox()
+        self.vc_anthropic_model.setEditable(True)
+        self.vc_anthropic_model.addItems(VC_ANTHROPIC_MODELS)
+        cur = settings.get("vc_anthropic_model", VC_ANTHROPIC_MODELS[0])
+        aidx = self.vc_anthropic_model.findText(cur)
+        if aidx >= 0:
+            self.vc_anthropic_model.setCurrentIndex(aidx)
+        else:
+            self.vc_anthropic_model.setCurrentText(cur)
+        self._vc_anthropic_model_label = QLabel("Model")
+        vc_form.addRow(self._vc_anthropic_model_label, self.vc_anthropic_model)
+
+        self.vc_openai_model = QComboBox()
+        self.vc_openai_model.setEditable(True)
+        self.vc_openai_model.addItems(VC_OPENAI_MODELS)
+        cur = settings.get("vc_openai_model", VC_OPENAI_MODELS[0])
+        oidx2 = self.vc_openai_model.findText(cur)
+        if oidx2 >= 0:
+            self.vc_openai_model.setCurrentIndex(oidx2)
+        else:
+            self.vc_openai_model.setCurrentText(cur)
+        self._vc_openai_model_label = QLabel("Model")
+        vc_form.addRow(self._vc_openai_model_label, self.vc_openai_model)
+
+        self.vc_gemini_model = QComboBox()
+        self.vc_gemini_model.setEditable(True)
+        self.vc_gemini_model.addItems(VC_GEMINI_MODELS)
+        cur = settings.get("vc_gemini_model", VC_GEMINI_MODELS[0])
+        gidx = self.vc_gemini_model.findText(cur)
+        if gidx >= 0:
+            self.vc_gemini_model.setCurrentIndex(gidx)
+        else:
+            self.vc_gemini_model.setCurrentText(cur)
+        self._vc_gemini_model_label = QLabel("Model")
+        vc_form.addRow(self._vc_gemini_model_label, self.vc_gemini_model)
+
+        # STT model combo
+        self.vc_stt_model = QComboBox()
+        self._vc_stt_no_models = QLabel("No STT models downloaded \u2014 go to AI Models tab.")
+        self._vc_stt_no_models.setWordWrap(True)
+        self._vc_stt_no_models.setStyleSheet(
+            f"font-size: 12px; color: {c['TEXT_SECONDARY']};"
+            f" font-style: italic; background: transparent;"
+        )
+        vc_form.addRow("STT Model", self.vc_stt_model)
+        vc_form.addRow("", self._vc_stt_no_models)
+        self._vc_saved_stt = settings.get("vc_stt_model", "")
+
+        # VAD model combo
+        self.vc_vad_model = QComboBox()
+        self._vc_vad_no_models = QLabel("No VAD models downloaded \u2014 go to AI Models tab.")
+        self._vc_vad_no_models.setWordWrap(True)
+        self._vc_vad_no_models.setStyleSheet(
+            f"font-size: 12px; color: {c['TEXT_SECONDARY']};"
+            f" font-style: italic; background: transparent;"
+        )
+        vc_form.addRow("VAD Model", self.vc_vad_model)
+        vc_form.addRow("", self._vc_vad_no_models)
+        self._vc_saved_vad = settings.get("vc_vad_model", "")
+
+        # Interruption toggle
+        self.vc_interruption = QCheckBox("Allow barge-in (interrupt TTS by speaking)")
+        self.vc_interruption.setChecked(bool(settings.get("vc_interruption", False)))
+        vc_form.addRow("", self.vc_interruption)
+
+        # TTS model combo
+        self.vc_tts_model = QComboBox()
+        self._vc_tts_no_models = QLabel("No TTS models downloaded \u2014 go to AI Models tab.")
+        self._vc_tts_no_models.setWordWrap(True)
+        self._vc_tts_no_models.setStyleSheet(
+            f"font-size: 12px; color: {c['TEXT_SECONDARY']};"
+            f" font-style: italic; background: transparent;"
+        )
+        vc_form.addRow("TTS Model", self.vc_tts_model)
+        vc_form.addRow("", self._vc_tts_no_models)
+        self._vc_saved_tts = settings.get("vc_tts_model", "")
+
+        vc_layout.addLayout(vc_form)
+        layout.addWidget(self._vc_section)
+
+        # ── System prompt (shared) ──
         section = QLabel("System Prompt")
         section.setStyleSheet(
             f"font-size: 12px; font-weight: 600; color: {c['TEXT_SECONDARY']};"
@@ -357,26 +536,111 @@ class _AIPage(QWidget):
         layout.addWidget(self.prompt)
         layout.addStretch()
 
-        # Wire provider switch
+        # Wire signals
+        self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
         self.provider.currentIndexChanged.connect(self._on_provider_changed)
+        self.vc_provider.currentIndexChanged.connect(self._on_vc_provider_changed)
+
+        # Initial state
+        self._on_mode_changed(self.mode_combo.currentIndex())
         self._on_provider_changed(self.provider.currentIndex())
+        self._on_vc_provider_changed(self.vc_provider.currentIndex())
+
+    def _on_mode_changed(self, index: int) -> None:
+        is_realtime = CONVERSATION_MODES[index][1] == "realtime"
+        self._realtime_section.setVisible(is_realtime)
+        self._vc_section.setVisible(not is_realtime)
+        if not is_realtime:
+            self.refresh_vc_model_combos()
 
     def _on_provider_changed(self, index: int) -> None:
         is_gemini = PROVIDERS[index][1] == "gemini"
-        # Gemini fields
         self._gemini_key_label.setVisible(is_gemini)
         self.gemini_api_key.setVisible(is_gemini)
         self._gemini_model_label.setVisible(is_gemini)
         self.gemini_model.setVisible(is_gemini)
         self._gemini_voice_label.setVisible(is_gemini)
         self.gemini_voice.setVisible(is_gemini)
-        # OpenAI fields
         self._openai_key_label.setVisible(not is_gemini)
         self.openai_api_key.setVisible(not is_gemini)
         self._openai_model_label.setVisible(not is_gemini)
         self.openai_model.setVisible(not is_gemini)
         self._openai_voice_label.setVisible(not is_gemini)
         self.openai_voice.setVisible(not is_gemini)
+
+    def _on_vc_provider_changed(self, index: int) -> None:
+        prov = VC_LLM_PROVIDERS[index][1]
+        self._anthropic_key_label.setVisible(prov == "anthropic")
+        self.anthropic_api_key.setVisible(prov == "anthropic")
+        self._vc_anthropic_model_label.setVisible(prov == "anthropic")
+        self.vc_anthropic_model.setVisible(prov == "anthropic")
+        self._vc_openai_key_label.setVisible(prov == "openai")
+        self.vc_openai_api_key.setVisible(prov == "openai")
+        self._vc_openai_model_label.setVisible(prov == "openai")
+        self.vc_openai_model.setVisible(prov == "openai")
+        self._vc_gemini_key_label.setVisible(prov == "gemini")
+        self.vc_gemini_api_key.setVisible(prov == "gemini")
+        self._vc_gemini_model_label.setVisible(prov == "gemini")
+        self.vc_gemini_model.setVisible(prov == "gemini")
+
+    def refresh_vc_model_combos(self) -> None:
+        """Rebuild STT/TTS/VAD model combos with currently downloaded models."""
+        from room_ui.model_manager import (
+            STT_MODELS,
+            TTS_MODELS,
+            VAD_MODELS,
+            is_model_downloaded,
+            is_tts_model_downloaded,
+            is_vad_model_downloaded,
+        )
+
+        # STT
+        self.vc_stt_model.blockSignals(True)
+        self.vc_stt_model.clear()
+        for m in STT_MODELS:
+            if is_model_downloaded(m.id):
+                self.vc_stt_model.addItem(f"{m.name} ({m.type})", m.id)
+        target = self._vc_saved_stt or (
+            self.vc_stt_model.itemData(0) if self.vc_stt_model.count() else ""
+        )
+        for i in range(self.vc_stt_model.count()):
+            if self.vc_stt_model.itemData(i) == target:
+                self.vc_stt_model.setCurrentIndex(i)
+                break
+        self.vc_stt_model.blockSignals(False)
+        self._vc_stt_no_models.setVisible(self.vc_stt_model.count() == 0)
+
+        # VAD
+        self.vc_vad_model.blockSignals(True)
+        self.vc_vad_model.clear()
+        self.vc_vad_model.addItem("None (continuous mode)", "")
+        for m in VAD_MODELS:
+            if is_vad_model_downloaded(m.id):
+                self.vc_vad_model.addItem(m.name, m.id)
+        target = self._vc_saved_vad
+        for i in range(self.vc_vad_model.count()):
+            if self.vc_vad_model.itemData(i) == target:
+                self.vc_vad_model.setCurrentIndex(i)
+                break
+        self.vc_vad_model.blockSignals(False)
+        has_vad = self.vc_vad_model.count() > 1  # more than just "None"
+        self._vc_vad_no_models.setVisible(not has_vad)
+
+        # TTS
+        self.vc_tts_model.blockSignals(True)
+        self.vc_tts_model.clear()
+        for m in TTS_MODELS:
+            if is_tts_model_downloaded(m.id):
+                self.vc_tts_model.addItem(m.name, m.id)
+        target = self._vc_saved_tts or (
+            self.vc_tts_model.itemData(0) if self.vc_tts_model.count() else ""
+        )
+        for i in range(self.vc_tts_model.count()):
+            if self.vc_tts_model.itemData(i) == target:
+                self.vc_tts_model.setCurrentIndex(i)
+                break
+        self.vc_tts_model.blockSignals(False)
+        self._vc_tts_no_models.setVisible(self.vc_tts_model.count() == 0)
 
 
 STT_LANGUAGES = [
@@ -660,6 +924,125 @@ class _ModelsPage(QWidget):
         denoise_frame_layout.addWidget(self._gtcrn_row)
 
         layout.addWidget(denoise_frame)
+
+        # -- VAD Models section -------------------------------------------------
+        vad_section = QLabel("Voice Activity Detection Models")
+        vad_section.setStyleSheet(
+            f"font-size: 12px; font-weight: 600; color: {c['TEXT_SECONDARY']};"
+            f" text-transform: uppercase; letter-spacing: 1px; background: transparent;"
+        )
+        layout.addWidget(vad_section)
+
+        vad_desc = QLabel(
+            "Download a VAD model for Voice Channel mode. "
+            "Required to detect speech segments for offline STT models."
+        )
+        vad_desc.setWordWrap(True)
+        vad_desc.setStyleSheet(
+            f"font-size: 13px; color: {c['TEXT_SECONDARY']}; background: transparent;"
+        )
+        layout.addWidget(vad_desc)
+
+        vad_frame = QWidget()
+        vad_frame.setStyleSheet(
+            f"background: {c['BG_SECONDARY']}; border: 1px solid {c['SEPARATOR']};"
+            f" border-radius: 8px;"
+        )
+        vad_frame_layout = QVBoxLayout(vad_frame)
+        vad_frame_layout.setContentsMargins(4, 4, 4, 4)
+        vad_frame_layout.setSpacing(0)
+
+        from room_ui.model_manager import VAD_MODELS, is_vad_model_downloaded
+
+        self._vad_rows: list[_ModelRow] = []
+        for vad_m in VAD_MODELS:
+            row = _ModelRow(vad_m, c, show_radio=False)
+            row._refresh_state(is_vad_model_downloaded(vad_m.id))
+            row.action_btn.clicked.connect(
+                lambda _checked=False, mid=vad_m.id: self._download_vad_model(mid)
+            )
+            row.delete_btn.clicked.connect(
+                lambda _checked=False, mid=vad_m.id: self._delete_vad_model(mid)
+            )
+            vad_frame_layout.addWidget(row)
+            self._vad_rows.append(row)
+
+        layout.addWidget(vad_frame)
+
+        # -- TTS Models section -------------------------------------------------
+        tts_section = QLabel("Text-to-Speech Models")
+        tts_section.setStyleSheet(
+            f"font-size: 12px; font-weight: 600; color: {c['TEXT_SECONDARY']};"
+            f" text-transform: uppercase; letter-spacing: 1px; background: transparent;"
+        )
+        layout.addWidget(tts_section)
+
+        tts_desc = QLabel(
+            "Download local TTS models for Voice Channel mode. "
+            "espeak-ng data is a shared dependency required by all Piper models."
+        )
+        tts_desc.setWordWrap(True)
+        tts_desc.setStyleSheet(
+            f"font-size: 13px; color: {c['TEXT_SECONDARY']}; background: transparent;"
+        )
+        layout.addWidget(tts_desc)
+
+        tts_frame = QWidget()
+        tts_frame.setStyleSheet(
+            f"background: {c['BG_SECONDARY']}; border: 1px solid {c['SEPARATOR']};"
+            f" border-radius: 8px;"
+        )
+        tts_frame_layout = QVBoxLayout(tts_frame)
+        tts_frame_layout.setContentsMargins(4, 4, 4, 4)
+        tts_frame_layout.setSpacing(0)
+
+        # espeak-ng-data row (shared dependency)
+        from room_ui.model_manager import is_espeak_ng_downloaded
+
+        @dataclass(frozen=True)
+        class _EspeakInfo:
+            id: str
+            name: str
+            type: str
+            size: str
+
+        espeak_info = _EspeakInfo(
+            id="espeak-ng-data",
+            name="espeak-ng data",
+            type="shared",
+            size="~1 MB",
+        )
+        self._espeak_row = _ModelRow(espeak_info, c, show_radio=False)
+        self._espeak_row._refresh_state(is_espeak_ng_downloaded())
+        self._espeak_row.action_btn.clicked.connect(self._download_espeak)
+        self._espeak_row.delete_btn.clicked.connect(self._delete_espeak)
+        tts_frame_layout.addWidget(self._espeak_row)
+
+        # TTS model rows
+        from room_ui.model_manager import TTS_MODELS, is_tts_model_downloaded
+
+        @dataclass(frozen=True)
+        class _TTSInfo:
+            id: str
+            name: str
+            type: str
+            size: str
+
+        self._tts_rows: list[_ModelRow] = []
+        for tts_m in TTS_MODELS:
+            info = _TTSInfo(id=tts_m.id, name=tts_m.name, type="tts", size=tts_m.size)
+            row = _ModelRow(info, c, show_radio=False)
+            row._refresh_state(is_tts_model_downloaded(tts_m.id))
+            row.action_btn.clicked.connect(
+                lambda _checked=False, mid=tts_m.id: self._download_tts_model(mid)
+            )
+            row.delete_btn.clicked.connect(
+                lambda _checked=False, mid=tts_m.id: self._delete_tts_model(mid)
+            )
+            tts_frame_layout.addWidget(row)
+            self._tts_rows.append(row)
+
+        layout.addWidget(tts_frame)
         layout.addStretch()
 
     def _find_row(self, model_id: str) -> _ModelRow | None:
@@ -731,6 +1114,120 @@ class _ModelsPage(QWidget):
 
         delete_gtcrn()
         self._gtcrn_row.set_not_downloaded()
+
+    # -- TTS model handlers --------------------------------------------------
+
+    def _find_tts_row(self, model_id: str) -> _ModelRow | None:
+        for row in self._tts_rows:
+            if row.model.id == model_id:
+                return row
+        return None
+
+    def _download_espeak(self) -> None:
+        import asyncio
+        import logging
+
+        from room_ui.model_manager import download_espeak_ng_data
+
+        row = self._espeak_row
+        row.set_resolving()
+        loop = asyncio.get_event_loop()
+
+        def _progress(downloaded: int, total: int) -> None:
+            pct = min(int(downloaded * 100 / total), 100) if total > 0 else 0
+            loop.call_soon_threadsafe(row.set_downloading, pct)
+
+        async def _run() -> None:
+            try:
+                await download_espeak_ng_data(_progress)
+                row.set_downloaded()
+            except Exception:
+                logging.exception("espeak-ng-data download failed")
+                row.set_error()
+
+        loop.create_task(_run())
+
+    def _delete_espeak(self) -> None:
+        from room_ui.model_manager import delete_espeak_ng_data
+
+        delete_espeak_ng_data()
+        self._espeak_row.set_not_downloaded()
+
+    def _download_tts_model(self, model_id: str) -> None:
+        import asyncio
+        import logging
+
+        from room_ui.model_manager import download_tts_model
+
+        row = self._find_tts_row(model_id)
+        if row is None:
+            return
+        row.set_resolving()
+        loop = asyncio.get_event_loop()
+
+        def _progress(downloaded: int, total: int) -> None:
+            pct = min(int(downloaded * 100 / total), 100) if total > 0 else 0
+            loop.call_soon_threadsafe(row.set_downloading, pct)
+
+        async def _run() -> None:
+            try:
+                await download_tts_model(model_id, _progress)
+                row.set_downloaded()
+            except Exception:
+                logging.exception("TTS model download failed: %s", model_id)
+                row.set_error()
+
+        loop.create_task(_run())
+
+    def _delete_tts_model(self, model_id: str) -> None:
+        from room_ui.model_manager import delete_tts_model
+
+        delete_tts_model(model_id)
+        row = self._find_tts_row(model_id)
+        if row is not None:
+            row.set_not_downloaded()
+
+    # -- VAD model handlers --------------------------------------------------
+
+    def _find_vad_row(self, model_id: str) -> _ModelRow | None:
+        for row in self._vad_rows:
+            if row.model.id == model_id:
+                return row
+        return None
+
+    def _download_vad_model(self, model_id: str) -> None:
+        import asyncio
+        import logging
+
+        from room_ui.model_manager import download_vad_model
+
+        row = self._find_vad_row(model_id)
+        if row is None:
+            return
+        row.set_resolving()
+        loop = asyncio.get_event_loop()
+
+        def _progress(downloaded: int, total: int) -> None:
+            pct = min(int(downloaded * 100 / total), 100) if total > 0 else 0
+            loop.call_soon_threadsafe(row.set_downloading, pct)
+
+        async def _run() -> None:
+            try:
+                await download_vad_model(model_id, _progress)
+                row.set_downloaded()
+            except Exception:
+                logging.exception("VAD model download failed: %s", model_id)
+                row.set_error()
+
+        loop.create_task(_run())
+
+    def _delete_vad_model(self, model_id: str) -> None:
+        from room_ui.model_manager import delete_vad_model
+
+        delete_vad_model(model_id)
+        row = self._find_vad_row(model_id)
+        if row is not None:
+            row.set_not_downloaded()
 
 
 class _DictationPage(QWidget):
@@ -1327,11 +1824,14 @@ class SettingsPanel(QDialog):
         root.setContentsMargins(0, 0, 0, 0)
         root.addLayout(content)
 
+    _AI_TAB = 1
     _DICTATION_TAB = 2
 
     def _on_tab_changed(self, index: int) -> None:
         self._stack.setCurrentIndex(index)
-        if index == self._DICTATION_TAB:
+        if index == self._AI_TAB:
+            self._ai.refresh_vc_model_combos()
+        elif index == self._DICTATION_TAB:
             self._dictation.refresh_model_combo()
 
     def closeEvent(self, event) -> None:  # noqa: N802
@@ -1341,14 +1841,21 @@ class SettingsPanel(QDialog):
     def _save(self) -> None:
         from room_ui.theme import get_stylesheet
 
+        # Merge API keys: prefer non-empty from either location
+        openai_key = (
+            self._ai.openai_api_key.text().strip()
+            or self._ai.vc_openai_api_key.text().strip()
+            or self._dictation.openai_api_key.text().strip()
+        )
+        gemini_key = (
+            self._ai.gemini_api_key.text().strip() or self._ai.vc_gemini_api_key.text().strip()
+        )
+
         settings = {
             "theme": THEMES[self._general.theme_combo.currentIndex()][1],
             "provider": PROVIDERS[self._ai.provider.currentIndex()][1],
-            "api_key": self._ai.gemini_api_key.text().strip(),
-            "openai_api_key": (
-                self._ai.openai_api_key.text().strip()
-                or self._dictation.openai_api_key.text().strip()
-            ),
+            "api_key": gemini_key,
+            "openai_api_key": openai_key,
             "model": self._ai.gemini_model.currentText().strip(),
             "openai_model": self._ai.openai_model.currentText().strip(),
             "voice": self._ai.gemini_voice.currentText(),
@@ -1368,6 +1875,17 @@ class SettingsPanel(QDialog):
             "stt_language": STT_LANGUAGES[self._dictation.language.currentIndex()][1],
             "stt_translate": self._dictation.translate.isChecked(),
             "mcp_servers": self._mcp.get_servers_json(),
+            # Voice channel settings
+            "conversation_mode": CONVERSATION_MODES[self._ai.mode_combo.currentIndex()][1],
+            "vc_llm_provider": VC_LLM_PROVIDERS[self._ai.vc_provider.currentIndex()][1],
+            "anthropic_api_key": self._ai.anthropic_api_key.text().strip(),
+            "vc_anthropic_model": self._ai.vc_anthropic_model.currentText().strip(),
+            "vc_openai_model": self._ai.vc_openai_model.currentText().strip(),
+            "vc_gemini_model": self._ai.vc_gemini_model.currentText().strip(),
+            "vc_stt_model": self._ai.vc_stt_model.currentData() or "",
+            "vc_vad_model": self._ai.vc_vad_model.currentData() or "",
+            "vc_interruption": self._ai.vc_interruption.isChecked(),
+            "vc_tts_model": self._ai.vc_tts_model.currentData() or "",
         }
         save_settings(settings)
 

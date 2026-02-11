@@ -1,4 +1,4 @@
-"""Download and manage local STT models from edge-ai-models."""
+"""Download and manage local STT/TTS models from edge-ai-models."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ from pathlib import Path
 
 _RAW_URL = "https://raw.githubusercontent.com/anganyAI/edge-ai-models/main"
 _LFS_BATCH_URL = "https://github.com/anganyAI/edge-ai-models.git/info/lfs/objects/batch"
+_GH_API_URL = "https://api.github.com/repos/anganyAI/edge-ai-models/contents"
 
 # Progress callback: (bytes_downloaded, total_bytes)
 ProgressCallback = Callable[[int, int], None]
@@ -361,3 +362,385 @@ def _download_gtcrn_sync(progress: ProgressCallback | None = None) -> None:
 async def download_gtcrn(progress: ProgressCallback | None = None) -> None:
     """Download the GTCRN model in a background thread."""
     await asyncio.to_thread(_download_gtcrn_sync, progress)
+
+
+# ---------------------------------------------------------------------------
+# VAD models (Silero / TEN via sherpa-onnx)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class VADModel:
+    id: str
+    name: str
+    type: str  # "silero" or "ten" (maps to SherpaOnnxVADConfig.model_type)
+    size: str
+    onnx_file: str
+
+
+VAD_MODELS: list[VADModel] = [
+    VADModel(
+        "ten-vad",
+        "TEN VAD",
+        "ten",
+        "~126 KB",
+        "ten-vad.int8.onnx",
+    ),
+    VADModel(
+        "silero-vad",
+        "Silero VAD",
+        "silero",
+        "~2.2 MB",
+        "silero_vad.onnx",
+    ),
+]
+
+_VAD_MODELS_BY_ID: dict[str, VADModel] = {m.id: m for m in VAD_MODELS}
+
+# Map edge-ai-models repo paths for each VAD model
+_VAD_REPO_PATHS: dict[str, str] = {
+    "ten-vad": "vad/ten/v1/ten-vad.int8.onnx",
+    "silero-vad": "vad/silero/v1/silero_vad.onnx",
+}
+
+
+def vad_model_path(model_id: str) -> Path:
+    """Return the directory for a specific VAD model."""
+    return get_models_dir() / "vad" / model_id / "v1"
+
+
+def is_vad_model_downloaded(model_id: str) -> bool:
+    """Check whether the VAD model ONNX file exists."""
+    m = _VAD_MODELS_BY_ID.get(model_id)
+    if m is None:
+        return False
+    return (vad_model_path(model_id) / m.onnx_file).is_file()
+
+
+def delete_vad_model(model_id: str) -> None:
+    """Remove a downloaded VAD model's directory."""
+    d = get_models_dir() / "vad" / model_id
+    if d.exists():
+        shutil.rmtree(d)
+
+
+def _download_vad_model_sync(
+    model_id: str,
+    progress: ProgressCallback | None = None,
+) -> None:
+    """Download a VAD model (blocking), resolving LFS pointers."""
+    m = _VAD_MODELS_BY_ID.get(model_id)
+    if m is None:
+        raise ValueError(f"Unknown VAD model: {model_id}")
+
+    dest = vad_model_path(model_id)
+    dest.mkdir(parents=True, exist_ok=True)
+    target = dest / m.onnx_file
+    if target.is_file():
+        return
+
+    repo_path = _VAD_REPO_PATHS[model_id]
+    raw_url = f"{_RAW_URL}/{repo_path}"
+
+    with urllib.request.urlopen(raw_url) as resp:  # noqa: S310
+        raw_bytes = resp.read()
+
+    lfs = _resolve_lfs_pointer(raw_bytes)
+    if lfs is not None:
+        oid, size = lfs
+        real_url = _lfs_download_url(oid, size)
+        downloaded = 0
+        if progress is not None:
+            progress(0, size)
+
+        def _on_bytes(n: int) -> None:
+            nonlocal downloaded
+            downloaded += n
+            if progress is not None:
+                progress(downloaded, size)
+
+        _download_file(real_url, target, expected_size=size, on_bytes=_on_bytes)
+    else:
+        total = len(raw_bytes)
+        if progress is not None:
+            progress(0, total)
+        target.write_bytes(raw_bytes)
+        if progress is not None:
+            progress(total, total)
+
+
+async def download_vad_model(
+    model_id: str,
+    progress: ProgressCallback | None = None,
+) -> None:
+    """Download VAD model in a background thread."""
+    await asyncio.to_thread(_download_vad_model_sync, model_id, progress)
+
+
+def build_vad_config(model_id: str, *, provider: str = "cpu"):
+    """Build a ``SherpaOnnxVADConfig`` for the given downloaded VAD model."""
+    from roomkit.voice.pipeline.vad.sherpa_onnx import SherpaOnnxVADConfig
+
+    m = _VAD_MODELS_BY_ID.get(model_id)
+    if m is None:
+        raise ValueError(f"Unknown VAD model: {model_id}")
+
+    d = vad_model_path(model_id)
+    return SherpaOnnxVADConfig(
+        model=str(d / m.onnx_file),
+        model_type=m.type,
+        provider=provider,
+    )
+
+
+# ---------------------------------------------------------------------------
+# TTS models (Piper via sherpa-onnx)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class TTSModel:
+    id: str
+    name: str
+    size: str
+    sample_rate: int
+    num_speakers: int
+    onnx_file: str  # e.g. "fr_FR-siwis-medium.onnx"
+    config_file: str  # e.g. "fr_FR-siwis-medium.onnx.json"
+
+
+TTS_MODELS: list[TTSModel] = [
+    TTSModel(
+        "piper-siwis-medium",
+        "Siwis (French Female)",
+        "~61 MB",
+        22050,
+        1,
+        "fr_FR-siwis-medium.onnx",
+        "fr_FR-siwis-medium.onnx.json",
+    ),
+    TTSModel(
+        "piper-mls-medium",
+        "MLS (French Multi-speaker)",
+        "~74 MB",
+        22050,
+        125,
+        "fr_FR-mls-medium.onnx",
+        "fr_FR-mls-medium.onnx.json",
+    ),
+    TTSModel(
+        "piper-tom-medium",
+        "Tom (French Male)",
+        "~61 MB",
+        44100,
+        1,
+        "fr_FR-tom-medium.onnx",
+        "fr_FR-tom-medium.onnx.json",
+    ),
+]
+
+_TTS_MODELS_BY_ID: dict[str, TTSModel] = {m.id: m for m in TTS_MODELS}
+
+
+def tts_model_path(model_id: str) -> Path:
+    """Return the directory for a specific TTS model."""
+    return get_models_dir() / "tts" / model_id / "v1"
+
+
+def espeak_ng_data_path() -> Path:
+    """Return the shared espeak-ng-data directory."""
+    return get_models_dir() / "tts" / "espeak-ng-data"
+
+
+def is_tts_model_downloaded(model_id: str) -> bool:
+    """Check whether the TTS model ONNX + tokens.txt exist."""
+    m = _TTS_MODELS_BY_ID.get(model_id)
+    if m is None:
+        return False
+    d = tts_model_path(model_id)
+    return (d / m.onnx_file).is_file() and (d / "tokens.txt").is_file()
+
+
+def is_espeak_ng_downloaded() -> bool:
+    """Check whether espeak-ng-data directory exists and has content."""
+    d = espeak_ng_data_path()
+    return d.is_dir() and (d / "phontab").is_file()
+
+
+def delete_tts_model(model_id: str) -> None:
+    """Remove a downloaded TTS model's directory."""
+    d = get_models_dir() / "tts" / model_id
+    if d.exists():
+        shutil.rmtree(d)
+
+
+def delete_espeak_ng_data() -> None:
+    """Remove the shared espeak-ng-data directory."""
+    d = espeak_ng_data_path()
+    if d.exists():
+        shutil.rmtree(d)
+
+
+def _generate_tokens_txt(onnx_json_path: Path, tokens_path: Path) -> None:
+    """Generate tokens.txt from Piper .onnx.json phoneme_id_map.
+
+    sherpa-onnx expects ``symbol ID`` pairs, one per line (e.g. ``_ 0``).
+    """
+    config = json.loads(onnx_json_path.read_text())
+    phoneme_map: dict[str, list[int]] = config["phoneme_id_map"]
+    max_id = max(max(ids) for ids in phoneme_map.values())
+    tokens: list[str] = [""] * (max_id + 1)
+    for symbol, ids in phoneme_map.items():
+        tokens[ids[0]] = symbol
+    lines = [f"{tok} {i}" for i, tok in enumerate(tokens)]
+    tokens_path.write_text("\n".join(lines) + "\n")
+
+
+
+
+def _download_tts_model_sync(
+    model_id: str,
+    progress: ProgressCallback | None = None,
+) -> None:
+    """Download TTS model files (blocking)."""
+    m = _TTS_MODELS_BY_ID.get(model_id)
+    if m is None:
+        raise ValueError(f"Unknown TTS model: {model_id}")
+
+    dest = tts_model_path(model_id)
+    dest.mkdir(parents=True, exist_ok=True)
+
+    files_to_download: list[tuple[str, str, int]] = []
+    total_bytes = 0
+
+    for fname in (m.onnx_file, m.config_file, "tokens.txt"):
+        target = dest / fname
+        if target.is_file():
+            continue
+        raw_url = f"{_RAW_URL}/tts/{model_id}/v1/{fname}"
+        try:
+            with urllib.request.urlopen(raw_url) as resp:  # noqa: S310
+                raw_bytes = resp.read()
+        except urllib.error.HTTPError:
+            continue  # tokens.txt may not be in repo yet
+        lfs = _resolve_lfs_pointer(raw_bytes)
+        if lfs is not None:
+            oid, size = lfs
+            real_url = _lfs_download_url(oid, size)
+            files_to_download.append((fname, real_url, size))
+            total_bytes += size
+        else:
+            target.write_bytes(raw_bytes)
+
+    if files_to_download:
+        downloaded = 0
+        if progress is not None:
+            progress(0, total_bytes)
+
+        for fname, url, size in files_to_download:
+            target = dest / fname
+
+            def _on_bytes(n: int) -> None:
+                nonlocal downloaded
+                downloaded += n
+                if progress is not None:
+                    progress(downloaded, total_bytes)
+
+            _download_file(url, target, expected_size=size, on_bytes=_on_bytes)
+
+    # Fallback: generate tokens.txt from .onnx.json if not downloaded
+    json_path = dest / m.config_file
+    tokens_path = dest / "tokens.txt"
+    if json_path.is_file() and not tokens_path.is_file():
+        _generate_tokens_txt(json_path, tokens_path)
+
+
+async def download_tts_model(
+    model_id: str,
+    progress: ProgressCallback | None = None,
+) -> None:
+    """Download TTS model files in a background thread."""
+    await asyncio.to_thread(_download_tts_model_sync, model_id, progress)
+
+
+def _list_gh_tree(path: str) -> list[dict]:
+    """Recursively list files under *path* via GitHub Contents API."""
+    url = f"{_GH_API_URL}/{path}"
+    req = urllib.request.Request(url)  # noqa: S310
+    req.add_header("Accept", "application/vnd.github.v3+json")
+    with urllib.request.urlopen(req) as resp:  # noqa: S310
+        entries = json.loads(resp.read())
+    files: list[dict] = []
+    for entry in entries:
+        if entry["type"] == "file":
+            files.append(entry)
+        elif entry["type"] == "dir":
+            files.extend(_list_gh_tree(entry["path"]))
+    return files
+
+
+def _download_espeak_ng_sync(
+    progress: ProgressCallback | None = None,
+) -> None:
+    """Download espeak-ng-data directory from edge-ai-models (blocking)."""
+    dest = espeak_ng_data_path()
+    if dest.is_dir() and (dest / "phontab").is_file():
+        return
+
+    # Enumerate all files via GitHub API
+    entries = _list_gh_tree("tts/espeak-ng-data")
+    total_bytes = sum(e.get("size", 0) for e in entries)
+    downloaded = 0
+
+    if progress is not None:
+        progress(0, total_bytes)
+
+    for entry in entries:
+        # entry["path"] is like "tts/espeak-ng-data/lang/roa/fr"
+        rel = entry["path"].removeprefix("tts/espeak-ng-data/")
+        target = dest / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+
+        if target.is_file():
+            downloaded += entry.get("size", 0)
+            if progress is not None:
+                progress(downloaded, total_bytes)
+            continue
+
+        raw_url = entry.get("download_url") or f"{_RAW_URL}/{entry['path']}"
+        with urllib.request.urlopen(raw_url) as resp:  # noqa: S310
+            data = resp.read()
+        target.write_bytes(data)
+
+        downloaded += entry.get("size", 0)
+        if progress is not None:
+            progress(downloaded, total_bytes)
+
+
+async def download_espeak_ng_data(
+    progress: ProgressCallback | None = None,
+) -> None:
+    """Download espeak-ng-data in a background thread."""
+    await asyncio.to_thread(_download_espeak_ng_sync, progress)
+
+
+def build_tts_config(
+    model_id: str,
+    *,
+    provider: str = "cpu",
+):
+    """Build a ``SherpaOnnxTTSConfig`` for the given downloaded TTS model."""
+    from roomkit.voice.tts.sherpa_onnx import SherpaOnnxTTSConfig
+
+    m = _TTS_MODELS_BY_ID.get(model_id)
+    if m is None:
+        raise ValueError(f"Unknown TTS model: {model_id}")
+
+    d = tts_model_path(model_id)
+    return SherpaOnnxTTSConfig(
+        model=str(d / m.onnx_file),
+        tokens=str(d / "tokens.txt"),
+        data_dir=str(espeak_ng_data_path()),
+        sample_rate=m.sample_rate,
+        provider=provider,
+    )

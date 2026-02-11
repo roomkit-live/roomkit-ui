@@ -30,6 +30,17 @@ _DEFAULTS = {
     "inference_device": "cpu",
     "theme": "dark",
     "mcp_servers": "[]",
+    # Voice channel (STT → LLM → TTS) settings
+    "conversation_mode": "realtime",  # "realtime" | "voice_channel"
+    "vc_llm_provider": "anthropic",  # "anthropic" | "openai" | "gemini"
+    "anthropic_api_key": "",
+    "vc_anthropic_model": "claude-sonnet-4-20250514",
+    "vc_openai_model": "gpt-4o",
+    "vc_gemini_model": "gemini-2.0-flash",
+    "vc_tts_model": "",
+    "vc_stt_model": "",
+    "vc_vad_model": "",
+    "vc_interruption": False,
 }
 
 

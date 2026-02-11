@@ -132,8 +132,10 @@ class Engine(QObject):
         super().__init__(parent)
         self._kit: Any = None
         self._channel: Any = None
+        self._ai_channel: Any = None
         self._session: Any = None
         self._transport: Any = None
+        self._backend: Any = None  # LocalAudioBackend for voice channel mode
         self._mcp: MCPManager | None = None
         self._mic_muted = False
         self._state = "idle"
@@ -158,6 +160,7 @@ class Engine(QObject):
                 self._transport.set_input_muted(self._session, muted)
             except Exception:
                 pass
+        # Voice channel mode uses LocalAudioBackend (no set_input_muted)
 
     # -- register our own callbacks (roomkit uses append-based lists) --------
 
@@ -271,6 +274,15 @@ class Engine(QObject):
             return
         self._mic_muted = False
 
+        mode = settings.get("conversation_mode", "realtime")
+        if mode == "voice_channel":
+            await self._start_voice_channel(settings)
+        else:
+            await self._start_realtime(settings)
+
+    # -- Realtime (speech-to-speech) path ------------------------------------
+
+    async def _start_realtime(self, settings: dict) -> None:
         self._state = "connecting"
         self.state_changed.emit("connecting")
 
@@ -310,48 +322,9 @@ class Engine(QObject):
             block_ms = 20
             frame_size = sample_rate * block_ms // 1000
 
-            aec: Any = None
-            if aec_mode in ("webrtc", "1"):
-                try:
-                    from roomkit.voice.pipeline.aec.webrtc import WebRTCAECProvider
-
-                    aec = WebRTCAECProvider(sample_rate=sample_rate)
-                except ImportError:
-                    logger.warning("WebRTC AEC not available — install aec-audio-processing")
-            elif aec_mode == "speex":
-                try:
-                    from roomkit.voice.pipeline.aec.speex import SpeexAECProvider
-
-                    aec = SpeexAECProvider(
-                        frame_size=frame_size,
-                        filter_length=frame_size * 10,
-                        sample_rate=sample_rate,
-                    )
-                except ImportError:
-                    logger.warning("Speex AEC not available — install libspeexdsp")
-
-            denoiser: Any = None
-            if denoise_mode == "rnnoise":
-                try:
-                    from roomkit.voice.pipeline.denoiser.rnnoise import RNNoiseDenoiserProvider
-
-                    denoiser = RNNoiseDenoiserProvider(sample_rate=sample_rate)
-                except ImportError:
-                    logger.warning("RNNoise denoiser not available")
-            elif denoise_mode == "gtcrn":
-                from room_ui.model_manager import gtcrn_model_path, is_gtcrn_downloaded
-
-                if is_gtcrn_downloaded():
-                    from roomkit.voice.pipeline.denoiser.sherpa_onnx import (
-                        SherpaOnnxDenoiserConfig,
-                        SherpaOnnxDenoiserProvider,
-                    )
-
-                    denoiser = SherpaOnnxDenoiserProvider(
-                        SherpaOnnxDenoiserConfig(model=str(gtcrn_model_path()))
-                    )
-                else:
-                    logger.warning("GTCRN model not downloaded — denoiser disabled")
+            aec, denoiser = self._build_audio_processing(
+                aec_mode, denoise_mode, sample_rate, frame_size
+            )
 
             mute_mic = aec is None
 
@@ -385,38 +358,11 @@ class Engine(QObject):
             self._register_callbacks(provider, transport)
 
             # -- MCP tools -------------------------------------------------------
-            mcp_servers: list[dict] = []
-            try:
-                mcp_servers = [
-                    s
-                    for s in json.loads(settings.get("mcp_servers", "[]"))
-                    if s.get("enabled", True)
-                ]
-            except (json.JSONDecodeError, TypeError):
-                pass
-
-            # Always start with built-in tools
-            tools: list[dict] = list(_BUILTIN_TOOLS)
+            tools, has_mcp_tools = await self._setup_mcp_tools(settings)
             tool_handler = self._handle_tool_call
-
-            if mcp_servers:
-                self._mcp = MCPManager(mcp_servers)
-                await self._mcp.connect_all()
-                discovered = self._mcp.get_tools()
-
-                if self._mcp.failed_servers:
-                    failed = ", ".join(self._mcp.failed_servers)
-                    self.mcp_status.emit(f"MCP failed: {failed}")
-
-                if discovered:
-                    tools.extend(discovered)
-                    names = ", ".join(t["name"] for t in discovered)
-                    logger.info("MCP tools: %s", names)
 
             all_names = ", ".join(t["name"] for t in tools)
             logger.info("Tools: %s", all_names)
-
-            has_mcp_tools = len(tools) > len(_BUILTIN_TOOLS)
 
             self._session = await self._start_session(
                 RoomKit,
@@ -476,6 +422,393 @@ class Engine(QObject):
             self.error_occurred.emit(str(e))
             await self._cleanup()
 
+    # -- Voice Channel (STT → LLM → TTS) path -------------------------------
+
+    async def _start_voice_channel(self, settings: dict) -> None:
+        self._state = "connecting"
+        self.state_changed.emit("connecting")
+
+        try:
+            from roomkit import RoomKit, VoiceChannel
+            from roomkit.channels.ai import AIChannel
+            from roomkit.voice.backends.local import LocalAudioBackend
+            from roomkit.voice.pipeline.config import AudioPipelineConfig
+            from roomkit.voice.stt.sherpa_onnx import SherpaOnnxSTTProvider
+            from roomkit.voice.tts.sherpa_onnx import SherpaOnnxTTSProvider
+
+            from room_ui.model_manager import build_stt_config, build_tts_config
+
+            system_prompt = settings.get(
+                "system_prompt",
+                "You are a friendly voice assistant. Be concise and helpful.",
+            )
+            inference_device = settings.get("inference_device", "cpu")
+            aec_mode = settings.get("aec_mode", "webrtc")
+            denoise_mode = settings.get("denoise", "none")
+
+            # 1. Build STT
+            stt_model_id = settings.get("vc_stt_model", "")
+            if not stt_model_id:
+                raise ValueError(
+                    "No STT model selected. Download one in AI Models and select it in Settings."
+                )
+            stt_language = settings.get("stt_language", "") or "en"
+            stt_translate = settings.get("stt_translate", False)
+            stt_config = build_stt_config(
+                stt_model_id,
+                language=stt_language,
+                translate=stt_translate,
+                provider=inference_device,
+            )
+            stt = SherpaOnnxSTTProvider(stt_config)
+            logger.info("STT: model=%s, language=%s", stt_model_id, stt_language)
+
+            # 2. Build TTS
+            tts_model_id = settings.get("vc_tts_model", "")
+            if not tts_model_id:
+                raise ValueError(
+                    "No TTS model selected. Download one in AI Models and select it in Settings."
+                )
+            tts_config = build_tts_config(tts_model_id, provider=inference_device)
+            tts = SherpaOnnxTTSProvider(tts_config)
+            logger.info("TTS: model=%s, sample_rate=%d", tts_model_id, tts_config.sample_rate)
+
+            # 3. Build AI provider
+            llm_provider_name = settings.get("vc_llm_provider", "anthropic")
+            ai_provider = self._build_ai_provider(settings, llm_provider_name)
+            model = ai_provider.model_name
+
+            # 4. Audio processing
+            input_sample_rate = 16000
+            output_sample_rate = tts_config.sample_rate
+            block_ms = 20
+            frame_size = input_sample_rate * block_ms // 1000
+
+            aec, denoiser = self._build_audio_processing(
+                aec_mode, denoise_mode, input_sample_rate, frame_size
+            )
+
+            # 5. Build audio backend
+            input_device = settings.get("input_device")
+            output_device = settings.get("output_device")
+
+            backend = LocalAudioBackend(
+                input_sample_rate=input_sample_rate,
+                output_sample_rate=output_sample_rate,
+                block_duration_ms=block_ms,
+                input_device=input_device,
+                output_device=output_device,
+                aec=aec,
+                mute_mic_during_playback=aec is None,
+            )
+            self._backend = backend
+
+            aec_label = type(aec).__name__ if aec else "none"
+            denoise_label = type(denoiser).__name__ if denoiser else "none"
+            logger.info(
+                "VC audio pipeline: aec=%s, denoiser=%s, in_rate=%dHz, out_rate=%dHz",
+                aec_label,
+                denoise_label,
+                input_sample_rate,
+                output_sample_rate,
+            )
+
+            # 6. Build pipeline config (with optional VAD)
+            vad: Any = None
+            vad_model_id = settings.get("vc_vad_model", "")
+            if vad_model_id:
+                from room_ui.model_manager import build_vad_config, is_vad_model_downloaded
+
+                if is_vad_model_downloaded(vad_model_id):
+                    from roomkit.voice.pipeline.vad.sherpa_onnx import SherpaOnnxVADProvider
+
+                    vad_config = build_vad_config(vad_model_id, provider=inference_device)
+                    vad = SherpaOnnxVADProvider(vad_config)
+                    logger.info("VAD: %s", vad_model_id)
+                else:
+                    logger.warning("VAD model %s not downloaded — no VAD", vad_model_id)
+
+            # Interruption config
+            from roomkit.voice.interruption import InterruptionConfig, InterruptionStrategy
+
+            interruption_enabled = settings.get("vc_interruption", False)
+            strategy = (
+                InterruptionStrategy.IMMEDIATE if interruption_enabled
+                else InterruptionStrategy.DISABLED
+            )
+            interruption = InterruptionConfig(strategy=strategy)
+            logger.info("Interruption: %s", strategy.value)
+
+            pipeline = AudioPipelineConfig(
+                aec=aec, denoiser=denoiser, vad=vad, interruption=interruption
+            )
+
+            # 7. Create VoiceChannel
+            voice = VoiceChannel(
+                "voice",
+                stt=stt,
+                tts=tts,
+                backend=backend,
+                pipeline=pipeline,
+            )
+            self._channel = voice
+
+            # 8. Create AIChannel (with tool handler for MCP + built-in tools)
+            async def _vc_tool_handler(name: str, arguments: dict[str, Any]) -> str:
+                return await self._handle_tool_call(None, name, arguments)
+
+            ai_channel = AIChannel(
+                "ai",
+                provider=ai_provider,
+                system_prompt=system_prompt,
+                tool_handler=_vc_tool_handler,
+            )
+            self._ai_channel = ai_channel
+
+            # 9. MCP tools
+            tools, _has_mcp = await self._setup_mcp_tools(settings)
+
+            # 10. Wire up framework
+            kit = RoomKit()
+            self._kit = kit
+
+            kit.register_channel(voice)
+            kit.register_channel(ai_channel)
+            await kit.create_room(room_id="local-demo")
+            from roomkit.models.enums import ChannelCategory
+
+            voice_binding = await kit.attach_channel("local-demo", "voice")
+            await kit.attach_channel(
+                "local-demo",
+                "ai",
+                category=ChannelCategory.INTELLIGENCE,
+                metadata={"tools": tools},
+            )
+
+            # 11. Register hooks for UI callbacks
+            self._register_vc_hooks(kit)
+
+            # 12. Connect and start
+            session = await backend.connect("local-demo", "local-user", "voice")
+            self._session = session
+            voice.bind_session(session, "local-demo", voice_binding)
+            await backend.start_listening(session)
+
+            self._state = "active"
+            self.state_changed.emit("active")
+
+            # Emit session info
+            tool_info = [
+                {"name": t.get("name", ""), "description": t.get("description", "")} for t in tools
+            ]
+            info: dict = {
+                "provider": llm_provider_name,
+                "model": model,
+                "tools": tool_info,
+            }
+            if self._mcp and self._mcp.failed_servers:
+                info["failed_servers"] = list(self._mcp.failed_servers)
+            self.session_info.emit(info)
+
+        except Exception as e:
+            logger.exception("Failed to start voice channel session")
+            self._state = "error"
+            self.state_changed.emit("error")
+            self.error_occurred.emit(str(e))
+            await self._cleanup()
+
+    # -- Shared helpers ------------------------------------------------------
+
+    def _build_audio_processing(
+        self,
+        aec_mode: str,
+        denoise_mode: str,
+        sample_rate: int,
+        frame_size: int,
+    ) -> tuple[Any, Any]:
+        """Build AEC and denoiser providers. Returns (aec, denoiser)."""
+        aec: Any = None
+        if aec_mode in ("webrtc", "1"):
+            try:
+                from roomkit.voice.pipeline.aec.webrtc import WebRTCAECProvider
+
+                aec = WebRTCAECProvider(sample_rate=sample_rate)
+            except ImportError:
+                logger.warning("WebRTC AEC not available — install aec-audio-processing")
+        elif aec_mode == "speex":
+            try:
+                from roomkit.voice.pipeline.aec.speex import SpeexAECProvider
+
+                aec = SpeexAECProvider(
+                    frame_size=frame_size,
+                    filter_length=frame_size * 10,
+                    sample_rate=sample_rate,
+                )
+            except ImportError:
+                logger.warning("Speex AEC not available — install libspeexdsp")
+
+        denoiser: Any = None
+        if denoise_mode == "rnnoise":
+            try:
+                from roomkit.voice.pipeline.denoiser.rnnoise import RNNoiseDenoiserProvider
+
+                denoiser = RNNoiseDenoiserProvider(sample_rate=sample_rate)
+            except ImportError:
+                logger.warning("RNNoise denoiser not available")
+        elif denoise_mode == "gtcrn":
+            from room_ui.model_manager import gtcrn_model_path, is_gtcrn_downloaded
+
+            if is_gtcrn_downloaded():
+                from roomkit.voice.pipeline.denoiser.sherpa_onnx import (
+                    SherpaOnnxDenoiserConfig,
+                    SherpaOnnxDenoiserProvider,
+                )
+
+                denoiser = SherpaOnnxDenoiserProvider(
+                    SherpaOnnxDenoiserConfig(model=str(gtcrn_model_path()))
+                )
+            else:
+                logger.warning("GTCRN model not downloaded — denoiser disabled")
+
+        return aec, denoiser
+
+    async def _setup_mcp_tools(self, settings: dict) -> tuple[list[dict], bool]:
+        """Connect MCP servers and return (tools_list, has_mcp_tools)."""
+        mcp_servers: list[dict] = []
+        try:
+            mcp_servers = [
+                s for s in json.loads(settings.get("mcp_servers", "[]")) if s.get("enabled", True)
+            ]
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+        tools: list[dict] = list(_BUILTIN_TOOLS)
+
+        if mcp_servers:
+            self._mcp = MCPManager(mcp_servers)
+            await self._mcp.connect_all()
+            discovered = self._mcp.get_tools()
+
+            if self._mcp.failed_servers:
+                failed = ", ".join(self._mcp.failed_servers)
+                self.mcp_status.emit(f"MCP failed: {failed}")
+
+            if discovered:
+                tools.extend(discovered)
+                names = ", ".join(t["name"] for t in discovered)
+                logger.info("MCP tools: %s", names)
+
+        has_mcp_tools = len(tools) > len(_BUILTIN_TOOLS)
+        return tools, has_mcp_tools
+
+    def _build_ai_provider(self, settings: dict, provider_name: str) -> Any:
+        """Create an AI provider for voice channel mode."""
+        if provider_name == "anthropic":
+            from roomkit.providers.anthropic.ai import AnthropicAIProvider
+            from roomkit.providers.anthropic.config import AnthropicConfig
+
+            api_key = settings.get("anthropic_api_key", "")
+            if not api_key:
+                raise ValueError("Anthropic API key is required. Open Settings to enter it.")
+            return AnthropicAIProvider(
+                AnthropicConfig(
+                    api_key=api_key,
+                    model=settings.get("vc_anthropic_model", "claude-sonnet-4-20250514"),
+                )
+            )
+        elif provider_name == "openai":
+            from roomkit.providers.openai.ai import OpenAIAIProvider
+            from roomkit.providers.openai.config import OpenAIConfig
+
+            api_key = settings.get("openai_api_key", "")
+            if not api_key:
+                raise ValueError("OpenAI API key is required. Open Settings to enter it.")
+            return OpenAIAIProvider(
+                OpenAIConfig(
+                    api_key=api_key,
+                    model=settings.get("vc_openai_model", "gpt-4o"),
+                )
+            )
+        else:  # gemini
+            from roomkit.providers.gemini.ai import GeminiAIProvider
+            from roomkit.providers.gemini.config import GeminiConfig
+
+            api_key = settings.get("api_key", "")
+            if not api_key:
+                raise ValueError("Google API key is required. Open Settings to enter it.")
+            return GeminiAIProvider(
+                GeminiConfig(
+                    api_key=api_key,
+                    model=settings.get("vc_gemini_model", "gemini-2.0-flash"),
+                )
+            )
+
+    def _register_vc_hooks(self, kit: Any) -> None:
+        """Register framework hooks for VoiceChannel UI callbacks."""
+        from roomkit.models.enums import HookExecution, HookTrigger
+
+        @kit.hook(HookTrigger.ON_TRANSCRIPTION, HookExecution.SYNC)
+        async def _on_user_transcription(text, context):
+            from roomkit import HookResult
+
+            try:
+                self.transcription.emit(str(text), "user", True)
+            except Exception:
+                pass
+            return HookResult.allow()
+
+        @kit.hook(HookTrigger.ON_PARTIAL_TRANSCRIPTION, HookExecution.ASYNC)
+        async def _on_partial_transcription(event, context):
+            try:
+                self.transcription.emit(str(event.text), "user", False)
+            except Exception:
+                pass
+
+        @kit.hook(HookTrigger.ON_SPEECH_START, HookExecution.ASYNC)
+        async def _on_speech_start(event, context):
+            try:
+                self.user_speaking.emit(True)
+            except Exception:
+                pass
+
+        @kit.hook(HookTrigger.ON_SPEECH_END, HookExecution.ASYNC)
+        async def _on_speech_end(event, context):
+            try:
+                self.user_speaking.emit(False)
+            except Exception:
+                pass
+
+        @kit.hook(HookTrigger.BEFORE_TTS, HookExecution.SYNC)
+        async def _on_ai_response(text, context):
+            from roomkit import HookResult
+
+            try:
+                self.transcription.emit(str(text), "assistant", True)
+                self.ai_speaking.emit(True)
+            except Exception:
+                pass
+            return HookResult.allow()
+
+        @kit.hook(HookTrigger.AFTER_TTS, HookExecution.ASYNC)
+        async def _on_tts_done(text, context):
+            try:
+                self.ai_speaking.emit(False)
+            except Exception:
+                pass
+
+        @kit.hook(HookTrigger.ON_VAD_AUDIO_LEVEL, HookExecution.ASYNC)
+        async def _on_audio_level(event, context):
+            try:
+                # Convert dB to 0.0-1.0 range for VU meter
+                # Typical range: -60 dB (silence) to 0 dB (max)
+                db = getattr(event, "level_db", -60.0)
+                level = max(0.0, min(1.0, (db + 60.0) / 60.0))
+                if self._mic_muted:
+                    level = 0.0
+                self.mic_audio_level.emit(level)
+            except Exception:
+                pass
+
     async def _start_session(
         self,
         RoomKit: type,  # noqa: N803
@@ -533,13 +866,28 @@ class Engine(QObject):
     async def _cleanup(self) -> None:
         self._spk_timer.stop()
         self._spk_rms_queue.clear()
-        if self._channel and self._session:
+        # Voice channel mode: disconnect backend
+        if self._backend and self._session:
+            try:
+                logger.info("cleanup: disconnecting voice channel backend …")
+                await self._backend.stop_listening(self._session)
+                await self._backend.disconnect(self._session)
+                logger.info("cleanup: backend disconnected")
+            except Exception:
+                logger.exception("cleanup: backend disconnect failed")
+        # Realtime mode: end session via channel
+        elif self._channel and self._session and not self._backend:
             try:
                 logger.info("cleanup: ending voice session …")
                 await self._channel.end_session(self._session)
                 logger.info("cleanup: voice session ended")
             except Exception:
                 logger.exception("cleanup: end_session failed")
+        if self._backend:
+            try:
+                await self._backend.close()
+            except Exception:
+                logger.exception("cleanup: backend.close() failed")
         if self._kit:
             try:
                 logger.info("cleanup: closing roomkit …")
@@ -555,9 +903,11 @@ class Engine(QObject):
             except Exception:
                 logger.exception("cleanup: mcp.close_all() failed")
         self._channel = None
+        self._ai_channel = None
         self._session = None
         self._kit = None
         self._transport = None
+        self._backend = None
         self._mcp = None
         # Clean up stale event-loop state left by MCP/anyio.
         self._cleanup_stale_fds()
