@@ -33,14 +33,17 @@ Then double-click the app to open it. You'll also need to grant microphone permi
 - **Real-time voice** — full-duplex voice conversation with interruption support
 - **Animated VU meter** — ambient glow visualization for mic and speaker audio levels
 - **Chat transcript** — iMessage-style bubbles with markdown rendering and streaming transcriptions
-- **System-wide dictation** — global hotkey triggers OpenAI STT and pastes text into the focused app
+- **System-wide dictation** — global hotkey triggers STT and pastes text into the focused app
+- **Local STT models** — offline dictation with downloadable sherpa-onnx models (Whisper, Parakeet, Zipformer)
 - **MCP tool support** — connect external tools via Model Context Protocol (stdio, SSE, HTTP)
 - **Echo cancellation** — WebRTC or Speex AEC for hands-free use
-- **RNNoise denoiser** — optional audio denoising for noisy environments
+- **Noise suppression** — RNNoise or GTCRN denoiser for noisy environments
+- **GPU inference** — optional CUDA (NVIDIA) or CoreML (Apple) acceleration for local STT models
 - **Audio device selection** — pick your microphone and speaker from settings
 - **Dark & Light themes** — Apple-inspired UI with theme switcher
 - **System tray** — tray icon with dictation status, quick toggle, and notifications
 - **Multi-language STT** — 14+ languages for dictation (auto-detect, English, French, Spanish, etc.)
+- **Whisper translation** — translate speech to English using Whisper models
 
 ## Requirements
 
@@ -65,6 +68,27 @@ For WebRTC echo cancellation (recommended):
 uv pip install aec-audio-processing
 ```
 
+### GPU acceleration (optional)
+
+Local STT models can run on GPU for faster inference. The inference device can be selected in Settings > General > Audio Processing.
+
+**NVIDIA CUDA** (Linux):
+
+Requires cuDNN 9 and the sherpa-onnx CUDA wheel:
+
+```bash
+# Install cuDNN 9
+sudo apt-get install cudnn9-cuda-12
+
+# Install CUDA wheel (after uv sync)
+uv pip install sherpa-onnx==1.12.23+cuda12.cudnn9 \
+    -f https://k2-fsa.github.io/sherpa/onnx/cuda.html
+```
+
+> **Note:** `uv sync` and `uv run` will reinstall the CPU wheel from PyPI. Use `uv run --no-sync` to preserve the CUDA wheel, or reinstall after syncing.
+
+**CoreML** (macOS): Available automatically with the standard sherpa-onnx package.
+
 ## Usage
 
 1. Click the gear icon to open **Settings**
@@ -72,6 +96,12 @@ uv pip install aec-audio-processing
 3. Click **Save**, then press the green call button to start a voice session
 4. Speak naturally — the AI will respond in real-time
 5. Press the red button to end the session
+
+### Local STT dictation
+
+1. Go to **Settings > AI Models** and download a speech-to-text model
+2. Go to **Settings > Dictation**, set STT Provider to **Local** and select your model
+3. Press the global hotkey to record, release to transcribe and paste
 
 ## Project Structure
 
@@ -82,6 +112,7 @@ src/room_ui/
 ├── hotkey.py           # Global hotkey (NSEvent on macOS, pynput fallback)
 ├── icons.py            # Heroicons SVG rendering
 ├── mcp_manager.py      # MCP client manager (stdio, SSE, HTTP)
+├── model_manager.py    # Local model download & management
 ├── settings.py         # QSettings persistence
 ├── stt_engine.py       # STT dictation engine + text pasting
 ├── theme.py            # Dark & Light theme stylesheets
@@ -89,6 +120,7 @@ src/room_ui/
 └── widgets/
     ├── main_window.py    # Main window layout
     ├── settings_panel.py # Tabbed settings dialog
+    ├── session_info.py   # Collapsible session info bar
     ├── chat_view.py      # Scrollable chat area
     ├── chat_bubble.py    # Chat bubble with markdown rendering
     ├── vu_meter.py       # Animated ambient glow VU meter
@@ -113,4 +145,4 @@ pyinstaller --name "RoomKit UI" --windowed --icon=assets/icon.icns src/room_ui/_
 
 ## License
 
-MIT License — Copyright (c) 2025 Sylvain Boily
+MIT License — Copyright (c) 2026 Sylvain Boily
