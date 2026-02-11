@@ -107,12 +107,12 @@ class ChatBubble(QFrame):
         align = Qt.AlignRight if is_user else Qt.AlignLeft
         self._time_label.setAlignment(align)
         self._time_label.setStyleSheet(
-            "QLabel {"
-            "  color: #636366;"
-            "  font-size: 10px;"
-            "  background: transparent;"
-            "  padding: 2px 4px 0px 4px;"
-            "}"
+            f"QLabel {{"
+            f"  color: {c['TEXT_SECONDARY']};"
+            f"  font-size: 10px;"
+            f"  background: transparent;"
+            f"  padding: 2px 4px 0px 4px;"
+            f"}}"
         )
 
         # ── Row: bubble aligned left or right ──

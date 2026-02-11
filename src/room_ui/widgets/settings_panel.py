@@ -268,10 +268,11 @@ class _AIPage(QWidget):
         layout.addLayout(form)
 
         # System prompt
+        c = colors()
         section = QLabel("System Prompt")
         section.setStyleSheet(
-            "font-size: 12px; font-weight: 600; color: #8E8E93;"
-            " text-transform: uppercase; letter-spacing: 1px; background: transparent;"
+            f"font-size: 12px; font-weight: 600; color: {c['TEXT_SECONDARY']};"
+            f" text-transform: uppercase; letter-spacing: 1px; background: transparent;"
         )
         layout.addWidget(section)
         self.prompt = QTextEdit()
@@ -346,7 +347,10 @@ class _DictationPage(QWidget):
             "Realtime for speech-to-text."
         )
         desc.setWordWrap(True)
-        desc.setStyleSheet("font-size: 13px; color: #8E8E93; background: transparent;")
+        c = colors()
+        desc.setStyleSheet(
+            f"font-size: 13px; color: {c['TEXT_SECONDARY']}; background: transparent;"
+        )
         layout.addWidget(desc)
 
         form = QFormLayout()
@@ -385,7 +389,9 @@ class _DictationPage(QWidget):
 
         hint = QLabel("Click the button above, then press your desired key combination.")
         hint.setWordWrap(True)
-        hint.setStyleSheet("font-size: 11px; color: #636366; background: transparent;")
+        hint.setStyleSheet(
+            f"font-size: 11px; color: {c['TEXT_SECONDARY']}; background: transparent;"
+        )
         layout.addWidget(hint)
 
         layout.addStretch()
@@ -422,7 +428,10 @@ class _MCPPage(QWidget):
             "voice assistant access to external tools."
         )
         desc.setWordWrap(True)
-        desc.setStyleSheet("font-size: 13px; color: #8E8E93; background: transparent;")
+        c = colors()
+        desc.setStyleSheet(
+            f"font-size: 13px; color: {c['TEXT_SECONDARY']}; background: transparent;"
+        )
         layout.addWidget(desc)
 
         # Server list

@@ -13,6 +13,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from room_ui.theme import colors
+
 
 class DictationLog(QWidget):
     """Floating window that displays dictation events."""
@@ -24,18 +26,20 @@ class DictationLog(QWidget):
         self.resize(520, 360)
         self.setWindowFlags(Qt.Window)
 
+        c = colors()
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
 
         self._log = QTextEdit()
         self._log.setReadOnly(True)
         self._log.setStyleSheet(
-            "QTextEdit {"
-            "  font-family: monospace; font-size: 12px;"
-            "  background-color: #1C1C1E; color: #E5E5EA;"
-            "  border: 1px solid #2C2C2E; border-radius: 6px;"
-            "  padding: 6px;"
-            "}"
+            f"QTextEdit {{"
+            f"  font-family: monospace; font-size: 12px;"
+            f"  background-color: {c['BG_PRIMARY']}; color: {c['TEXT_PRIMARY']};"
+            f"  border: 1px solid {c['SEPARATOR']}; border-radius: 6px;"
+            f"  padding: 6px;"
+            f"}}"
         )
         layout.addWidget(self._log, 1)
 

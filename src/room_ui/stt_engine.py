@@ -304,24 +304,19 @@ class STTEngine(QObject):
             # Set transcription language if configured.
             stt_language = settings.get("stt_language", "")
             if stt_language:
-                import json
-
-                ws = self._provider._connections.get(self._session.id)
-                if ws:
-                    await ws.send(
-                        json.dumps(
-                            {
-                                "type": "session.update",
-                                "session": {
-                                    "input_audio_transcription": {
-                                        "model": "gpt-4o-transcribe",
-                                        "language": stt_language,
-                                    },
-                                },
-                            }
-                        )
-                    )
-                    logger.info("Set STT language: %s", stt_language)
+                await self._provider.send_event(
+                    self._session,
+                    {
+                        "type": "session.update",
+                        "session": {
+                            "input_audio_transcription": {
+                                "model": "gpt-4o-transcribe",
+                                "language": stt_language,
+                            },
+                        },
+                    },
+                )
+                logger.info("Set STT language: %s", stt_language)
 
             logger.info("STT session started")
 
@@ -385,13 +380,7 @@ class STTEngine(QObject):
 
     async def _commit_and_wait(self) -> None:
         """Send input_audio_buffer.commit and wait for the transcription."""
-        import json
-
         if self._provider is None or self._session is None:
-            return
-
-        ws = self._provider._connections.get(self._session.id)
-        if ws is None:
             return
 
         self._transcription_event = asyncio.Event()
@@ -401,7 +390,7 @@ class STTEngine(QObject):
             self._transcription_event.set()
 
         try:
-            await ws.send(json.dumps({"type": "input_audio_buffer.commit"}))
+            await self._provider.send_event(self._session, {"type": "input_audio_buffer.commit"})
             logger.info("Sent input_audio_buffer.commit, waiting for transcription...")
         except Exception:
             logger.exception("Error sending audio buffer commit")
@@ -428,19 +417,6 @@ class STTEngine(QObject):
             if channel and session:
                 try:
                     await channel.end_session(session)
-                except Exception:
-                    pass
-            if transport is not None:
-                try:
-                    for stream in transport._input_streams.values():
-                        if stream.active:
-                            stream.stop()
-                except Exception:
-                    pass
-                try:
-                    for stream in transport._output_streams.values():
-                        if stream.active:
-                            stream.stop()
                 except Exception:
                     pass
             if kit:

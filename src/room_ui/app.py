@@ -21,8 +21,14 @@ from room_ui.tray import TrayService
 from room_ui.widgets.dictation_log import DictationLog
 from room_ui.widgets.main_window import MainWindow
 
-# Log to file so we can diagnose issues when launched from Finder (no console).
-_log_dir = os.path.join(os.path.expanduser("~"), "Library", "Logs", "RoomKit UI")
+# Log to file so we can diagnose issues when launched without a console.
+if sys.platform == "darwin":
+    _log_dir = os.path.join(os.path.expanduser("~"), "Library", "Logs", "RoomKit UI")
+else:
+    _xdg = os.environ.get(
+        "XDG_DATA_HOME", os.path.join(os.path.expanduser("~"), ".local", "share")
+    )
+    _log_dir = os.path.join(_xdg, "roomkit-ui", "logs")
 os.makedirs(_log_dir, exist_ok=True)
 _log_file = os.path.join(_log_dir, "roomkit-ui.log")
 

@@ -122,16 +122,9 @@ class Engine(QObject):
 
     def set_mic_muted(self, muted: bool) -> None:
         self._mic_muted = muted
-        # Pause / resume the PortAudio input stream directly.
-        # This is the cleanest way to mute — no audio frames are captured
-        # at all, so nothing reaches the provider.
-        if self._transport is not None:
+        if self._transport is not None and self._session is not None:
             try:
-                for stream in self._transport._input_streams.values():
-                    if muted and stream.active:
-                        stream.stop()
-                    elif not muted and not stream.active:
-                        stream.start()
+                self._transport.set_input_muted(self._session, muted)
             except Exception:
                 pass
 

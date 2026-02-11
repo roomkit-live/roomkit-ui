@@ -93,7 +93,7 @@ class MCPManager:
                     )
                     self.failed_servers.append(name)
                     await self._safe_close_stack(stack, name)
-                except BaseException:
+                except Exception:
                     logger.exception(
                         "Failed to connect to MCP server %r",
                         name,
@@ -113,7 +113,7 @@ class MCPManager:
 
         except asyncio.CancelledError:
             logger.info("MCP manager task cancelled")
-        except BaseException:
+        except Exception:
             logger.exception("MCP manager task failed")
         finally:
             ready.set()  # unblock caller if we failed early
