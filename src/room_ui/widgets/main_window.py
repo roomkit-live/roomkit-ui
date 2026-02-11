@@ -82,8 +82,8 @@ class MainWindow(QMainWindow):
 
     def _open_settings(self) -> None:
         dlg = SettingsPanel(self)
-        if dlg.exec():
-            self.settings_saved.emit()
+        dlg.exec()
+        self.settings_saved.emit()
 
     def _on_reset(self) -> None:
         if self._engine.state != "idle":

@@ -405,7 +405,7 @@ MCP_TRANSPORTS = [
 
 
 class _MCPPage(QWidget):
-    """MCP Servers configuration page."""
+    """MCP Servers configuration page with list/edit navigation."""
 
     def __init__(self, settings: dict, parent=None) -> None:
         super().__init__(parent)
@@ -415,35 +415,43 @@ class _MCPPage(QWidget):
         except (json.JSONDecodeError, TypeError):
             self._servers = []
 
+        self._editing_row = -1
+        c = colors()
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(12)
+        layout.setSpacing(0)
+
+        self._stack = QStackedWidget()
+        layout.addWidget(self._stack)
+
+        # ── Page 0: Server list ──
+        list_page = QWidget()
+        list_layout = QVBoxLayout(list_page)
+        list_layout.setContentsMargins(0, 0, 0, 0)
+        list_layout.setSpacing(12)
 
         title = QLabel("MCP Servers")
         title.setStyleSheet("font-size: 18px; font-weight: 600; background: transparent;")
-        layout.addWidget(title)
+        list_layout.addWidget(title)
 
         desc = QLabel(
             "Configure Model Context Protocol servers to give the "
             "voice assistant access to external tools."
         )
         desc.setWordWrap(True)
-        c = colors()
         desc.setStyleSheet(
             f"font-size: 13px; color: {c['TEXT_SECONDARY']}; background: transparent;"
         )
-        layout.addWidget(desc)
+        list_layout.addWidget(desc)
 
-        # Server list
         self._server_list = QListWidget()
-        self._server_list.setFixedHeight(160)
-        c = colors()
         self._server_list.setStyleSheet(
             f"QListWidget {{ border: 1px solid {c['SEPARATOR']}; border-radius: 6px; }}"
+            f"QListWidget::item {{ padding: 6px 10px; }}"
         )
-        layout.addWidget(self._server_list)
+        list_layout.addWidget(self._server_list, 1)
 
-        # Add / Remove buttons below the list
         _btn_style = (
             f"QPushButton {{ font-size: 18px; font-weight: 700;"
             f" color: {c['TEXT_PRIMARY']}; background-color: {c['BG_SECONDARY']};"
@@ -465,13 +473,36 @@ class _MCPPage(QWidget):
         btn_row.addWidget(add_btn)
         btn_row.addWidget(remove_btn)
         btn_row.addStretch()
-        layout.addLayout(btn_row)
+        list_layout.addLayout(btn_row)
 
-        # Per-server config form
-        self._form_container = QWidget()
-        form = QFormLayout(self._form_container)
+        self._stack.addWidget(list_page)
+
+        # ── Page 1: Edit form ──
+        edit_page = QWidget()
+        edit_layout = QVBoxLayout(edit_page)
+        edit_layout.setContentsMargins(0, 0, 0, 0)
+        edit_layout.setSpacing(12)
+
+        back_btn = QPushButton("\u2190  Back to list")
+        back_btn.setCursor(Qt.PointingHandCursor)
+        back_btn.setStyleSheet(
+            f"QPushButton {{ background: transparent; border: none;"
+            f" color: {c['ACCENT_BLUE']}; font-size: 13px;"
+            f" text-align: left; padding: 0; }}"
+            f"QPushButton:hover {{ text-decoration: underline; }}"
+        )
+        back_btn.clicked.connect(self._show_list)
+        edit_layout.addWidget(back_btn)
+
+        self._edit_title = QLabel()
+        self._edit_title.setStyleSheet(
+            "font-size: 18px; font-weight: 600; background: transparent;"
+        )
+        edit_layout.addWidget(self._edit_title)
+
+        form = QFormLayout()
         form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
-        form.setSpacing(8)
+        form.setSpacing(10)
         form.setLabelAlignment(Qt.AlignRight)
 
         self._enabled_check = QCheckBox("Enabled")
@@ -493,7 +524,9 @@ class _MCPPage(QWidget):
         form.addRow(self._command_label, self._command_edit)
 
         self._args_edit = QLineEdit()
-        self._args_edit.setPlaceholderText("e.g. -y @modelcontextprotocol/server-filesystem /home")
+        self._args_edit.setPlaceholderText(
+            "e.g. -y @modelcontextprotocol/server-filesystem /home"
+        )
         self._args_label = QLabel("Args")
         form.addRow(self._args_label, self._args_edit)
 
@@ -504,20 +537,23 @@ class _MCPPage(QWidget):
 
         self._env_edit = QTextEdit()
         self._env_edit.setPlaceholderText("KEY=VALUE (one per line)")
-        self._env_edit.setFixedHeight(48)
+        self._env_edit.setFixedHeight(60)
         form.addRow("Env", self._env_edit)
 
-        layout.addWidget(self._form_container)
-        self._form_container.setVisible(False)
+        edit_layout.addLayout(form)
+        edit_layout.addStretch()
 
-        layout.addStretch()
+        self._stack.addWidget(edit_page)
+
+        # Start on list page
+        self._stack.setCurrentIndex(0)
 
         # Populate list
         for srv in self._servers:
             self._server_list.addItem(self._display_name(srv))
 
         # Connections
-        self._server_list.currentRowChanged.connect(self._on_selection_changed)
+        self._server_list.itemDoubleClicked.connect(self._on_item_activated)
         self._transport_combo.currentIndexChanged.connect(self._on_transport_changed)
         self._enabled_check.toggled.connect(self._sync_to_model)
         self._name_edit.textChanged.connect(self._sync_to_model)
@@ -526,35 +562,21 @@ class _MCPPage(QWidget):
         self._url_edit.textChanged.connect(self._sync_to_model)
         self._env_edit.textChanged.connect(self._sync_to_model)
 
-    def _add_server(self) -> None:
-        srv = {
-            "enabled": True,
-            "name": "New Server",
-            "transport": "stdio",
-            "command": "",
-            "args": "",
-            "url": "",
-            "env": "",
-        }
-        self._servers.append(srv)
-        self._server_list.addItem(srv["name"])
-        self._server_list.setCurrentRow(len(self._servers) - 1)
+    # -- navigation ----------------------------------------------------------
 
-    def _remove_server(self) -> None:
-        row = self._server_list.currentRow()
-        if row < 0:
-            return
-        self._servers.pop(row)
-        self._server_list.takeItem(row)
+    def _show_list(self) -> None:
+        self._editing_row = -1
+        self._stack.setCurrentIndex(0)
 
-    def _on_selection_changed(self, row: int) -> None:
+    def _show_edit(self, row: int) -> None:
         if row < 0 or row >= len(self._servers):
-            self._form_container.setVisible(False)
             return
-        self._form_container.setVisible(True)
+        self._editing_row = row
         srv = self._servers[row]
 
-        # Block signals while populating to avoid feedback loop
+        self._edit_title.setText(srv.get("name") or "New Server")
+
+        # Block signals while populating
         for w in (
             self._enabled_check,
             self._name_edit,
@@ -591,6 +613,37 @@ class _MCPPage(QWidget):
             w.blockSignals(False)
 
         self._update_field_visibility(transport)
+        self._stack.setCurrentIndex(1)
+
+    def _on_item_activated(self, _item: QListWidgetItem) -> None:
+        row = self._server_list.currentRow()
+        self._show_edit(row)
+
+    # -- add / remove --------------------------------------------------------
+
+    def _add_server(self) -> None:
+        srv = {
+            "enabled": True,
+            "name": "",
+            "transport": "stdio",
+            "command": "",
+            "args": "",
+            "url": "",
+            "env": "",
+        }
+        self._servers.append(srv)
+        self._server_list.addItem(self._display_name(srv))
+        self._show_edit(len(self._servers) - 1)
+        self._name_edit.setFocus()
+
+    def _remove_server(self) -> None:
+        row = self._server_list.currentRow()
+        if row < 0:
+            return
+        self._servers.pop(row)
+        self._server_list.takeItem(row)
+
+    # -- edit form -----------------------------------------------------------
 
     def _on_transport_changed(self, _index: int) -> None:
         transport = MCP_TRANSPORTS[self._transport_combo.currentIndex()][1]
@@ -607,7 +660,7 @@ class _MCPPage(QWidget):
         self._url_edit.setVisible(not is_stdio)
 
     def _sync_to_model(self) -> None:
-        row = self._server_list.currentRow()
+        row = self._editing_row
         if row < 0 or row >= len(self._servers):
             return
         srv = self._servers[row]
@@ -622,6 +675,8 @@ class _MCPPage(QWidget):
         item = self._server_list.item(row)
         if item:
             item.setText(self._display_name(srv))
+        # Update edit title
+        self._edit_title.setText(srv["name"] or "New Server")
 
     @staticmethod
     def _display_name(srv: dict) -> str:
@@ -684,7 +739,7 @@ class _AboutPage(QWidget):
 
         license_text = QLabel(
             "MIT License\n\n"
-            "Copyright (c) 2025 Sylvain Boily\n\n"
+            "Copyright (c) 2025-2026 Sylvain Boily\n\n"
             "Permission is hereby granted, free of charge, to any person obtaining "
             "a copy of this software and associated documentation files, to deal in "
             "the Software without restriction, including without limitation the rights "
@@ -767,21 +822,6 @@ class SettingsPanel(QDialog):
         self._sidebar.currentRowChanged.connect(self._stack.setCurrentIndex)
         self._sidebar.setCurrentRow(0)
 
-        # ── Buttons ──
-        btn_row = QHBoxLayout()
-        btn_row.addStretch()
-        cancel_btn = QPushButton("Cancel")
-        cancel_btn.clicked.connect(self.reject)
-        save_btn = QPushButton("Save")
-        save_btn.setStyleSheet(
-            f"QPushButton {{ background-color: {c['ACCENT_BLUE']}; color: white;"
-            f" font-weight: 600; padding: 8px 24px; border-radius: 10px; }}"
-            f"QPushButton:hover {{ background-color: #0070E0; }}"
-        )
-        save_btn.clicked.connect(self._save)
-        btn_row.addWidget(cancel_btn)
-        btn_row.addWidget(save_btn)
-
         # ── Layout ──
         content = QHBoxLayout()
         content.setSpacing(0)
@@ -797,12 +837,15 @@ class SettingsPanel(QDialog):
         right.setContentsMargins(20, 16, 20, 16)
         right.setSpacing(12)
         right.addWidget(self._stack, 1)
-        right.addLayout(btn_row)
         content.addLayout(right, 1)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.addLayout(content)
+
+    def closeEvent(self, event) -> None:  # noqa: N802
+        self._save()
+        super().closeEvent(event)
 
     def _save(self) -> None:
         from room_ui.theme import get_stylesheet
@@ -837,5 +880,3 @@ class SettingsPanel(QDialog):
         app = QApplication.instance()
         if app is not None:
             app.setStyleSheet(get_stylesheet(settings["theme"]))
-
-        self.accept()
