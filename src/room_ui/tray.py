@@ -18,7 +18,7 @@ _COLOR_IDLE = "#AAAAAA"
 _COLOR_RECORDING = "#FF4444"
 
 # RoomKit logo for the tray (falls back to microphone SVG if missing)
-_LOGO_PATH = Path(__file__).resolve().parent.parent.parent / "assets" / "icon.png"
+_LOGO_PATH = Path(__file__).resolve().parent / "assets" / "icon.png"
 
 
 class TrayService(QObject):

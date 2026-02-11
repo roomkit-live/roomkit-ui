@@ -50,7 +50,7 @@ class ChatView(QScrollArea):
         icon = QLabel()
         icon.setAlignment(Qt.AlignCenter)
         icon.setStyleSheet("background: transparent;")
-        logo_path = Path(__file__).resolve().parent.parent.parent.parent / "assets" / "logo.svg"
+        logo_path = Path(__file__).resolve().parent.parent / "assets" / "logo.svg"
         if logo_path.exists():
             svg_data = QByteArray(logo_path.read_bytes())
             renderer = QSvgRenderer(svg_data)

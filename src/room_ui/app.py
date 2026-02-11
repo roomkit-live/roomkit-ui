@@ -45,7 +45,7 @@ def main() -> None:
     settings = load_settings()
     app.setStyleSheet(get_stylesheet(settings.get("theme", "dark")))
 
-    icon_path = Path(__file__).resolve().parent.parent.parent / "assets" / "icon.png"
+    icon_path = Path(__file__).resolve().parent / "assets" / "icon.png"
     if icon_path.exists():
         app.setWindowIcon(QIcon(str(icon_path)))
 
