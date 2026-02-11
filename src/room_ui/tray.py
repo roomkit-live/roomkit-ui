@@ -83,7 +83,13 @@ class TrayService(QObject):
 
     @Slot(str)
     def on_text_ready(self, text: str) -> None:
-        pass
+        preview = text[:80] + ("…" if len(text) > 80 else "")
+        self._tray.showMessage(
+            "Dictation — copied to clipboard",
+            preview,
+            QSystemTrayIcon.MessageIcon.Information,
+            3000,
+        )
 
     @Slot(str)
     def on_error(self, message: str) -> None:

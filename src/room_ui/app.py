@@ -56,6 +56,24 @@ def main() -> None:
     window = MainWindow()
     window.show()
 
+    # On macOS, check and request event-posting permissions.
+    if sys.platform == "darwin":
+        try:
+            from ApplicationServices import AXIsProcessTrusted
+            from Quartz import CGPreflightPostEventAccess, CGRequestPostEventAccess
+
+            logger = logging.getLogger(__name__)
+            ax = AXIsProcessTrusted()
+            post = CGPreflightPostEventAccess()
+            logger.info(
+                "macOS permissions: AXTrusted=%s PostEvent=%s pid=%d exe=%s",
+                ax, post, os.getpid(), sys.executable,
+            )
+            if not post:
+                CGRequestPostEventAccess()
+        except Exception:
+            pass
+
     # -- System-wide STT dictation --
     stt = STTEngine()
     tray = TrayService()

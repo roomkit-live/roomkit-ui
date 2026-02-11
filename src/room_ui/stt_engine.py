@@ -78,20 +78,33 @@ def _simulate_paste() -> None:
     Terminals typically use Ctrl+Shift+V, while other apps use Ctrl+V.
     """
     if sys.platform == "darwin":
-        import Quartz
+        from Quartz import (
+            CGEventCreateKeyboardEvent,
+            CGEventPost,
+            CGEventSetFlags,
+            CGEventSourceCreate,
+            CGPreflightPostEventAccess,
+            kCGEventFlagMaskCommand,
+            kCGEventSourceStateHIDSystemState,
+            kCGSessionEventTap,
+        )
 
-        # Cmd+V via CGEvent — works when Accessibility permission is granted
-        # (same permission the CGEventTap hotkey listener already requires).
+        if not CGPreflightPostEventAccess():
+            logger.warning("PostEvent access not granted — text copied to clipboard only")
+            # Text is already on clipboard; caller will show a notification.
+            return
+
         v_keycode = 0x09  # macOS virtual keycode for 'v'
-        cmd_flag = Quartz.kCGEventFlagMaskCommand
+        source = CGEventSourceCreate(kCGEventSourceStateHIDSystemState)
 
-        down = Quartz.CGEventCreateKeyboardEvent(None, v_keycode, True)
-        Quartz.CGEventSetFlags(down, cmd_flag)
-        Quartz.CGEventPost(Quartz.kCGAnnotatedSessionEventTap, down)
+        down = CGEventCreateKeyboardEvent(source, v_keycode, True)
+        CGEventSetFlags(down, kCGEventFlagMaskCommand)
 
-        up = Quartz.CGEventCreateKeyboardEvent(None, v_keycode, False)
-        Quartz.CGEventSetFlags(up, cmd_flag)
-        Quartz.CGEventPost(Quartz.kCGAnnotatedSessionEventTap, up)
+        up = CGEventCreateKeyboardEvent(source, v_keycode, False)
+        CGEventSetFlags(up, kCGEventFlagMaskCommand)
+
+        CGEventPost(kCGSessionEventTap, down)
+        CGEventPost(kCGSessionEventTap, up)
     elif _is_wayland():
         subprocess.run(["wtype", "-M", "ctrl", "v", "-m", "ctrl"], check=True, timeout=5)
     elif _is_terminal_focused():
