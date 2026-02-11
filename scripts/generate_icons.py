@@ -100,6 +100,16 @@ def png_to_icns() -> None:
 
 
 if __name__ == "__main__":
+    # Skip generation if the required icons already exist
+    needed = [PNG]
+    if sys.platform == "darwin":
+        needed.append(ICNS)
+    elif sys.platform == "win32":
+        needed.append(ICO)
+    if all(f.exists() for f in needed):
+        print("Icons already exist, skipping generation.")
+        sys.exit(0)
+
     print(f"Converting {SVG} ...")
     svg_to_png(1024)
     print(f"  -> {PNG}")

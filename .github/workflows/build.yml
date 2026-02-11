@@ -45,6 +45,12 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install librsvg
 
+      # Windows: install cairo for icon generation (fallback)
+      - name: Install system dependencies (Windows)
+        if: runner.os == 'Windows'
+        run: choco install cairo -y --no-progress
+        continue-on-error: true
+
       - name: Install Python dependencies
         run: |
           uv sync
