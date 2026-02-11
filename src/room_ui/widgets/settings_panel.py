@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtWidgets import (
@@ -49,6 +50,12 @@ AEC_MODES = [
     ("WebRTC (recommended)", "webrtc"),
     ("Speex", "speex"),
     ("None", "none"),
+]
+
+DENOISE_MODES = [
+    ("None", "none"),
+    ("RNNoise (Linux/macOS)", "rnnoise"),
+    ("GTCRN (cross-platform)", "gtcrn"),
 ]
 
 
@@ -160,7 +167,83 @@ class _GeneralPage(QWidget):
         form.addRow("Speaker", self.output_combo)
 
         layout.addLayout(form)
+
+        # Audio processing
+        proc_section = QLabel("Audio Processing")
+        proc_section.setStyleSheet(
+            f"font-size: 12px; font-weight: 600; color: {c['TEXT_SECONDARY']};"
+            f" text-transform: uppercase; letter-spacing: 1px; background: transparent;"
+        )
+        layout.addWidget(proc_section)
+
+        proc_form = QFormLayout()
+        proc_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        proc_form.setSpacing(10)
+        proc_form.setLabelAlignment(Qt.AlignRight)
+
+        # AEC
+        self.aec = QComboBox()
+        for label, _value in AEC_MODES:
+            self.aec.addItem(label)
+        current_aec = settings.get("aec_mode", "webrtc")
+        for i, (_, val) in enumerate(AEC_MODES):
+            if val == current_aec:
+                self.aec.setCurrentIndex(i)
+                break
+        proc_form.addRow("Echo Cancel", self.aec)
+
+        # Denoise
+        self.denoise = QComboBox()
+        for label, _value in DENOISE_MODES:
+            self.denoise.addItem(label)
+        current_denoise = settings.get("denoise", "none")
+        for i, (_, val) in enumerate(DENOISE_MODES):
+            if val == current_denoise:
+                self.denoise.setCurrentIndex(i)
+                break
+        proc_form.addRow("Denoise", self.denoise)
+
+        # Inference device
+        from room_ui.model_manager import detect_providers
+
+        self._inference_providers = detect_providers()
+        self.inference_device = QComboBox()
+        for label, _value in self._inference_providers:
+            self.inference_device.addItem(label)
+        current_device = settings.get("inference_device", "cpu")
+        for i, (_, val) in enumerate(self._inference_providers):
+            if val == current_device:
+                self.inference_device.setCurrentIndex(i)
+                break
+        proc_form.addRow("Inference Device", self.inference_device)
+
+        self._device_hint = QLabel()
+        self._device_hint.setWordWrap(True)
+        self._device_hint.setStyleSheet(
+            f"font-size: 11px; color: {c['TEXT_SECONDARY']};"
+            f" font-style: italic; background: transparent;"
+        )
+        proc_form.addRow("", self._device_hint)
+        self.inference_device.currentIndexChanged.connect(self._on_device_changed)
+        self._on_device_changed(self.inference_device.currentIndex())
+
+        layout.addLayout(proc_form)
         layout.addStretch()
+
+    def _on_device_changed(self, index: int) -> None:
+        val = self._inference_providers[index][1]
+        if val == "cuda":
+            self._device_hint.setText(
+                "Affects local STT models only. Requires the sherpa-onnx CUDA wheel "
+                "and cuDNN 9: uv pip install sherpa-onnx==1.12.23+cuda12.cudnn9 "
+                "-f https://k2-fsa.github.io/sherpa/onnx/cuda.html"
+            )
+            self._device_hint.show()
+        elif val == "coreml":
+            self._device_hint.setText("Affects local STT models only.")
+            self._device_hint.show()
+        else:
+            self._device_hint.hide()
 
 
 class _AIPage(QWidget):
@@ -250,22 +333,6 @@ class _AIPage(QWidget):
             self.openai_voice.setCurrentIndex(ovidx)
         self._openai_voice_label = QLabel("Voice")
         form.addRow(self._openai_voice_label, self.openai_voice)
-
-        # AEC
-        self.aec = QComboBox()
-        for label, _value in AEC_MODES:
-            self.aec.addItem(label)
-        current_aec = settings.get("aec_mode", "webrtc")
-        for i, (_, val) in enumerate(AEC_MODES):
-            if val == current_aec:
-                self.aec.setCurrentIndex(i)
-                break
-        form.addRow("Echo Cancel", self.aec)
-
-        # Denoise
-        self.denoise = QCheckBox("Enable RNNoise denoiser")
-        self.denoise.setChecked(bool(settings.get("denoise", False)))
-        form.addRow("", self.denoise)
 
         layout.addLayout(form)
 
@@ -553,6 +620,49 @@ class _ModelsPage(QWidget):
             self._model_rows.append(row)
 
         layout.addWidget(model_frame)
+
+        # -- Denoiser Models section -----------------------------------------
+        denoise_section = QLabel("Denoiser Models")
+        denoise_section.setStyleSheet(
+            f"font-size: 12px; font-weight: 600; color: {c['TEXT_SECONDARY']};"
+            f" text-transform: uppercase; letter-spacing: 1px; background: transparent;"
+        )
+        layout.addWidget(denoise_section)
+
+        from room_ui.model_manager import (
+            GTCRN_MODEL_ID,
+            GTCRN_SIZE,
+            is_gtcrn_downloaded,
+        )
+
+        @dataclass(frozen=True)
+        class _DenoiserModel:
+            id: str
+            name: str
+            type: str
+            size: str
+
+        gtcrn_info = _DenoiserModel(
+            id=GTCRN_MODEL_ID, name="GTCRN", type="denoiser", size=GTCRN_SIZE,
+        )
+
+        denoise_frame = QWidget()
+        denoise_frame.setStyleSheet(
+            f"background: {c['BG_SECONDARY']}; border: 1px solid {c['SEPARATOR']};"
+            f" border-radius: 8px;"
+        )
+        denoise_frame_layout = QVBoxLayout(denoise_frame)
+        denoise_frame_layout.setContentsMargins(4, 4, 4, 4)
+        denoise_frame_layout.setSpacing(0)
+
+        self._gtcrn_row = _ModelRow(gtcrn_info, c, show_radio=False)
+        # Override the initial state check since _ModelRow uses is_model_downloaded
+        self._gtcrn_row._refresh_state(is_gtcrn_downloaded())
+        self._gtcrn_row.action_btn.clicked.connect(self._download_gtcrn)
+        self._gtcrn_row.delete_btn.clicked.connect(self._delete_gtcrn)
+        denoise_frame_layout.addWidget(self._gtcrn_row)
+
+        layout.addWidget(denoise_frame)
         layout.addStretch()
 
     def _find_row(self, model_id: str) -> _ModelRow | None:
@@ -594,6 +704,36 @@ class _ModelsPage(QWidget):
         row = self._find_row(model_id)
         if row is not None:
             row.set_not_downloaded()
+
+    def _download_gtcrn(self) -> None:
+        import asyncio
+        import logging
+
+        from room_ui.model_manager import download_gtcrn
+
+        row = self._gtcrn_row
+        row.set_resolving()
+        loop = asyncio.get_event_loop()
+
+        def _progress(downloaded: int, total: int) -> None:
+            pct = min(int(downloaded * 100 / total), 100) if total > 0 else 0
+            loop.call_soon_threadsafe(row.set_downloading, pct)
+
+        async def _run() -> None:
+            try:
+                await download_gtcrn(_progress)
+                row.set_downloaded()
+            except Exception:
+                logging.exception("GTCRN download failed")
+                row.set_error()
+
+        loop.create_task(_run())
+
+    def _delete_gtcrn(self) -> None:
+        from room_ui.model_manager import delete_gtcrn
+
+        delete_gtcrn()
+        self._gtcrn_row.set_not_downloaded()
 
 
 class _DictationPage(QWidget):
@@ -648,15 +788,10 @@ class _DictationPage(QWidget):
         self._openai_key_label = QLabel("OpenAI Key")
         form.addRow(self._openai_key_label, self.openai_api_key)
 
-        # ── Local model combo (shown only for Local provider) ──
-        self._model_form = QFormLayout()
-        self._model_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
-        self._model_form.setSpacing(10)
-        self._model_form.setLabelAlignment(Qt.AlignRight)
-
+        # Local model combo (shown only for Local provider)
         self._model_combo = QComboBox()
         self._model_label = QLabel("Model")
-        self._model_form.addRow(self._model_label, self._model_combo)
+        form.addRow(self._model_label, self._model_combo)
 
         self._no_models_hint = QLabel(
             "No models downloaded \u2014 go to the AI Models tab to download one."
@@ -666,23 +801,14 @@ class _DictationPage(QWidget):
             f"font-size: 12px; color: {c['TEXT_SECONDARY']};"
             f" font-style: italic; background: transparent;"
         )
-        self._model_form.addRow("", self._no_models_hint)
-
-        layout.addLayout(form)
-        layout.addLayout(self._model_form)
+        form.addRow("", self._no_models_hint)
 
         self._saved_model = settings.get("stt_model", "")
-        self.refresh_model_combo()
 
-        # ── Hotkey / Language (always visible) ──
-        form2 = QFormLayout()
-        form2.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
-        form2.setSpacing(10)
-        form2.setLabelAlignment(Qt.AlignRight)
-
+        # Hotkey / Language
         self.hotkey = HotkeyButton()
         self.hotkey.set_value(settings.get("stt_hotkey", "<ctrl>+<shift>+h"))
-        form2.addRow("Hotkey", self.hotkey)
+        form.addRow("Hotkey", self.hotkey)
 
         self.language = QComboBox()
         for label, _value in STT_LANGUAGES:
@@ -692,9 +818,14 @@ class _DictationPage(QWidget):
             if val == current_lang:
                 self.language.setCurrentIndex(i)
                 break
-        form2.addRow("Language", self.language)
+        form.addRow("Language", self.language)
 
-        layout.addLayout(form2)
+        # Translate to English (Whisper only)
+        self.translate = QCheckBox("Translate to English (Whisper only)")
+        self.translate.setChecked(bool(settings.get("stt_translate", False)))
+        form.addRow("", self.translate)
+
+        layout.addLayout(form)
 
         hint = QLabel("Click the button above, then press your desired key combination.")
         hint.setWordWrap(True)
@@ -705,8 +836,10 @@ class _DictationPage(QWidget):
 
         layout.addStretch()
 
-        # Wire provider switch
+        # Populate model combo and wire provider switch
+        self.refresh_model_combo()
         self.stt_provider.currentIndexChanged.connect(self._on_stt_provider_changed)
+        self._model_combo.currentIndexChanged.connect(self._update_translate_visibility)
         self._on_stt_provider_changed(self.stt_provider.currentIndex())
 
     def _on_stt_provider_changed(self, index: int) -> None:
@@ -716,6 +849,13 @@ class _DictationPage(QWidget):
         self._model_label.setVisible(not is_openai)
         self._model_combo.setVisible(not is_openai)
         self._no_models_hint.setVisible(not is_openai and self._model_combo.count() == 0)
+        self._update_translate_visibility()
+
+    def _update_translate_visibility(self) -> None:
+        is_local = STT_PROVIDERS[self.stt_provider.currentIndex()][1] == "local"
+        model_id = self._model_combo.currentData() or ""
+        is_whisper = model_id.startswith("whisper")
+        self.translate.setVisible(is_local and is_whisper)
 
     def selected_model_id(self) -> str:
         """Return the model ID selected in the combo box."""
@@ -1219,8 +1359,11 @@ class SettingsPanel(QDialog):
             "voice": self._ai.gemini_voice.currentText(),
             "openai_voice": self._ai.openai_voice.currentText(),
             "system_prompt": self._ai.prompt.toPlainText().strip(),
-            "aec_mode": AEC_MODES[self._ai.aec.currentIndex()][1],
-            "denoise": self._ai.denoise.isChecked(),
+            "aec_mode": AEC_MODES[self._general.aec.currentIndex()][1],
+            "denoise": DENOISE_MODES[self._general.denoise.currentIndex()][1],
+            "inference_device": self._general._inference_providers[
+                self._general.inference_device.currentIndex()
+            ][1],
             "input_device": self._general.input_combo.currentData(),
             "output_device": self._general.output_combo.currentData(),
             "stt_enabled": self._dictation.enabled.isChecked(),
@@ -1228,6 +1371,7 @@ class SettingsPanel(QDialog):
             "stt_provider": STT_PROVIDERS[self._dictation.stt_provider.currentIndex()][1],
             "stt_model": self._dictation.selected_model_id(),
             "stt_language": STT_LANGUAGES[self._dictation.language.currentIndex()][1],
+            "stt_translate": self._dictation.translate.isChecked(),
             "mcp_servers": self._mcp.get_servers_json(),
         }
         save_settings(settings)

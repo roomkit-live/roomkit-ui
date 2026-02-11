@@ -281,7 +281,7 @@ class Engine(QObject):
                 "You are a friendly voice assistant. Be concise and helpful.",
             )
             aec_mode = settings.get("aec_mode", "webrtc")
-            use_denoise = settings.get("denoise", False)
+            denoise_mode = settings.get("denoise", "none")
 
             from roomkit import RealtimeVoiceChannel, RoomKit
             from roomkit.voice.realtime.local_transport import LocalAudioTransport
@@ -331,13 +331,27 @@ class Engine(QObject):
                     logger.warning("Speex AEC not available — install libspeexdsp")
 
             denoiser = None
-            if use_denoise:
+            if denoise_mode == "rnnoise":
                 try:
                     from roomkit.voice.pipeline.denoiser.rnnoise import RNNoiseDenoiserProvider
 
                     denoiser = RNNoiseDenoiserProvider(sample_rate=sample_rate)
                 except ImportError:
                     logger.warning("RNNoise denoiser not available")
+            elif denoise_mode == "gtcrn":
+                from room_ui.model_manager import gtcrn_model_path, is_gtcrn_downloaded
+
+                if is_gtcrn_downloaded():
+                    from roomkit.voice.pipeline.denoiser.sherpa_onnx import (
+                        SherpaOnnxDenoiserConfig,
+                        SherpaOnnxDenoiserProvider,
+                    )
+
+                    denoiser = SherpaOnnxDenoiserProvider(
+                        SherpaOnnxDenoiserConfig(model=str(gtcrn_model_path()))
+                    )
+                else:
+                    logger.warning("GTCRN model not downloaded — denoiser disabled")
 
             mute_mic = aec is None
 
@@ -356,6 +370,15 @@ class Engine(QObject):
             )
 
             self._transport = transport
+
+            # Log audio pipeline configuration
+            aec_label = type(aec).__name__ if aec else "none"
+            denoise_label = type(denoiser).__name__ if denoiser else "none"
+            logger.info(
+                "Audio pipeline: aec=%s, denoiser=%s, rate=%dHz, block=%dms",
+                aec_label, denoise_label, sample_rate, block_ms,
+            )
+
             self._register_callbacks(provider, transport)
 
             # -- MCP tools -------------------------------------------------------

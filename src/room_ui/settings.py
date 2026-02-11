@@ -18,12 +18,16 @@ _DEFAULTS = {
     "openai_voice": "alloy",
     "system_prompt": "You are a friendly voice assistant. Be concise and helpful.",
     "aec_mode": "webrtc",
-    "denoise": False,
+    "denoise": "none",
     "input_device": None,
     "output_device": None,
     "stt_enabled": True,
     "stt_hotkey": _DEFAULT_HOTKEY,
     "stt_language": "",
+    "stt_provider": "openai",
+    "stt_model": "",
+    "stt_translate": False,
+    "inference_device": "cpu",
     "theme": "dark",
     "mcp_servers": "[]",
 }
@@ -38,6 +42,11 @@ def load_settings() -> dict:
         # QSettings returns strings for bools
         if isinstance(default, bool) and isinstance(val, str):
             val = val.lower() in ("true", "1", "yes")
+        # Migrate denoise from bool (old) to string (new)
+        if key == "denoise" and isinstance(val, bool):
+            val = "rnnoise" if val else "none"
+        elif key == "denoise" and isinstance(val, str) and val.lower() in ("true", "false"):
+            val = "rnnoise" if val.lower() == "true" else "none"
         # QSettings returns strings for ints stored as device indices
         if key in ("input_device", "output_device"):
             if val is not None and val != "":

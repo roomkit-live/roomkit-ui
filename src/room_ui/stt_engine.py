@@ -11,6 +11,7 @@ from typing import Any
 
 from PySide6.QtCore import QObject, Signal
 
+from room_ui.model_manager import build_stt_config, is_model_downloaded, is_streaming_model
 from room_ui.settings import load_settings
 
 logger = logging.getLogger(__name__)
@@ -169,11 +170,11 @@ def _activate_bundle(bundle_id: str) -> None:
 
 
 class STTEngine(QObject):
-    """Records speech via an OpenAI Realtime STT room and pastes the result.
+    """Records speech via a roomkit STT room and pastes the result.
 
-    Uses a dedicated roomkit room (``stt-room``) with
-    ``create_response=False`` so the provider only transcribes — no AI
-    response is generated.
+    Supports two providers:
+    - **OpenAI**: ``RealtimeVoiceChannel`` with ``create_response=False``
+    - **Local**: ``VoiceChannel`` with ``SherpaOnnxSTTProvider`` + ``LocalAudioBackend``
     """
 
     recording_changed = Signal(bool)
@@ -192,6 +193,12 @@ class STTEngine(QObject):
         self._accumulated_text: list[str] = []
         self._transcription_event: asyncio.Event | None = None
         self._prev_app: str | None = None  # bundle ID of app that was focused before recording
+        # Local STT state (VoiceChannel + LocalAudioBackend)
+        self._local_provider: Any = None
+        self._local_backend: Any = None
+        self._local_session: Any = None
+        self._local_flush_event: asyncio.Event | None = None
+        self._batch_mode: bool = False
 
     @property
     def recording(self) -> bool:
@@ -242,6 +249,14 @@ class STTEngine(QObject):
             return
 
         settings = load_settings()
+        stt_provider = settings.get("stt_provider", "openai")
+
+        if stt_provider == "local":
+            await self._start_local_recording(settings)
+        else:
+            await self._start_openai_recording(settings)
+
+    async def _start_openai_recording(self, settings: dict) -> None:
         api_key = settings.get("openai_api_key", "")
         if not api_key:
             self.error_occurred.emit(
@@ -318,7 +333,11 @@ class STTEngine(QObject):
                 )
                 logger.info("Set STT language: %s", stt_language)
 
-            logger.info("STT session started")
+            logger.info(
+                "Dictation started: provider=openai, model=%s, rate=%dHz",
+                settings.get("openai_model", "gpt-4o-realtime-preview"),
+                sample_rate,
+            )
 
         except Exception as exc:
             logger.exception("Failed to start STT session")
@@ -326,6 +345,140 @@ class STTEngine(QObject):
             self.recording_changed.emit(False)
             self.error_occurred.emit(str(exc))
             await self._cleanup()
+        finally:
+            self._busy = False
+
+    # -- local STT (VoiceChannel + LocalAudioBackend + SherpaOnnxSTTProvider) --
+
+    async def _start_local_recording(self, settings: dict) -> None:
+        model_id = settings.get("stt_model", "")
+        if not model_id:
+            self.error_occurred.emit(
+                "No local STT model selected. Go to Settings → AI Models to choose one."
+            )
+            self._recording = False
+            self._busy = False
+            self.recording_changed.emit(False)
+            return
+
+        if not is_model_downloaded(model_id):
+            self.error_occurred.emit(
+                f"Model '{model_id}' is not downloaded. "
+                "Go to Settings → AI Models to download it."
+            )
+            self._recording = False
+            self._busy = False
+            self.recording_changed.emit(False)
+            return
+
+        try:
+            from roomkit import (
+                ChannelBinding,
+                ChannelType,
+                HookExecution,
+                HookResult,
+                HookTrigger,
+                RoomKit,
+                VoiceChannel,
+            )
+            from roomkit.voice.backends.local import LocalAudioBackend
+            from roomkit.voice.pipeline import AudioPipelineConfig
+            from roomkit.voice.stt.sherpa_onnx import SherpaOnnxSTTProvider
+        except ImportError as exc:
+            self.error_occurred.emit(
+                f"Missing dependency for local STT: {exc}. "
+                "Install with: pip install sherpa-onnx"
+            )
+            self._recording = False
+            self._busy = False
+            self.recording_changed.emit(False)
+            return
+
+        try:
+            language = settings.get("stt_language", "") or "en"
+            translate = bool(settings.get("stt_translate", False))
+            inference_device = settings.get("inference_device", "cpu")
+            config = build_stt_config(
+                model_id, language, translate=translate, provider=inference_device,
+            )
+            # Dictation: the user controls start/stop, so disable endpoint
+            # detection — we get one single final result on flush instead
+            # of splitting the transcription into segments at pauses.
+            config.enable_endpoint_detection = False
+            stt_provider = SherpaOnnxSTTProvider(config)
+
+            self._local_provider = stt_provider
+            self._batch_mode = not is_streaming_model(model_id)
+            input_device = settings.get("input_device")
+
+            backend = LocalAudioBackend(
+                input_sample_rate=16000,
+                output_sample_rate=16000,
+                channels=1,
+                block_duration_ms=20,
+                input_device=input_device,
+            )
+            self._local_backend = backend
+
+            voice = VoiceChannel(
+                "stt",
+                stt=stt_provider,
+                backend=backend,
+                pipeline=AudioPipelineConfig(),
+            )
+            self._channel = voice
+
+            self._kit = RoomKit()
+            self._kit.register_channel(voice)
+
+            await self._kit.create_room(room_id="stt-room")
+            await self._kit.attach_channel("stt-room", "stt")
+
+            if not self._batch_mode:
+                # Streaming: capture transcriptions via hook
+                accumulated = self._accumulated_text
+
+                @self._kit.hook(
+                    HookTrigger.ON_PARTIAL_TRANSCRIPTION, execution=HookExecution.ASYNC,
+                )
+                async def _on_partial(result, ctx):
+                    logger.info("Local STT partial: %s", result.text)
+
+                self._local_flush_event = asyncio.Event()
+                flush_event = self._local_flush_event
+
+                @self._kit.hook(HookTrigger.ON_TRANSCRIPTION)
+                async def _on_transcription(text, ctx):
+                    if text and text.strip():
+                        logger.info("Local STT final: %s", text)
+                        accumulated.append(text.strip())
+                    flush_event.set()
+                    return HookResult.block("dictation-only")
+
+            # Connect backend, bind session, start listening.
+            self._local_session = await backend.connect("stt-room", "stt-user", "stt")
+            binding = ChannelBinding(
+                room_id="stt-room",
+                channel_id="stt",
+                channel_type=ChannelType.VOICE,
+            )
+            voice.bind_session(self._local_session, "stt-room", binding)
+            await backend.start_listening(self._local_session)
+
+            mode = "batch" if self._batch_mode else "streaming"
+            task = "translate" if translate else "transcribe"
+            logger.info(
+                "Dictation started: provider=local, model=%s, mode=%s,"
+                " task=%s, rate=16000Hz",
+                model_id, mode, task,
+            )
+
+        except Exception as exc:
+            logger.exception("Failed to start local STT session")
+            self._recording = False
+            self.recording_changed.emit(False)
+            self.error_occurred.emit(str(exc))
+            self._cleanup_local()
         finally:
             self._busy = False
 
@@ -346,6 +499,8 @@ class STTEngine(QObject):
         try:
             if os.environ.get("STT_FAKE"):
                 self._accumulated_text.append("Hello, this is a test transcription.")
+            elif self._local_provider is not None:
+                await self._stop_local_recording()
             else:
                 # Only commit if we don't already have text from VAD —
                 # committing an empty buffer causes a harmless but noisy error.
@@ -369,7 +524,9 @@ class STTEngine(QObject):
         finally:
             # Snapshot the objects and clear self._ immediately so a new
             # recording cycle won't be affected by the background cleanup.
-            if not os.environ.get("STT_FAKE"):
+            if self._local_provider is not None:
+                self._cleanup_local()
+            elif not os.environ.get("STT_FAKE"):
                 snap = (self._kit, self._channel, self._session, self._transport)
                 self._kit = None
                 self._channel = None
@@ -377,6 +534,68 @@ class STTEngine(QObject):
                 self._provider = None
                 self._transport = None
                 asyncio.ensure_future(self._cleanup_snapshot(*snap))
+
+    async def _stop_local_recording(self) -> None:
+        """Stop the LocalAudioBackend and wait for final transcriptions."""
+        if self._local_backend and self._local_session:
+            await self._local_backend.stop_listening(self._local_session)
+
+            if self._batch_mode:
+                # Batch mode: flush accumulated audio through offline STT
+                try:
+                    result = await asyncio.wait_for(
+                        self._channel.flush_stt(self._local_session),
+                        timeout=30.0,
+                    )
+                    if result and result.text and result.text.strip():
+                        logger.info("Batch STT result: %s", result.text)
+                        self._accumulated_text.append(result.text.strip())
+                except TimeoutError:
+                    logger.warning("Batch STT timed out")
+            else:
+                # Streaming mode: wait for final transcription from hook
+                if self._local_flush_event is not None:
+                    self._local_flush_event.clear()
+                    try:
+                        await asyncio.wait_for(self._local_flush_event.wait(), timeout=3.0)
+                    except TimeoutError:
+                        logger.info("No final transcription received within timeout")
+
+    def _cleanup_local(self) -> None:
+        """Snapshot and clear local STT state, schedule async cleanup."""
+        snap = (self._kit, self._channel, self._local_backend, self._local_session)
+        self._kit = None
+        self._channel = None
+        self._local_provider = None
+        self._local_backend = None
+        self._local_session = None
+        self._local_flush_event = None
+        self._batch_mode = False
+        if any(snap):
+            asyncio.ensure_future(self._cleanup_local_snapshot(*snap))
+
+    async def _cleanup_local_snapshot(
+        self, kit: Any, channel: Any, backend: Any, session: Any
+    ) -> None:
+        """Clean up local STT objects without touching self._."""
+        try:
+            if channel and session:
+                try:
+                    channel.unbind_session(session)
+                except Exception:
+                    pass
+            if backend and session:
+                try:
+                    await backend.disconnect(session)
+                except Exception:
+                    pass
+            if kit:
+                try:
+                    await kit.close()
+                except Exception:
+                    pass
+        except Exception:
+            logger.exception("Error during local STT cleanup")
 
     async def _commit_and_wait(self) -> None:
         """Send input_audio_buffer.commit and wait for the transcription."""
