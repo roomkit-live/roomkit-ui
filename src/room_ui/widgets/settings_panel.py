@@ -15,7 +15,9 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QListWidget,
     QListWidgetItem,
+    QProgressBar,
     QPushButton,
+    QRadioButton,
     QScrollArea,
     QStackedWidget,
     QTextEdit,
@@ -328,8 +330,274 @@ STT_LANGUAGES = [
 ]
 
 
+STT_PROVIDERS = [
+    ("OpenAI", "openai"),
+    ("Local", "local"),
+]
+
+
+class _ModelRow(QWidget):
+    """A single row in the local model list: radio + name + type + size + action + progress."""
+
+    def __init__(self, model, c: dict, show_radio: bool = True, parent=None) -> None:
+        super().__init__(parent)
+        from room_ui.model_manager import is_model_downloaded
+
+        self.model = model
+        self._c = c
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(8, 6, 8, 6)
+        outer.setSpacing(4)
+
+        # Top line: radio + info + buttons
+        top = QHBoxLayout()
+        top.setSpacing(8)
+
+        self.radio = QRadioButton()
+        if not show_radio:
+            self.radio.hide()
+        top.addWidget(self.radio)
+
+        name_label = QLabel(model.name)
+        name_label.setStyleSheet(
+            "font-size: 13px; font-weight: 500; background: transparent;"
+        )
+        top.addWidget(name_label)
+
+        type_label = QLabel(model.type)
+        type_label.setStyleSheet(
+            f"font-size: 11px; color: {c['TEXT_SECONDARY']};"
+            f" background: {c['BG_TERTIARY']}; border-radius: 4px;"
+            f" padding: 1px 6px;"
+        )
+        top.addWidget(type_label)
+
+        size_label = QLabel(model.size)
+        size_label.setStyleSheet(
+            f"font-size: 11px; color: {c['TEXT_SECONDARY']}; background: transparent;"
+        )
+        top.addWidget(size_label)
+
+        top.addStretch()
+
+        self.status_label = QLabel()
+        self.status_label.setStyleSheet(
+            f"font-size: 12px; color: {c['ACCENT_GREEN']}; background: transparent;"
+        )
+        top.addWidget(self.status_label)
+
+        self.action_btn = QPushButton()
+        self.action_btn.setCursor(Qt.PointingHandCursor)
+        self.action_btn.setFixedHeight(26)
+        top.addWidget(self.action_btn)
+
+        self.delete_btn = QPushButton("Delete")
+        self.delete_btn.setCursor(Qt.PointingHandCursor)
+        self.delete_btn.setFixedHeight(26)
+        self.delete_btn.setStyleSheet(
+            f"QPushButton {{ font-size: 12px; padding: 2px 10px;"
+            f" background: transparent; border: 1px solid {c['ACCENT_RED']};"
+            f" color: {c['ACCENT_RED']}; border-radius: 4px; }}"
+            f"QPushButton:hover {{ background: {c['ACCENT_RED']};"
+            f" color: white; }}"
+        )
+        top.addWidget(self.delete_btn)
+
+        outer.addLayout(top)
+
+        # Progress bar (hidden by default)
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setFixedHeight(6)
+        self.progress_bar.setTextVisible(False)
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setStyleSheet(
+            f"QProgressBar {{ background: {c['BG_TERTIARY']};"
+            f" border: none; border-radius: 3px; }}"
+            f"QProgressBar::chunk {{ background: {c['ACCENT_BLUE']};"
+            f" border-radius: 3px; }}"
+        )
+        self.progress_bar.hide()
+        outer.addWidget(self.progress_bar)
+
+        self._refresh_state(is_model_downloaded(model.id))
+
+    def _refresh_state(self, downloaded: bool) -> None:
+        c = self._c
+        self.progress_bar.hide()
+        if downloaded:
+            self.status_label.setText("\u2713 Ready")
+            self.status_label.setStyleSheet(
+                f"font-size: 12px; color: {c['ACCENT_GREEN']};"
+                f" background: transparent;"
+            )
+            self.action_btn.hide()
+            self.delete_btn.show()
+        else:
+            self.status_label.setText("")
+            self.action_btn.setText("Download")
+            self.action_btn.setStyleSheet(
+                f"QPushButton {{ font-size: 12px; padding: 2px 10px;"
+                f" background: {c['ACCENT_BLUE']}; color: white;"
+                f" border: none; border-radius: 4px; }}"
+                f"QPushButton:hover {{ opacity: 0.8; }}"
+            )
+            self.action_btn.setEnabled(True)
+            self.action_btn.show()
+            self.delete_btn.hide()
+
+    def set_downloading(self, pct: int) -> None:
+        self.action_btn.hide()
+        self.delete_btn.hide()
+        if self.progress_bar.maximum() == 0:
+            self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(pct)
+        self.progress_bar.show()
+        self.status_label.setText(f"{pct}%")
+        self.status_label.setStyleSheet(
+            f"font-size: 12px; color: {self._c['TEXT_SECONDARY']};"
+            f" background: transparent;"
+        )
+
+    def set_resolving(self) -> None:
+        self.action_btn.hide()
+        self.delete_btn.hide()
+        self.progress_bar.setRange(0, 0)  # indeterminate
+        self.progress_bar.show()
+        self.status_label.setText("Resolving…")
+        self.status_label.setStyleSheet(
+            f"font-size: 12px; color: {self._c['TEXT_SECONDARY']};"
+            f" background: transparent;"
+        )
+
+    def set_downloaded(self) -> None:
+        self.progress_bar.setRange(0, 100)  # restore determinate mode
+        self._refresh_state(True)
+
+    def set_not_downloaded(self) -> None:
+        self.progress_bar.setRange(0, 100)
+        self._refresh_state(False)
+
+    def set_error(self) -> None:
+        self.progress_bar.hide()
+        self.progress_bar.setRange(0, 100)
+        self.action_btn.setText("Retry")
+        self.action_btn.setStyleSheet(
+            f"QPushButton {{ font-size: 12px; padding: 2px 10px;"
+            f" background: {self._c['ACCENT_BLUE']}; color: white;"
+            f" border: none; border-radius: 4px; }}"
+            f"QPushButton:hover {{ opacity: 0.8; }}"
+        )
+        self.action_btn.setEnabled(True)
+        self.action_btn.show()
+        self.status_label.setText("Error")
+        self.status_label.setStyleSheet(
+            f"font-size: 12px; color: {self._c['ACCENT_RED']};"
+            f" background: transparent;"
+        )
+
+
+class _ModelsPage(QWidget):
+    """AI Models catalog: browse, download, and delete local STT models."""
+
+    def __init__(self, settings: dict, parent=None) -> None:
+        super().__init__(parent)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(16)
+
+        c = colors()
+
+        title = QLabel("AI Models")
+        title.setStyleSheet("font-size: 18px; font-weight: 600; background: transparent;")
+        layout.addWidget(title)
+
+        desc = QLabel(
+            "Download local speech-to-text models for offline dictation. "
+            "Downloaded models will appear in the Dictation settings."
+        )
+        desc.setWordWrap(True)
+        desc.setStyleSheet(
+            f"font-size: 13px; color: {c['TEXT_SECONDARY']}; background: transparent;"
+        )
+        layout.addWidget(desc)
+
+        model_section = QLabel("Available Models")
+        model_section.setStyleSheet(
+            f"font-size: 12px; font-weight: 600; color: {c['TEXT_SECONDARY']};"
+            f" text-transform: uppercase; letter-spacing: 1px; background: transparent;"
+        )
+        layout.addWidget(model_section)
+
+        model_frame = QWidget()
+        model_frame.setStyleSheet(
+            f"background: {c['BG_SECONDARY']}; border: 1px solid {c['SEPARATOR']};"
+            f" border-radius: 8px;"
+        )
+        frame_layout = QVBoxLayout(model_frame)
+        frame_layout.setContentsMargins(4, 4, 4, 4)
+        frame_layout.setSpacing(0)
+
+        from room_ui.model_manager import STT_MODELS
+
+        self._model_rows: list[_ModelRow] = []
+        for model in STT_MODELS:
+            row = _ModelRow(model, c, show_radio=False)
+            row.action_btn.clicked.connect(
+                lambda _checked=False, m=model.id: self._download_model(m)
+            )
+            row.delete_btn.clicked.connect(
+                lambda _checked=False, m=model.id: self._delete_model(m)
+            )
+            frame_layout.addWidget(row)
+            self._model_rows.append(row)
+
+        layout.addWidget(model_frame)
+        layout.addStretch()
+
+    def _find_row(self, model_id: str) -> _ModelRow | None:
+        for row in self._model_rows:
+            if row.model.id == model_id:
+                return row
+        return None
+
+    def _download_model(self, model_id: str) -> None:
+        import asyncio
+        import logging
+
+        from room_ui.model_manager import download_model
+
+        row = self._find_row(model_id)
+        if row is None:
+            return
+        row.set_resolving()
+        loop = asyncio.get_event_loop()
+
+        def _progress(downloaded: int, total: int) -> None:
+            pct = min(int(downloaded * 100 / total), 100) if total > 0 else 0
+            loop.call_soon_threadsafe(row.set_downloading, pct)
+
+        async def _run() -> None:
+            try:
+                await download_model(model_id, _progress)
+                row.set_downloaded()
+            except Exception:
+                logging.exception("Model download failed: %s", model_id)
+                row.set_error()
+
+        loop.create_task(_run())
+
+    def _delete_model(self, model_id: str) -> None:
+        from room_ui.model_manager import delete_model
+
+        delete_model(model_id)
+        row = self._find_row(model_id)
+        if row is not None:
+            row.set_not_downloaded()
+
+
 class _DictationPage(QWidget):
-    """Dictation settings: enable, hotkey, language."""
+    """Dictation settings: enable, STT provider, hotkey, language."""
 
     def __init__(self, settings: dict, parent=None) -> None:
         super().__init__(parent)
@@ -343,8 +611,7 @@ class _DictationPage(QWidget):
 
         desc = QLabel(
             "Press a global hotkey to record speech and paste the "
-            "transcription into the focused input field. Uses OpenAI "
-            "Realtime for speech-to-text."
+            "transcription into the focused input field."
         )
         desc.setWordWrap(True)
         c = colors()
@@ -363,18 +630,60 @@ class _DictationPage(QWidget):
         self.enabled.setChecked(bool(settings.get("stt_enabled", True)))
         form.addRow("", self.enabled)
 
-        # OpenAI API key (required for STT regardless of main provider)
+        # STT Provider
+        self.stt_provider = QComboBox()
+        for label, _value in STT_PROVIDERS:
+            self.stt_provider.addItem(label)
+        current_stt = settings.get("stt_provider", "openai")
+        for i, (_, val) in enumerate(STT_PROVIDERS):
+            if val == current_stt:
+                self.stt_provider.setCurrentIndex(i)
+                break
+        form.addRow("STT Provider", self.stt_provider)
+
+        # OpenAI API key (shown only for OpenAI provider)
         self.openai_api_key = QLineEdit(settings.get("openai_api_key", ""))
         self.openai_api_key.setEchoMode(QLineEdit.Password)
         self.openai_api_key.setPlaceholderText("Required for dictation STT")
-        form.addRow("OpenAI Key", self.openai_api_key)
+        self._openai_key_label = QLabel("OpenAI Key")
+        form.addRow(self._openai_key_label, self.openai_api_key)
 
-        # Hotkey
+        # ── Local model combo (shown only for Local provider) ──
+        self._model_form = QFormLayout()
+        self._model_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        self._model_form.setSpacing(10)
+        self._model_form.setLabelAlignment(Qt.AlignRight)
+
+        self._model_combo = QComboBox()
+        self._model_label = QLabel("Model")
+        self._model_form.addRow(self._model_label, self._model_combo)
+
+        self._no_models_hint = QLabel(
+            "No models downloaded \u2014 go to the AI Models tab to download one."
+        )
+        self._no_models_hint.setWordWrap(True)
+        self._no_models_hint.setStyleSheet(
+            f"font-size: 12px; color: {c['TEXT_SECONDARY']};"
+            f" font-style: italic; background: transparent;"
+        )
+        self._model_form.addRow("", self._no_models_hint)
+
+        layout.addLayout(form)
+        layout.addLayout(self._model_form)
+
+        self._saved_model = settings.get("stt_model", "")
+        self.refresh_model_combo()
+
+        # ── Hotkey / Language (always visible) ──
+        form2 = QFormLayout()
+        form2.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        form2.setSpacing(10)
+        form2.setLabelAlignment(Qt.AlignRight)
+
         self.hotkey = HotkeyButton()
         self.hotkey.set_value(settings.get("stt_hotkey", "<ctrl>+<shift>+h"))
-        form.addRow("Hotkey", self.hotkey)
+        form2.addRow("Hotkey", self.hotkey)
 
-        # Language
         self.language = QComboBox()
         for label, _value in STT_LANGUAGES:
             self.language.addItem(label)
@@ -383,9 +692,9 @@ class _DictationPage(QWidget):
             if val == current_lang:
                 self.language.setCurrentIndex(i)
                 break
-        form.addRow("Language", self.language)
+        form2.addRow("Language", self.language)
 
-        layout.addLayout(form)
+        layout.addLayout(form2)
 
         hint = QLabel("Click the button above, then press your desired key combination.")
         hint.setWordWrap(True)
@@ -395,6 +704,44 @@ class _DictationPage(QWidget):
         layout.addWidget(hint)
 
         layout.addStretch()
+
+        # Wire provider switch
+        self.stt_provider.currentIndexChanged.connect(self._on_stt_provider_changed)
+        self._on_stt_provider_changed(self.stt_provider.currentIndex())
+
+    def _on_stt_provider_changed(self, index: int) -> None:
+        is_openai = STT_PROVIDERS[index][1] == "openai"
+        self._openai_key_label.setVisible(is_openai)
+        self.openai_api_key.setVisible(is_openai)
+        self._model_label.setVisible(not is_openai)
+        self._model_combo.setVisible(not is_openai)
+        self._no_models_hint.setVisible(not is_openai and self._model_combo.count() == 0)
+
+    def selected_model_id(self) -> str:
+        """Return the model ID selected in the combo box."""
+        return self._model_combo.currentData() or ""
+
+    def refresh_model_combo(self) -> None:
+        """Rebuild the model combo with currently downloaded models."""
+        from room_ui.model_manager import STT_MODELS, is_model_downloaded
+
+        self._model_combo.blockSignals(True)
+        self._model_combo.clear()
+        for m in STT_MODELS:
+            if is_model_downloaded(m.id):
+                self._model_combo.addItem(f"{m.name} ({m.type})", m.id)
+
+        # Restore previous selection
+        target = self._saved_model or self._model_combo.itemData(0)
+        for i in range(self._model_combo.count()):
+            if self._model_combo.itemData(i) == target:
+                self._model_combo.setCurrentIndex(i)
+                break
+        self._model_combo.blockSignals(False)
+
+        has_models = self._model_combo.count() > 0
+        is_local = STT_PROVIDERS[self.stt_provider.currentIndex()][1] == "local"
+        self._no_models_hint.setVisible(is_local and not has_models)
 
 
 MCP_TRANSPORTS = [
@@ -739,7 +1086,7 @@ class _AboutPage(QWidget):
 
         license_text = QLabel(
             "MIT License\n\n"
-            "Copyright (c) 2025-2026 Sylvain Boily\n\n"
+            "Copyright (c) 2026 Sylvain Boily\n\n"
             "Permission is hereby granted, free of charge, to any person obtaining "
             "a copy of this software and associated documentation files, to deal in "
             "the Software without restriction, including without limitation the rights "
@@ -775,7 +1122,7 @@ class SettingsPanel(QDialog):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Settings")
-        self.setFixedSize(740, 540)
+        self.setFixedSize(740, 600)
         self.setModal(True)
 
         settings = load_settings()
@@ -799,7 +1146,7 @@ class SettingsPanel(QDialog):
             f"}}"
         )
 
-        for label in ("General", "AI Provider", "Dictation", "MCP Servers", "About"):
+        for label in ("General", "AI Provider", "Dictation", "AI Models", "MCP Servers", "About"):
             item = QListWidgetItem(label)
             item.setSizeHint(item.sizeHint().expandedTo(QSize(0, 38)))
             self._sidebar.addItem(item)
@@ -809,9 +1156,11 @@ class SettingsPanel(QDialog):
         self._general = _GeneralPage(settings)
         self._ai = _AIPage(settings)
         self._dictation = _DictationPage(settings)
+        self._models = _ModelsPage(settings)
         self._mcp = _MCPPage(settings)
         self._about = _AboutPage()
-        for page in (self._general, self._ai, self._dictation, self._mcp, self._about):
+        pages = (self._general, self._ai, self._dictation, self._models, self._mcp, self._about)
+        for page in pages:
             scroll = QScrollArea()
             scroll.setWidget(page)
             scroll.setWidgetResizable(True)
@@ -819,7 +1168,7 @@ class SettingsPanel(QDialog):
             scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
             self._stack.addWidget(scroll)
 
-        self._sidebar.currentRowChanged.connect(self._stack.setCurrentIndex)
+        self._sidebar.currentRowChanged.connect(self._on_tab_changed)
         self._sidebar.setCurrentRow(0)
 
         # ── Layout ──
@@ -842,6 +1191,13 @@ class SettingsPanel(QDialog):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.addLayout(content)
+
+    _DICTATION_TAB = 2
+
+    def _on_tab_changed(self, index: int) -> None:
+        self._stack.setCurrentIndex(index)
+        if index == self._DICTATION_TAB:
+            self._dictation.refresh_model_combo()
 
     def closeEvent(self, event) -> None:  # noqa: N802
         self._save()
@@ -869,6 +1225,8 @@ class SettingsPanel(QDialog):
             "output_device": self._general.output_combo.currentData(),
             "stt_enabled": self._dictation.enabled.isChecked(),
             "stt_hotkey": self._dictation.hotkey.value(),
+            "stt_provider": STT_PROVIDERS[self._dictation.stt_provider.currentIndex()][1],
+            "stt_model": self._dictation.selected_model_id(),
             "stt_language": STT_LANGUAGES[self._dictation.language.currentIndex()][1],
             "mcp_servers": self._mcp.get_servers_json(),
         }
