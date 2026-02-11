@@ -126,6 +126,7 @@ class Engine(QObject):
     error_occurred = Signal(str)
     tool_use = Signal(str, str)  # tool_name, arguments_json
     mcp_status = Signal(str)  # status message
+    session_info = Signal(dict)  # {provider, model, tools, failed_servers}
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -256,7 +257,12 @@ class Engine(QObject):
 
         if self._mcp is None:
             return '{"error": "Unknown tool"}'
-        return await self._mcp.handle_tool_call(session, name, arguments)
+        result = await self._mcp.handle_tool_call(session, name, arguments)
+        # MCP/anyio can leak orphaned timer callbacks under qasync when a
+        # tool call fails or the server crashes.  Run a lightweight cleanup
+        # after every MCP call to prevent 100% CPU spin loops.
+        self._cleanup_stale_fds()
+        return result
 
     # -- lifecycle -----------------------------------------------------------
 
@@ -379,9 +385,6 @@ class Engine(QObject):
                     tools.extend(discovered)
                     names = ", ".join(t["name"] for t in discovered)
                     logger.info("MCP tools: %s", names)
-                    self.mcp_status.emit(f"MCP tools: {names}")
-                elif not self._mcp.failed_servers:
-                    self.mcp_status.emit("MCP: no tools available")
 
             all_names = ", ".join(t["name"] for t in tools)
             logger.info("Tools: %s", all_names)
@@ -405,6 +408,7 @@ class Engine(QObject):
                     self.mcp_status.emit(
                         "MCP tools disabled — incompatible with this provider"
                     )
+                    tools = list(_BUILTIN_TOOLS)
 
             if self._session is None:
                 raise RuntimeError("Failed to start voice session")
@@ -414,6 +418,20 @@ class Engine(QObject):
 
             self._state = "active"
             self.state_changed.emit("active")
+
+            # Emit structured session info for the UI info bar
+            tool_info = [
+                {"name": t.get("name", ""), "description": t.get("description", "")}
+                for t in tools
+            ]
+            info: dict = {
+                "provider": provider_name,
+                "model": model,
+                "tools": tool_info,
+            }
+            if self._mcp and self._mcp.failed_servers:
+                info["failed_servers"] = list(self._mcp.failed_servers)
+            self.session_info.emit(info)
 
         except Exception as e:
             logger.exception("Failed to start voice session")

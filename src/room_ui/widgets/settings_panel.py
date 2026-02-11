@@ -436,7 +436,7 @@ class _MCPPage(QWidget):
 
         # Server list
         self._server_list = QListWidget()
-        self._server_list.setFixedHeight(90)
+        self._server_list.setFixedHeight(160)
         c = colors()
         self._server_list.setStyleSheet(
             f"QListWidget {{ border: 1px solid {c['SEPARATOR']}; border-radius: 6px; }}"

@@ -13,6 +13,7 @@ from room_ui.settings import load_settings
 from room_ui.theme import colors
 from room_ui.widgets.chat_view import ChatView
 from room_ui.widgets.control_bar import ControlBar
+from room_ui.widgets.session_info import SessionInfoBar
 from room_ui.widgets.settings_panel import SettingsPanel
 from room_ui.widgets.vu_meter import VUMeter
 
@@ -37,6 +38,10 @@ class MainWindow(QMainWindow):
         root = QVBoxLayout(central)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
+
+        # ── Session info bar ──
+        self._info_bar = SessionInfoBar()
+        root.addWidget(self._info_bar)
 
         # ── Chat ──
         self._chat = ChatView()
@@ -73,6 +78,7 @@ class MainWindow(QMainWindow):
         self._engine.error_occurred.connect(self._on_error)
         self._engine.tool_use.connect(self._on_tool_use)
         self._engine.mcp_status.connect(self._on_mcp_status)
+        self._engine.session_info.connect(self._on_session_info)
 
     def _open_settings(self) -> None:
         dlg = SettingsPanel(self)
@@ -105,6 +111,7 @@ class MainWindow(QMainWindow):
             self._vu.start()
         elif state in ("idle", "error"):
             self._vu.stop()
+            self._info_bar.clear_session()
 
     def _on_transcription(self, text: str, role: str, is_final: bool) -> None:
         self._chat.add_transcription(text, role, is_final)
@@ -120,6 +127,9 @@ class MainWindow(QMainWindow):
             self._chat.show_thinking()
         else:
             self._chat.hide_status()
+
+    def _on_session_info(self, info: dict) -> None:
+        self._info_bar.set_session(info)
 
     def _on_mcp_status(self, message: str) -> None:
         self._chat.add_info(message)

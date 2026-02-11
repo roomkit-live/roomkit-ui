@@ -18,6 +18,7 @@ from contextlib import AsyncExitStack
 from typing import Any
 
 _CONNECT_TIMEOUT = 30  # seconds per server
+_TOOL_CALL_TIMEOUT = 60  # seconds per tool call
 
 # JSON Schema keys that voice providers (especially Gemini) reject.
 _STRIP_SCHEMA_KEYS = {"$schema", "additionalProperties"}
@@ -266,7 +267,10 @@ class MCPManager:
             return json.dumps({"error": f"Unknown tool: {name}"})
 
         try:
-            result = await mcp_session.call_tool(name, arguments)
+            result = await asyncio.wait_for(
+                mcp_session.call_tool(name, arguments),
+                timeout=_TOOL_CALL_TIMEOUT,
+            )
             texts: list[str] = []
             for content in result.content:
                 if hasattr(content, "text"):
@@ -275,6 +279,9 @@ class MCPManager:
             if result.isError:
                 return json.dumps({"error": output})
             return json.dumps({"result": output})
+        except TimeoutError:
+            logger.error("MCP tool call %r timed out after %ds", name, _TOOL_CALL_TIMEOUT)
+            return json.dumps({"error": f"Tool call timed out after {_TOOL_CALL_TIMEOUT}s"})
         except Exception as exc:
             logger.exception("MCP tool call %r failed", name)
             return json.dumps({"error": str(exc)})
