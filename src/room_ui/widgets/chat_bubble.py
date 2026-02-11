@@ -86,7 +86,7 @@ class ChatBubble(QFrame):
         self._label = QLabel(text)
         self._label.setWordWrap(True)
         self._label.setTextFormat(Qt.PlainText)
-        self._label.setMaximumWidth(270)
+        self._label.setMaximumWidth(380)
         self._label.setStyleSheet(
             f"QLabel {{"
             f"  color: {text_color};"

@@ -104,6 +104,7 @@ class _GeneralPage(QWidget):
         layout.addWidget(theme_section)
 
         theme_form = QFormLayout()
+        theme_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
         theme_form.setSpacing(10)
         theme_form.setLabelAlignment(Qt.AlignRight)
         self.theme_combo = QComboBox()
@@ -126,6 +127,7 @@ class _GeneralPage(QWidget):
         layout.addWidget(section)
 
         form = QFormLayout()
+        form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
         form.setSpacing(10)
         form.setLabelAlignment(Qt.AlignRight)
 
@@ -173,6 +175,7 @@ class _AIPage(QWidget):
         layout.addWidget(title)
 
         form = QFormLayout()
+        form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
         form.setSpacing(10)
         form.setLabelAlignment(Qt.AlignRight)
 
@@ -347,6 +350,7 @@ class _DictationPage(QWidget):
         layout.addWidget(desc)
 
         form = QFormLayout()
+        form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
         form.setSpacing(10)
         form.setLabelAlignment(Qt.AlignRight)
 
@@ -421,16 +425,16 @@ class _MCPPage(QWidget):
         desc.setStyleSheet("font-size: 13px; color: #8E8E93; background: transparent;")
         layout.addWidget(desc)
 
-        # Server list + buttons
-        list_row = QHBoxLayout()
+        # Server list
         self._server_list = QListWidget()
         self._server_list.setFixedHeight(90)
         c = colors()
         self._server_list.setStyleSheet(
             f"QListWidget {{ border: 1px solid {c['SEPARATOR']}; border-radius: 6px; }}"
         )
-        list_row.addWidget(self._server_list, 1)
+        layout.addWidget(self._server_list)
 
+        # Add / Remove buttons below the list
         _btn_style = (
             f"QPushButton {{ font-size: 18px; font-weight: 700;"
             f" color: {c['TEXT_PRIMARY']}; background-color: {c['BG_SECONDARY']};"
@@ -439,8 +443,8 @@ class _MCPPage(QWidget):
             f" min-width: 28px; min-height: 28px; }}"
             f"QPushButton:hover {{ background-color: {c['BG_TERTIARY']}; }}"
         )
-        btn_col = QVBoxLayout()
-        btn_col.setSpacing(4)
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(4)
         add_btn = QPushButton("+")
         add_btn.setFixedSize(28, 28)
         add_btn.setStyleSheet(_btn_style)
@@ -449,15 +453,15 @@ class _MCPPage(QWidget):
         remove_btn.setFixedSize(28, 28)
         remove_btn.setStyleSheet(_btn_style)
         remove_btn.clicked.connect(self._remove_server)
-        btn_col.addWidget(add_btn)
-        btn_col.addWidget(remove_btn)
-        btn_col.addStretch()
-        list_row.addLayout(btn_col)
-        layout.addLayout(list_row)
+        btn_row.addWidget(add_btn)
+        btn_row.addWidget(remove_btn)
+        btn_row.addStretch()
+        layout.addLayout(btn_row)
 
         # Per-server config form
         self._form_container = QWidget()
         form = QFormLayout(self._form_container)
+        form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
         form.setSpacing(8)
         form.setLabelAlignment(Qt.AlignRight)
 
