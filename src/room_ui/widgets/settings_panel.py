@@ -614,9 +614,9 @@ class _AIPage(QWidget):
         self.vc_vad_model.blockSignals(True)
         self.vc_vad_model.clear()
         self.vc_vad_model.addItem("None (continuous mode)", "")
-        for m in VAD_MODELS:
-            if is_vad_model_downloaded(m.id):
-                self.vc_vad_model.addItem(m.name, m.id)
+        for vm in VAD_MODELS:
+            if is_vad_model_downloaded(vm.id):
+                self.vc_vad_model.addItem(vm.name, vm.id)
         target = self._vc_saved_vad
         for i in range(self.vc_vad_model.count()):
             if self.vc_vad_model.itemData(i) == target:
@@ -629,9 +629,9 @@ class _AIPage(QWidget):
         # TTS
         self.vc_tts_model.blockSignals(True)
         self.vc_tts_model.clear()
-        for m in TTS_MODELS:
-            if is_tts_model_downloaded(m.id):
-                self.vc_tts_model.addItem(m.name, m.id)
+        for tm in TTS_MODELS:
+            if is_tts_model_downloaded(tm.id):
+                self.vc_tts_model.addItem(tm.name, tm.id)
         target = self._vc_saved_tts or (
             self.vc_tts_model.itemData(0) if self.vc_tts_model.count() else ""
         )
