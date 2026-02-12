@@ -7,10 +7,8 @@ import collections
 import datetime
 import json
 import logging
-import math
 import os
 import resource
-import struct
 from typing import Any
 
 from PySide6.QtCore import QObject, QTimer, Signal
@@ -18,29 +16,6 @@ from PySide6.QtCore import QObject, QTimer, Signal
 from room_ui.mcp_manager import MCPManager
 
 logger = logging.getLogger(__name__)
-
-# ---------------------------------------------------------------------------
-# Audio helpers
-# ---------------------------------------------------------------------------
-
-# 24 kHz, 16-bit mono → 960 bytes per 20 ms block
-_BLOCK_BYTES = 960
-
-
-def _compute_rms(data: bytes) -> float:
-    """Return RMS level 0.0-1.0 from 16-bit PCM audio bytes.
-
-    Uses a square-root curve so quiet mic signals are still clearly visible
-    on the VU meter while loud signals don't clip too aggressively.
-    """
-    if len(data) < 2:
-        return 0.0
-    n = len(data) // 2
-    samples = struct.unpack(f"<{n}h", data)
-    rms = math.sqrt(sum(s * s for s in samples) / n) / 32768.0
-    # sqrt curve: quiet speech (~0.03) → 0.55, loud speech (~0.15) → 1.0
-    return min(1.0, math.sqrt(rms) * 3.2)
-
 
 # ---------------------------------------------------------------------------
 # Built-in tools (always available)
@@ -166,13 +141,11 @@ class Engine(QObject):
 
     def _register_callbacks(self, provider: Any, transport: Any) -> None:
         provider.on_transcription(self._on_transcription)
-        provider.on_audio(self._on_speaker_audio)
         provider.on_speech_start(self._on_speech_start)
         provider.on_speech_end(self._on_speech_end)
         provider.on_response_start(self._on_response_start)
         provider.on_response_end(self._on_response_end)
         provider.on_error(self._on_provider_error)
-        transport.on_audio_received(self._on_mic_audio)
 
     # -- callbacks -----------------------------------------------------------
 
@@ -182,32 +155,10 @@ class Engine(QObject):
         except Exception:
             pass
 
-    def _on_speaker_audio(self, _s: Any, audio: bytes) -> None:
-        """Split provider audio into block-sized RMS values and queue them."""
-        try:
-            offset = 0
-            while offset + _BLOCK_BYTES <= len(audio):
-                block = audio[offset : offset + _BLOCK_BYTES]
-                self._spk_rms_queue.append(_compute_rms(block))
-                offset += _BLOCK_BYTES
-            if offset < len(audio):
-                self._spk_rms_queue.append(_compute_rms(audio[offset:]))
-        except Exception:
-            pass
-
     def _drain_speaker_level(self) -> None:
         """Pop one RMS value per timer tick → matches real playback cadence."""
         if self._spk_rms_queue:
             self.speaker_audio_level.emit(self._spk_rms_queue.popleft())
-
-    def _on_mic_audio(self, _s: Any, audio: bytes) -> None:
-        try:
-            if self._mic_muted:
-                self.mic_audio_level.emit(0.0)
-            else:
-                self.mic_audio_level.emit(_compute_rms(audio))
-        except Exception:
-            pass
 
     def _on_speech_start(self, _s: Any) -> None:
         try:
@@ -395,6 +346,8 @@ class Engine(QObject):
 
             if self._session is None:
                 raise RuntimeError("Failed to start voice session")
+
+            self._register_audio_hooks(self._kit)
 
             self._spk_rms_queue.clear()
             self._spk_timer.start()
@@ -594,6 +547,9 @@ class Engine(QObject):
             voice.bind_session(session, "local-demo", voice_binding)
             await backend.start_listening(session)
 
+            self._spk_rms_queue.clear()
+            self._spk_timer.start()
+
             self._state = "active"
             self.state_changed.emit("active")
 
@@ -743,9 +699,35 @@ class Engine(QObject):
                 )
             )
 
+    def _register_audio_hooks(self, kit: Any) -> None:
+        """Register ON_INPUT/OUTPUT_AUDIO_LEVEL hooks — shared by both modes."""
+        from roomkit.models.enums import HookExecution, HookTrigger
+
+        @kit.hook(HookTrigger.ON_INPUT_AUDIO_LEVEL, HookExecution.ASYNC)
+        async def _on_input_level(event, context):
+            try:
+                db = getattr(event, "level_db", -60.0)
+                level = max(0.0, min(1.0, (db + 60.0) / 60.0))
+                if self._mic_muted:
+                    level = 0.0
+                self.mic_audio_level.emit(level)
+            except Exception:
+                pass
+
+        @kit.hook(HookTrigger.ON_OUTPUT_AUDIO_LEVEL, HookExecution.ASYNC)
+        async def _on_output_level(event, context):
+            try:
+                db = getattr(event, "level_db", -60.0)
+                level = max(0.0, min(1.0, (db + 60.0) / 60.0))
+                self._spk_rms_queue.append(level)
+            except Exception:
+                pass
+
     def _register_vc_hooks(self, kit: Any) -> None:
         """Register framework hooks for VoiceChannel UI callbacks."""
         from roomkit.models.enums import HookExecution, HookTrigger
+
+        self._register_audio_hooks(kit)
 
         @kit.hook(HookTrigger.ON_TRANSCRIPTION, HookExecution.SYNC)
         async def _on_user_transcription(text, context):
@@ -793,19 +775,6 @@ class Engine(QObject):
         async def _on_tts_done(text, context):
             try:
                 self.ai_speaking.emit(False)
-            except Exception:
-                pass
-
-        @kit.hook(HookTrigger.ON_VAD_AUDIO_LEVEL, HookExecution.ASYNC)
-        async def _on_audio_level(event, context):
-            try:
-                # Convert dB to 0.0-1.0 range for VU meter
-                # Typical range: -60 dB (silence) to 0 dB (max)
-                db = getattr(event, "level_db", -60.0)
-                level = max(0.0, min(1.0, (db + 60.0) / 60.0))
-                if self._mic_muted:
-                    level = 0.0
-                self.mic_audio_level.emit(level)
             except Exception:
                 pass
 
