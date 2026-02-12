@@ -28,6 +28,8 @@ _DEFAULTS = {
     "stt_model": "",
     "stt_translate": False,
     "inference_device": "cpu",
+    "assistant_hotkey_enabled": True,
+    "assistant_hotkey": "<ctrl>+<shift>+a",
     "theme": "dark",
     "mcp_servers": "[]",
     # Voice channel (STT → LLM → TTS) settings

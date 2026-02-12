@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 
 class MainWindow(QMainWindow):
     settings_saved = Signal()
+    session_active_changed = Signal(bool)
 
     def __init__(self) -> None:
         super().__init__()
@@ -99,6 +100,13 @@ class MainWindow(QMainWindow):
         self._active_app_widgets: dict[str, Any] = {}  # tool_name → MCPAppWidget
         self._pending_app_results: dict[str, str] = {}  # buffered results
 
+    def toggle_session(self) -> None:
+        """Toggle the voice session on/off (used by global hotkey)."""
+        if self._engine.state in ("active", "connecting"):
+            self._on_stop()
+        else:
+            self._on_start()
+
     def _open_settings(self) -> None:
         dlg = SettingsPanel(self)
         dlg.exec()
@@ -130,11 +138,13 @@ class MainWindow(QMainWindow):
         self._controls.set_state(state)
         if state == "active":
             self._vu.start()
+            self.session_active_changed.emit(True)
         elif state in ("idle", "error"):
             self._vu.stop()
             self._info_bar.clear_session()
             self._active_app_widgets.clear()
             self._pending_app_results.clear()
+            self.session_active_changed.emit(False)
 
     def _on_transcription(self, text: str, role: str, is_final: bool) -> None:
         self._chat.add_transcription(text, role, is_final)

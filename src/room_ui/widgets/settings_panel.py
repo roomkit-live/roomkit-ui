@@ -143,6 +143,38 @@ class _GeneralPage(QWidget):
         theme_form.addRow("Theme", self.theme_combo)
         layout.addLayout(theme_form)
 
+        # Assistant hotkey
+        hotkey_section = QLabel("Assistant Hotkey")
+        hotkey_section.setStyleSheet(
+            f"font-size: 12px; font-weight: 600; color: {c['TEXT_SECONDARY']};"
+            f" text-transform: uppercase; letter-spacing: 1px; background: transparent;"
+        )
+        layout.addWidget(hotkey_section)
+
+        hotkey_form = QFormLayout()
+        hotkey_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        hotkey_form.setSpacing(10)
+        hotkey_form.setLabelAlignment(Qt.AlignRight)
+
+        self.assistant_hotkey_enabled = QCheckBox("Enable global hotkey to start/stop session")
+        self.assistant_hotkey_enabled.setChecked(
+            bool(settings.get("assistant_hotkey_enabled", True))
+        )
+        hotkey_form.addRow("", self.assistant_hotkey_enabled)
+
+        self.assistant_hotkey = HotkeyButton()
+        self.assistant_hotkey.set_value(settings.get("assistant_hotkey", "<ctrl>+<shift>+a"))
+        hotkey_form.addRow("Hotkey", self.assistant_hotkey)
+
+        hotkey_hint = QLabel("Press the button, then press your desired key combination.")
+        hotkey_hint.setWordWrap(True)
+        hotkey_hint.setStyleSheet(
+            f"font-size: 11px; color: {c['TEXT_SECONDARY']}; background: transparent;"
+        )
+        hotkey_form.addRow("", hotkey_hint)
+
+        layout.addLayout(hotkey_form)
+
         # Audio devices
         section = QLabel("Audio Devices")
         section.setStyleSheet(
@@ -1868,6 +1900,8 @@ class SettingsPanel(QDialog):
             ][1],
             "input_device": self._general.input_combo.currentData(),
             "output_device": self._general.output_combo.currentData(),
+            "assistant_hotkey_enabled": self._general.assistant_hotkey_enabled.isChecked(),
+            "assistant_hotkey": self._general.assistant_hotkey.value(),
             "stt_enabled": self._dictation.enabled.isChecked(),
             "stt_hotkey": self._dictation.hotkey.value(),
             "stt_provider": STT_PROVIDERS[self._dictation.stt_provider.currentIndex()][1],

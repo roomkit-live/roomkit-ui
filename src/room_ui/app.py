@@ -142,6 +142,14 @@ def main() -> None:
     tray.log_action.triggered.connect(dictation_log.show)
     tray.log_action.triggered.connect(dictation_log.raise_)
 
+    # session state → tray icon + notification sounds
+    from room_ui.sounds import play_session_start, play_session_stop
+
+    window.session_active_changed.connect(tray.on_session_changed)
+    window.session_active_changed.connect(
+        lambda active: play_session_start() if active else play_session_stop()
+    )
+
     # engine → tray status + log
     stt.recording_changed.connect(tray.on_recording_changed)
     stt.recording_changed.connect(dictation_log.on_recording_changed)
@@ -153,15 +161,27 @@ def main() -> None:
     # engine → paste into focused input
     stt.text_ready.connect(stt.paste_text)
 
-    # Global hotkey (always created, reload picks up settings changes)
+    # Global hotkey for dictation (always created, reload picks up settings changes)
     hotkey_str = settings.get("stt_hotkey", "<ctrl>+<shift>+h")
     hotkey = HotkeyListener(hotkey=hotkey_str)
     hotkey.hotkey_pressed.connect(stt.toggle_recording)
     if settings.get("stt_enabled", True):
         hotkey.start()
 
-    # Reload hotkey when settings are saved
+    # Global hotkey for assistant session start/stop
+    assistant_hotkey_str = settings.get("assistant_hotkey", "<ctrl>+<shift>+a")
+    assistant_hotkey = HotkeyListener(
+        hotkey=assistant_hotkey_str,
+        enabled_key="assistant_hotkey_enabled",
+        hotkey_key="assistant_hotkey",
+    )
+    assistant_hotkey.hotkey_pressed.connect(window.toggle_session)
+    if settings.get("assistant_hotkey_enabled", True):
+        assistant_hotkey.start()
+
+    # Reload hotkeys when settings are saved
     window.settings_saved.connect(hotkey.reload)
+    window.settings_saved.connect(assistant_hotkey.reload)
 
     # Let Ctrl+C quit cleanly instead of being swallowed by the Qt loop.
     # The Qt event loop runs in C, so Python signal handlers never fire

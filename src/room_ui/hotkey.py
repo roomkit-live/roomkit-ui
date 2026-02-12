@@ -48,10 +48,14 @@ class HotkeyListener(QObject):
     def __init__(
         self,
         hotkey: str = "<ctrl>+<shift>+h",
+        enabled_key: str = "stt_enabled",
+        hotkey_key: str = "stt_hotkey",
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
         self._hotkey = hotkey
+        self._enabled_key = enabled_key
+        self._hotkey_key = hotkey_key
         self._listener: Any = None
         self._monitor: Any = None  # NSEvent global monitor
 
@@ -195,8 +199,8 @@ class HotkeyListener(QObject):
         from room_ui.settings import load_settings
 
         settings = load_settings()
-        enabled = settings.get("stt_enabled", True)
-        new_hotkey = settings.get("stt_hotkey", "<ctrl>+<shift>+h")
+        enabled = settings.get(self._enabled_key, True)
+        new_hotkey = settings.get(self._hotkey_key, "<ctrl>+<shift>+h")
 
         self.stop()
 
