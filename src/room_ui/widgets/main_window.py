@@ -59,7 +59,9 @@ class MainWindow(QMainWindow):
         from room_ui.widgets.mcp_app_widget import has_webengine
 
         if has_webengine():
-            self._chat.widget().winId()
+            w = self._chat.widget()
+            if w is not None:
+                w.winId()
 
         # ── VU Meter ──
         self._vu = VUMeter()

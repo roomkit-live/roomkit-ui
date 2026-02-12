@@ -347,7 +347,7 @@ class MCPAppWidget(QFrame):
 
         try:
             srv = _get_http_server()
-            host, port = srv.server_address
+            host, port = srv.server_address[:2]
 
             # Unique token so multiple widgets don't collide
             token = secrets.token_hex(8)
@@ -364,7 +364,7 @@ class MCPAppWidget(QFrame):
 
             self._http_paths = [app_path, wrapper_path]
 
-            url = f"http://{host}:{port}{wrapper_path}"
+            url = f"http://{host!s}:{port}{wrapper_path}"
             logger.debug("MCPAppWidget: loading %s (app=%d bytes)", url, len(html_content))
             self._view.load(QUrl(url))
 
@@ -429,7 +429,9 @@ class MCPAppWidget(QFrame):
             return
 
         # Reparent view back to inline widget
-        dialog.layout().removeWidget(self._view)
+        lay = dialog.layout()
+        if lay is not None:
+            lay.removeWidget(self._view)
         self._view.setFixedHeight(_DEFAULT_VIEW_HEIGHT)
         self._view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self._layout.addWidget(self._view)
