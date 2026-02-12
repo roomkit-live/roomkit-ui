@@ -14,12 +14,14 @@ from pathlib import Path
 # LIBGL_ALWAYS_SOFTWARE=1 forces Mesa to use llvmpipe (CPU-based OpenGL)
 # for both Qt Quick and Chromium's WebGL — this keeps WebGL available for
 # MCP Apps (e.g. Excalidraw) while avoiding GPU driver crashes.
-# The Chromium flags tell the embedded browser to allow software WebGL
-# and ignore the GPU blocklist.  Must be set *before* PySide6 is imported.
+# The Chromium flags tell the embedded browser to allow software WebGL,
+# ignore the GPU blocklist, and disable CORS for MCP App ES-module imports
+# (esm.sh rejects http://127.0.0.1 origins).  Must be set *before* PySide6.
 os.environ.setdefault("LIBGL_ALWAYS_SOFTWARE", "1")
 os.environ.setdefault(
     "QTWEBENGINE_CHROMIUM_FLAGS",
-    "--enable-webgl-software-rendering --ignore-gpu-blocklist --disable-vulkan",
+    "--enable-webgl-software-rendering --ignore-gpu-blocklist --disable-vulkan"
+    " --disable-web-security",
 )
 
 from PySide6.QtCore import QTimer  # noqa: E402
