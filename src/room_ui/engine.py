@@ -121,10 +121,32 @@ class Engine(QObject):
             pass
 
     def _on_provider_error(self, _s: Any, code: str, message: str) -> None:
+        # Suppress errors during shutdown — WebSocket close races are expected
+        if self._state not in ("active", "connecting"):
+            logger.debug("Suppressed provider error (%s): %s: %s", self._state, code, message)
+            return
         try:
-            self.error_occurred.emit(f"{code}: {message}")
+            friendly = self._friendly_error(code, message)
+            logger.warning("Provider error: %s: %s → %s", code, message, friendly)
+            self.error_occurred.emit(friendly)
         except Exception:
             pass
+
+    @staticmethod
+    def _friendly_error(code: str, message: str) -> str:
+        """Map raw provider errors to user-friendly messages."""
+        low = f"{code} {message}".lower()
+        if "1011" in low or "internal error" in low:
+            return "Connection lost — the server closed unexpectedly. Try again."
+        if "1006" in low or "abnormal" in low:
+            return "Connection lost — network interruption."
+        if "send_audio_failed" in low:
+            return "Connection lost while sending audio."
+        if "rate_limit" in low or "429" in low:
+            return "Rate limited by the provider. Wait a moment and try again."
+        if "auth" in low or "401" in low or "403" in low:
+            return "Authentication failed — check your API key in Settings."
+        return f"{code}: {message}"
 
     # -- tool calls ----------------------------------------------------------
 
