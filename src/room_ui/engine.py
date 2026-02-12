@@ -141,7 +141,7 @@ class Engine(QObject):
         if "1006" in low or "abnormal" in low:
             return "Connection lost — network interruption."
         if "send_audio_failed" in low:
-            return "Connection lost while sending audio."
+            return "Audio interrupted — please repeat."
         if "rate_limit" in low or "429" in low:
             return "Rate limited by the provider. Wait a moment and try again."
         if "auth" in low or "401" in low or "403" in low:
