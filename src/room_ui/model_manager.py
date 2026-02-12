@@ -596,8 +596,6 @@ def _generate_tokens_txt(onnx_json_path: Path, tokens_path: Path) -> None:
     tokens_path.write_text("\n".join(lines) + "\n")
 
 
-
-
 def _download_tts_model_sync(
     model_id: str,
     progress: ProgressCallback | None = None,

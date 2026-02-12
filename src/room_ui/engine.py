@@ -486,7 +486,8 @@ class Engine(QObject):
 
             interruption_enabled = settings.get("vc_interruption", False)
             strategy = (
-                InterruptionStrategy.IMMEDIATE if interruption_enabled
+                InterruptionStrategy.IMMEDIATE
+                if interruption_enabled
                 else InterruptionStrategy.DISABLED
             )
             interruption = InterruptionConfig(strategy=strategy)
