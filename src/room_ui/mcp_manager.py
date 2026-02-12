@@ -42,6 +42,7 @@ class MCPManager:
         self._configs = server_configs
         self._tools: list[dict[str, Any]] = []
         self._tool_to_session: dict[str, Any] = {}  # tool name → ClientSession
+        self._app_tools: dict[str, dict[str, str]] = {}  # tool name → {uri, server}
         self._close_event: asyncio.Event | None = None
         self._task: asyncio.Task | None = None
         self.failed_servers: list[str] = []  # names of servers that failed
@@ -92,6 +93,19 @@ class MCPManager:
                                 "parameters": _clean_schema(tool.inputSchema or {}),
                             }
                         )
+                        # Track MCP App tools (tools with ui:// resourceUri)
+                        meta = getattr(tool, "meta", None)
+                        if isinstance(meta, dict):
+                            ui = meta.get("ui", {})
+                            if isinstance(ui, dict):
+                                resource_uri = ui.get("resourceUri", "")
+                                if isinstance(resource_uri, str) and resource_uri.startswith(
+                                    "ui://"
+                                ):
+                                    self._app_tools[tool.name] = {
+                                        "uri": resource_uri,
+                                        "server": name,
+                                    }
                     server_stacks.append(stack)
                     logger.info(
                         "MCP server %r: %d tools",
@@ -243,6 +257,7 @@ class MCPManager:
             self._task = None
         self._tools.clear()
         self._tool_to_session.clear()
+        self._app_tools.clear()
         logger.info("close_all: done")
 
     # -- tools ---------------------------------------------------------------
@@ -250,6 +265,30 @@ class MCPManager:
     def get_tools(self) -> list[dict[str, Any]]:
         """Return discovered tools in roomkit format."""
         return list(self._tools)
+
+    def get_app_tool_info(self, tool_name: str) -> dict[str, str] | None:
+        """Return ``{uri, server}`` if *tool_name* is an MCP App tool."""
+        return self._app_tools.get(tool_name)
+
+    async def read_resource(self, tool_name: str, uri: str) -> str | None:
+        """Fetch an MCP resource (e.g. ``ui://`` HTML) from the owning server."""
+        session = self._tool_to_session.get(tool_name)
+        if session is None:
+            logger.warning("read_resource: no session for tool %r", tool_name)
+            return None
+        try:
+            from pydantic import AnyUrl
+
+            result = await asyncio.wait_for(
+                session.read_resource(AnyUrl(uri)),
+                timeout=_CONNECT_TIMEOUT,
+            )
+            for content in result.contents:
+                if hasattr(content, "text"):
+                    return str(content.text)
+        except Exception:
+            logger.exception("read_resource(%r, %r) failed", tool_name, uri)
+        return None
 
     async def handle_tool_call(
         self,

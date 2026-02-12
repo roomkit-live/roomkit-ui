@@ -10,7 +10,7 @@ import resource
 logger = logging.getLogger(__name__)
 
 
-def cleanup_stale_fds() -> None:
+def cleanup_stale_fds(*, timers_only: bool = False) -> None:
     """Purge all qasync event-loop state that MCP/anyio may have leaked.
 
     qasync has TWO notifier layers that can hold stale FDs:
@@ -21,56 +21,60 @@ def cleanup_stale_fds() -> None:
     busy-loop if the FD is always-ready.
 
     We also purge cancelled timer callbacks and stale asyncio handles.
+
+    When *timers_only* is True, skip FD notifier cleanup (Layers 1-2).
+    Use this during an active session where FDs may still be needed.
     """
     loop = asyncio.get_event_loop()
     self_pipe_fd = getattr(getattr(loop, "_ssock", None), "fileno", lambda: -1)()
 
     removed = 0
 
-    # --- Layer 1: _QEventLoop notifiers (_add_reader / _add_writer) ---
-    for attr in ("_read_notifiers", "_write_notifiers"):
-        notifiers: dict | None = getattr(loop, attr, None)
-        if not notifiers:
-            continue
-        for fd in list(notifiers):
-            if fd == self_pipe_fd:
+    if not timers_only:
+        # --- Layer 1: _QEventLoop notifiers (_add_reader / _add_writer) ---
+        for attr in ("_read_notifiers", "_write_notifiers"):
+            notifiers: dict | None = getattr(loop, attr, None)
+            if not notifiers:
                 continue
-            try:
-                target = os.readlink(f"/proc/self/fd/{fd}")
-            except OSError:
-                target = "?"
-            logger.warning("cleanup L1: removing %s FD %d → %s", attr, fd, target)
-            notifier = notifiers.pop(fd, None)
-            if notifier is not None:
-                notifier.setEnabled(False)
-            removed += 1
-
-    # --- Layer 2: _Selector notifiers (register / unregister) ---------
-    selector = getattr(loop, "_selector", None)
-    if selector is not None:
-        fd_to_key: dict = getattr(selector, "_fd_to_key", {})
-        for mangled in (
-            "_Selector__read_notifiers",
-            "_Selector__write_notifiers",
-        ):
-            sel_notifiers: dict | None = getattr(selector, mangled, None)
-            if not sel_notifiers:
-                continue
-            for fd in list(sel_notifiers):
+            for fd in list(notifiers):
                 if fd == self_pipe_fd:
                     continue
-                logger.warning("cleanup L2: removing %s FD %d", mangled, fd)
-                notifier = sel_notifiers.pop(fd, None)
+                try:
+                    target = os.readlink(f"/proc/self/fd/{fd}")
+                except OSError:
+                    target = "?"
+                logger.warning("cleanup L1: removing %s FD %d → %s", attr, fd, target)
+                notifier = notifiers.pop(fd, None)
                 if notifier is not None:
                     notifier.setEnabled(False)
                 removed += 1
-        # Clean corresponding selector keys (skip self-pipe)
-        for fd in list(fd_to_key):
-            if fd == self_pipe_fd:
-                continue
-            logger.warning("cleanup L2: removing selector key FD %d", fd)
-            del fd_to_key[fd]
-            removed += 1
+
+        # --- Layer 2: _Selector notifiers (register / unregister) ---------
+        selector = getattr(loop, "_selector", None)
+        if selector is not None:
+            fd_to_key: dict = getattr(selector, "_fd_to_key", {})
+            for mangled in (
+                "_Selector__read_notifiers",
+                "_Selector__write_notifiers",
+            ):
+                sel_notifiers: dict | None = getattr(selector, mangled, None)
+                if not sel_notifiers:
+                    continue
+                for fd in list(sel_notifiers):
+                    if fd == self_pipe_fd:
+                        continue
+                    logger.warning("cleanup L2: removing %s FD %d", mangled, fd)
+                    notifier = sel_notifiers.pop(fd, None)
+                    if notifier is not None:
+                        notifier.setEnabled(False)
+                    removed += 1
+            # Clean corresponding selector keys (skip self-pipe)
+            for fd in list(fd_to_key):
+                if fd == self_pipe_fd:
+                    continue
+                logger.warning("cleanup L2: removing selector key FD %d", fd)
+                del fd_to_key[fd]
+                removed += 1
 
     # --- Layer 3: orphaned timer callbacks in _SimpleTimer -------------
     # After MCP/anyio cleanup, two non-cancelled callbacks can get stuck

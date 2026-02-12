@@ -9,18 +9,31 @@ import signal
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QTimer
-from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import QApplication
-from qasync import QEventLoop
+# ── Software rendering fallback ──────────────────────────────────────────
+# When the hardware GPU driver is broken or absent, we need software GL.
+# LIBGL_ALWAYS_SOFTWARE=1 forces Mesa to use llvmpipe (CPU-based OpenGL)
+# for both Qt Quick and Chromium's WebGL — this keeps WebGL available for
+# MCP Apps (e.g. Excalidraw) while avoiding GPU driver crashes.
+# The Chromium flags tell the embedded browser to allow software WebGL
+# and ignore the GPU blocklist.  Must be set *before* PySide6 is imported.
+os.environ.setdefault("LIBGL_ALWAYS_SOFTWARE", "1")
+os.environ.setdefault(
+    "QTWEBENGINE_CHROMIUM_FLAGS",
+    "--enable-webgl-software-rendering --ignore-gpu-blocklist --disable-vulkan",
+)
 
-from room_ui.hotkey import HotkeyListener
-from room_ui.settings import load_settings
-from room_ui.stt_engine import STTEngine
-from room_ui.theme import get_stylesheet
-from room_ui.tray import TrayService
-from room_ui.widgets.dictation_log import DictationLog
-from room_ui.widgets.main_window import MainWindow
+from PySide6.QtCore import QTimer  # noqa: E402
+from PySide6.QtGui import QIcon  # noqa: E402
+from PySide6.QtWidgets import QApplication  # noqa: E402
+from qasync import QEventLoop  # noqa: E402
+
+from room_ui.hotkey import HotkeyListener  # noqa: E402
+from room_ui.settings import load_settings  # noqa: E402
+from room_ui.stt_engine import STTEngine  # noqa: E402
+from room_ui.theme import get_stylesheet  # noqa: E402
+from room_ui.tray import TrayService  # noqa: E402
+from room_ui.widgets.dictation_log import DictationLog  # noqa: E402
+from room_ui.widgets.main_window import MainWindow  # noqa: E402
 
 # Log to file so we can diagnose issues when launched without a console.
 if sys.platform == "darwin":
@@ -34,7 +47,7 @@ os.makedirs(_log_dir, exist_ok=True)
 _log_file = os.path.join(_log_dir, "roomkit-ui.log")
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG if os.environ.get("DEBUG") else logging.INFO,
     format="%(asctime)s %(name)s %(levelname)s %(message)s",
     handlers=[
         logging.StreamHandler(),
@@ -43,8 +56,15 @@ logging.basicConfig(
     force=True,
 )
 
-# Enable MCP SDK debug logging to trace subprocess cleanup
-logging.getLogger("mcp").setLevel(logging.DEBUG)
+# Enable verbose logging for key subsystems only when DEBUG is set.
+# The MCP library logs full message bodies (including HTML resources)
+# at DEBUG level, so keep it at INFO unless explicitly debugging.
+if os.environ.get("DEBUG"):
+    logging.getLogger("mcp").setLevel(logging.DEBUG)
+    logging.getLogger("roomkit").setLevel(logging.DEBUG)
+    logging.getLogger("roomkit.channels.realtime_voice").setLevel(logging.DEBUG)
+else:
+    logging.getLogger("roomkit.channels.realtime_voice").setLevel(logging.DEBUG)
 
 
 def main() -> None:
@@ -65,6 +85,21 @@ def main() -> None:
     # -- Main voice-chat window --
     window = MainWindow()
     window.show()
+
+    # Pre-start the Chromium subprocess so the first QWebEngineView
+    # creation later doesn't freeze the UI.  Loading about:blank on
+    # a throwaway page triggers the full init path.
+    def _prewarm_webengine() -> None:
+        try:
+            from PySide6.QtWebEngineCore import QWebEnginePage
+
+            page = QWebEnginePage()
+            page.setHtml("")
+            page.loadFinished.connect(page.deleteLater)
+        except ImportError:
+            pass
+
+    QTimer.singleShot(200, _prewarm_webengine)
 
     # On macOS, check and request event-posting permissions.
     if sys.platform == "darwin":

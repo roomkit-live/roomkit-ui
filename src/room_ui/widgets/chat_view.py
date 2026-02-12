@@ -208,6 +208,38 @@ class ChatView(QScrollArea):
         self._layout.insertWidget(idx, label)
         self._scroll_to_bottom()
 
+    def add_app_tool_call(
+        self,
+        tool_name: str,
+        arguments_json: str,
+        html_content: str | None,
+        server_name: str,
+    ) -> QWidget | None:
+        """Embed an MCP App widget in the chat, or fall back to a text label.
+
+        Returns the ``MCPAppWidget`` if created, else ``None``.
+        """
+        from room_ui.widgets.mcp_app_widget import MCPAppWidget, has_webengine
+
+        if html_content is None or not has_webengine():
+            self.add_tool_call(tool_name, arguments_json)
+            return None
+
+        self._hide_status()
+        if self._current_bubble and not self._current_bubble.finalized:
+            self._current_bubble.finalize()
+            self._current_bubble = None
+
+        widget = MCPAppWidget(tool_name, server_name, parent=self._container)
+        widget.load_html(html_content)
+
+        idx = self._layout.count() - 2
+        if idx < 0:
+            idx = 0
+        self._layout.insertWidget(idx, widget)
+        self._scroll_to_bottom()
+        return widget
+
     def add_error(self, message: str) -> None:
         """Show a centered error message in the chat area."""
         self._hide_status()

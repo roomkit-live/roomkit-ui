@@ -34,6 +34,8 @@ class Engine(QObject):
     ai_speaking = Signal(bool)
     error_occurred = Signal(str)
     tool_use = Signal(str, str)  # tool_name, arguments_json
+    tool_use_app = Signal(str, str, str, str)  # name, args_json, resource_uri, server_name
+    tool_result_app = Signal(str, str)  # name, result_json
     mcp_status = Signal(str)  # status message
     session_info = Signal(dict)  # {provider, model, tools, failed_servers}
 
@@ -133,8 +135,19 @@ class Engine(QObject):
         arguments: dict[str, Any],
     ) -> str:
         """Handle built-in tools or forward to MCP manager."""
+        # Check if this is an MCP App tool (has ui:// resource)
+        app_info = self._mcp.get_app_tool_info(name) if self._mcp else None
+
         try:
-            self.tool_use.emit(name, json.dumps(arguments))
+            if app_info is not None:
+                self.tool_use_app.emit(
+                    name,
+                    json.dumps(arguments),
+                    app_info["uri"],
+                    app_info["server"],
+                )
+            else:
+                self.tool_use.emit(name, json.dumps(arguments))
         except Exception:
             pass
 
@@ -149,8 +162,23 @@ class Engine(QObject):
         # MCP/anyio can leak orphaned timer callbacks under qasync when a
         # tool call fails or the server crashes.  Run a lightweight cleanup
         # after every MCP call to prevent 100% CPU spin loops.
-        cleanup_stale_fds()
+        # timers_only=True: don't touch FD notifiers during an active session.
+        cleanup_stale_fds(timers_only=True)
+
+        # Notify the UI so the app widget can display the result
+        if app_info is not None:
+            try:
+                self.tool_result_app.emit(name, result)
+            except Exception:
+                pass
+
         return result
+
+    async def handle_app_tool_call(self, tool_name: str, arguments: dict[str, Any]) -> str:
+        """Proxy a tool call initiated by an MCP App back through MCP."""
+        if self._mcp is None:
+            return json.dumps({"error": "MCP not connected"})
+        return await self._mcp.handle_tool_call(None, tool_name, arguments)
 
     # -- lifecycle -----------------------------------------------------------
 

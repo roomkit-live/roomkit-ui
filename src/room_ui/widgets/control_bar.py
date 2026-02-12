@@ -5,8 +5,8 @@ from __future__ import annotations
 import math
 import time
 
-from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QPainter, QPen, QRadialGradient
+from PySide6.QtCore import QRectF, Qt, QTimer, Signal
+from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QHBoxLayout, QPushButton, QWidget
 
 from room_ui.icons import svg_icon
@@ -17,17 +17,25 @@ from room_ui.theme import colors
 # ---------------------------------------------------------------------------
 
 
-class _CircleButton(QPushButton):
-    """A perfectly round button with custom painted background."""
+class _PillButton(QPushButton):
+    """Rounded-rectangle (pill) button with custom painted background."""
 
-    def __init__(self, diameter: int, padding: int = 0, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        btn_width: int,
+        btn_height: int,
+        padding: int = 0,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
-        self._diameter = diameter
+        self._btn_w = btn_width
+        self._btn_h = btn_height
+        self._radius = btn_height / 2.0
         self._padding = padding
         self._bg = QColor("#30D158")
         self._bg_hover = QColor("#28c04e")
         self._hover = False
-        self.setFixedSize(diameter + 2 * padding, diameter + 2 * padding)
+        self.setFixedSize(btn_width + 2 * padding, btn_height + 2 * padding)
         self.setFlat(True)
         self.setCursor(Qt.PointingHandCursor)
         self.setStyleSheet("QPushButton { background: transparent; border: none; }")
@@ -53,8 +61,13 @@ class _CircleButton(QPushButton):
         color = self._bg_hover if self._hover else self._bg
         p.setPen(Qt.NoPen)
         p.setBrush(color)
-        off = self._padding
-        p.drawEllipse(off + 1, off + 1, self._diameter - 2, self._diameter - 2)
+        rect = QRectF(
+            self._padding + 1,
+            self._padding + 1,
+            self._btn_w - 2,
+            self._btn_h - 2,
+        )
+        p.drawRoundedRect(rect, self._radius, self._radius)
         p.end()
         super().paintEvent(_ev)
 
@@ -71,16 +84,16 @@ _GLOW_COLORS = {
 }
 
 
-class _CenterButton(_CircleButton):
-    """Large center button (56 px circle in 80×80 widget) with glow ring."""
+class _CenterButton(_PillButton):
+    """Rounded-rect center button with glow ring."""
 
     _BURST_DURATION = 0.40  # seconds
     _PULSE_MIN = 3.0
     _PULSE_MAX = 8.0
 
     def __init__(self, parent: QWidget | None = None) -> None:
-        # 56 px circle, 12 px padding on each side → 80×80 widget
-        super().__init__(diameter=56, padding=12, parent=parent)
+        # 100×46 pill, 10 px padding → 120×66 widget
+        super().__init__(btn_width=100, btn_height=46, padding=10, parent=parent)
         self._glow_color = QColor(_GLOW_COLORS["idle"])
 
         # Burst state
@@ -135,57 +148,56 @@ class _CenterButton(_CircleButton):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
 
-        w = self.width()
-        h = self.height()
-        cx, cy = w / 2.0, h / 2.0
-        r_button = self._diameter / 2.0
+        half_h = self._btn_h / 2.0
 
         now = time.monotonic()
 
         # -- glow ring (pulse or burst) -------------------------------------
-        ring_radius: float | None = None
-        ring_alpha = 0.0
+        glow_spread: float | None = None
+        glow_alpha = 0.0
 
         if self._burst_start is not None:
             elapsed = now - self._burst_start
             t = min(elapsed / self._BURST_DURATION, 1.0)
-            ring_radius = r_button + t * 14.0
-            ring_alpha = 0.35 * (1.0 - t)
+            glow_spread = t * 14.0
+            glow_alpha = 0.35 * (1.0 - t)
 
         elif self._pulsing:
             elapsed = now - self._pulse_t0
             phase = math.sin(elapsed * 3.0)  # ~0.33 Hz oscillation
-            ring_radius = (
-                r_button
-                + self._PULSE_MIN
-                + (self._PULSE_MAX - self._PULSE_MIN) * (phase * 0.5 + 0.5)
+            glow_spread = self._PULSE_MIN + (self._PULSE_MAX - self._PULSE_MIN) * (
+                phase * 0.5 + 0.5
             )
-            ring_alpha = 0.10 + 0.08 * (phase * 0.5 + 0.5)
+            glow_alpha = 0.10 + 0.08 * (phase * 0.5 + 0.5)
 
-        if ring_radius is not None and ring_alpha > 0.005:
+        if glow_spread is not None and glow_alpha > 0.005:
             gc = QColor(self._glow_color)
-            grad = QRadialGradient(cx, cy, ring_radius + 4)
-            grad.setColorAt(0.0, QColor(gc.red(), gc.green(), gc.blue(), 0))
-            inner_stop = max(0.0, (r_button - 2) / (ring_radius + 4))
-            grad.setColorAt(inner_stop, QColor(gc.red(), gc.green(), gc.blue(), 0))
-            mid_stop = min(1.0, ring_radius / (ring_radius + 4))
-            grad.setColorAt(
-                mid_stop,
-                QColor(gc.red(), gc.green(), gc.blue(), int(255 * ring_alpha)),
+            # Draw glow as a larger rounded rect behind the button
+            glow_rect = QRectF(
+                self._padding - glow_spread,
+                self._padding - glow_spread,
+                self._btn_w + glow_spread * 2,
+                self._btn_h + glow_spread * 2,
             )
-            grad.setColorAt(1.0, QColor(gc.red(), gc.green(), gc.blue(), 0))
+            glow_radius = half_h + glow_spread
+            glow_color = QColor(gc.red(), gc.green(), gc.blue(), int(255 * glow_alpha))
+            # Use a clipped path to create a ring (outer minus inner)
+            outer = QPainterPath()
+            outer.addRoundedRect(glow_rect, glow_radius, glow_radius)
+            inner = QPainterPath()
+            inner.addRoundedRect(
+                QRectF(self._padding + 1, self._padding + 1, self._btn_w - 2, self._btn_h - 2),
+                self._radius,
+                self._radius,
+            )
+            ring = outer - inner
             p.setPen(Qt.NoPen)
-            p.setBrush(grad)
-            p.drawEllipse(
-                int(cx - ring_radius - 4),
-                int(cy - ring_radius - 4),
-                int((ring_radius + 4) * 2),
-                int((ring_radius + 4) * 2),
-            )
+            p.setBrush(glow_color)
+            p.drawPath(ring)
 
         p.end()
 
-        # Draw the filled circle + icon via parent
+        # Draw the filled pill + icon via parent
         super().paintEvent(ev)
 
 
