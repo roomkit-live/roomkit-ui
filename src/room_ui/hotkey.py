@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import sys
+from typing import Any
 
 from PySide6.QtCore import QMetaObject, QObject, Qt, QTimer, Signal, Slot
 
@@ -51,8 +52,8 @@ class HotkeyListener(QObject):
     ) -> None:
         super().__init__(parent)
         self._hotkey = hotkey
-        self._listener = None
-        self._monitor = None  # NSEvent global monitor
+        self._listener: Any = None
+        self._monitor: Any = None  # NSEvent global monitor
 
     def start(self) -> None:
         if self._listener is not None or self._monitor is not None:
@@ -154,7 +155,7 @@ class HotkeyListener(QObject):
             # should match both ctrl_l and ctrl_r).
             # AltGr on many Linux keyboards reports as ISO_Level3_Shift
             # (vk 65027) instead of pynput's Key.alt_gr (vk 65406).
-            variants = {
+            variants: dict[Key | KeyCode, set[Key | KeyCode]] = {
                 Key.ctrl: {Key.ctrl, Key.ctrl_l, Key.ctrl_r},
                 Key.shift: {Key.shift, Key.shift_l, Key.shift_r},
                 Key.alt: {Key.alt, Key.alt_l, Key.alt_r, Key.alt_gr, KeyCode.from_vk(65027)},

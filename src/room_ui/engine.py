@@ -4,84 +4,18 @@ from __future__ import annotations
 
 import asyncio
 import collections
-import datetime
 import json
 import logging
-import os
-import resource
 from typing import Any
 
 from PySide6.QtCore import QObject, QTimer, Signal
 
+from room_ui.builtin_tools import BUILTIN_TOOLS, handle_builtin_tool
+from room_ui.cleanup import cleanup_stale_fds, post_cleanup_monitor
+from room_ui.hooks import register_audio_hooks, register_vc_hooks
 from room_ui.mcp_manager import MCPManager
 
 logger = logging.getLogger(__name__)
-
-# ---------------------------------------------------------------------------
-# Built-in tools (always available)
-# ---------------------------------------------------------------------------
-
-_BUILTIN_TOOLS = [
-    {
-        "type": "function",
-        "name": "get_current_date",
-        "description": "Get today's date and day of the week.",
-        "parameters": {"type": "object", "properties": {}},
-    },
-    {
-        "type": "function",
-        "name": "get_current_time",
-        "description": "Get the current local time.",
-        "parameters": {"type": "object", "properties": {}},
-    },
-    {
-        "type": "function",
-        "name": "get_roomkit_info",
-        "description": "Get information about RoomKit and RoomKit UI.",
-        "parameters": {"type": "object", "properties": {}},
-    },
-]
-
-
-def _handle_builtin_tool(name: str) -> str | None:
-    """Handle a built-in tool call. Returns JSON string or None if not built-in."""
-    now = datetime.datetime.now()
-    if name == "get_current_date":
-        return json.dumps(
-            {
-                "date": now.strftime("%Y-%m-%d"),
-                "day": now.strftime("%A"),
-            }
-        )
-    if name == "get_current_time":
-        return json.dumps(
-            {
-                "time": now.strftime("%H:%M:%S"),
-                "timezone": now.astimezone().tzname(),
-            }
-        )
-    if name == "get_roomkit_info":
-        return json.dumps(
-            {
-                "roomkit": (
-                    "RoomKit is an open-source Python framework for building "
-                    "real-time voice AI applications. It provides a high-level API "
-                    "for managing voice sessions with AI providers like Google Gemini "
-                    "and OpenAI Realtime, handling audio input/output, echo cancellation, "
-                    "noise suppression, and tool calling via the Model Context Protocol (MCP). "
-                    "RoomKit is designed to be provider-agnostic and extensible."
-                ),
-                "roomkit_ui": (
-                    "RoomKit UI is a desktop voice assistant built with RoomKit and PySide6 (Qt). "
-                    "It lets you have real-time voice conversations with AI, configure multiple "
-                    "AI providers, connect MCP servers to give the assistant external tools, "
-                    "and includes a system-wide speech-to-text dictation feature. "
-                    "It runs on Linux and macOS."
-                ),
-                "website": "https://www.roomkit.live",
-            }
-        )
-    return None
 
 
 # ---------------------------------------------------------------------------
@@ -205,7 +139,7 @@ class Engine(QObject):
             pass
 
         # Try built-in tools first
-        builtin_result = _handle_builtin_tool(name)
+        builtin_result = handle_builtin_tool(name)
         if builtin_result is not None:
             return builtin_result
 
@@ -215,7 +149,7 @@ class Engine(QObject):
         # MCP/anyio can leak orphaned timer callbacks under qasync when a
         # tool call fails or the server crashes.  Run a lightweight cleanup
         # after every MCP call to prevent 100% CPU spin loops.
-        self._cleanup_stale_fds()
+        cleanup_stale_fds()
         return result
 
     # -- lifecycle -----------------------------------------------------------
@@ -337,17 +271,17 @@ class Engine(QObject):
                     system_prompt,
                     voice,
                     sample_rate,
-                    list(_BUILTIN_TOOLS),
+                    list(BUILTIN_TOOLS),
                     tool_handler,
                 )
                 if self._session is not None:
                     self.mcp_status.emit("MCP tools disabled — incompatible with this provider")
-                    tools = list(_BUILTIN_TOOLS)
+                    tools = list(BUILTIN_TOOLS)
 
             if self._session is None:
                 raise RuntimeError("Failed to start voice session")
 
-            self._register_audio_hooks(self._kit)
+            register_audio_hooks(self._kit, self)
 
             self._spk_rms_queue.clear()
             self._spk_timer.start()
@@ -540,7 +474,7 @@ class Engine(QObject):
             )
 
             # 11. Register hooks for UI callbacks
-            self._register_vc_hooks(kit)
+            register_vc_hooks(kit, self)
 
             # 12. Connect and start
             session = await backend.connect("local-demo", "local-user", "voice")
@@ -639,7 +573,7 @@ class Engine(QObject):
         except (json.JSONDecodeError, TypeError):
             pass
 
-        tools: list[dict] = list(_BUILTIN_TOOLS)
+        tools: list[dict] = list(BUILTIN_TOOLS)
 
         if mcp_servers:
             self._mcp = MCPManager(mcp_servers)
@@ -655,7 +589,7 @@ class Engine(QObject):
                 names = ", ".join(t["name"] for t in discovered)
                 logger.info("MCP tools: %s", names)
 
-        has_mcp_tools = len(tools) > len(_BUILTIN_TOOLS)
+        has_mcp_tools = len(tools) > len(BUILTIN_TOOLS)
         return tools, has_mcp_tools
 
     def _build_ai_provider(self, settings: dict, provider_name: str) -> Any:
@@ -699,85 +633,6 @@ class Engine(QObject):
                     model=settings.get("vc_gemini_model", "gemini-2.0-flash"),
                 )
             )
-
-    def _register_audio_hooks(self, kit: Any) -> None:
-        """Register ON_INPUT/OUTPUT_AUDIO_LEVEL hooks — shared by both modes."""
-        from roomkit.models.enums import HookExecution, HookTrigger
-
-        @kit.hook(HookTrigger.ON_INPUT_AUDIO_LEVEL, HookExecution.ASYNC)
-        async def _on_input_level(event, context):
-            try:
-                db = getattr(event, "level_db", -60.0)
-                level = max(0.0, min(1.0, (db + 60.0) / 60.0))
-                if self._mic_muted:
-                    level = 0.0
-                self.mic_audio_level.emit(level)
-            except Exception:
-                pass
-
-        @kit.hook(HookTrigger.ON_OUTPUT_AUDIO_LEVEL, HookExecution.ASYNC)
-        async def _on_output_level(event, context):
-            try:
-                db = getattr(event, "level_db", -60.0)
-                level = max(0.0, min(1.0, (db + 60.0) / 60.0))
-                self._spk_rms_queue.append(level)
-            except Exception:
-                pass
-
-    def _register_vc_hooks(self, kit: Any) -> None:
-        """Register framework hooks for VoiceChannel UI callbacks."""
-        from roomkit.models.enums import HookExecution, HookTrigger
-
-        self._register_audio_hooks(kit)
-
-        @kit.hook(HookTrigger.ON_TRANSCRIPTION, HookExecution.SYNC)
-        async def _on_user_transcription(text, context):
-            from roomkit import HookResult
-
-            try:
-                self.transcription.emit(str(text), "user", True)
-            except Exception:
-                pass
-            return HookResult.allow()
-
-        @kit.hook(HookTrigger.ON_PARTIAL_TRANSCRIPTION, HookExecution.ASYNC)
-        async def _on_partial_transcription(event, context):
-            try:
-                self.transcription.emit(str(event.text), "user", False)
-            except Exception:
-                pass
-
-        @kit.hook(HookTrigger.ON_SPEECH_START, HookExecution.ASYNC)
-        async def _on_speech_start(event, context):
-            try:
-                self.user_speaking.emit(True)
-            except Exception:
-                pass
-
-        @kit.hook(HookTrigger.ON_SPEECH_END, HookExecution.ASYNC)
-        async def _on_speech_end(event, context):
-            try:
-                self.user_speaking.emit(False)
-            except Exception:
-                pass
-
-        @kit.hook(HookTrigger.BEFORE_TTS, HookExecution.SYNC)
-        async def _on_ai_response(text, context):
-            from roomkit import HookResult
-
-            try:
-                self.transcription.emit(str(text), "assistant", True)
-                self.ai_speaking.emit(True)
-            except Exception:
-                pass
-            return HookResult.allow()
-
-        @kit.hook(HookTrigger.AFTER_TTS, HookExecution.ASYNC)
-        async def _on_tts_done(text, context):
-            try:
-                self.ai_speaking.emit(False)
-            except Exception:
-                pass
 
     async def _start_session(
         self,
@@ -880,210 +735,10 @@ class Engine(QObject):
         self._backend = None
         self._mcp = None
         # Clean up stale event-loop state left by MCP/anyio.
-        self._cleanup_stale_fds()
+        cleanup_stale_fds()
         # The orphaned anyio timers may only appear after the current
         # event-loop iteration completes (they re-create themselves via
         # call_soon).  Schedule a second pass to catch them.
-        asyncio.get_event_loop().call_soon(self._cleanup_stale_fds)
+        asyncio.get_event_loop().call_soon(cleanup_stale_fds)
         # Monitor CPU after cleanup to verify the fix worked
-        asyncio.ensure_future(self._post_cleanup_monitor())
-
-    @staticmethod
-    def _cleanup_stale_fds() -> None:
-        """Purge all qasync event-loop state that MCP/anyio may have leaked.
-
-        qasync has TWO notifier layers that can hold stale FDs:
-        1. _QEventLoop._read_notifiers / _write_notifiers  (from _add_reader)
-        2. _Selector.__read_notifiers / __write_notifiers   (from register)
-        Layer 2 is especially dangerous because its notifier callbacks do NOT
-        disable the notifier before invoking the callback, causing a tight
-        busy-loop if the FD is always-ready.
-
-        We also purge cancelled timer callbacks and stale asyncio handles.
-        """
-        loop = asyncio.get_event_loop()
-        self_pipe_fd = getattr(getattr(loop, "_ssock", None), "fileno", lambda: -1)()
-
-        removed = 0
-
-        # --- Layer 1: _QEventLoop notifiers (_add_reader / _add_writer) ---
-        for attr in ("_read_notifiers", "_write_notifiers"):
-            notifiers: dict | None = getattr(loop, attr, None)
-            if not notifiers:
-                continue
-            for fd in list(notifiers):
-                if fd == self_pipe_fd:
-                    continue
-                try:
-                    target = os.readlink(f"/proc/self/fd/{fd}")
-                except OSError:
-                    target = "?"
-                logger.warning("cleanup L1: removing %s FD %d → %s", attr, fd, target)
-                notifier = notifiers.pop(fd, None)
-                if notifier is not None:
-                    notifier.setEnabled(False)
-                removed += 1
-
-        # --- Layer 2: _Selector notifiers (register / unregister) ---------
-        selector = getattr(loop, "_selector", None)
-        if selector is not None:
-            fd_to_key: dict = getattr(selector, "_fd_to_key", {})
-            for mangled in (
-                "_Selector__read_notifiers",
-                "_Selector__write_notifiers",
-            ):
-                sel_notifiers: dict | None = getattr(selector, mangled, None)
-                if not sel_notifiers:
-                    continue
-                for fd in list(sel_notifiers):
-                    if fd == self_pipe_fd:
-                        continue
-                    logger.warning("cleanup L2: removing %s FD %d", mangled, fd)
-                    notifier = sel_notifiers.pop(fd, None)
-                    if notifier is not None:
-                        notifier.setEnabled(False)
-                    removed += 1
-            # Clean corresponding selector keys (skip self-pipe)
-            for fd in list(fd_to_key):
-                if fd == self_pipe_fd:
-                    continue
-                logger.warning("cleanup L2: removing selector key FD %d", fd)
-                del fd_to_key[fd]
-                removed += 1
-
-        # --- Layer 3: orphaned timer callbacks in _SimpleTimer -------------
-        # After MCP/anyio cleanup, two non-cancelled callbacks can get stuck
-        # in an infinite 0 ms timer loop:
-        #   - CancelScope._deliver_cancellation()  (anyio cancel retry)
-        #   - Task.task_wakeup()  (waking an orphaned task)
-        # We kill cancelled timers AND these orphaned active ones.
-        timer = getattr(loop, "_timer", None)
-        if timer is not None:
-            cbs: dict = getattr(timer, "_SimpleTimer__callbacks", {})
-            live_tasks = asyncio.all_tasks(loop)
-            kill_tids: list[int] = []
-            for tid, handle in list(cbs.items()):
-                if getattr(handle, "_cancelled", False):
-                    kill_tids.append(tid)
-                    continue
-                # Inspect the callback to detect orphaned anyio/task handles
-                cb = getattr(handle, "_callback", None)
-                cb_self = getattr(cb, "__self__", None)
-                if cb_self is None:
-                    continue
-                # anyio CancelScope stuck in a cancel-delivery retry loop
-                if type(cb_self).__name__ == "CancelScope":
-                    logger.warning(
-                        "cleanup L3: killing orphaned CancelScope timer %s",
-                        tid,
-                    )
-                    handle.cancel()
-                    kill_tids.append(tid)
-                    continue
-                # Task.task_wakeup for a task no longer tracked by asyncio
-                if isinstance(cb_self, asyncio.Task) and cb_self not in live_tasks:
-                    logger.warning(
-                        "cleanup L3: killing orphaned task timer %s → %s",
-                        tid,
-                        cb_self,
-                    )
-                    handle.cancel()
-                    kill_tids.append(tid)
-            for tid in kill_tids:
-                timer.killTimer(tid)
-                del cbs[tid]
-                removed += 1
-            if kill_tids:
-                logger.info("cleanup L3: killed %d timers", len(kill_tids))
-
-        # --- Layer 4: purge cancelled handles from asyncio _ready queue ---
-        ready = getattr(loop, "_ready", None)
-        if ready is not None:
-            before = len(ready)
-            active = [h for h in ready if not h._cancelled]
-            ready.clear()
-            ready.extend(active)
-            dropped = before - len(active)
-            if dropped:
-                logger.info("cleanup L4: dropped %d cancelled handles", dropped)
-                removed += dropped
-
-        # --- Summary -----------------------------------------------------
-        r_count = len(getattr(loop, "_read_notifiers", {}) or {})
-        w_count = len(getattr(loop, "_write_notifiers", {}) or {})
-        tasks = [t for t in asyncio.all_tasks(loop) if not t.done()]
-        logger.info(
-            "cleanup: removed %d items, %d read + %d write notifiers remain "
-            "(self-pipe=%d), %d live tasks",
-            removed,
-            r_count,
-            w_count,
-            self_pipe_fd,
-            len(tasks),
-        )
-        for t in tasks:
-            logger.info("cleanup: live task: %s", t)
-
-    @staticmethod
-    async def _post_cleanup_monitor() -> None:
-        """Log CPU usage after cleanup to verify the fix worked."""
-        loop = asyncio.get_event_loop()
-        t0 = resource.getrusage(resource.RUSAGE_SELF)
-        for i in range(3):
-            await asyncio.sleep(3)
-            t1 = resource.getrusage(resource.RUSAGE_SELF)
-            cpu = (t1.ru_utime - t0.ru_utime) + (t1.ru_stime - t0.ru_stime)
-            logger.info(
-                "cpu-monitor[%d]: %.2fs CPU in 3s",
-                i,
-                cpu,
-            )
-            if cpu > 1.0:
-                # Dump everything that could be spinning
-                timer = getattr(loop, "_timer", None)
-                if timer is not None:
-                    cbs = getattr(timer, "_SimpleTimer__callbacks", {})
-                    logger.warning("cpu-monitor: %d timer callbacks", len(cbs))
-                    for tid_k, handle in list(cbs.items())[:5]:
-                        logger.warning(
-                            "  timer %s → %s (cancelled=%s)", tid_k, handle, handle._cancelled
-                        )
-
-                ready = getattr(loop, "_ready", None)
-                if ready is not None:
-                    logger.warning("cpu-monitor: %d _ready items", len(ready))
-                    for h in list(ready)[:5]:
-                        logger.warning("  ready → %s (cancelled=%s)", h, h._cancelled)
-
-                # Layer 1 notifiers
-                for attr in ("_read_notifiers", "_write_notifiers"):
-                    notifiers = getattr(loop, attr, {})
-                    for fd, notifier in list(notifiers.items()):
-                        logger.warning(
-                            "  L1 %s FD %d enabled=%s",
-                            attr,
-                            fd,
-                            notifier.isEnabled(),
-                        )
-
-                # Layer 2 notifiers (Selector)
-                selector = getattr(loop, "_selector", None)
-                if selector:
-                    for mangled in ("_Selector__read_notifiers", "_Selector__write_notifiers"):
-                        sel_n = getattr(selector, mangled, {})
-                        for fd, notifier in list(sel_n.items()):
-                            logger.warning(
-                                "  L2 %s FD %d enabled=%s",
-                                mangled,
-                                fd,
-                                notifier.isEnabled(),
-                            )
-                    fd_to_key = getattr(selector, "_fd_to_key", {})
-                    if fd_to_key:
-                        logger.warning("  L2 _fd_to_key: %s", list(fd_to_key.keys()))
-
-                tasks = [t for t in asyncio.all_tasks(loop) if not t.done()]
-                logger.warning("cpu-monitor: %d live tasks", len(tasks))
-                for t in tasks:
-                    logger.warning("  task: %s", t)
-            t0 = t1
+        asyncio.ensure_future(post_cleanup_monitor())
