@@ -56,8 +56,8 @@ _DEFAULTS = {
     "gradium_stt_model": "",  # STT model variant (empty = "default")
     "gradium_stt_delay": "",  # delay_in_frames: 7,8,10,12,14,16,20,24,36,48
     "gradium_stt_temperature": "",  # STT text temperature 0..1 (empty = 0)
-    "gradium_vad_threshold": "",  # VAD turn threshold 0-1 (empty = 0.5)
-    "gradium_vad_steps": "",  # Consecutive VAD steps (empty = 6)
+    "gradium_vad_threshold": "",  # VAD inactivity_prob threshold 0-1 (empty = 0.9)
+    "gradium_vad_steps": "",  # Consecutive steps above threshold (empty = 10, ×80ms)
     "gradium_tts_model": "",  # TTS model variant (empty = "default")
     "gradium_speed": "",  # padding_bonus: -4.0..4.0 (empty = default)
     "gradium_temperature": "",  # TTS temperature 0..1.4 (empty = 0.7)

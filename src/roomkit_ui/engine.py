@@ -558,13 +558,13 @@ class Engine(QObject):
                 vad_thresh = settings.get("gradium_vad_threshold", "")
                 if vad_thresh:
                     try:
-                        stt_kwargs["vad_turn_threshold"] = float(vad_thresh)
+                        stt_kwargs["vad_threshold"] = float(vad_thresh)
                     except (ValueError, TypeError):
                         pass
                 vad_steps = settings.get("gradium_vad_steps", "")
                 if vad_steps:
                     try:
-                        stt_kwargs["vad_turn_steps"] = int(vad_steps)
+                        stt_kwargs["vad_steps"] = int(vad_steps)
                     except (ValueError, TypeError):
                         pass
                 # json_config for STT temperature
@@ -606,6 +606,10 @@ class Engine(QObject):
                 )
                 stt = SherpaOnnxSTTProvider(local_stt_config)
                 logger.info("STT: model=%s, language=%s", stt_model_id, stt_language)
+
+            if hasattr(stt, "warmup"):
+                self.loading_status.emit("Warming up STT model\u2026")
+                await stt.warmup()
 
             # 2. Build TTS
             self.loading_status.emit("Loading TTS model\u2026")

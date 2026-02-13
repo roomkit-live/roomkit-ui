@@ -596,11 +596,11 @@ class _AIPage(QWidget):
         self.gradium_vad_threshold = QLineEdit(
             str(settings.get("gradium_vad_threshold", "") or "")
         )
-        self.gradium_vad_threshold.setPlaceholderText("0.5 (0 \u2013 1)")
+        self.gradium_vad_threshold.setPlaceholderText("0.9 (0 \u2013 1)")
         gadv_form.addRow("VAD Threshold", self.gradium_vad_threshold)
 
         self.gradium_vad_steps = QLineEdit(str(settings.get("gradium_vad_steps", "") or ""))
-        self.gradium_vad_steps.setPlaceholderText("6 (steps \u00d7 80ms)")
+        self.gradium_vad_steps.setPlaceholderText("10 (steps \u00d7 80ms = 800ms)")
         gadv_form.addRow("VAD Steps", self.gradium_vad_steps)
 
         # -- TTS --
