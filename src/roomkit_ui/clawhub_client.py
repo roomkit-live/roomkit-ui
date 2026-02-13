@@ -15,7 +15,7 @@ from roomkit_ui.skill_manager import get_clawhub_dir
 
 logger = logging.getLogger(__name__)
 
-BASE_URL = "https://clawhub.ai/api/v1"
+BASE_URL = "https://wry-manatee-359.convex.site/api/v1"
 _TIMEOUT = 30.0
 
 
@@ -61,16 +61,19 @@ class ClawHubClient:
         next_cursor = data.get("next_cursor") or data.get("next") or None
         return items, next_cursor
 
-    async def download_skill(self, slug: str, version: str = "latest") -> Path:
+    async def download_skill(self, slug: str, version: str | None = None) -> Path:
         """Download and extract a skill ZIP into the ClawHub skills directory.
 
         Returns the extracted directory path.
         """
         dest = get_clawhub_dir() / slug
+        params: dict[str, str] = {"slug": slug}
+        if version:
+            params["version"] = version
         async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
             resp = await client.get(
                 f"{self._base_url}/download",
-                params={"slug": slug, "version": version},
+                params=params,
             )
             resp.raise_for_status()
             content = resp.content
@@ -98,8 +101,8 @@ class ClawHubClient:
     @staticmethod
     def _parse_item(item: dict) -> ClawHubSkillInfo:
         return ClawHubSkillInfo(
-            slug=item.get("slug", item.get("name", "")),
-            display_name=item.get("display_name", item.get("name", "")),
+            slug=item.get("slug") or item.get("name") or "",
+            display_name=item.get("display_name") or item.get("name") or item.get("slug") or "",
             summary=item.get("summary") or item.get("description"),
             version=item.get("version"),
             downloads=int(item.get("downloads", 0)),

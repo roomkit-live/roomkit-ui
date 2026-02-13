@@ -180,11 +180,51 @@ def discover_all_skills(
     Returns a list of ``(SkillMetadata, skill_path, source_label)`` tuples.
     Invalid skills are logged and skipped.
     """
-    from roomkit.skills.parser import parse_skill_metadata
+    from roomkit.skills.parser import (
+        SkillMetadata,
+        find_skill_md,
+        parse_frontmatter,
+        parse_skill_metadata,
+    )
+
+    def _lenient_parse(skill_dir: Path) -> SkillMetadata | None:
+        """Parse frontmatter without enforcing name-vs-directory match.
+
+        Useful for ClawHub-installed skills where the directory name is
+        the marketplace slug rather than the skill name.
+        """
+        md_path = find_skill_md(skill_dir)
+        if md_path is None:
+            return None
+        content = md_path.read_text(encoding="utf-8")
+        data, _ = parse_frontmatter(content)
+        name = data.get("name", "")
+        desc = data.get("description", "")
+        if not name or not desc:
+            return None
+        _known = {"name", "description", "license", "compatibility", "allowed_tools"}
+        extra = {k: v for k, v in data.items() if k not in _known}
+        return SkillMetadata(
+            name=name,
+            description=desc,
+            license=data.get("license"),
+            compatibility=data.get("compatibility"),
+            allowed_tools=data.get("allowed_tools"),
+            extra_metadata=extra,
+        )
 
     results: list[tuple[object, Path, str]] = []
     for source in sources:
-        label = source.get("label", source.get("url", source.get("path", "unknown")))
+        src_type = source.get("type", "")
+        raw_label = source.get("label", source.get("url", source.get("path", "unknown")))
+        if src_type == "clawhub":
+            label = "ClawHub"
+        elif src_type == "git":
+            label = f"git \u00b7 {raw_label}"
+        elif src_type == "local":
+            label = f"local \u00b7 {raw_label}"
+        else:
+            label = raw_label
         root = _resolve_source_path(source)
         if root is None:
             continue
@@ -192,8 +232,11 @@ def discover_all_skills(
             try:
                 meta = parse_skill_metadata(skill_dir)
             except Exception:
-                logger.debug("Skipping invalid skill in %s", skill_dir, exc_info=True)
-                continue
+                # Strict parse failed — try lenient (e.g. ClawHub slug mismatch)
+                meta = _lenient_parse(skill_dir)
+                if meta is None:
+                    logger.debug("Skipping invalid skill in %s", skill_dir, exc_info=True)
+                    continue
             results.append((meta, skill_dir, label))
     return results
 

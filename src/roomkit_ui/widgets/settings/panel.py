@@ -23,7 +23,7 @@ from roomkit_ui.widgets.settings.dictation_page import _DictationPage
 from roomkit_ui.widgets.settings.general_page import _GeneralPage
 from roomkit_ui.widgets.settings.mcp_page import _MCPPage
 from roomkit_ui.widgets.settings.models_page import _ModelsPage
-from roomkit_ui.widgets.settings.skills_page import _SkillsPage
+from roomkit_ui.widgets.settings.skills import _SkillsPage
 
 
 class SettingsPanel(QDialog):
