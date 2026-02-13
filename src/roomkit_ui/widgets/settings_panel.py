@@ -1809,7 +1809,7 @@ class _MCPPage(QWidget):
             "env": "",
             "auth": "none",
             "oauth_client_id": "",
-            "oauth_client_secret": "",
+            "oauth_client_secret": "",  # nosec B105 — empty default, not a real secret
             "oauth_scopes": "",
         }
         self._servers.append(srv)
