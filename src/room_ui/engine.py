@@ -37,6 +37,7 @@ class Engine(QObject):
     tool_use_app = Signal(str, str, str, str)  # name, args_json, resource_uri, server_name
     tool_result_app = Signal(str, str)  # name, result_json
     mcp_status = Signal(str)  # status message
+    loading_status = Signal(str)  # loading progress message
     session_info = Signal(dict)  # {provider, model, tools, failed_servers}
 
     def __init__(self, parent: QObject | None = None) -> None:
@@ -47,6 +48,7 @@ class Engine(QObject):
         self._session: Any = None
         self._transport: Any = None
         self._backend: Any = None  # LocalAudioBackend for voice channel mode
+        self._tts: Any = None
         self._mcp: MCPManager | None = None
         self._mic_muted = False
         self._state = "idle"
@@ -293,12 +295,22 @@ class Engine(QObject):
             self._register_callbacks(provider, transport)
 
             # -- MCP tools -------------------------------------------------------
+            mcp_servers_configured = False
+            try:
+                mcp_servers_configured = any(
+                    s.get("enabled", True) for s in json.loads(settings.get("mcp_servers", "[]"))
+                )
+            except (json.JSONDecodeError, TypeError):
+                pass
+            if mcp_servers_configured:
+                self.loading_status.emit("Connecting MCP servers\u2026")
             tools, has_mcp_tools = await self._setup_mcp_tools(settings)
             tool_handler = self._handle_tool_call
 
             all_names = ", ".join(t["name"] for t in tools)
             logger.info("Tools: %s", all_names)
 
+            self.loading_status.emit("Connecting to provider\u2026")
             self._session = await self._start_session(
                 RoomKit,
                 RealtimeVoiceChannel,
@@ -371,9 +383,8 @@ class Engine(QObject):
             from roomkit.voice.backends.local import LocalAudioBackend
             from roomkit.voice.pipeline.config import AudioPipelineConfig
             from roomkit.voice.stt.sherpa_onnx import SherpaOnnxSTTProvider
-            from roomkit.voice.tts.sherpa_onnx import SherpaOnnxTTSProvider
 
-            from room_ui.model_manager import build_stt_config, build_tts_config
+            from room_ui.model_manager import build_stt_config
 
             system_prompt = settings.get(
                 "system_prompt",
@@ -384,6 +395,7 @@ class Engine(QObject):
             denoise_mode = settings.get("denoise", "none")
 
             # 1. Build STT
+            self.loading_status.emit("Loading STT model\u2026")
             stt_model_id = settings.get("vc_stt_model", "")
             if not stt_model_id:
                 raise ValueError(
@@ -401,14 +413,17 @@ class Engine(QObject):
             logger.info("STT: model=%s, language=%s", stt_model_id, stt_language)
 
             # 2. Build TTS
-            tts_model_id = settings.get("vc_tts_model", "")
-            if not tts_model_id:
-                raise ValueError(
-                    "No TTS model selected. Download one in AI Models and select it in Settings."
-                )
-            tts_config = build_tts_config(tts_model_id, provider=inference_device)
-            tts = SherpaOnnxTTSProvider(tts_config)
-            logger.info("TTS: model=%s, sample_rate=%d", tts_model_id, tts_config.sample_rate)
+            self.loading_status.emit("Loading TTS model\u2026")
+            tts, output_sample_rate = self._build_tts_provider(settings)
+            self._tts = tts
+            if hasattr(tts, "warmup"):
+                self.loading_status.emit("Warming up TTS model\u2026")
+                await tts.warmup()
+            logger.info(
+                "TTS: provider=%s, sample_rate=%d",
+                settings.get("vc_tts_provider", "piper"),
+                output_sample_rate,
+            )
 
             # 3. Build AI provider
             llm_provider_name = settings.get("vc_llm_provider", "anthropic")
@@ -417,7 +432,6 @@ class Engine(QObject):
 
             # 4. Audio processing
             input_sample_rate = 16000
-            output_sample_rate = tts_config.sample_rate
             block_ms = 20
             frame_size = input_sample_rate * block_ms // 1000
 
@@ -504,6 +518,15 @@ class Engine(QObject):
             self._ai_channel = ai_channel
 
             # 9. MCP tools
+            mcp_servers_configured = False
+            try:
+                mcp_servers_configured = any(
+                    s.get("enabled", True) for s in json.loads(settings.get("mcp_servers", "[]"))
+                )
+            except (json.JSONDecodeError, TypeError):
+                pass
+            if mcp_servers_configured:
+                self.loading_status.emit("Connecting MCP servers\u2026")
             tools, _has_mcp = await self._setup_mcp_tools(settings)
 
             # 10. Wire up framework
@@ -527,6 +550,7 @@ class Engine(QObject):
             register_vc_hooks(kit, self)
 
             # 12. Connect and start
+            self.loading_status.emit("Starting voice channel\u2026")
             session = await backend.connect("local-demo", "local-user", "voice")
             self._session = session
             voice.bind_session(session, "local-demo", voice_binding)
@@ -684,6 +708,64 @@ class Engine(QObject):
                 )
             )
 
+    def _build_tts_provider(self, settings: dict) -> tuple[Any, int]:
+        """Create a TTS provider for voice channel mode. Returns (provider, sample_rate)."""
+        provider_name = settings.get("vc_tts_provider", "piper")
+        inference_device = settings.get("inference_device", "cpu")
+
+        if provider_name == "qwen3":
+            from roomkit.voice.tts.qwen3 import Qwen3TTSConfig, Qwen3TTSProvider, VoiceCloneConfig
+
+            ref_audio, ref_text = self._require_ref_audio(settings, "Qwen3-TTS")
+            tts = Qwen3TTSProvider(
+                Qwen3TTSConfig(
+                    voices={
+                        "default": VoiceCloneConfig(
+                            ref_audio=ref_audio,
+                            ref_text=ref_text,
+                        )
+                    },
+                )
+            )
+            return tts, 24000
+
+        if provider_name == "neutts":
+            from roomkit.voice.tts.neutts import NeuTTSConfig, NeuTTSProvider, NeuTTSVoiceConfig
+
+            ref_audio, ref_text = self._require_ref_audio(settings, "NeuTTS")
+            tts = NeuTTSProvider(
+                NeuTTSConfig(
+                    voices={
+                        "default": NeuTTSVoiceConfig(
+                            ref_audio=ref_audio,
+                            ref_text=ref_text,
+                        )
+                    },
+                )
+            )
+            return tts, 24000
+
+        # piper (default)
+        from roomkit.voice.tts.sherpa_onnx import SherpaOnnxTTSProvider
+
+        from room_ui.model_manager import build_tts_config
+
+        tts_model_id = settings.get("vc_tts_model", "")
+        if not tts_model_id:
+            raise ValueError(
+                "No TTS model selected. Download one in AI Models and select it in Settings."
+            )
+        config = build_tts_config(tts_model_id, provider=inference_device)
+        return SherpaOnnxTTSProvider(config), config.sample_rate
+
+    @staticmethod
+    def _require_ref_audio(settings: dict, label: str) -> tuple[str, str]:
+        ref_audio = settings.get("vc_tts_ref_audio", "")
+        ref_text = settings.get("vc_tts_ref_text", "")
+        if not ref_audio or not ref_text:
+            raise ValueError(f"{label} requires a reference WAV and its transcript in Settings.")
+        return ref_audio, ref_text
+
     async def _start_session(
         self,
         RoomKit: type,  # noqa: N803
@@ -758,6 +840,11 @@ class Engine(QObject):
                 logger.info("cleanup: voice session ended")
             except Exception:
                 logger.exception("cleanup: end_session failed")
+        if self._tts is not None and hasattr(self._tts, "close"):
+            try:
+                await self._tts.close()
+            except Exception:
+                logger.exception("cleanup: tts.close() failed")
         if self._backend:
             try:
                 await self._backend.close()
@@ -783,6 +870,7 @@ class Engine(QObject):
         self._kit = None
         self._transport = None
         self._backend = None
+        self._tts = None
         self._mcp = None
         # Clean up stale event-loop state left by MCP/anyio.
         cleanup_stale_fds()

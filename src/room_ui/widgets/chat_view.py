@@ -37,6 +37,7 @@ class ChatView(QScrollArea):
         self.setWidget(self._container)
 
         self._current_bubble: ChatBubble | None = None
+        self._loading_label: QLabel | None = None
 
         c = colors()
 
@@ -151,6 +152,38 @@ class ChatView(QScrollArea):
 
     def hide_status(self) -> None:
         self._hide_status()
+
+    def set_loading_status(self, message: str) -> None:
+        """Show or update a single loading status label (replaces previous)."""
+        c = colors()
+        if self._loading_label is None:
+            self._loading_label = QLabel()
+            self._loading_label.setWordWrap(True)
+            self._loading_label.setAlignment(Qt.AlignCenter)
+            self._loading_label.setStyleSheet(
+                f"QLabel {{"
+                f"  color: {c['TEXT_SECONDARY']};"
+                f"  font-size: 12px;"
+                f"  background: {c['BG_TERTIARY']};"
+                f"  border: 1px solid {c['SEPARATOR']};"
+                f"  border-radius: 8px;"
+                f"  padding: 8px 16px;"
+                f"  margin: 4px 20px;"
+                f"}}"
+            )
+            idx = self._layout.count() - 2
+            if idx < 0:
+                idx = 0
+            self._layout.insertWidget(idx, self._loading_label)
+        self._loading_label.setText(message)
+        self._scroll_to_bottom()
+
+    def clear_loading_status(self) -> None:
+        """Remove the loading status label if present."""
+        if self._loading_label is not None:
+            self._layout.removeWidget(self._loading_label)
+            self._loading_label.deleteLater()
+            self._loading_label = None
 
     def add_info(self, message: str) -> None:
         """Show a neutral info message in the chat area."""
@@ -271,6 +304,7 @@ class ChatView(QScrollArea):
     def clear(self) -> None:
         """Remove all bubbles and error labels, switch to chat layout."""
         self._empty_state.hide()
+        self._loading_label = None
         # Remove everything from layout
         while self._layout.count():
             item = self._layout.takeAt(0)
@@ -287,6 +321,7 @@ class ChatView(QScrollArea):
     def reset(self) -> None:
         """Clear conversation and show empty state again."""
         self._hide_status()
+        self._loading_label = None
         while self._layout.count():
             item = self._layout.takeAt(0)
             if item is None:

@@ -96,6 +96,7 @@ class MainWindow(QMainWindow):
         self._engine.tool_use_app.connect(self._on_tool_use_app)
         self._engine.tool_result_app.connect(self._on_tool_result_app)
         self._engine.mcp_status.connect(self._on_mcp_status)
+        self._engine.loading_status.connect(self._on_loading_status)
         self._engine.session_info.connect(self._on_session_info)
 
         # MCP App state
@@ -139,9 +140,11 @@ class MainWindow(QMainWindow):
     def _on_state_changed(self, state: str) -> None:
         self._controls.set_state(state)
         if state == "active":
+            self._chat.clear_loading_status()
             self._vu.start()
             self.session_active_changed.emit(True)
         elif state in ("idle", "error"):
+            self._chat.clear_loading_status()
             self._vu.stop()
             self._info_bar.clear_session()
             self._active_app_widgets.clear()
@@ -168,6 +171,9 @@ class MainWindow(QMainWindow):
 
     def _on_mcp_status(self, message: str) -> None:
         self._chat.add_info(message)
+
+    def _on_loading_status(self, message: str) -> None:
+        self._chat.set_loading_status(message)
 
     def _on_tool_use(self, name: str, arguments: str) -> None:
         logger.info("Tool call: %s(%s)", name, arguments[:200])
