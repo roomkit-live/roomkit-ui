@@ -50,6 +50,9 @@ _DEFAULTS = {
     "vc_stt_model": "",
     "vc_vad_model": "",
     "vc_interruption": False,
+    # Agent Skills
+    "skill_sources": "[]",     # JSON array of {type, url/path, label}
+    "enabled_skills": "[]",    # JSON array of skill name strings
 }
 
 

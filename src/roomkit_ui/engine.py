@@ -533,6 +533,29 @@ class Engine(QObject):
             )
             self._channel = voice
 
+            # 7.5. Check if tools are supported (local models may not)
+            skip_tools = llm_provider_name == "local" and not settings.get("vc_local_tools", True)
+
+            # 7.6. Build skill registry from enabled skills
+            skills_registry = None
+            if not skip_tools:
+                try:
+                    from roomkit_ui.skill_manager import build_registry
+
+                    sources = json.loads(settings.get("skill_sources", "[]"))
+                    enabled = json.loads(settings.get("enabled_skills", "[]"))
+                    if sources and enabled:
+                        self.loading_status.emit("Loading skills\u2026")
+                        skills_registry = build_registry(sources, enabled)
+                        if skills_registry.skill_count > 0:
+                            logger.info(
+                                "Skills loaded: %s", ", ".join(skills_registry.skill_names)
+                            )
+                        else:
+                            skills_registry = None
+                except Exception:
+                    logger.exception("Failed to load skills")
+
             # 8. Create AIChannel (with tool handler for MCP + built-in tools)
             async def _vc_tool_handler(name: str, arguments: dict[str, Any]) -> str:
                 return await self._handle_tool_call(None, name, arguments)
@@ -542,11 +565,11 @@ class Engine(QObject):
                 provider=ai_provider,
                 system_prompt=system_prompt,
                 tool_handler=_vc_tool_handler,
+                skills=skills_registry,
             )
             self._ai_channel = ai_channel
 
             # 9. MCP tools (skip when the local model has no tool support)
-            skip_tools = llm_provider_name == "local" and not settings.get("vc_local_tools", True)
             tools: list[dict] = []
             if skip_tools:
                 logger.info("Local model tool support disabled — skipping MCP/tools")
@@ -600,10 +623,17 @@ class Engine(QObject):
             tool_info = [
                 {"name": t.get("name", ""), "description": t.get("description", "")} for t in tools
             ]
+            skill_info: list[dict] = []
+            if skills_registry and skills_registry.skill_count > 0:
+                skill_info = [
+                    {"name": m.name, "description": m.description}
+                    for m in skills_registry.all_metadata()
+                ]
             info: dict = {
                 "provider": llm_provider_name,
                 "model": model,
                 "tools": tool_info,
+                "skills": skill_info,
             }
             if self._mcp and self._mcp.failed_servers:
                 info["failed_servers"] = list(self._mcp.failed_servers)

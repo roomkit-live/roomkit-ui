@@ -110,6 +110,7 @@ class SessionInfoBar(QWidget):
         provider = info.get("provider", "")
         model = info.get("model", "")
         tools: list[dict] = info.get("tools", [])
+        skills: list[dict] = info.get("skills", [])
         failed: list[str] = info.get("failed_servers", [])
 
         # Shorten model name for display
@@ -119,13 +120,16 @@ class SessionInfoBar(QWidget):
 
         provider_display = provider.capitalize()
         n_tools = len(tools)
+        n_skills = len(skills)
         tool_word = "tool" if n_tools == 1 else "tools"
-        self._summary_label.setText(
-            f" {provider_display}  \u2013  {display_model}  \u2013  {n_tools} {tool_word}"
-        )
+        parts = [f"{provider_display}", display_model, f"{n_tools} {tool_word}"]
+        if n_skills:
+            skill_word = "skill" if n_skills == 1 else "skills"
+            parts.append(f"{n_skills} {skill_word}")
+        self._summary_label.setText("  \u2013  ".join(parts))
         self._chevron.setText("\u25be")
 
-        # Build tool detail list
+        # Build detail list
         self._clear_details()
         c = colors()
 
@@ -139,24 +143,14 @@ class SessionInfoBar(QWidget):
             self._detail_layout.addWidget(failed_label)
 
         for tool in tools:
-            name = tool.get("name", "")
-            desc = tool.get("description", "")
-            # Truncate long descriptions
-            if len(desc) > 80:
-                desc = desc[:77] + "..."
-            sec_color = c["TEXT_SECONDARY"]
-            row = QLabel(
-                f"<span style='font-weight:600;'>\u2699 {_esc(name)}</span>"
-                f"  "
-                f"<span style='color:{sec_color};'>{_esc(desc)}</span>"
+            self._add_detail_row(
+                "\u2699", tool.get("name", ""), tool.get("description", ""), c
             )
-            row.setTextFormat(Qt.RichText)
-            row.setWordWrap(True)
-            row.setStyleSheet(
-                f"color: {c['TEXT_PRIMARY']}; font-size: 12px;"
-                f" background: transparent; padding: 1px 0;"
+
+        for skill in skills:
+            self._add_detail_row(
+                "\u2726", skill.get("name", ""), skill.get("description", ""), c
             )
-            self._detail_layout.addWidget(row)
 
         self._detail_layout.addStretch()
 
@@ -165,6 +159,26 @@ class SessionInfoBar(QWidget):
         self._detail_area.hide()
         self.setFixedHeight(_COLLAPSED_HEIGHT)
         self.show()
+
+    def _add_detail_row(
+        self, icon: str, name: str, desc: str, c: dict
+    ) -> None:
+        """Add a single tool/skill row to the detail panel."""
+        if len(desc) > 80:
+            desc = desc[:77] + "..."
+        sec_color = c["TEXT_SECONDARY"]
+        row = QLabel(
+            f"<span style='font-weight:600;'>{icon} {_esc(name)}</span>"
+            f"  "
+            f"<span style='color:{sec_color};'>{_esc(desc)}</span>"
+        )
+        row.setTextFormat(Qt.RichText)
+        row.setWordWrap(True)
+        row.setStyleSheet(
+            f"color: {c['TEXT_PRIMARY']}; font-size: 12px;"
+            f" background: transparent; padding: 1px 0;"
+        )
+        self._detail_layout.addWidget(row)
 
     def clear_session(self) -> None:
         """Hide the bar."""
