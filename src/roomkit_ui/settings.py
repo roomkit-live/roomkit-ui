@@ -36,10 +36,11 @@ _DEFAULTS = {
     "conversation_mode": "realtime",  # "realtime" | "voice_channel"
     "vc_llm_provider": "anthropic",  # "anthropic" | "openai" | "gemini"
     "anthropic_api_key": "",
-    "vc_anthropic_model": "claude-sonnet-4-20250514",
+    "vc_anthropic_model": "claude-sonnet-4-5-20250929",
     "vc_openai_model": "gpt-4o",
     "vc_gemini_model": "gemini-2.0-flash",
-    "vc_tts_provider": "piper",  # "piper" | "qwen3" | "neutts"
+    "vc_stt_provider": "local",  # "local" | "gradium"
+    "vc_tts_provider": "piper",  # "piper" | "qwen3" | "neutts" | "gradium"
     "vc_tts_model": "",
     "vc_tts_ref_audio": "",  # Path to reference WAV for voice cloning
     "vc_tts_ref_text": "",  # Transcript of reference audio
@@ -47,6 +48,21 @@ _DEFAULTS = {
     "vc_local_model": "",
     "vc_local_api_key": "",
     "vc_local_tools": True,
+    "gradium_api_key": "",
+    "gradium_region": "us",
+    "vc_gradium_voice": "",  # Gradium TTS voice ID
+    # Gradium advanced settings
+    "gradium_language": "",  # STT/TTS language: en,fr,de,es,pt (empty = auto)
+    "gradium_stt_model": "",  # STT model variant (empty = "default")
+    "gradium_stt_delay": "",  # delay_in_frames: 7,8,10,12,14,16,20,24,36,48
+    "gradium_stt_temperature": "",  # STT text temperature 0..1 (empty = 0)
+    "gradium_vad_threshold": "",  # VAD turn threshold 0-1 (empty = 0.5)
+    "gradium_vad_steps": "",  # Consecutive VAD steps (empty = 6)
+    "gradium_tts_model": "",  # TTS model variant (empty = "default")
+    "gradium_speed": "",  # padding_bonus: -4.0..4.0 (empty = default)
+    "gradium_temperature": "",  # TTS temperature 0..1.4 (empty = 0.7)
+    "gradium_cfg_coef": "",  # 1.0..4.0 (empty = 2.0)
+    "gradium_rewrite_rules": "",  # "en","fr","de","es","pt" or custom rules
     "vc_stt_model": "",
     "vc_vad_model": "",
     "vc_interruption": False,

@@ -34,6 +34,29 @@ def get_repos_dir() -> Path:
     return d
 
 
+def get_clawhub_dir() -> Path:
+    """Return the directory for ClawHub-installed skills."""
+    d = get_skills_dir() / "clawhub"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def list_clawhub_installed() -> list[str]:
+    """Return slugs of installed ClawHub skills."""
+    d = get_clawhub_dir()
+    if not d.exists():
+        return []
+    return [p.name for p in d.iterdir() if p.is_dir() and (p / "SKILL.md").exists()]
+
+
+def remove_clawhub_skill(slug: str) -> None:
+    """Remove an installed ClawHub skill."""
+    target = get_clawhub_dir() / slug
+    if target.exists():
+        shutil.rmtree(target)
+        logger.info("Removed ClawHub skill %s", slug)
+
+
 # ---------------------------------------------------------------------------
 # Git operations
 # ---------------------------------------------------------------------------
@@ -127,6 +150,9 @@ def _resolve_source_path(source: dict) -> Path | None:
     if src_type == "local":
         p = Path(source.get("path", ""))
         return p if p.is_dir() else None
+    if src_type == "clawhub":
+        d = get_clawhub_dir()
+        return d if d.is_dir() else None
     return None
 
 

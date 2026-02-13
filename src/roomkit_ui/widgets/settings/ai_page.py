@@ -65,14 +65,30 @@ VC_LLM_PROVIDERS = [
     ("Local (vLLM / Ollama)", "local"),
 ]
 
-VC_ANTHROPIC_MODELS = ["claude-sonnet-4-20250514", "claude-haiku-4-5-20251001"]
+VC_ANTHROPIC_MODELS = [
+    ("Opus 4.6", "claude-opus-4-6"),
+    ("Sonnet 4.5", "claude-sonnet-4-5-20250929"),
+    ("Sonnet 4", "claude-sonnet-4-20250514"),
+    ("Haiku 4.5", "claude-haiku-4-5-20251001"),
+]
 VC_OPENAI_MODELS = ["gpt-4o", "gpt-4o-mini"]
 VC_GEMINI_MODELS = ["gemini-2.0-flash", "gemini-2.5-flash"]
+
+VC_STT_PROVIDERS = [
+    ("Local (sherpa-onnx)", "local"),
+    ("Gradium", "gradium"),
+]
+
+GRADIUM_REGIONS = [
+    ("US", "us"),
+    ("EU", "eu"),
+]
 
 VC_TTS_PROVIDERS = [
     ("Piper (sherpa-onnx)", "piper"),
     ("Qwen3-TTS (voice clone)", "qwen3"),
     ("NeuTTS (voice clone)", "neutts"),
+    ("Gradium", "gradium"),
 ]
 
 
@@ -333,14 +349,13 @@ class _AIPage(QWidget):
 
         # Model combos (one per provider, shown/hidden)
         self.vc_anthropic_model = QComboBox()
-        self.vc_anthropic_model.setEditable(True)
-        self.vc_anthropic_model.addItems(VC_ANTHROPIC_MODELS)
-        cur = settings.get("vc_anthropic_model", VC_ANTHROPIC_MODELS[0])
-        aidx = self.vc_anthropic_model.findText(cur)
-        if aidx >= 0:
-            self.vc_anthropic_model.setCurrentIndex(aidx)
-        else:
-            self.vc_anthropic_model.setCurrentText(cur)
+        for label, model_id in VC_ANTHROPIC_MODELS:
+            self.vc_anthropic_model.addItem(label, model_id)
+        cur = settings.get("vc_anthropic_model", VC_ANTHROPIC_MODELS[0][1])
+        for i, (_, mid) in enumerate(VC_ANTHROPIC_MODELS):
+            if mid == cur:
+                self.vc_anthropic_model.setCurrentIndex(i)
+                break
         self._vc_anthropic_model_label = QLabel("Model")
         vc_form.addRow(self._vc_anthropic_model_label, self.vc_anthropic_model)
 
@@ -390,27 +405,59 @@ class _AIPage(QWidget):
         self._vc_local_tools_label = QLabel("")
         vc_form.addRow(self._vc_local_tools_label, self.vc_local_tools)
 
-        # STT model combo
+        # STT provider selector
+        self.vc_stt_provider = QComboBox()
+        for label, _value in VC_STT_PROVIDERS:
+            self.vc_stt_provider.addItem(label)
+        current_stt_prov = settings.get("vc_stt_provider", "local")
+        for i, (_, val) in enumerate(VC_STT_PROVIDERS):
+            if val == current_stt_prov:
+                self.vc_stt_provider.setCurrentIndex(i)
+                break
+        vc_form.addRow("STT Provider", self.vc_stt_provider)
+
+        # STT model combo (local only)
         self.vc_stt_model = QComboBox()
+        self._vc_stt_model_label = QLabel("STT Model")
         self._vc_stt_no_models = QLabel("No STT models downloaded \u2014 go to AI Models tab.")
         self._vc_stt_no_models.setWordWrap(True)
         self._vc_stt_no_models.setStyleSheet(
             f"font-size: 12px; color: {c['TEXT_SECONDARY']};"
             f" font-style: italic; background: transparent;"
         )
-        vc_form.addRow("STT Model", self.vc_stt_model)
+        vc_form.addRow(self._vc_stt_model_label, self.vc_stt_model)
         vc_form.addRow("", self._vc_stt_no_models)
         self._vc_saved_stt = settings.get("vc_stt_model", "")
 
-        # VAD model combo
+        # Gradium API key (shared by STT and TTS)
+        self.gradium_api_key = QLineEdit(settings.get("gradium_api_key", ""))
+        self.gradium_api_key.setEchoMode(QLineEdit.Password)
+        self.gradium_api_key.setPlaceholderText("Enter your Gradium API key")
+        self._gradium_key_label = QLabel("Gradium Key")
+        vc_form.addRow(self._gradium_key_label, self.gradium_api_key)
+
+        # Gradium region
+        self.gradium_region = QComboBox()
+        for label, _val in GRADIUM_REGIONS:
+            self.gradium_region.addItem(label, _val)
+        saved_region = settings.get("gradium_region", "us")
+        for i, (_, val) in enumerate(GRADIUM_REGIONS):
+            if val == saved_region:
+                self.gradium_region.setCurrentIndex(i)
+                break
+        self._gradium_region_label = QLabel("Gradium Region")
+        vc_form.addRow(self._gradium_region_label, self.gradium_region)
+
+        # VAD model combo (local STT only)
         self.vc_vad_model = QComboBox()
+        self._vc_vad_model_label = QLabel("VAD Model")
         self._vc_vad_no_models = QLabel("No VAD models downloaded \u2014 go to AI Models tab.")
         self._vc_vad_no_models.setWordWrap(True)
         self._vc_vad_no_models.setStyleSheet(
             f"font-size: 12px; color: {c['TEXT_SECONDARY']};"
             f" font-style: italic; background: transparent;"
         )
-        vc_form.addRow("VAD Model", self.vc_vad_model)
+        vc_form.addRow(self._vc_vad_model_label, self.vc_vad_model)
         vc_form.addRow("", self._vc_vad_no_models)
         self._vc_saved_vad = settings.get("vc_vad_model", "")
 
@@ -443,6 +490,12 @@ class _AIPage(QWidget):
         vc_form.addRow("", self._vc_tts_no_models)
         self._vc_saved_tts = settings.get("vc_tts_model", "")
 
+        # Gradium voice ID (shown when TTS provider is Gradium)
+        self.vc_gradium_voice = QLineEdit(settings.get("vc_gradium_voice", ""))
+        self.vc_gradium_voice.setPlaceholderText("Voice ID (leave empty for default)")
+        self._vc_gradium_voice_label = QLabel("Gradium Voice")
+        vc_form.addRow(self._vc_gradium_voice_label, self.vc_gradium_voice)
+
         # Reference audio + text (voice clone providers only)
         self.vc_tts_ref_audio = QLineEdit(settings.get("vc_tts_ref_audio", ""))
         self.vc_tts_ref_audio.setPlaceholderText("Path to reference WAV (3-15s of speech)")
@@ -463,6 +516,124 @@ class _AIPage(QWidget):
         vc_form.addRow(self._vc_ref_text_label, self.vc_tts_ref_text)
 
         vc_layout.addLayout(vc_form)
+
+        # ── Gradium Advanced (collapsible) ──
+        self._gradium_adv_toggle = QPushButton("\u25b8 Gradium Advanced")
+        self._gradium_adv_toggle.setFlat(True)
+        self._gradium_adv_toggle.setCursor(Qt.PointingHandCursor)
+        self._gradium_adv_toggle.setStyleSheet(
+            "text-align: left; font-size: 12px; font-weight: 600;"
+            f" color: {c['TEXT_SECONDARY']}; background: transparent; border: none;"
+            " padding: 2px 0;"
+        )
+        self._gradium_adv_toggle.clicked.connect(self._toggle_gradium_advanced)
+        vc_layout.addWidget(self._gradium_adv_toggle)
+
+        self._gradium_adv_container = QWidget()
+        gadv_form = QFormLayout(self._gradium_adv_container)
+        gadv_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        gadv_form.setSpacing(10)
+        gadv_form.setLabelAlignment(Qt.AlignRight)
+
+        # -- STT --
+        stt_label = QLabel("STT")
+        stt_label.setStyleSheet(
+            f"font-size: 11px; font-weight: 600; color: {c['TEXT_SECONDARY']};"
+            " background: transparent;"
+        )
+        gadv_form.addRow("", stt_label)
+
+        self.gradium_stt_model = QLineEdit(settings.get("gradium_stt_model", ""))
+        self.gradium_stt_model.setPlaceholderText("default")
+        gadv_form.addRow("Model", self.gradium_stt_model)
+
+        gradium_lang_options = [
+            ("Auto", ""),
+            ("English", "en"),
+            ("French", "fr"),
+            ("German", "de"),
+            ("Spanish", "es"),
+            ("Portuguese", "pt"),
+        ]
+        self.gradium_language = QComboBox()
+        for label, val in gradium_lang_options:
+            self.gradium_language.addItem(label, val)
+        saved_glang = settings.get("gradium_language", "")
+        for i, (_, val) in enumerate(gradium_lang_options):
+            if val == saved_glang:
+                self.gradium_language.setCurrentIndex(i)
+                break
+        gadv_form.addRow("Language", self.gradium_language)
+
+        self.gradium_stt_delay = QComboBox()
+        delay_options = [
+            ("Auto (7)", ""),
+            ("8", "8"),
+            ("10", "10"),
+            ("12", "12"),
+            ("14", "14"),
+            ("16", "16"),
+            ("20", "20"),
+            ("24", "24"),
+            ("36", "36"),
+            ("48", "48"),
+        ]
+        for label, val in delay_options:
+            self.gradium_stt_delay.addItem(label, val)
+        saved_delay = str(settings.get("gradium_stt_delay", "") or "")
+        for i, (_, val) in enumerate(delay_options):
+            if val == saved_delay:
+                self.gradium_stt_delay.setCurrentIndex(i)
+                break
+        gadv_form.addRow("Delay (frames)", self.gradium_stt_delay)
+
+        self.gradium_stt_temperature = QLineEdit(
+            str(settings.get("gradium_stt_temperature", "") or "")
+        )
+        self.gradium_stt_temperature.setPlaceholderText("0 (0 = greedy \u2026 1 = diverse)")
+        gadv_form.addRow("Temperature", self.gradium_stt_temperature)
+
+        self.gradium_vad_threshold = QLineEdit(
+            str(settings.get("gradium_vad_threshold", "") or "")
+        )
+        self.gradium_vad_threshold.setPlaceholderText("0.5 (0 \u2013 1)")
+        gadv_form.addRow("VAD Threshold", self.gradium_vad_threshold)
+
+        self.gradium_vad_steps = QLineEdit(str(settings.get("gradium_vad_steps", "") or ""))
+        self.gradium_vad_steps.setPlaceholderText("6 (steps \u00d7 80ms)")
+        gadv_form.addRow("VAD Steps", self.gradium_vad_steps)
+
+        # -- TTS --
+        tts_label = QLabel("TTS")
+        tts_label.setStyleSheet(
+            f"font-size: 11px; font-weight: 600; color: {c['TEXT_SECONDARY']};"
+            " background: transparent;"
+        )
+        gadv_form.addRow("", tts_label)
+
+        self.gradium_tts_model = QLineEdit(settings.get("gradium_tts_model", ""))
+        self.gradium_tts_model.setPlaceholderText("default")
+        gadv_form.addRow("Model", self.gradium_tts_model)
+
+        self.gradium_speed = QLineEdit(str(settings.get("gradium_speed", "") or ""))
+        self.gradium_speed.setPlaceholderText("0 (\u22124 faster \u2026 +4 slower)")
+        gadv_form.addRow("Speed", self.gradium_speed)
+
+        self.gradium_temperature = QLineEdit(str(settings.get("gradium_temperature", "") or ""))
+        self.gradium_temperature.setPlaceholderText("0.7 (0 \u2013 1.4)")
+        gadv_form.addRow("Temperature", self.gradium_temperature)
+
+        self.gradium_cfg_coef = QLineEdit(str(settings.get("gradium_cfg_coef", "") or ""))
+        self.gradium_cfg_coef.setPlaceholderText("2.0 (1 \u2013 4)")
+        gadv_form.addRow("Voice Similarity", self.gradium_cfg_coef)
+
+        self.gradium_rewrite_rules = QLineEdit(settings.get("gradium_rewrite_rules", ""))
+        self.gradium_rewrite_rules.setPlaceholderText("en, fr, de, es, pt or custom rules")
+        gadv_form.addRow("Rewrite Rules", self.gradium_rewrite_rules)
+
+        self._gradium_adv_container.hide()
+        vc_layout.addWidget(self._gradium_adv_container)
+
         layout.addWidget(self._vc_section)
 
         # ── System prompt (shared) ──
@@ -512,12 +683,14 @@ class _AIPage(QWidget):
         self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
         self.provider.currentIndexChanged.connect(self._on_provider_changed)
         self.vc_provider.currentIndexChanged.connect(self._on_vc_provider_changed)
+        self.vc_stt_provider.currentIndexChanged.connect(self._on_vc_stt_provider_changed)
         self.vc_tts_provider.currentIndexChanged.connect(self._on_vc_tts_provider_changed)
 
         # Initial state
         self._on_mode_changed(self.mode_combo.currentIndex())
         self._on_provider_changed(self.provider.currentIndex())
         self._on_vc_provider_changed(self.vc_provider.currentIndex())
+        self._on_vc_stt_provider_changed(self.vc_stt_provider.currentIndex())
         self._on_vc_tts_provider_changed(self.vc_tts_provider.currentIndex())
 
     def _on_mode_changed(self, index: int) -> None:
@@ -550,6 +723,12 @@ class _AIPage(QWidget):
         self._gemini_adv_container.setVisible(visible)
         self._gemini_adv_toggle.setText("\u25be Advanced" if visible else "\u25b8 Advanced")
 
+    def _toggle_gradium_advanced(self) -> None:
+        visible = not self._gradium_adv_container.isVisible()
+        self._gradium_adv_container.setVisible(visible)
+        arrow = "\u25be" if visible else "\u25b8"
+        self._gradium_adv_toggle.setText(f"{arrow} Gradium Advanced")
+
     def _on_vc_provider_changed(self, index: int) -> None:
         prov = VC_LLM_PROVIDERS[index][1]
         self._anthropic_key_label.setVisible(prov == "anthropic")
@@ -573,19 +752,52 @@ class _AIPage(QWidget):
         self._vc_local_tools_label.setVisible(prov == "local")
         self.vc_local_tools.setVisible(prov == "local")
 
+    def _on_vc_stt_provider_changed(self, index: int) -> None:
+        prov = VC_STT_PROVIDERS[index][1]
+        is_local = prov == "local"
+        # Local STT model + VAD
+        self._vc_stt_model_label.setVisible(is_local)
+        self.vc_stt_model.setVisible(is_local)
+        self._vc_stt_no_models.setVisible(is_local and self.vc_stt_model.count() == 0)
+        self._vc_vad_model_label.setVisible(is_local)
+        self.vc_vad_model.setVisible(is_local)
+        self._vc_vad_no_models.setVisible(is_local and self.vc_vad_model.count() <= 1)
+        # Gradium shared fields
+        self._update_gradium_fields_visibility()
+
     def _on_vc_tts_provider_changed(self, index: int) -> None:
         prov = VC_TTS_PROVIDERS[index][1]
         is_piper = prov == "piper"
+        is_voice_clone = prov in ("qwen3", "neutts")
+        is_gradium = prov == "gradium"
         # Piper-specific widgets
         self._vc_tts_model_label.setVisible(is_piper)
         self.vc_tts_model.setVisible(is_piper)
         self._vc_tts_no_models.setVisible(is_piper and self.vc_tts_model.count() == 0)
+        # Gradium voice field
+        self._vc_gradium_voice_label.setVisible(is_gradium)
+        self.vc_gradium_voice.setVisible(is_gradium)
         # Voice clone reference fields
-        self._vc_ref_audio_label.setVisible(not is_piper)
-        self.vc_tts_ref_audio.setVisible(not is_piper)
-        self._vc_ref_audio_browse.setVisible(not is_piper)
-        self._vc_ref_text_label.setVisible(not is_piper)
-        self.vc_tts_ref_text.setVisible(not is_piper)
+        self._vc_ref_audio_label.setVisible(is_voice_clone)
+        self.vc_tts_ref_audio.setVisible(is_voice_clone)
+        self._vc_ref_audio_browse.setVisible(is_voice_clone)
+        self._vc_ref_text_label.setVisible(is_voice_clone)
+        self.vc_tts_ref_text.setVisible(is_voice_clone)
+        # Gradium shared fields
+        self._update_gradium_fields_visibility()
+
+    def _update_gradium_fields_visibility(self) -> None:
+        """Show Gradium API key/region/advanced when either STT or TTS uses Gradium."""
+        stt_prov = VC_STT_PROVIDERS[self.vc_stt_provider.currentIndex()][1]
+        tts_prov = VC_TTS_PROVIDERS[self.vc_tts_provider.currentIndex()][1]
+        needs_gradium = stt_prov == "gradium" or tts_prov == "gradium"
+        self._gradium_key_label.setVisible(needs_gradium)
+        self.gradium_api_key.setVisible(needs_gradium)
+        self._gradium_region_label.setVisible(needs_gradium)
+        self.gradium_region.setVisible(needs_gradium)
+        self._gradium_adv_toggle.setVisible(needs_gradium)
+        if not needs_gradium:
+            self._gradium_adv_container.hide()
 
     def _browse_ref_audio(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
@@ -670,7 +882,8 @@ class _AIPage(QWidget):
                 self.vc_tts_model.setCurrentIndex(i)
                 break
         self.vc_tts_model.blockSignals(False)
-        # Re-apply TTS provider visibility (controls model combo vs ref fields)
+        # Re-apply provider visibility (controls model combo vs ref fields)
+        self._on_vc_stt_provider_changed(self.vc_stt_provider.currentIndex())
         self._on_vc_tts_provider_changed(self.vc_tts_provider.currentIndex())
 
     def get_settings(self) -> dict:
@@ -697,10 +910,27 @@ class _AIPage(QWidget):
             "anthropic_api_key": self.anthropic_api_key.text().strip(),
             "_vc_openai_key": self.vc_openai_api_key.text().strip(),
             "_vc_gemini_key": self.vc_gemini_api_key.text().strip(),
-            "vc_anthropic_model": self.vc_anthropic_model.currentText().strip(),
+            "vc_anthropic_model": (
+                self.vc_anthropic_model.currentData() or VC_ANTHROPIC_MODELS[0][1]
+            ),
             "vc_openai_model": self.vc_openai_model.currentText().strip(),
             "vc_gemini_model": self.vc_gemini_model.currentText().strip(),
+            "vc_stt_provider": VC_STT_PROVIDERS[self.vc_stt_provider.currentIndex()][1],
             "vc_stt_model": self.vc_stt_model.currentData() or "",
+            "gradium_api_key": self.gradium_api_key.text().strip(),
+            "gradium_region": self.gradium_region.currentData() or "us",
+            "vc_gradium_voice": self.vc_gradium_voice.text().strip(),
+            "gradium_language": self.gradium_language.currentData() or "",
+            "gradium_stt_model": self.gradium_stt_model.text().strip(),
+            "gradium_stt_delay": self.gradium_stt_delay.currentData() or "",
+            "gradium_stt_temperature": self.gradium_stt_temperature.text().strip(),
+            "gradium_vad_threshold": self.gradium_vad_threshold.text().strip(),
+            "gradium_vad_steps": self.gradium_vad_steps.text().strip(),
+            "gradium_tts_model": self.gradium_tts_model.text().strip(),
+            "gradium_speed": self.gradium_speed.text().strip(),
+            "gradium_temperature": self.gradium_temperature.text().strip(),
+            "gradium_cfg_coef": self.gradium_cfg_coef.text().strip(),
+            "gradium_rewrite_rules": self.gradium_rewrite_rules.text().strip(),
             "vc_vad_model": self.vc_vad_model.currentData() or "",
             "vc_interruption": self.vc_interruption.isChecked(),
             "vc_tts_provider": VC_TTS_PROVIDERS[self.vc_tts_provider.currentIndex()][1],

@@ -72,7 +72,8 @@ def register_vc_hooks(kit: Any, engine: Any) -> None:
         from roomkit import HookResult
 
         try:
-            engine.transcription.emit(str(text), "assistant", True)
+            # Emit as partial — the chat bubble will stream words progressively
+            engine.transcription.emit(str(text), "assistant", False)
             engine.ai_speaking.emit(True)
         except Exception:
             pass
@@ -81,6 +82,8 @@ def register_vc_hooks(kit: Any, engine: Any) -> None:
     @kit.hook(HookTrigger.AFTER_TTS, HookExecution.ASYNC)
     async def _on_tts_done(text, context):
         try:
+            # Finalize the assistant bubble (renders markdown, shows full text)
+            engine.transcription.emit(str(text), "assistant", True)
             engine.ai_speaking.emit(False)
         except Exception:
             pass

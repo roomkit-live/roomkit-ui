@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout
 
 from roomkit_ui.theme import colors
@@ -65,6 +65,12 @@ class ChatBubble(QFrame):
         self._finalized = False
         self._created = datetime.now()
         self._raw_text = text
+
+        # Word-by-word streaming state
+        self._stream_words: list[str] = []
+        self._stream_index = 0
+        self._stream_timer = QTimer(self)
+        self._stream_timer.timeout.connect(self._stream_tick)
 
         c = colors()
         is_user = role == "user"
@@ -163,7 +169,46 @@ class ChatBubble(QFrame):
     def text(self) -> str:
         return self._raw_text
 
+    def start_streaming(self, full_text: str) -> None:
+        """Start word-by-word reveal animation for assistant bubbles.
+
+        Words appear progressively, paced to roughly match TTS speaking
+        speed (~150 WPM).  The timer is stopped when finalize() is called.
+        """
+        self._stream_timer.stop()
+        self._raw_text = full_text
+        self._stream_words = full_text.split()
+        self._stream_index = 0
+
+        if not self._stream_words:
+            self._label.setText(full_text)
+            return
+
+        # Pace: spread words across estimated speaking time.
+        # ~150 WPM = 400ms/word, but cap interval to keep it snappy.
+        n = len(self._stream_words)
+        interval = max(40, min(120, int(n * 400 / n)))  # clamp 40-120ms
+        # For short responses, reveal faster
+        if n <= 5:
+            interval = 40
+        self._stream_timer.setInterval(interval)
+        # Show first word immediately
+        self._stream_index = 1
+        self._label.setText(self._stream_words[0])
+        if n > 1:
+            self._stream_timer.start()
+
+    def _stream_tick(self) -> None:
+        """Reveal the next word(s)."""
+        if self._stream_index >= len(self._stream_words):
+            self._stream_timer.stop()
+            return
+        self._stream_index += 1
+        visible = " ".join(self._stream_words[: self._stream_index])
+        self._label.setText(visible)
+
     def finalize(self) -> None:
+        self._stream_timer.stop()
         self._finalized = True
         # Update timestamp to finalization time
         self._time_label.setText(datetime.now().strftime("%H:%M"))

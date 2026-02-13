@@ -109,9 +109,9 @@ class ChatView(QScrollArea):
     def add_transcription(self, text: str, role: str, is_final: bool) -> None:
         """Add or update a chat bubble from a transcription event.
 
-        Partials (is_final=False) are word fragments that get appended to the
-        current in-progress bubble.  Finals replace the bubble text with the
-        complete sentence and freeze it.
+        Partials (is_final=False) replace the current bubble text.
+        For assistant partials, a word-by-word streaming animation is used.
+        Finals replace and freeze the bubble (renders markdown for assistant).
         """
         self._hide_status()
 
@@ -121,22 +121,29 @@ class ChatView(QScrollArea):
             and self._current_bubble.role == role
         ):
             if is_final:
-                # Final replaces with the complete text
                 self._current_bubble.set_text(text)
             else:
-                # Partial — append the fragment
-                self._current_bubble.append_text(text)
+                # Update existing bubble — just replace text directly.
+                # (Streaming animation only runs on initial bubble creation.)
+                self._current_bubble.set_text(text)
         else:
             # New bubble (finalize any previous in-progress bubble first)
             if self._current_bubble and not self._current_bubble.finalized:
                 self._current_bubble.finalize()
-            bubble = ChatBubble(text, role=role)
+            if not is_final and role == "assistant":
+                # Create empty bubble then stream words in
+                bubble = ChatBubble("", role=role)
+            else:
+                bubble = ChatBubble(text, role=role)
             # Insert before status_label (last widget) and stretch (second-to-last)
             idx = self._layout.count() - 2
             if idx < 0:
                 idx = 0
             self._layout.insertWidget(idx, bubble)
             self._current_bubble = bubble
+            if not is_final and role == "assistant":
+                bubble.start_streaming(text)
+                bubble._stream_timer.timeout.connect(self._scroll_to_bottom)
 
         if is_final:
             self._current_bubble.finalize()

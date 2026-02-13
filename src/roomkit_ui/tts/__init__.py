@@ -9,6 +9,7 @@ _REGISTRY: dict[str, str] = {
     "qwen3": "roomkit_ui.tts.qwen3",
     "neutts": "roomkit_ui.tts.neutts",
     "piper": "roomkit_ui.tts.piper",
+    "gradium": "roomkit_ui.tts.gradium",
 }
 
 

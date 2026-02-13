@@ -21,6 +21,44 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
+# Voice error log handler — surfaces roomkit errors in the chat
+# ---------------------------------------------------------------------------
+
+
+class _VoiceErrorLogHandler(logging.Handler):
+    """Intercept ERROR logs from roomkit.voice and emit on the engine signal.
+
+    This lets the UI show STT/TTS connection errors (e.g. "insufficient
+    credits") that roomkit catches internally and retries silently.
+    Debounces repeated identical messages.
+    """
+
+    def __init__(self, engine: Engine) -> None:  # type: ignore[name-defined]
+        super().__init__(level=logging.ERROR)
+        self._engine_ref: Any = engine
+        self._last_msg = ""
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            engine = self._engine_ref
+            if engine is None or engine._state != "active":
+                return
+            msg = record.getMessage()
+            # Extract the root cause from the traceback if present
+            if record.exc_info and record.exc_info[1]:
+                cause = str(record.exc_info[1])
+                # Use the exception message — more user-friendly
+                msg = cause
+            # Debounce identical messages
+            if msg == self._last_msg:
+                return
+            self._last_msg = msg
+            engine.error_occurred.emit(msg)
+        except Exception:
+            pass
+
+
+# ---------------------------------------------------------------------------
 # Engine
 # ---------------------------------------------------------------------------
 
@@ -57,6 +95,13 @@ class Engine(QObject):
         self._state = "idle"
         self._attitude: str = ""  # full description text (injected into prompt)
         self._attitude_name: str = ""  # short display name for the header
+        # Realtime partial transcription accumulator: Gemini/OpenAI send
+        # incremental fragments, but the UI expects full accumulated text.
+        self._partial_buffers: dict[str, str] = {}  # role → accumulated text
+
+        # Log handler to surface roomkit voice errors in the UI
+        self._log_handler = _VoiceErrorLogHandler(self)
+        logging.getLogger("roomkit.voice").addHandler(self._log_handler)
 
         # Speaker RMS queue: audio arrives in bursts from the provider but
         # plays back at a steady 20 ms cadence.  We split incoming chunks
@@ -93,8 +138,20 @@ class Engine(QObject):
     # -- callbacks -----------------------------------------------------------
 
     def _on_transcription(self, _s: Any, text: str, role: str, is_final: bool) -> None:
+        """Realtime transcription callback.
+
+        Gemini/OpenAI send incremental fragments for partials.
+        Accumulate them so the signal always carries the full text.
+        """
         try:
-            self.transcription.emit(str(text), str(role), bool(is_final))
+            if is_final:
+                self._partial_buffers.pop(role, None)
+                self.transcription.emit(str(text), str(role), True)
+            else:
+                buf = self._partial_buffers.get(role, "")
+                buf += text
+                self._partial_buffers[role] = buf
+                self.transcription.emit(buf, str(role), False)
         except Exception:
             pass
 
@@ -210,7 +267,7 @@ class Engine(QObject):
     def _apply_attitude(self, description: str) -> str:
         """Apply a new attitude/personality and update the live system prompt."""
         self._attitude = description
-        self._attitude_name = description
+        self._attitude_name = self._lookup_attitude_name(description)
         # Voice channel: update the system prompt on AIChannel for subsequent requests
         if self._ai_channel is not None:
             base = self._ai_channel._system_prompt or ""
@@ -457,9 +514,6 @@ class Engine(QObject):
             from roomkit.channels.ai import AIChannel
             from roomkit.voice.backends.local import LocalAudioBackend
             from roomkit.voice.pipeline.config import AudioPipelineConfig
-            from roomkit.voice.stt.sherpa_onnx import SherpaOnnxSTTProvider
-
-            from roomkit_ui.model_manager import build_stt_config
 
             system_prompt = settings.get(
                 "system_prompt",
@@ -476,22 +530,82 @@ class Engine(QObject):
             denoise_mode = settings.get("denoise", "none")
 
             # 1. Build STT
-            self.loading_status.emit("Loading STT model\u2026")
-            stt_model_id = settings.get("vc_stt_model", "")
-            if not stt_model_id:
-                raise ValueError(
-                    "No STT model selected. Download one in AI Models and select it in Settings."
-                )
+            stt_provider_name = settings.get("vc_stt_provider", "local")
             stt_language = settings.get("stt_language", "") or "en"
-            stt_translate = settings.get("stt_translate", False)
-            stt_config = build_stt_config(
-                stt_model_id,
-                language=stt_language,
-                translate=stt_translate,
-                provider=inference_device,
-            )
-            stt = SherpaOnnxSTTProvider(stt_config)
-            logger.info("STT: model=%s, language=%s", stt_model_id, stt_language)
+
+            if stt_provider_name == "gradium":
+                from roomkit.voice.stt.gradium import GradiumSTTConfig, GradiumSTTProvider
+
+                self.loading_status.emit("Connecting Gradium STT\u2026")
+                api_key = settings.get("gradium_api_key", "")
+                if not api_key:
+                    raise ValueError("Gradium API key is required for Gradium STT.")
+                region = settings.get("gradium_region", "us")
+                # Prefer Gradium-specific language, fall back to global
+                gradium_lang = settings.get("gradium_language", "")
+                if gradium_lang:
+                    stt_language = gradium_lang
+                stt_kwargs: dict[str, Any] = {}
+                model_name = settings.get("gradium_stt_model", "")
+                if model_name:
+                    stt_kwargs["model_name"] = model_name
+                delay = settings.get("gradium_stt_delay", "")
+                if delay:
+                    try:
+                        stt_kwargs["delay_in_frames"] = int(delay)
+                    except (ValueError, TypeError):
+                        pass
+                vad_thresh = settings.get("gradium_vad_threshold", "")
+                if vad_thresh:
+                    try:
+                        stt_kwargs["vad_turn_threshold"] = float(vad_thresh)
+                    except (ValueError, TypeError):
+                        pass
+                vad_steps = settings.get("gradium_vad_steps", "")
+                if vad_steps:
+                    try:
+                        stt_kwargs["vad_turn_steps"] = int(vad_steps)
+                    except (ValueError, TypeError):
+                        pass
+                # json_config for STT temperature
+                json_config: dict[str, Any] = {}
+                stt_temp = settings.get("gradium_stt_temperature", "")
+                if stt_temp:
+                    try:
+                        json_config["temperature"] = float(stt_temp)
+                    except (ValueError, TypeError):
+                        pass
+                if json_config:
+                    stt_kwargs["json_config"] = json_config
+                stt_config = GradiumSTTConfig(
+                    api_key=api_key,
+                    region=region,
+                    language=stt_language,
+                    **stt_kwargs,
+                )
+                stt = GradiumSTTProvider(stt_config)
+                logger.info("STT: gradium, region=%s, language=%s", region, stt_language)
+            else:
+                from roomkit.voice.stt.sherpa_onnx import SherpaOnnxSTTProvider
+
+                from roomkit_ui.model_manager import build_stt_config
+
+                self.loading_status.emit("Loading STT model\u2026")
+                stt_model_id = settings.get("vc_stt_model", "")
+                if not stt_model_id:
+                    raise ValueError(
+                        "No STT model selected. Download one in AI Models"
+                        " and select it in Settings."
+                    )
+                stt_translate = settings.get("stt_translate", False)
+                local_stt_config = build_stt_config(
+                    stt_model_id,
+                    language=stt_language,
+                    translate=stt_translate,
+                    provider=inference_device,
+                )
+                stt = SherpaOnnxSTTProvider(local_stt_config)
+                logger.info("STT: model=%s, language=%s", stt_model_id, stt_language)
 
             # 2. Build TTS
             self.loading_status.emit("Loading TTS model\u2026")
@@ -571,9 +685,9 @@ class Engine(QObject):
                 output_sample_rate,
             )
 
-            # 6. Build pipeline config (with optional VAD)
+            # 6. Build pipeline config (with optional VAD — local STT only)
             vad: Any = None
-            vad_model_id = settings.get("vc_vad_model", "")
+            vad_model_id = settings.get("vc_vad_model", "") if stt_provider_name == "local" else ""
             if vad_model_id:
                 from roomkit_ui.model_manager import build_vad_config, is_vad_model_downloaded
 
@@ -748,6 +862,37 @@ class Engine(QObject):
             pass
         return ""
 
+    @staticmethod
+    def _lookup_attitude_name(description: str) -> str:
+        """Reverse-lookup an attitude name from its description text.
+
+        When the LLM calls set_attitude, it sends the full description.
+        Try to find the matching preset/custom attitude name for display.
+        Falls back to a short excerpt of the description if no match.
+        """
+        if not description:
+            return ""
+        from roomkit_ui.settings import load_settings
+        from roomkit_ui.widgets.settings.constants import ATTITUDE_PRESETS
+
+        for pname, ptext in ATTITUDE_PRESETS:
+            if ptext == description or pname.lower() == description.lower():
+                return pname
+        try:
+            settings = load_settings()
+            for att in json.loads(settings.get("custom_attitudes", "[]")):
+                text = att.get("text", "")
+                name = att.get("name", "")
+                if text == description or name.lower() == description.lower():
+                    return name
+        except (json.JSONDecodeError, TypeError):
+            pass
+        # No match — use first few words as a short label
+        words = description.split()
+        if len(words) <= 4:
+            return description
+        return " ".join(words[:4]) + "\u2026"
+
     def _build_audio_processing(
         self,
         aec_mode: str,
@@ -886,6 +1031,7 @@ class Engine(QObject):
         finally:
             self._attitude = ""
             self._attitude_name = ""
+            self._log_handler._last_msg = ""
             self._state = "idle"
             self.state_changed.emit("idle")
 
