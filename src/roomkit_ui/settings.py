@@ -40,7 +40,10 @@ _DEFAULTS = {
     "vc_openai_model": "gpt-4o",
     "vc_gemini_model": "gemini-2.0-flash",
     "vc_stt_provider": "local",  # "local" | "gradium"
-    "vc_tts_provider": "piper",  # "piper" | "qwen3" | "neutts" | "gradium"
+    "vc_tts_provider": "piper",  # "piper" | "qwen3" | "neutts" | "gradium" | "elevenlabs"
+    "elevenlabs_api_key": "",
+    "elevenlabs_voice_id": "",  # Empty = Rachel default (21m00Tcm4TlvDq8ikWAM)
+    "elevenlabs_model": "",  # Empty = eleven_v3
     "vc_tts_model": "",
     "vc_tts_ref_audio": "",  # Path to reference WAV for voice cloning
     "vc_tts_ref_text": "",  # Transcript of reference audio

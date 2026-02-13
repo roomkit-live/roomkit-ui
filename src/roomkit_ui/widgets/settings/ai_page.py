@@ -89,6 +89,16 @@ VC_TTS_PROVIDERS = [
     ("Qwen3-TTS (voice clone)", "qwen3"),
     ("NeuTTS (voice clone)", "neutts"),
     ("Gradium", "gradium"),
+    ("ElevenLabs", "elevenlabs"),
+]
+
+ELEVENLABS_MODELS = [
+    ("v3 (expressive, 70+ langs)", "eleven_v3"),
+    ("Multilingual v2 (lifelike)", "eleven_multilingual_v2"),
+    ("Flash v2.5 (~75ms, multilingual)", "eleven_flash_v2_5"),
+    ("Flash v2 (~75ms, EN only)", "eleven_flash_v2"),
+    ("Turbo v2.5 (~250ms, multilingual)", "eleven_turbo_v2_5"),
+    ("Turbo v2 (~250ms, EN only)", "eleven_turbo_v2"),
 ]
 
 
@@ -496,6 +506,29 @@ class _AIPage(QWidget):
         self._vc_gradium_voice_label = QLabel("Gradium Voice")
         vc_form.addRow(self._vc_gradium_voice_label, self.vc_gradium_voice)
 
+        # ElevenLabs fields (shown when TTS provider is ElevenLabs)
+        self.elevenlabs_api_key = QLineEdit(settings.get("elevenlabs_api_key", ""))
+        self.elevenlabs_api_key.setEchoMode(QLineEdit.Password)
+        self.elevenlabs_api_key.setPlaceholderText("Enter your ElevenLabs API key")
+        self._elevenlabs_key_label = QLabel("ElevenLabs Key")
+        vc_form.addRow(self._elevenlabs_key_label, self.elevenlabs_api_key)
+
+        self.elevenlabs_voice_id = QLineEdit(settings.get("elevenlabs_voice_id", ""))
+        self.elevenlabs_voice_id.setPlaceholderText("Rachel (default)")
+        self._elevenlabs_voice_label = QLabel("Voice ID")
+        vc_form.addRow(self._elevenlabs_voice_label, self.elevenlabs_voice_id)
+
+        self.elevenlabs_model = QComboBox()
+        for label, val in ELEVENLABS_MODELS:
+            self.elevenlabs_model.addItem(label, val)
+        saved_el_model = settings.get("elevenlabs_model", "")
+        for i, (_, val) in enumerate(ELEVENLABS_MODELS):
+            if val == saved_el_model:
+                self.elevenlabs_model.setCurrentIndex(i)
+                break
+        self._elevenlabs_model_label = QLabel("Model")
+        vc_form.addRow(self._elevenlabs_model_label, self.elevenlabs_model)
+
         # Reference audio + text (voice clone providers only)
         self.vc_tts_ref_audio = QLineEdit(settings.get("vc_tts_ref_audio", ""))
         self.vc_tts_ref_audio.setPlaceholderText("Path to reference WAV (3-15s of speech)")
@@ -770,6 +803,7 @@ class _AIPage(QWidget):
         is_piper = prov == "piper"
         is_voice_clone = prov in ("qwen3", "neutts")
         is_gradium = prov == "gradium"
+        is_elevenlabs = prov == "elevenlabs"
         # Piper-specific widgets
         self._vc_tts_model_label.setVisible(is_piper)
         self.vc_tts_model.setVisible(is_piper)
@@ -777,6 +811,13 @@ class _AIPage(QWidget):
         # Gradium voice field
         self._vc_gradium_voice_label.setVisible(is_gradium)
         self.vc_gradium_voice.setVisible(is_gradium)
+        # ElevenLabs fields
+        self._elevenlabs_key_label.setVisible(is_elevenlabs)
+        self.elevenlabs_api_key.setVisible(is_elevenlabs)
+        self._elevenlabs_voice_label.setVisible(is_elevenlabs)
+        self.elevenlabs_voice_id.setVisible(is_elevenlabs)
+        self._elevenlabs_model_label.setVisible(is_elevenlabs)
+        self.elevenlabs_model.setVisible(is_elevenlabs)
         # Voice clone reference fields
         self._vc_ref_audio_label.setVisible(is_voice_clone)
         self.vc_tts_ref_audio.setVisible(is_voice_clone)
@@ -937,6 +978,9 @@ class _AIPage(QWidget):
             "vc_tts_model": self.vc_tts_model.currentData() or "",
             "vc_tts_ref_audio": self.vc_tts_ref_audio.text().strip(),
             "vc_tts_ref_text": self.vc_tts_ref_text.text().strip(),
+            "elevenlabs_api_key": self.elevenlabs_api_key.text().strip(),
+            "elevenlabs_voice_id": self.elevenlabs_voice_id.text().strip(),
+            "elevenlabs_model": self.elevenlabs_model.currentData() or "",
             "vc_local_base_url": self.vc_local_base_url.text().strip(),
             "vc_local_model": self.vc_local_model.text().strip(),
             "vc_local_api_key": self.vc_local_api_key.text().strip(),
