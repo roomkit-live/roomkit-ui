@@ -206,6 +206,7 @@ async def create_oauth_provider(
     callback server's lifecycle (call ``stop()`` when done).
     """
     import webbrowser
+    from typing import Literal
 
     from mcp.client.auth import OAuthClientProvider
     from mcp.shared.auth import OAuthClientInformationFull, OAuthClientMetadata
@@ -216,10 +217,12 @@ async def create_oauth_provider(
     storage = QSettingsTokenStorage(server_name)
 
     redirect_uri = callback_server.redirect_uri
-    auth_method = "none" if not client_secret else "client_secret_post"
+    auth_method: Literal["none", "client_secret_post"] = (
+        "none" if not client_secret else "client_secret_post"
+    )
 
     metadata = OAuthClientMetadata(
-        redirect_uris=[redirect_uri],
+        redirect_uris=[redirect_uri],  # type: ignore[list-item]  # Pydantic coerces str→AnyUrl
         token_endpoint_auth_method=auth_method,
         grant_types=["authorization_code", "refresh_token"],
         response_types=["code"],
@@ -232,7 +235,7 @@ async def create_oauth_provider(
         client_info = OAuthClientInformationFull(
             client_id=client_id,
             client_secret=client_secret or None,
-            redirect_uris=[redirect_uri],
+            redirect_uris=[redirect_uri],  # type: ignore[list-item]
             token_endpoint_auth_method=auth_method,
             grant_types=["authorization_code", "refresh_token"],
             response_types=["code"],
