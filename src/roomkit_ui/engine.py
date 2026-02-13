@@ -262,7 +262,7 @@ class Engine(QObject):
                 "system_prompt",
                 "You are a friendly voice assistant. Be concise and helpful.",
             )
-            attitude = self._resolve_attitude(settings)
+            attitude = self._attitude or self._resolve_attitude(settings)
             if attitude:
                 system_prompt = f"{system_prompt}\n\n# Attitude\n{attitude}"
                 self._attitude = attitude
@@ -429,7 +429,7 @@ class Engine(QObject):
                 "system_prompt",
                 "You are a friendly voice assistant. Be concise and helpful.",
             )
-            attitude = self._resolve_attitude(settings)
+            attitude = self._attitude or self._resolve_attitude(settings)
             if attitude:
                 system_prompt = f"{system_prompt}\n\n# Attitude\n{attitude}"
                 self._attitude = attitude
@@ -843,6 +843,7 @@ class Engine(QObject):
         except Exception:
             logger.exception("Error during stop")
         finally:
+            self._attitude = ""
             self._state = "idle"
             self.state_changed.emit("idle")
 
@@ -898,7 +899,8 @@ class Engine(QObject):
         self._backend = None
         self._tts = None
         self._mcp = None
-        self._attitude = ""
+        # Note: self._attitude is preserved across reconnects and only
+        # cleared in stop() when the user explicitly ends the session.
         # Clean up stale event-loop state left by MCP/anyio.
         cleanup_stale_fds()
         # The orphaned anyio timers may only appear after the current

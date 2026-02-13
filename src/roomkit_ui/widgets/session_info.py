@@ -59,18 +59,14 @@ class SessionInfoBar(QWidget):
         self._summary_label.setStyleSheet(
             f"color: {c['ACCENT_BLUE']}; font-size: 12px; background: transparent;"
         )
-        header_layout.addWidget(self._summary_label)
+        header_layout.addWidget(self._summary_label, 1)
 
-        self._attitude_label = QLabel()
-        self._attitude_label.setStyleSheet(
-            f"color: {c['TEXT_SECONDARY']}; font-size: 11px;"
-            f" background: {c['BG_SECONDARY']}; border-radius: 4px;"
-            f" padding: 1px 6px;"
-        )
-        self._attitude_label.hide()
-        header_layout.addWidget(self._attitude_label)
-
-        header_layout.addStretch(1)
+        # Stored state for rebuilding summary when attitude changes
+        self._provider_display = ""
+        self._model_display = ""
+        self._tools_display = ""
+        self._skills_display = ""
+        self._attitude_display = ""
 
         self._chevron = QLabel()
         self._chevron.setFixedWidth(20)
@@ -129,15 +125,19 @@ class SessionInfoBar(QWidget):
         if len(display_model) > 24:
             display_model = display_model[:22] + "\u2026"
 
-        provider_display = provider.capitalize()
         n_tools = len(tools)
         n_skills = len(skills)
         tool_word = "tool" if n_tools == 1 else "tools"
-        parts = [f"{provider_display}", display_model, f"{n_tools} {tool_word}"]
+
+        self._provider_display = provider.capitalize()
+        self._model_display = display_model
+        self._tools_display = f"{n_tools} {tool_word}"
+        self._skills_display = ""
         if n_skills:
             skill_word = "skill" if n_skills == 1 else "skills"
-            parts.append(f"{n_skills} {skill_word}")
-        self._summary_label.setText("  \u2013  ".join(parts))
+            self._skills_display = f"{n_skills} {skill_word}"
+
+        self._rebuild_summary()
         self._chevron.setText("\u25be")
 
         # Build detail list
@@ -186,14 +186,13 @@ class SessionInfoBar(QWidget):
         self._detail_layout.addWidget(row)
 
     def set_attitude(self, description: str) -> None:
-        """Show or hide the attitude badge in the header."""
+        """Update the attitude shown in the header summary."""
         if description:
-            # Use first ~30 chars for display
             display = description if len(description) <= 30 else description[:28] + "\u2026"
-            self._attitude_label.setText(display)
-            self._attitude_label.show()
+            self._attitude_display = display
         else:
-            self._attitude_label.hide()
+            self._attitude_display = ""
+        self._rebuild_summary()
 
     def clear_session(self) -> None:
         """Hide the bar."""
@@ -202,10 +201,19 @@ class SessionInfoBar(QWidget):
         self.setFixedHeight(0)
         self.hide()
         self._detail_area.hide()
-        self._attitude_label.hide()
+        self._attitude_display = ""
         self._clear_details()
 
     # -- internal ------------------------------------------------------------
+
+    def _rebuild_summary(self) -> None:
+        """Rebuild the summary label from stored parts."""
+        # Show attitude in place of model name when set
+        second = self._attitude_display or self._model_display
+        parts = [self._provider_display, second, self._tools_display]
+        if self._skills_display:
+            parts.append(self._skills_display)
+        self._summary_label.setText("  \u2013  ".join(parts))
 
     def _toggle(self) -> None:
         if self._expanded:
