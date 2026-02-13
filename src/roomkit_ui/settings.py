@@ -55,6 +55,14 @@ _DEFAULTS = {
     "enabled_skills": "[]",  # JSON array of skill name strings
     "custom_attitudes": "[]",  # JSON array of {"name": str, "text": str}
     "selected_attitude": "",  # Name of active attitude (empty = none)
+    # Gemini advanced settings
+    "gemini_language": "",
+    "gemini_no_interruption": False,
+    "gemini_affective_dialog": False,
+    "gemini_proactive_audio": False,
+    "gemini_start_sensitivity": "",
+    "gemini_end_sensitivity": "",
+    "gemini_silence_duration_ms": "",
 }
 
 

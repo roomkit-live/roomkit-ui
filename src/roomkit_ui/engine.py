@@ -296,6 +296,34 @@ class Engine(QObject):
 
                 provider = GeminiLiveProvider(api_key=api_key, model=model)
 
+            # Build provider_config for Gemini advanced settings
+            provider_config: dict[str, Any] = {}
+            if provider_name == "gemini":
+                lang = settings.get("gemini_language", "")
+                if lang:
+                    provider_config["language"] = lang
+                if settings.get("gemini_no_interruption"):
+                    provider_config["no_interruption"] = True
+                # enable_affective_dialog: not yet supported by the Gemini API
+                # (serialized under generation_config, rejected with 1007).
+                # Uncomment when the API adds support.
+                # if settings.get("gemini_affective_dialog"):
+                #     provider_config["enable_affective_dialog"] = True
+                if settings.get("gemini_proactive_audio"):
+                    provider_config["proactive_audio"] = True
+                start_sens = settings.get("gemini_start_sensitivity", "")
+                if start_sens:
+                    provider_config["start_of_speech_sensitivity"] = start_sens
+                end_sens = settings.get("gemini_end_sensitivity", "")
+                if end_sens:
+                    provider_config["end_of_speech_sensitivity"] = end_sens
+                silence_ms = settings.get("gemini_silence_duration_ms", "")
+                if silence_ms:
+                    try:
+                        provider_config["silence_duration_ms"] = int(silence_ms)
+                    except (ValueError, TypeError):
+                        pass
+
             sample_rate = 24000
             block_ms = 20
             frame_size = sample_rate * block_ms // 1000
@@ -352,6 +380,8 @@ class Engine(QObject):
             logger.info("Tools: %s", all_names)
 
             self.loading_status.emit("Connecting to provider\u2026")
+            if provider_config:
+                logger.info("provider_config: %s", provider_config)
             self._session = await self._start_session(
                 RoomKit,
                 RealtimeVoiceChannel,
@@ -362,6 +392,7 @@ class Engine(QObject):
                 sample_rate,
                 tools,
                 tool_handler,
+                provider_config=provider_config or None,
             )
             if self._session is None and has_mcp_tools:
                 # MCP tools broke the session — retry without them
@@ -376,6 +407,7 @@ class Engine(QObject):
                     sample_rate,
                     list(BUILTIN_TOOLS),
                     tool_handler,
+                    provider_config=provider_config or None,
                 )
                 if self._session is not None:
                     self.mcp_status.emit("MCP tools disabled — incompatible with this provider")
@@ -809,6 +841,7 @@ class Engine(QObject):
         sample_rate: int,
         tools: list[dict],
         tool_handler: Any,
+        provider_config: dict[str, Any] | None = None,
     ) -> Any:
         """Try to create a room and start a session. Returns None on failure."""
         try:
@@ -826,10 +859,12 @@ class Engine(QObject):
             self._kit.register_channel(self._channel)
             await self._kit.create_room(room_id="local-demo")
             await self._kit.attach_channel("local-demo", "voice")
+            metadata = {"provider_config": provider_config} if provider_config else None
             return await self._channel.start_session(
                 "local-demo",
                 "local-user",
                 connection=None,
+                metadata=metadata,
             )
         except Exception:
             logger.exception("_start_session failed")

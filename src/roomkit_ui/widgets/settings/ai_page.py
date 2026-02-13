@@ -19,6 +19,24 @@ from PySide6.QtWidgets import (
 
 from roomkit_ui.theme import colors
 
+GEMINI_LANGUAGES = [
+    ("Auto-detect", ""),
+    ("English (US)", "en-US"),
+    ("English (UK)", "en-GB"),
+    ("French", "fr-FR"),
+    ("Spanish", "es-ES"),
+    ("German", "de-DE"),
+    ("Italian", "it-IT"),
+    ("Portuguese (BR)", "pt-BR"),
+    ("Dutch", "nl-NL"),
+    ("Japanese", "ja-JP"),
+    ("Chinese", "zh-CN"),
+    ("Korean", "ko-KR"),
+    ("Russian", "ru-RU"),
+    ("Arabic", "ar-XA"),
+    ("Hindi", "hi-IN"),
+]
+
 GEMINI_MODELS = [
     "gemini-2.5-flash-native-audio-preview-12-2025",
     "gemini-2.0-flash-live-001",
@@ -179,6 +197,88 @@ class _AIPage(QWidget):
         rt_form.addRow(self._openai_voice_label, self.openai_voice)
 
         rt_layout.addLayout(rt_form)
+
+        # ── Gemini Advanced (collapsible) ──
+        self._gemini_adv_toggle = QPushButton("\u25b8 Advanced")
+        self._gemini_adv_toggle.setFlat(True)
+        self._gemini_adv_toggle.setCursor(Qt.PointingHandCursor)
+        self._gemini_adv_toggle.setStyleSheet(
+            "text-align: left; font-size: 12px; font-weight: 600;"
+            f" color: {c['TEXT_SECONDARY']}; background: transparent; border: none;"
+            " padding: 2px 0;"
+        )
+        self._gemini_adv_toggle.clicked.connect(self._toggle_gemini_advanced)
+        rt_layout.addWidget(self._gemini_adv_toggle)
+
+        self._gemini_adv_container = QWidget()
+        adv_form = QFormLayout(self._gemini_adv_container)
+        adv_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        adv_form.setSpacing(10)
+        adv_form.setLabelAlignment(Qt.AlignRight)
+
+        self.gemini_language = QComboBox()
+        for label, _val in GEMINI_LANGUAGES:
+            self.gemini_language.addItem(label, _val)
+        saved_lang = settings.get("gemini_language", "")
+        for i, (_, val) in enumerate(GEMINI_LANGUAGES):
+            if val == saved_lang:
+                self.gemini_language.setCurrentIndex(i)
+                break
+        adv_form.addRow("Language", self.gemini_language)
+
+        self.gemini_no_interruption = QCheckBox("Disable barge-in")
+        self.gemini_no_interruption.setChecked(bool(settings.get("gemini_no_interruption", False)))
+        adv_form.addRow("", self.gemini_no_interruption)
+
+        self.gemini_affective_dialog = QCheckBox("Emotional responses")
+        self.gemini_affective_dialog.setChecked(
+            bool(settings.get("gemini_affective_dialog", False))
+        )
+        adv_form.addRow("", self.gemini_affective_dialog)
+
+        self.gemini_proactive_audio = QCheckBox("AI can speak unprompted")
+        self.gemini_proactive_audio.setChecked(bool(settings.get("gemini_proactive_audio", False)))
+        adv_form.addRow("", self.gemini_proactive_audio)
+
+        start_sens_options = [
+            ("Auto", ""),
+            ("High", "START_SENSITIVITY_HIGH"),
+            ("Low", "START_SENSITIVITY_LOW"),
+        ]
+        self.gemini_start_sensitivity = QComboBox()
+        for label, _val in start_sens_options:
+            self.gemini_start_sensitivity.addItem(label, _val)
+        saved_start = settings.get("gemini_start_sensitivity", "")
+        for i, (_, val) in enumerate(start_sens_options):
+            if val == saved_start:
+                self.gemini_start_sensitivity.setCurrentIndex(i)
+                break
+        adv_form.addRow("Start Speech", self.gemini_start_sensitivity)
+
+        end_sens_options = [
+            ("Auto", ""),
+            ("High", "END_SENSITIVITY_HIGH"),
+            ("Low", "END_SENSITIVITY_LOW"),
+        ]
+        self.gemini_end_sensitivity = QComboBox()
+        for label, _val in end_sens_options:
+            self.gemini_end_sensitivity.addItem(label, _val)
+        saved_end = settings.get("gemini_end_sensitivity", "")
+        for i, (_, val) in enumerate(end_sens_options):
+            if val == saved_end:
+                self.gemini_end_sensitivity.setCurrentIndex(i)
+                break
+        adv_form.addRow("End Speech", self.gemini_end_sensitivity)
+
+        self.gemini_silence_duration = QLineEdit(
+            str(settings.get("gemini_silence_duration_ms", "") or "")
+        )
+        self.gemini_silence_duration.setPlaceholderText("e.g. 1000")
+        adv_form.addRow("Silence (ms)", self.gemini_silence_duration)
+
+        self._gemini_adv_container.hide()
+        rt_layout.addWidget(self._gemini_adv_container)
+
         layout.addWidget(self._realtime_section)
 
         # ── Voice Channel (STT → LLM → TTS) section ──
@@ -441,6 +541,14 @@ class _AIPage(QWidget):
         self.openai_model.setVisible(not is_gemini)
         self._openai_voice_label.setVisible(not is_gemini)
         self.openai_voice.setVisible(not is_gemini)
+        self._gemini_adv_toggle.setVisible(is_gemini)
+        if not is_gemini:
+            self._gemini_adv_container.hide()
+
+    def _toggle_gemini_advanced(self) -> None:
+        visible = not self._gemini_adv_container.isVisible()
+        self._gemini_adv_container.setVisible(visible)
+        self._gemini_adv_toggle.setText("\u25be Advanced" if visible else "\u25b8 Advanced")
 
     def _on_vc_provider_changed(self, index: int) -> None:
         prov = VC_LLM_PROVIDERS[index][1]
@@ -575,6 +683,13 @@ class _AIPage(QWidget):
             "openai_model": self.openai_model.currentText().strip(),
             "voice": self.gemini_voice.currentText(),
             "openai_voice": self.openai_voice.currentText(),
+            "gemini_language": self.gemini_language.currentData() or "",
+            "gemini_no_interruption": self.gemini_no_interruption.isChecked(),
+            "gemini_affective_dialog": self.gemini_affective_dialog.isChecked(),
+            "gemini_proactive_audio": self.gemini_proactive_audio.isChecked(),
+            "gemini_start_sensitivity": self.gemini_start_sensitivity.currentData() or "",
+            "gemini_end_sensitivity": self.gemini_end_sensitivity.currentData() or "",
+            "gemini_silence_duration_ms": self.gemini_silence_duration.text().strip(),
             "system_prompt": self.prompt.toPlainText().strip(),
             "selected_attitude": self.selected_attitude_name(),
             "conversation_mode": CONVERSATION_MODES[self.mode_combo.currentIndex()][1],
