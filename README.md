@@ -4,7 +4,7 @@
   <img src="assets/logo.svg" width="80" height="80" alt="RoomKit UI">
 </p>
 
-A desktop voice assistant built with [PySide6](https://doc.qt.io/qtforpython-6/) and [RoomKit](https://github.com/roomkit-live/roomkit). Supports real-time voice conversations with **Google Gemini** and **OpenAI** realtime APIs.
+A desktop voice assistant built with [PySide6](https://doc.qt.io/qtforpython-6/) and [RoomKit](https://github.com/roomkit-live/roomkit). Supports real-time voice conversations with **Google Gemini**, **OpenAI**, **Anthropic**, and **local LLMs**.
 
 ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue)
 ![License MIT](https://img.shields.io/badge/license-MIT-green)
@@ -29,13 +29,16 @@ Then double-click the app to open it. You'll also need to grant microphone permi
 
 ## Features
 
-- **Dual provider support** — switch between Google Gemini and OpenAI from settings
+- **Multi-provider support** — Google Gemini, OpenAI, Anthropic, and local LLMs (vLLM / Ollama)
+- **Two conversation modes** — Speech-to-Speech (realtime) or Voice Channel (STT → LLM → TTS)
+- **Local TTS** — offline text-to-speech with Piper, Qwen3-TTS (voice clone), and NeuTTS (voice clone)
 - **Real-time voice** — full-duplex voice conversation with interruption support
 - **Animated VU meter** — ambient glow visualization for mic and speaker audio levels
 - **Chat transcript** — iMessage-style bubbles with markdown rendering and streaming transcriptions
 - **System-wide dictation** — global hotkey triggers STT and pastes text into the focused app
 - **Local STT models** — offline dictation with downloadable sherpa-onnx models (Whisper, Parakeet, Zipformer)
-- **MCP tool support** — connect external tools via Model Context Protocol (stdio, SSE, HTTP)
+- **MCP tool support** — connect external tools via Model Context Protocol (stdio, SSE, HTTP) with OAuth2 authentication
+- **MCP Apps** — render HTML UIs served by MCP servers inline in the chat
 - **Echo cancellation** — WebRTC or Speex AEC for hands-free use
 - **Noise suppression** — RNNoise or GTCRN denoiser for noisy environments
 - **GPU inference** — optional CUDA (NVIDIA) or CoreML (Apple) acceleration for local STT models
@@ -49,7 +52,7 @@ Then double-click the app to open it. You'll also need to grant microphone permi
 
 - Python 3.12+
 - [uv](https://docs.astral.sh/uv/) (recommended) or pip
-- A Google API key (for Gemini) and/or an OpenAI API key
+- An API key for your chosen provider (Gemini, OpenAI, or Anthropic)
 - PortAudio (`libportaudio2` on Linux, included on macOS)
 - **Linux dictation deps** — `xclip` + `xdotool` (X11) or `wl-copy` + `wtype` (Wayland) for the system-wide STT dictation feature
 
@@ -108,21 +111,37 @@ uv pip install sherpa-onnx==1.12.23+cuda12.cudnn9 \
 ```
 src/roomkit_ui/
 ├── app.py              # QApplication + qasync event loop
-├── engine.py           # Async engine bridging roomkit <> Qt signals
+├── engine.py           # Async engine bridging roomkit ↔ Qt signals
+├── builtin_tools.py    # Built-in tools (always available)
+├── cleanup.py          # qasync timer/FD cleanup after MCP disconnect
+├── hooks.py            # RoomKit hook registration for UI events
 ├── hotkey.py           # Global hotkey (NSEvent on macOS, pynput fallback)
 ├── icons.py            # Heroicons SVG rendering
+├── mcp_auth.py         # OAuth2 authentication for MCP HTTP servers
 ├── mcp_manager.py      # MCP client manager (stdio, SSE, HTTP)
+├── mcp_app_bridge.py   # MCP Apps JSON-RPC bridge (QWebChannel ↔ iframe)
 ├── model_manager.py    # Local model download & management
 ├── settings.py         # QSettings persistence
+├── sounds.py           # Notification sounds for session start/stop
 ├── stt_engine.py       # STT dictation engine + text pasting
 ├── theme.py            # Dark & Light theme stylesheets
 ├── tray.py             # System tray icon for dictation
+├── providers/          # Voice channel LLM provider adapters
+│   ├── anthropic.py
+│   ├── gemini.py
+│   ├── openai.py
+│   └── local.py
+├── tts/                # Text-to-speech backends
+│   ├── piper.py        # Piper (sherpa-onnx)
+│   ├── qwen3.py        # Qwen3-TTS (voice clone)
+│   └── neutts.py       # NeuTTS (voice clone)
 └── widgets/
     ├── main_window.py    # Main window layout
     ├── settings_panel.py # Tabbed settings dialog
     ├── session_info.py   # Collapsible session info bar
     ├── chat_view.py      # Scrollable chat area
     ├── chat_bubble.py    # Chat bubble with markdown rendering
+    ├── mcp_app_widget.py # QWebEngineView for MCP App HTML UIs
     ├── vu_meter.py       # Animated ambient glow VU meter
     ├── control_bar.py    # Call button + mic mute + settings
     ├── hotkey_button.py  # Interactive hotkey capture widget

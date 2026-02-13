@@ -23,23 +23,40 @@ Entry point: `src/roomkit_ui/app.py` → `roomkit_ui.app:main`
 src/roomkit_ui/
 ├── app.py           # QApplication + qasync event loop bootstrap
 ├── engine.py        # Async voice session engine (roomkit ↔ Qt signals)
+├── builtin_tools.py # Built-in tools (always available)
+├── cleanup.py       # qasync timer/FD cleanup after MCP disconnect
+├── hooks.py         # RoomKit hook registration for UI events
+├── hotkey.py        # Global hotkey (NSEvent on macOS, pynput fallback)
+├── icons.py         # Heroicons SVG rendering
+├── mcp_auth.py      # OAuth2 authentication for MCP HTTP servers
 ├── mcp_manager.py   # MCP client manager (stdio, SSE, HTTP transports)
 ├── mcp_app_bridge.py # MCP Apps JSON-RPC bridge (QWebChannel ↔ iframe)
-├── settings.py      # QSettings persistence
-├── cleanup.py       # qasync timer/FD cleanup after MCP disconnect
-├── hotkey.py        # Global hotkey (NSEvent on macOS, pynput fallback)
-├── stt_engine.py    # Local STT dictation + text pasting
 ├── model_manager.py # Local model download & management
+├── settings.py      # QSettings persistence
+├── sounds.py        # Notification sounds for session start/stop
+├── stt_engine.py    # Local STT dictation + text pasting
 ├── theme.py         # Dark/Light theme stylesheets
+├── tray.py          # System tray icon for dictation
+├── providers/       # Voice channel LLM provider adapters
+│   ├── anthropic.py
+│   ├── gemini.py
+│   ├── openai.py
+│   └── local.py
+├── tts/             # Text-to-speech backends
+│   ├── piper.py     # Piper (sherpa-onnx)
+│   ├── qwen3.py     # Qwen3-TTS (voice clone)
+│   └── neutts.py    # NeuTTS (voice clone)
 └── widgets/
     ├── main_window.py     # Main window layout
     ├── settings_panel.py  # Tabbed settings dialog
+    ├── session_info.py    # Collapsible session info bar
     ├── chat_view.py       # Scrollable chat transcript
     ├── chat_bubble.py     # Markdown chat bubble
     ├── mcp_app_widget.py  # QWebEngineView for MCP App HTML UIs
     ├── vu_meter.py        # Animated ambient glow VU meter
     ├── control_bar.py     # Call button + mic mute + settings
-    └── hotkey_button.py   # Interactive hotkey capture widget
+    ├── hotkey_button.py   # Interactive hotkey capture widget
+    └── dictation_log.py   # Dictation event log window
 ```
 
 ## Code Style
