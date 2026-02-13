@@ -53,6 +53,8 @@ _DEFAULTS = {
     # Agent Skills
     "skill_sources": "[]",  # JSON array of {type, url/path, label}
     "enabled_skills": "[]",  # JSON array of skill name strings
+    "custom_attitudes": "[]",  # JSON array of {"name": str, "text": str}
+    "selected_attitude": "",  # Name of active attitude (empty = none)
 }
 
 

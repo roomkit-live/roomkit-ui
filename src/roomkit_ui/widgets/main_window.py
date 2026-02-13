@@ -17,7 +17,7 @@ from roomkit_ui.theme import colors
 from roomkit_ui.widgets.chat_view import ChatView
 from roomkit_ui.widgets.control_bar import ControlBar
 from roomkit_ui.widgets.session_info import SessionInfoBar
-from roomkit_ui.widgets.settings_panel import SettingsPanel
+from roomkit_ui.widgets.settings import SettingsPanel
 from roomkit_ui.widgets.vu_meter import VUMeter
 
 logger = logging.getLogger(__name__)

@@ -54,6 +54,7 @@ class Engine(QObject):
         self._mcp: MCPManager | None = None
         self._mic_muted = False
         self._state = "idle"
+        self._attitude: str = ""
 
         # Speaker RMS queue: audio arrives in bursts from the provider but
         # plays back at a steady 20 ms cadence.  We split incoming chunks
@@ -177,6 +178,10 @@ class Engine(QObject):
         except Exception:
             pass
 
+        # Handle attitude changes (needs engine state, not pure builtin)
+        if name == "set_attitude":
+            return self._apply_attitude(arguments.get("description", ""))
+
         # Try built-in tools first
         builtin_result = handle_builtin_tool(name)
         if builtin_result is not None:
@@ -199,6 +204,27 @@ class Engine(QObject):
                 pass
 
         return result
+
+    def _apply_attitude(self, description: str) -> str:
+        """Apply a new attitude/personality and update the live system prompt."""
+        self._attitude = description
+        # Voice channel: update the system prompt on AIChannel for subsequent requests
+        if self._ai_channel is not None:
+            base = self._ai_channel._system_prompt or ""
+            # Strip any existing attitude section
+            if "\n\n# Attitude\n" in base:
+                base = base.split("\n\n# Attitude\n")[0]
+            if description:
+                self._ai_channel._system_prompt = f"{base}\n\n# Attitude\n{description}"
+            else:
+                self._ai_channel._system_prompt = base
+        return json.dumps(
+            {
+                "status": "ok",
+                "attitude": description,
+                "instruction": f"Adopt this attitude now: {description}",
+            }
+        )
 
     async def handle_app_tool_call(self, tool_name: str, arguments: dict[str, Any]) -> str:
         """Proxy a tool call initiated by an MCP App back through MCP."""
@@ -231,6 +257,10 @@ class Engine(QObject):
                 "system_prompt",
                 "You are a friendly voice assistant. Be concise and helpful.",
             )
+            attitude = self._resolve_attitude(settings)
+            if attitude:
+                system_prompt = f"{system_prompt}\n\n# Attitude\n{attitude}"
+                self._attitude = attitude
             aec_mode = settings.get("aec_mode", "webrtc")
             denoise_mode = settings.get("denoise", "none")
 
@@ -392,6 +422,10 @@ class Engine(QObject):
                 "system_prompt",
                 "You are a friendly voice assistant. Be concise and helpful.",
             )
+            attitude = self._resolve_attitude(settings)
+            if attitude:
+                system_prompt = f"{system_prompt}\n\n# Attitude\n{attitude}"
+                self._attitude = attitude
             inference_device = settings.get("inference_device", "cpu")
             aec_mode = settings.get("aec_mode", "webrtc")
             denoise_mode = settings.get("denoise", "none")
@@ -648,6 +682,25 @@ class Engine(QObject):
 
     # -- Shared helpers ------------------------------------------------------
 
+    @staticmethod
+    def _resolve_attitude(settings: dict) -> str:
+        """Resolve the selected attitude name to its text content."""
+        name = settings.get("selected_attitude", "")
+        if not name:
+            return ""
+        from roomkit_ui.widgets.settings.constants import ATTITUDE_PRESETS
+
+        for pname, ptext in ATTITUDE_PRESETS:
+            if pname == name:
+                return ptext
+        try:
+            for att in json.loads(settings.get("custom_attitudes", "[]")):
+                if att.get("name") == name:
+                    return str(att.get("text", ""))
+        except (json.JSONDecodeError, TypeError):
+            pass
+        return ""
+
     def _build_audio_processing(
         self,
         aec_mode: str,
@@ -836,6 +889,7 @@ class Engine(QObject):
         self._backend = None
         self._tts = None
         self._mcp = None
+        self._attitude = ""
         # Clean up stale event-loop state left by MCP/anyio.
         cleanup_stale_fds()
         # The orphaned anyio timers may only appear after the current

@@ -24,6 +24,25 @@ BUILTIN_TOOLS: list[dict] = [
         "description": "Get information about RoomKit and RoomKit UI.",
         "parameters": {"type": "object", "properties": {}},
     },
+    {
+        "type": "function",
+        "name": "set_attitude",
+        "description": (
+            "Change the assistant's attitude, personality, or communication style. "
+            "Call this when the user asks you to change how you speak or behave. "
+            "Examples: 'be more formal', 'talk like a pirate', 'be concise'."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string",
+                    "description": "A description of the desired attitude or communication style.",
+                },
+            },
+            "required": ["description"],
+        },
+    },
 ]
 
 
