@@ -26,6 +26,15 @@ BUILTIN_TOOLS: list[dict] = [
     },
     {
         "type": "function",
+        "name": "list_attitudes",
+        "description": (
+            "List available attitude presets and custom attitudes. "
+            "Call this when the user asks what attitudes or personalities are available."
+        ),
+        "parameters": {"type": "object", "properties": {}},
+    },
+    {
+        "type": "function",
         "name": "set_attitude",
         "description": (
             "Change the assistant's attitude, personality, or communication style. "
@@ -63,6 +72,26 @@ def handle_builtin_tool(name: str) -> str | None:
                 "timezone": now.astimezone().tzname(),
             }
         )
+    if name == "list_attitudes":
+        from roomkit_ui.settings import load_settings
+        from roomkit_ui.widgets.settings.constants import ATTITUDE_PRESETS
+
+        settings = load_settings()
+        attitudes = [{"name": n, "description": t, "type": "preset"} for n, t in ATTITUDE_PRESETS]
+        try:
+            custom = json.loads(settings.get("custom_attitudes", "[]"))
+            for att in custom:
+                if att.get("name"):
+                    attitudes.append(
+                        {
+                            "name": att["name"],
+                            "description": att.get("text", ""),
+                            "type": "custom",
+                        }
+                    )
+        except (json.JSONDecodeError, TypeError):
+            pass
+        return json.dumps({"attitudes": attitudes})
     if name == "get_roomkit_info":
         return json.dumps(
             {
