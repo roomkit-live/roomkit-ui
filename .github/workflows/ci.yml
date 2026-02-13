@@ -53,4 +53,4 @@ jobs:
         run: uv python install 3.12
 
       - name: Mypy
-        run: uvx mypy src/
+        run: uvx --with pydantic --with httpx mypy src/
