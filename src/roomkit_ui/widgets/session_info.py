@@ -143,14 +143,10 @@ class SessionInfoBar(QWidget):
             self._detail_layout.addWidget(failed_label)
 
         for tool in tools:
-            self._add_detail_row(
-                "\u2699", tool.get("name", ""), tool.get("description", ""), c
-            )
+            self._add_detail_row("\u2699", tool.get("name", ""), tool.get("description", ""), c)
 
         for skill in skills:
-            self._add_detail_row(
-                "\u2726", skill.get("name", ""), skill.get("description", ""), c
-            )
+            self._add_detail_row("\u2726", skill.get("name", ""), skill.get("description", ""), c)
 
         self._detail_layout.addStretch()
 
@@ -160,9 +156,7 @@ class SessionInfoBar(QWidget):
         self.setFixedHeight(_COLLAPSED_HEIGHT)
         self.show()
 
-    def _add_detail_row(
-        self, icon: str, name: str, desc: str, c: dict
-    ) -> None:
+    def _add_detail_row(self, icon: str, name: str, desc: str, c: dict) -> None:
         """Add a single tool/skill row to the detail panel."""
         if len(desc) > 80:
             desc = desc[:77] + "..."
