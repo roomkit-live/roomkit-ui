@@ -98,6 +98,7 @@ class MainWindow(QMainWindow):
         self._engine.mcp_status.connect(self._on_mcp_status)
         self._engine.loading_status.connect(self._on_loading_status)
         self._engine.session_info.connect(self._on_session_info)
+        self._engine.attitude_changed.connect(self._info_bar.set_attitude)
 
         # MCP App state
         self._active_app_widgets: dict[str, Any] = {}  # tool_name → MCPAppWidget

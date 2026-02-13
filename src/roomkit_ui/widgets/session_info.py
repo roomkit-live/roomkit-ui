@@ -59,7 +59,18 @@ class SessionInfoBar(QWidget):
         self._summary_label.setStyleSheet(
             f"color: {c['ACCENT_BLUE']}; font-size: 12px; background: transparent;"
         )
-        header_layout.addWidget(self._summary_label, 1)
+        header_layout.addWidget(self._summary_label)
+
+        self._attitude_label = QLabel()
+        self._attitude_label.setStyleSheet(
+            f"color: {c['TEXT_SECONDARY']}; font-size: 11px;"
+            f" background: {c['BG_SECONDARY']}; border-radius: 4px;"
+            f" padding: 1px 6px;"
+        )
+        self._attitude_label.hide()
+        header_layout.addWidget(self._attitude_label)
+
+        header_layout.addStretch(1)
 
         self._chevron = QLabel()
         self._chevron.setFixedWidth(20)
@@ -174,6 +185,16 @@ class SessionInfoBar(QWidget):
         )
         self._detail_layout.addWidget(row)
 
+    def set_attitude(self, description: str) -> None:
+        """Show or hide the attitude badge in the header."""
+        if description:
+            # Use first ~30 chars for display
+            display = description if len(description) <= 30 else description[:28] + "\u2026"
+            self._attitude_label.setText(display)
+            self._attitude_label.show()
+        else:
+            self._attitude_label.hide()
+
     def clear_session(self) -> None:
         """Hide the bar."""
         self._anim_timer.stop()
@@ -181,6 +202,7 @@ class SessionInfoBar(QWidget):
         self.setFixedHeight(0)
         self.hide()
         self._detail_area.hide()
+        self._attitude_label.hide()
         self._clear_details()
 
     # -- internal ------------------------------------------------------------

@@ -41,6 +41,7 @@ class Engine(QObject):
     mcp_status = Signal(str)  # status message
     loading_status = Signal(str)  # loading progress message
     session_info = Signal(dict)  # {provider, model, tools, failed_servers}
+    attitude_changed = Signal(str)  # attitude name (empty string = cleared)
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -218,6 +219,10 @@ class Engine(QObject):
                 self._ai_channel._system_prompt = f"{base}\n\n# Attitude\n{description}"
             else:
                 self._ai_channel._system_prompt = base
+        try:
+            self.attitude_changed.emit(description)
+        except Exception:
+            pass
         return json.dumps(
             {
                 "status": "ok",
@@ -395,6 +400,8 @@ class Engine(QObject):
             if self._mcp and self._mcp.failed_servers:
                 info["failed_servers"] = list(self._mcp.failed_servers)
             self.session_info.emit(info)
+            if self._attitude:
+                self.attitude_changed.emit(self._attitude)
 
         except Exception as e:
             logger.exception("Failed to start voice session")
@@ -672,6 +679,8 @@ class Engine(QObject):
             if self._mcp and self._mcp.failed_servers:
                 info["failed_servers"] = list(self._mcp.failed_servers)
             self.session_info.emit(info)
+            if self._attitude:
+                self.attitude_changed.emit(self._attitude)
 
         except Exception as e:
             logger.exception("Failed to start voice channel session")
