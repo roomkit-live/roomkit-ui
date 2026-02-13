@@ -55,7 +55,8 @@ class Engine(QObject):
         self._mcp: MCPManager | None = None
         self._mic_muted = False
         self._state = "idle"
-        self._attitude: str = ""
+        self._attitude: str = ""  # full description text (injected into prompt)
+        self._attitude_name: str = ""  # short display name for the header
 
         # Speaker RMS queue: audio arrives in bursts from the provider but
         # plays back at a steady 20 ms cadence.  We split incoming chunks
@@ -209,6 +210,7 @@ class Engine(QObject):
     def _apply_attitude(self, description: str) -> str:
         """Apply a new attitude/personality and update the live system prompt."""
         self._attitude = description
+        self._attitude_name = description
         # Voice channel: update the system prompt on AIChannel for subsequent requests
         if self._ai_channel is not None:
             base = self._ai_channel._system_prompt or ""
@@ -220,7 +222,7 @@ class Engine(QObject):
             else:
                 self._ai_channel._system_prompt = base
         try:
-            self.attitude_changed.emit(description)
+            self.attitude_changed.emit(self._attitude_name)
         except Exception:
             pass
         return json.dumps(
@@ -266,6 +268,8 @@ class Engine(QObject):
             if attitude:
                 system_prompt = f"{system_prompt}\n\n# Attitude\n{attitude}"
                 self._attitude = attitude
+                if not self._attitude_name:
+                    self._attitude_name = settings.get("selected_attitude", "") or attitude
             aec_mode = settings.get("aec_mode", "webrtc")
             denoise_mode = settings.get("denoise", "none")
 
@@ -400,8 +404,8 @@ class Engine(QObject):
             if self._mcp and self._mcp.failed_servers:
                 info["failed_servers"] = list(self._mcp.failed_servers)
             self.session_info.emit(info)
-            if self._attitude:
-                self.attitude_changed.emit(self._attitude)
+            if self._attitude_name:
+                self.attitude_changed.emit(self._attitude_name)
 
         except Exception as e:
             logger.exception("Failed to start voice session")
@@ -433,6 +437,8 @@ class Engine(QObject):
             if attitude:
                 system_prompt = f"{system_prompt}\n\n# Attitude\n{attitude}"
                 self._attitude = attitude
+                if not self._attitude_name:
+                    self._attitude_name = settings.get("selected_attitude", "") or attitude
             inference_device = settings.get("inference_device", "cpu")
             aec_mode = settings.get("aec_mode", "webrtc")
             denoise_mode = settings.get("denoise", "none")
@@ -679,8 +685,8 @@ class Engine(QObject):
             if self._mcp and self._mcp.failed_servers:
                 info["failed_servers"] = list(self._mcp.failed_servers)
             self.session_info.emit(info)
-            if self._attitude:
-                self.attitude_changed.emit(self._attitude)
+            if self._attitude_name:
+                self.attitude_changed.emit(self._attitude_name)
 
         except Exception as e:
             logger.exception("Failed to start voice channel session")
@@ -844,6 +850,7 @@ class Engine(QObject):
             logger.exception("Error during stop")
         finally:
             self._attitude = ""
+            self._attitude_name = ""
             self._state = "idle"
             self.state_changed.emit("idle")
 
