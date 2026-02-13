@@ -9,7 +9,7 @@ from PySide6.QtCore import QObject, Slot
 from PySide6.QtGui import QAction, QColor, QIcon, QPainter, QPen
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
-from room_ui.icons import svg_icon
+from roomkit_ui.icons import svg_icon
 
 logger = logging.getLogger(__name__)
 

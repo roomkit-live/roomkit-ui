@@ -11,14 +11,14 @@ from typing import Any
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QMainWindow, QVBoxLayout, QWidget
 
-from room_ui.engine import Engine
-from room_ui.settings import load_settings
-from room_ui.theme import colors
-from room_ui.widgets.chat_view import ChatView
-from room_ui.widgets.control_bar import ControlBar
-from room_ui.widgets.session_info import SessionInfoBar
-from room_ui.widgets.settings_panel import SettingsPanel
-from room_ui.widgets.vu_meter import VUMeter
+from roomkit_ui.engine import Engine
+from roomkit_ui.settings import load_settings
+from roomkit_ui.theme import colors
+from roomkit_ui.widgets.chat_view import ChatView
+from roomkit_ui.widgets.control_bar import ControlBar
+from roomkit_ui.widgets.session_info import SessionInfoBar
+from roomkit_ui.widgets.settings_panel import SettingsPanel
+from roomkit_ui.widgets.vu_meter import VUMeter
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +56,7 @@ class MainWindow(QMainWindow):
         # That destroy-and-recreate cycle causes a visible flash across the
         # entire application.  Pre-creating the handles here (before show())
         # means the chain is already native when QWebEngineView appears later.
-        from room_ui.widgets.mcp_app_widget import has_webengine
+        from roomkit_ui.widgets.mcp_app_widget import has_webengine
 
         if has_webengine():
             w = self._chat.widget()
@@ -144,7 +144,7 @@ class MainWindow(QMainWindow):
             self._vu.start()
             self.session_active_changed.emit(True)
         elif state in ("idle", "error"):
-            self._chat.clear_loading_status()
+            self._chat.reset()
             self._vu.stop()
             self._info_bar.clear_session()
             self._active_app_widgets.clear()

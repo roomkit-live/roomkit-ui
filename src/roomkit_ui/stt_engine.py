@@ -11,8 +11,8 @@ from typing import Any
 
 from PySide6.QtCore import QObject, Signal
 
-from room_ui.model_manager import build_stt_config, is_model_downloaded, is_streaming_model
-from room_ui.settings import load_settings
+from roomkit_ui.model_manager import build_stt_config, is_model_downloaded, is_streaming_model
+from roomkit_ui.settings import load_settings
 
 logger = logging.getLogger(__name__)
 

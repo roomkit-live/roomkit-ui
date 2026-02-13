@@ -9,8 +9,8 @@ from PySide6.QtCore import QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QHBoxLayout, QPushButton, QWidget
 
-from room_ui.icons import svg_icon
-from room_ui.theme import colors
+from roomkit_ui.icons import svg_icon
+from roomkit_ui.theme import colors
 
 # ---------------------------------------------------------------------------
 # Base circle button

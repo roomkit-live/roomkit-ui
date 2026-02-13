@@ -8,7 +8,7 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QColor, QLinearGradient, QPainter, QPainterPath, QPen, QRadialGradient
 from PySide6.QtWidgets import QWidget
 
-from room_ui.theme import colors
+from roomkit_ui.theme import colors
 
 
 class VUMeter(QWidget):

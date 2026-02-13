@@ -196,7 +196,7 @@ class HotkeyListener(QObject):
 
     def reload(self) -> None:
         """Restart the listener with fresh settings."""
-        from room_ui.settings import load_settings
+        from roomkit_ui.settings import load_settings
 
         settings = load_settings()
         enabled = settings.get(self._enabled_key, True)

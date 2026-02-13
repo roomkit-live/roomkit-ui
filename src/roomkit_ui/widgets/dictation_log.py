@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from room_ui.theme import colors
+from roomkit_ui.theme import colors
 
 
 class DictationLog(QWidget):

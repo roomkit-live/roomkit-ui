@@ -263,7 +263,7 @@ QCheckBox::indicator:checked {{
 
 # ---------------------------------------------------------------------------
 # Backward-compat: module-level constants (dark palette) so existing imports
-# like `from room_ui.theme import STYLESHEET` keep working during migration.
+# like `from roomkit_ui.theme import STYLESHEET` keep working during migration.
 # ---------------------------------------------------------------------------
 
 BG_PRIMARY = DARK["BG_PRIMARY"]

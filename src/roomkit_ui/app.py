@@ -29,13 +29,13 @@ from PySide6.QtGui import QIcon  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 from qasync import QEventLoop  # noqa: E402
 
-from room_ui.hotkey import HotkeyListener  # noqa: E402
-from room_ui.settings import load_settings  # noqa: E402
-from room_ui.stt_engine import STTEngine  # noqa: E402
-from room_ui.theme import get_stylesheet  # noqa: E402
-from room_ui.tray import TrayService  # noqa: E402
-from room_ui.widgets.dictation_log import DictationLog  # noqa: E402
-from room_ui.widgets.main_window import MainWindow  # noqa: E402
+from roomkit_ui.hotkey import HotkeyListener  # noqa: E402
+from roomkit_ui.settings import load_settings  # noqa: E402
+from roomkit_ui.stt_engine import STTEngine  # noqa: E402
+from roomkit_ui.theme import get_stylesheet  # noqa: E402
+from roomkit_ui.tray import TrayService  # noqa: E402
+from roomkit_ui.widgets.dictation_log import DictationLog  # noqa: E402
+from roomkit_ui.widgets.main_window import MainWindow  # noqa: E402
 
 # Log to file so we can diagnose issues when launched without a console.
 if sys.platform == "darwin":
@@ -145,7 +145,7 @@ def main() -> None:
     tray.log_action.triggered.connect(dictation_log.raise_)
 
     # session state → tray icon + notification sounds
-    from room_ui.sounds import play_session_start, play_session_stop
+    from roomkit_ui.sounds import play_session_start, play_session_stop
 
     window.session_active_changed.connect(tray.on_session_changed)
     window.session_active_changed.connect(

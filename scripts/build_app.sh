@@ -55,8 +55,8 @@ uv run pyinstaller \
     --hidden-import=pynput \
     --hidden-import=pynput.keyboard \
     --hidden-import=pynput.keyboard._darwin \
-    --add-data "src/room_ui${SEP}room_ui" \
-    src/room_ui/__main__.py
+    --add-data "src/roomkit_ui${SEP}roomkit_ui" \
+    src/roomkit_ui/__main__.py
 
 # macOS: patch Info.plist and re-sign
 APP_PLIST="dist/RoomKit UI.app/Contents/Info.plist"

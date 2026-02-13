@@ -7,7 +7,7 @@ from datetime import datetime
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout
 
-from room_ui.theme import colors
+from roomkit_ui.theme import colors
 
 
 def _markdown_to_html(text: str, c: dict[str, str]) -> str:

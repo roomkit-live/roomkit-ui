@@ -10,10 +10,12 @@ from typing import Any
 
 from PySide6.QtCore import QObject, QTimer, Signal
 
-from room_ui.builtin_tools import BUILTIN_TOOLS, handle_builtin_tool
-from room_ui.cleanup import cleanup_stale_fds, post_cleanup_monitor
-from room_ui.hooks import register_audio_hooks, register_vc_hooks
-from room_ui.mcp_manager import MCPManager
+from roomkit_ui.builtin_tools import BUILTIN_TOOLS, handle_builtin_tool
+from roomkit_ui.cleanup import cleanup_stale_fds, post_cleanup_monitor
+from roomkit_ui.hooks import register_audio_hooks, register_vc_hooks
+from roomkit_ui.mcp_manager import MCPManager
+from roomkit_ui.providers import create_ai_provider
+from roomkit_ui.tts import create_tts_provider
 
 logger = logging.getLogger(__name__)
 
@@ -384,7 +386,7 @@ class Engine(QObject):
             from roomkit.voice.pipeline.config import AudioPipelineConfig
             from roomkit.voice.stt.sherpa_onnx import SherpaOnnxSTTProvider
 
-            from room_ui.model_manager import build_stt_config
+            from roomkit_ui.model_manager import build_stt_config
 
             system_prompt = settings.get(
                 "system_prompt",
@@ -414,7 +416,8 @@ class Engine(QObject):
 
             # 2. Build TTS
             self.loading_status.emit("Loading TTS model\u2026")
-            tts, output_sample_rate = self._build_tts_provider(settings)
+            tts_provider_name = settings.get("vc_tts_provider", "piper")
+            tts, output_sample_rate = create_tts_provider(tts_provider_name, settings)
             self._tts = tts
             if hasattr(tts, "warmup"):
                 self.loading_status.emit("Warming up TTS model\u2026")
@@ -426,9 +429,34 @@ class Engine(QObject):
             )
 
             # 3. Build AI provider
+            self.loading_status.emit("Connecting to LLM\u2026")
             llm_provider_name = settings.get("vc_llm_provider", "anthropic")
-            ai_provider = self._build_ai_provider(settings, llm_provider_name)
+            ai_provider = create_ai_provider(llm_provider_name, settings)
             model = ai_provider.model_name
+
+            # Wrap local provider so "does not support tools" errors reach the UI
+            if llm_provider_name == "local":
+                _orig_generate = ai_provider.generate
+                _tool_error_emitted = False
+
+                async def _generate_with_tool_hint(context: Any) -> Any:
+                    nonlocal _tool_error_emitted
+                    try:
+                        return await _orig_generate(context)
+                    except Exception as exc:
+                        if not _tool_error_emitted and "does not support tools" in str(exc):
+                            _tool_error_emitted = True
+                            try:
+                                self.error_occurred.emit(
+                                    "This model does not support tool use. "
+                                    'Disable "Model supports tool use" in '
+                                    "Settings \u2192 AI Provider."
+                                )
+                            except Exception:
+                                pass
+                        raise
+
+                ai_provider.generate = _generate_with_tool_hint  # type: ignore[method-assign]
 
             # 4. Audio processing
             input_sample_rate = 16000
@@ -468,7 +496,7 @@ class Engine(QObject):
             vad: Any = None
             vad_model_id = settings.get("vc_vad_model", "")
             if vad_model_id:
-                from room_ui.model_manager import build_vad_config, is_vad_model_downloaded
+                from roomkit_ui.model_manager import build_vad_config, is_vad_model_downloaded
 
                 if is_vad_model_downloaded(vad_model_id):
                     from roomkit.voice.pipeline.vad.sherpa_onnx import SherpaOnnxVADProvider
@@ -517,17 +545,23 @@ class Engine(QObject):
             )
             self._ai_channel = ai_channel
 
-            # 9. MCP tools
-            mcp_servers_configured = False
-            try:
-                mcp_servers_configured = any(
-                    s.get("enabled", True) for s in json.loads(settings.get("mcp_servers", "[]"))
-                )
-            except (json.JSONDecodeError, TypeError):
-                pass
-            if mcp_servers_configured:
-                self.loading_status.emit("Connecting MCP servers\u2026")
-            tools, _has_mcp = await self._setup_mcp_tools(settings)
+            # 9. MCP tools (skip when the local model has no tool support)
+            skip_tools = llm_provider_name == "local" and not settings.get("vc_local_tools", True)
+            tools: list[dict] = []
+            if skip_tools:
+                logger.info("Local model tool support disabled — skipping MCP/tools")
+            else:
+                mcp_servers_configured = False
+                try:
+                    mcp_servers_configured = any(
+                        s.get("enabled", True)
+                        for s in json.loads(settings.get("mcp_servers", "[]"))
+                    )
+                except (json.JSONDecodeError, TypeError):
+                    pass
+                if mcp_servers_configured:
+                    self.loading_status.emit("Connecting MCP servers\u2026")
+                tools, _has_mcp = await self._setup_mcp_tools(settings)
 
             # 10. Wire up framework
             kit = RoomKit()
@@ -621,7 +655,7 @@ class Engine(QObject):
             except ImportError:
                 logger.warning("RNNoise denoiser not available")
         elif denoise_mode == "gtcrn":
-            from room_ui.model_manager import gtcrn_model_path, is_gtcrn_downloaded
+            from roomkit_ui.model_manager import gtcrn_model_path, is_gtcrn_downloaded
 
             if is_gtcrn_downloaded():
                 from roomkit.voice.pipeline.denoiser.sherpa_onnx import (
@@ -665,106 +699,6 @@ class Engine(QObject):
 
         has_mcp_tools = len(tools) > len(BUILTIN_TOOLS)
         return tools, has_mcp_tools
-
-    def _build_ai_provider(self, settings: dict, provider_name: str) -> Any:
-        """Create an AI provider for voice channel mode."""
-        if provider_name == "anthropic":
-            from roomkit.providers.anthropic.ai import AnthropicAIProvider
-            from roomkit.providers.anthropic.config import AnthropicConfig
-
-            api_key = settings.get("anthropic_api_key", "")
-            if not api_key:
-                raise ValueError("Anthropic API key is required. Open Settings to enter it.")
-            return AnthropicAIProvider(
-                AnthropicConfig(
-                    api_key=api_key,
-                    model=settings.get("vc_anthropic_model", "claude-sonnet-4-20250514"),
-                )
-            )
-        elif provider_name == "openai":
-            from roomkit.providers.openai.ai import OpenAIAIProvider
-            from roomkit.providers.openai.config import OpenAIConfig
-
-            api_key = settings.get("openai_api_key", "")
-            if not api_key:
-                raise ValueError("OpenAI API key is required. Open Settings to enter it.")
-            return OpenAIAIProvider(
-                OpenAIConfig(
-                    api_key=api_key,
-                    model=settings.get("vc_openai_model", "gpt-4o"),
-                )
-            )
-        else:  # gemini
-            from roomkit.providers.gemini.ai import GeminiAIProvider
-            from roomkit.providers.gemini.config import GeminiConfig
-
-            api_key = settings.get("api_key", "")
-            if not api_key:
-                raise ValueError("Google API key is required. Open Settings to enter it.")
-            return GeminiAIProvider(
-                GeminiConfig(
-                    api_key=api_key,
-                    model=settings.get("vc_gemini_model", "gemini-2.0-flash"),
-                )
-            )
-
-    def _build_tts_provider(self, settings: dict) -> tuple[Any, int]:
-        """Create a TTS provider for voice channel mode. Returns (provider, sample_rate)."""
-        provider_name = settings.get("vc_tts_provider", "piper")
-        inference_device = settings.get("inference_device", "cpu")
-
-        if provider_name == "qwen3":
-            from roomkit.voice.tts.qwen3 import Qwen3TTSConfig, Qwen3TTSProvider, VoiceCloneConfig
-
-            ref_audio, ref_text = self._require_ref_audio(settings, "Qwen3-TTS")
-            tts = Qwen3TTSProvider(
-                Qwen3TTSConfig(
-                    voices={
-                        "default": VoiceCloneConfig(
-                            ref_audio=ref_audio,
-                            ref_text=ref_text,
-                        )
-                    },
-                )
-            )
-            return tts, 24000
-
-        if provider_name == "neutts":
-            from roomkit.voice.tts.neutts import NeuTTSConfig, NeuTTSProvider, NeuTTSVoiceConfig
-
-            ref_audio, ref_text = self._require_ref_audio(settings, "NeuTTS")
-            tts = NeuTTSProvider(
-                NeuTTSConfig(
-                    voices={
-                        "default": NeuTTSVoiceConfig(
-                            ref_audio=ref_audio,
-                            ref_text=ref_text,
-                        )
-                    },
-                )
-            )
-            return tts, 24000
-
-        # piper (default)
-        from roomkit.voice.tts.sherpa_onnx import SherpaOnnxTTSProvider
-
-        from room_ui.model_manager import build_tts_config
-
-        tts_model_id = settings.get("vc_tts_model", "")
-        if not tts_model_id:
-            raise ValueError(
-                "No TTS model selected. Download one in AI Models and select it in Settings."
-            )
-        config = build_tts_config(tts_model_id, provider=inference_device)
-        return SherpaOnnxTTSProvider(config), config.sample_rate
-
-    @staticmethod
-    def _require_ref_audio(settings: dict, label: str) -> tuple[str, str]:
-        ref_audio = settings.get("vc_tts_ref_audio", "")
-        ref_text = settings.get("vc_tts_ref_text", "")
-        if not ref_audio or not ref_text:
-            raise ValueError(f"{label} requires a reference WAV and its transcript in Settings.")
-        return ref_audio, ref_text
 
     async def _start_session(
         self,

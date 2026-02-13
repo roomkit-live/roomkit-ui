@@ -30,7 +30,7 @@ from PySide6.QtCore import QUrl, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QDialog, QFrame, QLabel, QSizePolicy, QVBoxLayout, QWidget
 
-from room_ui.theme import colors
+from roomkit_ui.theme import colors
 
 logger = logging.getLogger(__name__)
 
@@ -312,7 +312,7 @@ class MCPAppWidget(QFrame):
         self._layout.addWidget(label)
 
     def _setup_webengine(self) -> None:
-        from room_ui.mcp_app_bridge import MCPAppBridge
+        from roomkit_ui.mcp_app_bridge import MCPAppBridge
 
         logger.debug("MCPAppWidget: setting up QWebEngine for %r", self._tool_name)
 

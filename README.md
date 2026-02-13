@@ -59,7 +59,7 @@ Then double-click the app to open it. You'll also need to grant microphone permi
 git clone https://github.com/roomkit-live/roomkit-ui.git
 cd roomkit-ui
 uv sync
-uv run python -m room_ui
+uv run python -m roomkit_ui
 ```
 
 For WebRTC echo cancellation (recommended):
@@ -106,7 +106,7 @@ uv pip install sherpa-onnx==1.12.23+cuda12.cudnn9 \
 ## Project Structure
 
 ```
-src/room_ui/
+src/roomkit_ui/
 ├── app.py              # QApplication + qasync event loop
 ├── engine.py           # Async engine bridging roomkit <> Qt signals
 ├── hotkey.py           # Global hotkey (NSEvent on macOS, pynput fallback)
@@ -140,7 +140,7 @@ Or generate icons and build manually:
 ```bash
 pip install pyinstaller Pillow cairosvg
 python scripts/generate_icons.py
-pyinstaller --name "RoomKit UI" --windowed --icon=assets/icon.icns src/room_ui/__main__.py
+pyinstaller --name "RoomKit UI" --windowed --icon=assets/icon.icns src/roomkit_ui/__main__.py
 ```
 
 ## License

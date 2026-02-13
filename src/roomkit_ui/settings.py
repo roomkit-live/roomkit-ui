@@ -39,7 +39,14 @@ _DEFAULTS = {
     "vc_anthropic_model": "claude-sonnet-4-20250514",
     "vc_openai_model": "gpt-4o",
     "vc_gemini_model": "gemini-2.0-flash",
+    "vc_tts_provider": "piper",  # "piper" | "qwen3" | "neutts"
     "vc_tts_model": "",
+    "vc_tts_ref_audio": "",  # Path to reference WAV for voice cloning
+    "vc_tts_ref_text": "",  # Transcript of reference audio
+    "vc_local_base_url": "http://localhost:11434/v1",
+    "vc_local_model": "",
+    "vc_local_api_key": "",
+    "vc_local_tools": True,
     "vc_stt_model": "",
     "vc_vad_model": "",
     "vc_interruption": False,

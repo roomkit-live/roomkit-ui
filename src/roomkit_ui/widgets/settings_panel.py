@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
+    QFileDialog,
     QFormLayout,
     QHBoxLayout,
     QLabel,
@@ -26,9 +27,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from room_ui.settings import load_settings, save_settings
-from room_ui.theme import colors
-from room_ui.widgets.hotkey_button import HotkeyButton
+from roomkit_ui.settings import load_settings, save_settings
+from roomkit_ui.theme import colors
+from roomkit_ui.widgets.hotkey_button import HotkeyButton
 
 GEMINI_MODELS = [
     "gemini-2.5-flash-native-audio-preview-12-2025",
@@ -55,11 +56,18 @@ VC_LLM_PROVIDERS = [
     ("Anthropic", "anthropic"),
     ("OpenAI", "openai"),
     ("Google Gemini", "gemini"),
+    ("Local (vLLM / Ollama)", "local"),
 ]
 
 VC_ANTHROPIC_MODELS = ["claude-sonnet-4-20250514", "claude-haiku-4-5-20251001"]
 VC_OPENAI_MODELS = ["gpt-4o", "gpt-4o-mini"]
 VC_GEMINI_MODELS = ["gemini-2.0-flash", "gemini-2.5-flash"]
+
+VC_TTS_PROVIDERS = [
+    ("Piper (sherpa-onnx)", "piper"),
+    ("Qwen3-TTS (voice clone)", "qwen3"),
+    ("NeuTTS (voice clone)", "neutts"),
+]
 
 
 AEC_MODES = [
@@ -252,7 +260,7 @@ class _GeneralPage(QWidget):
         proc_form.addRow("Denoise", self.denoise)
 
         # Inference device
-        from room_ui.model_manager import detect_providers
+        from roomkit_ui.model_manager import detect_providers
 
         self._inference_providers = detect_providers()
         self.inference_device = QComboBox()
@@ -504,6 +512,28 @@ class _AIPage(QWidget):
         self._vc_gemini_model_label = QLabel("Model")
         vc_form.addRow(self._vc_gemini_model_label, self.vc_gemini_model)
 
+        # Local (vLLM / Ollama) fields
+        self.vc_local_base_url = QLineEdit(settings.get("vc_local_base_url", ""))
+        self.vc_local_base_url.setPlaceholderText("http://localhost:11434/v1")
+        self._vc_local_base_url_label = QLabel("Base URL")
+        vc_form.addRow(self._vc_local_base_url_label, self.vc_local_base_url)
+
+        self.vc_local_model = QLineEdit(settings.get("vc_local_model", ""))
+        self.vc_local_model.setPlaceholderText("e.g. qwen2.5:7b")
+        self._vc_local_model_label = QLabel("Model")
+        vc_form.addRow(self._vc_local_model_label, self.vc_local_model)
+
+        self.vc_local_api_key = QLineEdit(settings.get("vc_local_api_key", ""))
+        self.vc_local_api_key.setEchoMode(QLineEdit.Password)
+        self.vc_local_api_key.setPlaceholderText("Optional")
+        self._vc_local_api_key_label = QLabel("API Key")
+        vc_form.addRow(self._vc_local_api_key_label, self.vc_local_api_key)
+
+        self.vc_local_tools = QCheckBox("Model supports tool use (function calling)")
+        self.vc_local_tools.setChecked(bool(settings.get("vc_local_tools", True)))
+        self._vc_local_tools_label = QLabel("")
+        vc_form.addRow(self._vc_local_tools_label, self.vc_local_tools)
+
         # STT model combo
         self.vc_stt_model = QComboBox()
         self._vc_stt_no_models = QLabel("No STT models downloaded \u2014 go to AI Models tab.")
@@ -533,17 +563,48 @@ class _AIPage(QWidget):
         self.vc_interruption.setChecked(bool(settings.get("vc_interruption", False)))
         vc_form.addRow("", self.vc_interruption)
 
-        # TTS model combo
+        # TTS provider selector
+        self.vc_tts_provider = QComboBox()
+        for label, _value in VC_TTS_PROVIDERS:
+            self.vc_tts_provider.addItem(label)
+        current_tts_prov = settings.get("vc_tts_provider", "piper")
+        for i, (_, val) in enumerate(VC_TTS_PROVIDERS):
+            if val == current_tts_prov:
+                self.vc_tts_provider.setCurrentIndex(i)
+                break
+        vc_form.addRow("TTS Provider", self.vc_tts_provider)
+
+        # TTS model combo (Piper only)
         self.vc_tts_model = QComboBox()
+        self._vc_tts_model_label = QLabel("TTS Model")
         self._vc_tts_no_models = QLabel("No TTS models downloaded \u2014 go to AI Models tab.")
         self._vc_tts_no_models.setWordWrap(True)
         self._vc_tts_no_models.setStyleSheet(
             f"font-size: 12px; color: {c['TEXT_SECONDARY']};"
             f" font-style: italic; background: transparent;"
         )
-        vc_form.addRow("TTS Model", self.vc_tts_model)
+        vc_form.addRow(self._vc_tts_model_label, self.vc_tts_model)
         vc_form.addRow("", self._vc_tts_no_models)
         self._vc_saved_tts = settings.get("vc_tts_model", "")
+
+        # Reference audio + text (voice clone providers only)
+        self.vc_tts_ref_audio = QLineEdit(settings.get("vc_tts_ref_audio", ""))
+        self.vc_tts_ref_audio.setPlaceholderText("Path to reference WAV (3-15s of speech)")
+        self._vc_ref_audio_browse = QPushButton("Browse\u2026")
+        self._vc_ref_audio_browse.setCursor(Qt.PointingHandCursor)
+        self._vc_ref_audio_browse.setFixedHeight(28)
+        self._vc_ref_audio_browse.clicked.connect(self._browse_ref_audio)
+        ref_audio_row = QHBoxLayout()
+        ref_audio_row.setSpacing(6)
+        ref_audio_row.addWidget(self.vc_tts_ref_audio, 1)
+        ref_audio_row.addWidget(self._vc_ref_audio_browse)
+        self._vc_ref_audio_label = QLabel("Ref Audio")
+        vc_form.addRow(self._vc_ref_audio_label, ref_audio_row)
+
+        self.vc_tts_ref_text = QLineEdit(settings.get("vc_tts_ref_text", ""))
+        self.vc_tts_ref_text.setPlaceholderText("Transcript of the reference audio")
+        self._vc_ref_text_label = QLabel("Ref Text")
+        vc_form.addRow(self._vc_ref_text_label, self.vc_tts_ref_text)
 
         vc_layout.addLayout(vc_form)
         layout.addWidget(self._vc_section)
@@ -572,11 +633,13 @@ class _AIPage(QWidget):
         self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
         self.provider.currentIndexChanged.connect(self._on_provider_changed)
         self.vc_provider.currentIndexChanged.connect(self._on_vc_provider_changed)
+        self.vc_tts_provider.currentIndexChanged.connect(self._on_vc_tts_provider_changed)
 
         # Initial state
         self._on_mode_changed(self.mode_combo.currentIndex())
         self._on_provider_changed(self.provider.currentIndex())
         self._on_vc_provider_changed(self.vc_provider.currentIndex())
+        self._on_vc_tts_provider_changed(self.vc_tts_provider.currentIndex())
 
     def _on_mode_changed(self, index: int) -> None:
         is_realtime = CONVERSATION_MODES[index][1] == "realtime"
@@ -614,10 +677,39 @@ class _AIPage(QWidget):
         self.vc_gemini_api_key.setVisible(prov == "gemini")
         self._vc_gemini_model_label.setVisible(prov == "gemini")
         self.vc_gemini_model.setVisible(prov == "gemini")
+        self._vc_local_base_url_label.setVisible(prov == "local")
+        self.vc_local_base_url.setVisible(prov == "local")
+        self._vc_local_model_label.setVisible(prov == "local")
+        self.vc_local_model.setVisible(prov == "local")
+        self._vc_local_api_key_label.setVisible(prov == "local")
+        self.vc_local_api_key.setVisible(prov == "local")
+        self._vc_local_tools_label.setVisible(prov == "local")
+        self.vc_local_tools.setVisible(prov == "local")
+
+    def _on_vc_tts_provider_changed(self, index: int) -> None:
+        prov = VC_TTS_PROVIDERS[index][1]
+        is_piper = prov == "piper"
+        # Piper-specific widgets
+        self._vc_tts_model_label.setVisible(is_piper)
+        self.vc_tts_model.setVisible(is_piper)
+        self._vc_tts_no_models.setVisible(is_piper and self.vc_tts_model.count() == 0)
+        # Voice clone reference fields
+        self._vc_ref_audio_label.setVisible(not is_piper)
+        self.vc_tts_ref_audio.setVisible(not is_piper)
+        self._vc_ref_audio_browse.setVisible(not is_piper)
+        self._vc_ref_text_label.setVisible(not is_piper)
+        self.vc_tts_ref_text.setVisible(not is_piper)
+
+    def _browse_ref_audio(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Select Reference Audio", "", "WAV files (*.wav)"
+        )
+        if path:
+            self.vc_tts_ref_audio.setText(path)
 
     def refresh_vc_model_combos(self) -> None:
         """Rebuild STT/TTS/VAD model combos with currently downloaded models."""
-        from room_ui.model_manager import (
+        from roomkit_ui.model_manager import (
             STT_MODELS,
             TTS_MODELS,
             VAD_MODELS,
@@ -672,7 +764,8 @@ class _AIPage(QWidget):
                 self.vc_tts_model.setCurrentIndex(i)
                 break
         self.vc_tts_model.blockSignals(False)
-        self._vc_tts_no_models.setVisible(self.vc_tts_model.count() == 0)
+        # Re-apply TTS provider visibility (controls model combo vs ref fields)
+        self._on_vc_tts_provider_changed(self.vc_tts_provider.currentIndex())
 
 
 STT_LANGUAGES = [
@@ -704,7 +797,7 @@ class _ModelRow(QWidget):
 
     def __init__(self, model, c: dict, show_radio: bool = True, parent=None) -> None:
         super().__init__(parent)
-        from room_ui.model_manager import is_model_downloaded
+        from roomkit_ui.model_manager import is_model_downloaded
 
         self.model = model
         self._c = c
@@ -895,7 +988,7 @@ class _ModelsPage(QWidget):
         frame_layout.setContentsMargins(4, 4, 4, 4)
         frame_layout.setSpacing(0)
 
-        from room_ui.model_manager import STT_MODELS
+        from roomkit_ui.model_manager import STT_MODELS
 
         self._model_rows: list[_ModelRow] = []
         for model in STT_MODELS:
@@ -919,7 +1012,7 @@ class _ModelsPage(QWidget):
         )
         layout.addWidget(denoise_section)
 
-        from room_ui.model_manager import (
+        from roomkit_ui.model_manager import (
             GTCRN_MODEL_ID,
             GTCRN_SIZE,
             is_gtcrn_downloaded,
@@ -984,7 +1077,7 @@ class _ModelsPage(QWidget):
         vad_frame_layout.setContentsMargins(4, 4, 4, 4)
         vad_frame_layout.setSpacing(0)
 
-        from room_ui.model_manager import VAD_MODELS, is_vad_model_downloaded
+        from roomkit_ui.model_manager import VAD_MODELS, is_vad_model_downloaded
 
         self._vad_rows: list[_ModelRow] = []
         for vad_m in VAD_MODELS:
@@ -1029,7 +1122,7 @@ class _ModelsPage(QWidget):
         tts_frame_layout.setSpacing(0)
 
         # espeak-ng-data row (shared dependency)
-        from room_ui.model_manager import is_espeak_ng_downloaded
+        from roomkit_ui.model_manager import is_espeak_ng_downloaded
 
         @dataclass(frozen=True)
         class _EspeakInfo:
@@ -1051,7 +1144,7 @@ class _ModelsPage(QWidget):
         tts_frame_layout.addWidget(self._espeak_row)
 
         # TTS model rows
-        from room_ui.model_manager import TTS_MODELS, is_tts_model_downloaded
+        from roomkit_ui.model_manager import TTS_MODELS, is_tts_model_downloaded
 
         @dataclass(frozen=True)
         class _TTSInfo:
@@ -1087,7 +1180,7 @@ class _ModelsPage(QWidget):
         import asyncio
         import logging
 
-        from room_ui.model_manager import download_model
+        from roomkit_ui.model_manager import download_model
 
         row = self._find_row(model_id)
         if row is None:
@@ -1110,7 +1203,7 @@ class _ModelsPage(QWidget):
         loop.create_task(_run())
 
     def _delete_model(self, model_id: str) -> None:
-        from room_ui.model_manager import delete_model
+        from roomkit_ui.model_manager import delete_model
 
         delete_model(model_id)
         row = self._find_row(model_id)
@@ -1121,7 +1214,7 @@ class _ModelsPage(QWidget):
         import asyncio
         import logging
 
-        from room_ui.model_manager import download_gtcrn
+        from roomkit_ui.model_manager import download_gtcrn
 
         row = self._gtcrn_row
         row.set_resolving()
@@ -1142,7 +1235,7 @@ class _ModelsPage(QWidget):
         loop.create_task(_run())
 
     def _delete_gtcrn(self) -> None:
-        from room_ui.model_manager import delete_gtcrn
+        from roomkit_ui.model_manager import delete_gtcrn
 
         delete_gtcrn()
         self._gtcrn_row.set_not_downloaded()
@@ -1159,7 +1252,7 @@ class _ModelsPage(QWidget):
         import asyncio
         import logging
 
-        from room_ui.model_manager import download_espeak_ng_data
+        from roomkit_ui.model_manager import download_espeak_ng_data
 
         row = self._espeak_row
         row.set_resolving()
@@ -1180,7 +1273,7 @@ class _ModelsPage(QWidget):
         loop.create_task(_run())
 
     def _delete_espeak(self) -> None:
-        from room_ui.model_manager import delete_espeak_ng_data
+        from roomkit_ui.model_manager import delete_espeak_ng_data
 
         delete_espeak_ng_data()
         self._espeak_row.set_not_downloaded()
@@ -1189,7 +1282,7 @@ class _ModelsPage(QWidget):
         import asyncio
         import logging
 
-        from room_ui.model_manager import download_tts_model
+        from roomkit_ui.model_manager import download_tts_model
 
         row = self._find_tts_row(model_id)
         if row is None:
@@ -1212,7 +1305,7 @@ class _ModelsPage(QWidget):
         loop.create_task(_run())
 
     def _delete_tts_model(self, model_id: str) -> None:
-        from room_ui.model_manager import delete_tts_model
+        from roomkit_ui.model_manager import delete_tts_model
 
         delete_tts_model(model_id)
         row = self._find_tts_row(model_id)
@@ -1231,7 +1324,7 @@ class _ModelsPage(QWidget):
         import asyncio
         import logging
 
-        from room_ui.model_manager import download_vad_model
+        from roomkit_ui.model_manager import download_vad_model
 
         row = self._find_vad_row(model_id)
         if row is None:
@@ -1254,7 +1347,7 @@ class _ModelsPage(QWidget):
         loop.create_task(_run())
 
     def _delete_vad_model(self, model_id: str) -> None:
-        from room_ui.model_manager import delete_vad_model
+        from roomkit_ui.model_manager import delete_vad_model
 
         delete_vad_model(model_id)
         row = self._find_vad_row(model_id)
@@ -1389,7 +1482,7 @@ class _DictationPage(QWidget):
 
     def refresh_model_combo(self) -> None:
         """Rebuild the model combo with currently downloaded models."""
-        from room_ui.model_manager import STT_MODELS, is_model_downloaded
+        from roomkit_ui.model_manager import STT_MODELS, is_model_downloaded
 
         self._model_combo.blockSignals(True)
         self._model_combo.clear()
@@ -1871,7 +1964,7 @@ class SettingsPanel(QDialog):
         super().closeEvent(event)
 
     def _save(self) -> None:
-        from room_ui.theme import get_stylesheet
+        from roomkit_ui.theme import get_stylesheet
 
         # Merge API keys: prefer non-empty from either location
         openai_key = (
@@ -1919,7 +2012,14 @@ class SettingsPanel(QDialog):
             "vc_stt_model": self._ai.vc_stt_model.currentData() or "",
             "vc_vad_model": self._ai.vc_vad_model.currentData() or "",
             "vc_interruption": self._ai.vc_interruption.isChecked(),
+            "vc_tts_provider": VC_TTS_PROVIDERS[self._ai.vc_tts_provider.currentIndex()][1],
             "vc_tts_model": self._ai.vc_tts_model.currentData() or "",
+            "vc_tts_ref_audio": self._ai.vc_tts_ref_audio.text().strip(),
+            "vc_tts_ref_text": self._ai.vc_tts_ref_text.text().strip(),
+            "vc_local_base_url": self._ai.vc_local_base_url.text().strip(),
+            "vc_local_model": self._ai.vc_local_model.text().strip(),
+            "vc_local_api_key": self._ai.vc_local_api_key.text().strip(),
+            "vc_local_tools": self._ai.vc_local_tools.isChecked(),
         }
         save_settings(settings)
 

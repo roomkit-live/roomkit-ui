@@ -15,8 +15,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from room_ui.theme import colors
-from room_ui.widgets.chat_bubble import ChatBubble
+from roomkit_ui.theme import colors
+from roomkit_ui.widgets.chat_bubble import ChatBubble
 
 
 class ChatView(QScrollArea):
@@ -252,7 +252,7 @@ class ChatView(QScrollArea):
 
         Returns the ``MCPAppWidget`` if created, else ``None``.
         """
-        from room_ui.widgets.mcp_app_widget import MCPAppWidget, has_webengine
+        from roomkit_ui.widgets.mcp_app_widget import MCPAppWidget, has_webengine
 
         if html_content is None or not has_webengine():
             self.add_tool_call(tool_name, arguments_json)

@@ -96,8 +96,8 @@ jobs:
             --hidden-import=roomkit.voice.pipeline.aec.speex \
             --hidden-import=roomkit.voice.pipeline.denoiser.rnnoise \
             --hidden-import=certifi \
-            --add-data "src/room_ui${SEP}room_ui" \
-            src/room_ui/__main__.py
+            --add-data "src/roomkit_ui${SEP}roomkit_ui" \
+            src/roomkit_ui/__main__.py
 
       # macOS: patch Info.plist + ad-hoc codesign
       - name: Sign and patch (macOS)
@@ -138,8 +138,8 @@ jobs:
             "--hidden-import=roomkit.voice.pipeline.aec.speex",
             "--hidden-import=roomkit.voice.pipeline.denoiser.rnnoise",
             "--hidden-import=certifi",
-            "--add-data", "src/room_ui;room_ui",
-            "src/room_ui/__main__.py"
+            "--add-data", "src/roomkit_ui;roomkit_ui",
+            "src/roomkit_ui/__main__.py"
           )
           uv run pyinstaller @args
 

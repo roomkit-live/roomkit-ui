@@ -5,7 +5,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QPushButton
 
-from room_ui.theme import colors
+from roomkit_ui.theme import colors
 
 # ── Qt modifier → pynput token ──────────────────────────────────────────
 
