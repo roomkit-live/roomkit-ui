@@ -20,7 +20,7 @@ jobs:
         run: uv python install 3.12
 
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv sync --extra dev --no-install-project
 
       - name: Ruff check
         run: uv run ruff check .
@@ -41,7 +41,7 @@ jobs:
         run: uv python install 3.12
 
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv sync --extra dev --no-install-project
 
       - name: Bandit
         run: uv run bandit -r src/ -c pyproject.toml
@@ -59,7 +59,7 @@ jobs:
         run: uv python install 3.12
 
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv sync --extra dev --no-install-project
 
       - name: Mypy
         run: uv run mypy src/
