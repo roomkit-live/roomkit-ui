@@ -205,6 +205,8 @@ if _HAS_WEBENGINE:
     class _DebugPage(QWebEnginePage):  # type: ignore[misc]
         """QWebEnginePage that logs JS console messages to Python."""
 
+        js_error = Signal(str)  # emits user-visible error text
+
         def javaScriptConsoleMessage(  # noqa: N802
             self,
             level: QWebEnginePage.JavaScriptConsoleMessageLevel,
@@ -215,9 +217,13 @@ if _HAS_WEBENGINE:
             lvl: int = level.value  # type: ignore[union-attr]
             # Only log warnings/errors and short info messages to avoid
             # flooding the log with minified HTML/JS from MCP Apps.
-            if lvl >= 1:
-                tag = {1: "JS WARN", 2: "JS ERR"}.get(lvl, "JS")
-                logger.warning("[%s] %s (line %d)", tag, message[:300], line)
+            if lvl >= 2:
+                logger.warning("[JS ERR] %s (line %d)", message[:300], line)
+                # Skip benign ResizeObserver warnings
+                if "ResizeObserver" not in message:
+                    self.js_error.emit(message[:200])
+            elif lvl == 1:
+                logger.warning("[JS WARN] %s (line %d)", message[:300], line)
             elif len(message) < 500:
                 logger.debug("[JS] %s", message[:200])
 
@@ -274,6 +280,18 @@ class MCPAppWidget(QFrame):
         )
         self._layout.addWidget(header)
 
+        # Error label — hidden by default, shown on JS errors
+        c2 = colors()
+        self._error_label = QLabel()
+        self._error_label.setWordWrap(True)
+        self._error_label.setStyleSheet(
+            f"QLabel {{"
+            f"  color: {c2['ACCENT_RED']}; font-size: 11px;"
+            f"  background: transparent; padding: 4px 12px;"
+            f"}}"
+        )
+        self._error_label.hide()
+
         if _HAS_WEBENGINE:
             try:
                 self._setup_webengine()
@@ -282,6 +300,8 @@ class MCPAppWidget(QFrame):
                 self._add_fallback()
         else:
             self._add_fallback()
+
+        self._layout.addWidget(self._error_label)
 
     def _add_fallback(self) -> None:
         c = colors()
@@ -299,6 +319,7 @@ class MCPAppWidget(QFrame):
         # Off-the-record profile (no persistent storage)
         profile = QWebEngineProfile(self)
         page = _DebugPage(profile, self)
+        page.js_error.connect(self._on_js_error)
 
         settings = page.settings()
         settings.setAttribute(QWebEngineSettings.LocalContentCanAccessRemoteUrls, True)
@@ -459,6 +480,11 @@ class MCPAppWidget(QFrame):
             height,
             clamped,
         )
+
+    def _on_js_error(self, message: str) -> None:
+        """Show a JS error message in the error label below the web view."""
+        self._error_label.setText(f"JS Error: {message}")
+        self._error_label.show()
 
     def _cleanup_http(self) -> None:
         if _http_server is not None:
