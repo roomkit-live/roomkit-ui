@@ -1509,6 +1509,11 @@ MCP_TRANSPORTS = [
     ("Streamable HTTP", "streamable_http"),
 ]
 
+MCP_AUTH_MODES = [
+    ("None", "none"),
+    ("OAuth2", "oauth2"),
+]
+
 
 class _MCPPage(QWidget):
     """MCP Servers configuration page with list/edit navigation."""
@@ -1644,6 +1649,51 @@ class _MCPPage(QWidget):
         self._env_edit.setFixedHeight(60)
         form.addRow("Env", self._env_edit)
 
+        # -- OAuth2 fields (visible for HTTP transports only) --
+        self._auth_combo = QComboBox()
+        for label, _val in MCP_AUTH_MODES:
+            self._auth_combo.addItem(label)
+        self._auth_label = QLabel("Auth")
+        form.addRow(self._auth_label, self._auth_combo)
+
+        self._oauth_client_id = QLineEdit()
+        self._oauth_client_id.setPlaceholderText("Auto-detected via dynamic registration")
+        self._oauth_client_id_label = QLabel("Client ID")
+        form.addRow(self._oauth_client_id_label, self._oauth_client_id)
+
+        self._oauth_client_secret = QLineEdit()
+        self._oauth_client_secret.setEchoMode(QLineEdit.Password)
+        self._oauth_client_secret.setPlaceholderText("Leave empty for public clients")
+        self._oauth_client_secret_label = QLabel("Client Secret")
+        form.addRow(self._oauth_client_secret_label, self._oauth_client_secret)
+
+        self._oauth_scopes = QLineEdit()
+        self._oauth_scopes.setPlaceholderText("e.g. read write")
+        self._oauth_scopes_label = QLabel("Scopes")
+        form.addRow(self._oauth_scopes_label, self._oauth_scopes)
+
+        # Token status row
+        token_row = QHBoxLayout()
+        token_row.setSpacing(8)
+        self._oauth_status = QLabel("")
+        self._oauth_status.setStyleSheet(
+            f"font-size: 12px; color: {c['TEXT_SECONDARY']}; background: transparent;"
+        )
+        token_row.addWidget(self._oauth_status, 1)
+        self._authorize_btn = QPushButton("Authorize")
+        self._authorize_btn.setCursor(Qt.PointingHandCursor)
+        self._authorize_btn.setFixedHeight(28)
+        self._authorize_btn.clicked.connect(self._on_authorize_clicked)
+        token_row.addWidget(self._authorize_btn)
+        self._clear_token_btn = QPushButton("Clear Token")
+        self._clear_token_btn.setCursor(Qt.PointingHandCursor)
+        self._clear_token_btn.setFixedHeight(28)
+        self._clear_token_btn.clicked.connect(self._on_clear_token_clicked)
+        token_row.addWidget(self._clear_token_btn)
+        self._oauth_token_row_widget = QWidget()
+        self._oauth_token_row_widget.setLayout(token_row)
+        form.addRow("", self._oauth_token_row_widget)
+
         edit_layout.addLayout(form)
         edit_layout.addStretch()
 
@@ -1659,12 +1709,16 @@ class _MCPPage(QWidget):
         # Connections
         self._server_list.itemDoubleClicked.connect(self._on_item_activated)
         self._transport_combo.currentIndexChanged.connect(self._on_transport_changed)
+        self._auth_combo.currentIndexChanged.connect(self._on_auth_changed)
         self._enabled_check.toggled.connect(self._sync_to_model)
         self._name_edit.textChanged.connect(self._sync_to_model)
         self._command_edit.textChanged.connect(self._sync_to_model)
         self._args_edit.textChanged.connect(self._sync_to_model)
         self._url_edit.textChanged.connect(self._sync_to_model)
         self._env_edit.textChanged.connect(self._sync_to_model)
+        self._oauth_client_id.textChanged.connect(self._sync_to_model)
+        self._oauth_client_secret.textChanged.connect(self._sync_to_model)
+        self._oauth_scopes.textChanged.connect(self._sync_to_model)
 
     # -- navigation ----------------------------------------------------------
 
@@ -1689,6 +1743,10 @@ class _MCPPage(QWidget):
             self._url_edit,
             self._env_edit,
             self._transport_combo,
+            self._auth_combo,
+            self._oauth_client_id,
+            self._oauth_client_secret,
+            self._oauth_scopes,
         ):
             w.blockSignals(True)
 
@@ -1705,6 +1763,16 @@ class _MCPPage(QWidget):
                 self._transport_combo.setCurrentIndex(i)
                 break
 
+        auth = srv.get("auth", "none")
+        for i, (_label, val) in enumerate(MCP_AUTH_MODES):
+            if val == auth:
+                self._auth_combo.setCurrentIndex(i)
+                break
+
+        self._oauth_client_id.setText(srv.get("oauth_client_id", ""))
+        self._oauth_client_secret.setText(srv.get("oauth_client_secret", ""))
+        self._oauth_scopes.setText(srv.get("oauth_scopes", ""))
+
         for w in (
             self._enabled_check,
             self._name_edit,
@@ -1713,10 +1781,15 @@ class _MCPPage(QWidget):
             self._url_edit,
             self._env_edit,
             self._transport_combo,
+            self._auth_combo,
+            self._oauth_client_id,
+            self._oauth_client_secret,
+            self._oauth_scopes,
         ):
             w.blockSignals(False)
 
         self._update_field_visibility(transport)
+        self._refresh_oauth_status(srv.get("name", ""))
         self._stack.setCurrentIndex(1)
 
     def _on_item_activated(self, _item: QListWidgetItem) -> None:
@@ -1734,6 +1807,10 @@ class _MCPPage(QWidget):
             "args": "",
             "url": "",
             "env": "",
+            "auth": "none",
+            "oauth_client_id": "",
+            "oauth_client_secret": "",
+            "oauth_scopes": "",
         }
         self._servers.append(srv)
         self._server_list.addItem(self._display_name(srv))
@@ -1754,6 +1831,11 @@ class _MCPPage(QWidget):
         self._update_field_visibility(transport)
         self._sync_to_model()
 
+    def _on_auth_changed(self, _index: int) -> None:
+        transport = MCP_TRANSPORTS[self._transport_combo.currentIndex()][1]
+        self._update_field_visibility(transport)
+        self._sync_to_model()
+
     def _update_field_visibility(self, transport: str) -> None:
         is_stdio = transport == "stdio"
         self._command_label.setVisible(is_stdio)
@@ -1762,6 +1844,21 @@ class _MCPPage(QWidget):
         self._args_edit.setVisible(is_stdio)
         self._url_label.setVisible(not is_stdio)
         self._url_edit.setVisible(not is_stdio)
+
+        # Auth fields: only for HTTP transports
+        is_http = not is_stdio
+        auth = MCP_AUTH_MODES[self._auth_combo.currentIndex()][1]
+        is_oauth = is_http and auth == "oauth2"
+
+        self._auth_label.setVisible(is_http)
+        self._auth_combo.setVisible(is_http)
+        self._oauth_client_id_label.setVisible(is_oauth)
+        self._oauth_client_id.setVisible(is_oauth)
+        self._oauth_client_secret_label.setVisible(is_oauth)
+        self._oauth_client_secret.setVisible(is_oauth)
+        self._oauth_scopes_label.setVisible(is_oauth)
+        self._oauth_scopes.setVisible(is_oauth)
+        self._oauth_token_row_widget.setVisible(is_oauth)
 
     def _sync_to_model(self) -> None:
         row = self._editing_row
@@ -1775,12 +1872,106 @@ class _MCPPage(QWidget):
         srv["args"] = self._args_edit.text().strip()
         srv["url"] = self._url_edit.text().strip()
         srv["env"] = self._env_edit.toPlainText()
+        srv["auth"] = MCP_AUTH_MODES[self._auth_combo.currentIndex()][1]
+        srv["oauth_client_id"] = self._oauth_client_id.text().strip()
+        srv["oauth_client_secret"] = self._oauth_client_secret.text().strip()
+        srv["oauth_scopes"] = self._oauth_scopes.text().strip()
         # Update list item text
         item = self._server_list.item(row)
         if item:
             item.setText(self._display_name(srv))
         # Update edit title
         self._edit_title.setText(srv["name"] or "New Server")
+
+    # -- OAuth actions -------------------------------------------------------
+
+    def _refresh_oauth_status(self, server_name: str) -> None:
+        """Update the token status label for the current server."""
+        if not server_name:
+            self._oauth_status.setText("")
+            return
+        from roomkit_ui.mcp_auth import has_oauth_tokens
+
+        if has_oauth_tokens(server_name):
+            self._oauth_status.setText("Token stored")
+            self._oauth_status.setStyleSheet(
+                "font-size: 12px; color: #4caf50; background: transparent;"
+            )
+        else:
+            self._oauth_status.setText("Not authorized")
+            c = colors()
+            self._oauth_status.setStyleSheet(
+                f"font-size: 12px; color: {c['TEXT_SECONDARY']}; background: transparent;"
+            )
+
+    def _on_authorize_clicked(self) -> None:
+        server_name = self._name_edit.text().strip()
+        server_url = self._url_edit.text().strip()
+        if not server_name or not server_url:
+            self._oauth_status.setText("Set server name and URL first")
+            self._oauth_status.setStyleSheet(
+                "font-size: 12px; color: #f44336; background: transparent;"
+            )
+            return
+        self._authorize_btn.setEnabled(False)
+        self._oauth_status.setText("Waiting for browser...")
+        self._oauth_status.setStyleSheet(
+            "font-size: 12px; color: #ff9800; background: transparent;"
+        )
+        import asyncio
+
+        asyncio.ensure_future(self._run_oauth_flow(server_name, server_url))
+
+    async def _run_oauth_flow(self, server_name: str, server_url: str) -> None:
+        """Trigger the OAuth authorization flow in the background."""
+        try:
+            from roomkit_ui.mcp_auth import create_oauth_provider
+
+            provider, callback_server = await create_oauth_provider(
+                server_url=server_url,
+                server_name=server_name,
+                client_id=self._oauth_client_id.text().strip() or None,
+                client_secret=self._oauth_client_secret.text().strip() or None,
+                scopes=self._oauth_scopes.text().strip() or None,
+            )
+            try:
+                # Make a probe request to trigger the SDK's OAuth flow
+                # (401 → discovery → browser → callback → token exchange)
+                import httpx
+
+                async with httpx.AsyncClient(auth=provider, timeout=320) as client:
+                    await client.get(server_url)
+            finally:
+                await callback_server.stop()
+
+            self._oauth_status.setText("Token stored")
+            self._oauth_status.setStyleSheet(
+                "font-size: 12px; color: #4caf50; background: transparent;"
+            )
+        except TimeoutError:
+            self._oauth_status.setText("Authorization timed out")
+            self._oauth_status.setStyleSheet(
+                "font-size: 12px; color: #f44336; background: transparent;"
+            )
+        except Exception as exc:
+            self._oauth_status.setText(f"Error: {exc}")
+            self._oauth_status.setStyleSheet(
+                "font-size: 12px; color: #f44336; background: transparent;"
+            )
+        finally:
+            try:
+                self._authorize_btn.setEnabled(True)
+            except Exception:
+                pass
+
+    def _on_clear_token_clicked(self) -> None:
+        server_name = self._name_edit.text().strip()
+        if not server_name:
+            return
+        from roomkit_ui.mcp_auth import clear_oauth_tokens
+
+        clear_oauth_tokens(server_name)
+        self._refresh_oauth_status(server_name)
 
     @staticmethod
     def _display_name(srv: dict) -> str:

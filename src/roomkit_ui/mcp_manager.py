@@ -170,6 +170,27 @@ class MCPManager:
                 name,
             )
 
+    async def _get_auth_provider(
+        self,
+        cfg: dict[str, Any],
+        stack: AsyncExitStack,
+    ) -> Any | None:
+        """Return an ``OAuthClientProvider`` (httpx.Auth) if OAuth is configured."""
+        if cfg.get("auth") != "oauth2":
+            return None
+
+        from roomkit_ui.mcp_auth import create_oauth_provider
+
+        provider, callback_server = await create_oauth_provider(
+            server_url=cfg.get("url", ""),
+            server_name=cfg.get("name", ""),
+            client_id=cfg.get("oauth_client_id") or None,
+            client_secret=cfg.get("oauth_client_secret") or None,
+            scopes=cfg.get("oauth_scopes") or None,
+        )
+        stack.push_async_callback(callback_server.stop)
+        return provider
+
     async def _connect_one(
         self,
         cfg: dict[str, Any],
@@ -210,15 +231,23 @@ class MCPManager:
             from mcp.client.sse import sse_client
 
             url = cfg.get("url", "")
-            streams = await stack.enter_async_context(sse_client(url))
+            auth = await self._get_auth_provider(cfg, stack)
+            streams = await stack.enter_async_context(sse_client(url, auth=auth))
             read_stream, write_stream = streams
 
         elif transport == "streamable_http":
-            from mcp.client.streamable_http import streamablehttp_client
+            from mcp.client.streamable_http import streamable_http_client
 
             url = cfg.get("url", "")
+            auth = await self._get_auth_provider(cfg, stack)
+            http_client = None
+            if auth is not None:
+                from mcp.shared._httpx_utils import create_mcp_http_client
+
+                http_client = create_mcp_http_client(auth=auth)
+                stack.push_async_callback(http_client.aclose)
             streams = await stack.enter_async_context(
-                streamablehttp_client(url),
+                streamable_http_client(url, http_client=http_client),
             )
             read_stream, write_stream = streams[0], streams[1]
 
