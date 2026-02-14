@@ -237,9 +237,15 @@ class Engine(QObject):
         except Exception:
             pass
 
+        # Handle end_conversation — schedule stop after a delay so the
+        # agent's goodbye response can be spoken before disconnecting.
+        if name == "end_conversation":
+            asyncio.get_event_loop().call_later(3.0, lambda: asyncio.ensure_future(self.stop()))
+            return '{"status": "ok", "message": "Ending conversation in a few seconds."}'
+
         # Handle attitude changes (needs engine state, not pure builtin)
         if name == "set_attitude":
-            return self._apply_attitude(arguments.get("description", ""))
+            return self._apply_attitude_by_name(arguments.get("name", ""))
 
         # Try built-in tools first
         builtin_result = handle_builtin_tool(name)
@@ -264,10 +270,51 @@ class Engine(QObject):
 
         return result
 
-    def _apply_attitude(self, description: str) -> str:
-        """Apply a new attitude/personality and update the live system prompt."""
+    def _apply_attitude_by_name(self, name: str) -> str:
+        """Look up an attitude by name and apply it. Rejects unknown names."""
+        if not name:
+            return json.dumps({"error": "Attitude name is required."})
+
+        # Look up in presets
+        from roomkit_ui.widgets.settings.constants import ATTITUDE_PRESETS
+
+        for pname, ptext in ATTITUDE_PRESETS:
+            if pname.lower() == name.lower():
+                return self._apply_attitude(pname, ptext)
+
+        # Look up in custom attitudes
+        try:
+            from roomkit_ui.settings import load_settings
+
+            settings = load_settings()
+            for att in json.loads(settings.get("custom_attitudes", "[]")):
+                if att.get("name", "").lower() == name.lower():
+                    return self._apply_attitude(att["name"], att.get("text", ""))
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+        # Not found — return error with available names
+        available = [n for n, _ in ATTITUDE_PRESETS]
+        try:
+            from roomkit_ui.settings import load_settings
+
+            settings = load_settings()
+            for att in json.loads(settings.get("custom_attitudes", "[]")):
+                if att.get("name"):
+                    available.append(att["name"])
+        except (json.JSONDecodeError, TypeError):
+            pass
+        return json.dumps(
+            {
+                "error": f"Unknown attitude '{name}'.",
+                "available": available,
+            }
+        )
+
+    def _apply_attitude(self, name: str, description: str) -> str:
+        """Apply a known attitude and update the live system prompt."""
         self._attitude = description
-        self._attitude_name = self._lookup_attitude_name(description)
+        self._attitude_name = name
         # Voice channel: update the system prompt on AIChannel for subsequent requests
         if self._ai_channel is not None:
             base = self._ai_channel._system_prompt or ""
@@ -285,7 +332,7 @@ class Engine(QObject):
         return json.dumps(
             {
                 "status": "ok",
-                "attitude": description,
+                "attitude": name,
                 "instruction": f"Adopt this attitude now: {description}",
             }
         )
@@ -880,37 +927,6 @@ class Engine(QObject):
         except (json.JSONDecodeError, TypeError):
             pass
         return ""
-
-    @staticmethod
-    def _lookup_attitude_name(description: str) -> str:
-        """Reverse-lookup an attitude name from its description text.
-
-        When the LLM calls set_attitude, it sends the full description.
-        Try to find the matching preset/custom attitude name for display.
-        Falls back to a short excerpt of the description if no match.
-        """
-        if not description:
-            return ""
-        from roomkit_ui.settings import load_settings
-        from roomkit_ui.widgets.settings.constants import ATTITUDE_PRESETS
-
-        for pname, ptext in ATTITUDE_PRESETS:
-            if ptext == description or pname.lower() == description.lower():
-                return pname
-        try:
-            settings = load_settings()
-            for att in json.loads(settings.get("custom_attitudes", "[]")):
-                text = att.get("text", "")
-                name = att.get("name", "")
-                if text == description or name.lower() == description.lower():
-                    return str(name)
-        except (json.JSONDecodeError, TypeError):
-            pass
-        # No match — use first few words as a short label
-        words = description.split()
-        if len(words) <= 4:
-            return description
-        return " ".join(words[:4]) + "\u2026"
 
     def _build_audio_processing(
         self,

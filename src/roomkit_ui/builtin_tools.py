@@ -35,21 +35,34 @@ BUILTIN_TOOLS: list[dict] = [
     },
     {
         "type": "function",
+        "name": "end_conversation",
+        "description": (
+            "IMPORTANT: You MUST call this tool whenever the user signals the end "
+            "of the conversation. This includes any farewell or closing phrase such as "
+            "'bye', 'bye bye', 'goodbye', 'see you', 'see you later', 'that's all', "
+            "'thanks bye', 'I'm done', 'good night', 'take care', 'ciao', 'adios', "
+            "'au revoir', 'salut', or similar expressions in any language. "
+            "Say a brief goodbye FIRST, then ALWAYS call this tool to disconnect."
+        ),
+        "parameters": {"type": "object", "properties": {}},
+    },
+    {
+        "type": "function",
         "name": "set_attitude",
         "description": (
-            "Change the assistant's attitude, personality, or communication style. "
-            "Call this when the user asks you to change how you speak or behave. "
-            "Examples: 'be more formal', 'talk like a pirate', 'be concise'."
+            "Switch to an existing attitude preset or custom attitude by name. "
+            "Only accepts names returned by list_attitudes. "
+            "Call list_attitudes first if you don't know the available names."
         ),
         "parameters": {
             "type": "object",
             "properties": {
-                "description": {
+                "name": {
                     "type": "string",
-                    "description": "A description of the desired attitude or communication style.",
+                    "description": "The exact name of an existing attitude (preset or custom).",
                 },
             },
-            "required": ["description"],
+            "required": ["name"],
         },
     },
 ]
