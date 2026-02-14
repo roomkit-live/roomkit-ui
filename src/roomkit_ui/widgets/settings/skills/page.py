@@ -63,9 +63,7 @@ class _SkillsPage(QWidget):
         title.setStyleSheet("font-size: 18px; font-weight: 600; background: transparent;")
         ov_layout.addWidget(title)
 
-        desc = QLabel(
-            "Manage local skills and browse the ClawHub marketplace."
-        )
+        desc = QLabel("Manage local skills and browse the ClawHub marketplace.")
         desc.setWordWrap(True)
         desc.setStyleSheet(
             f"font-size: 13px; color: {c['TEXT_SECONDARY']}; background: transparent;"

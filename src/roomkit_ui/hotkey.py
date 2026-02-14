@@ -236,7 +236,10 @@ class HotkeyListener(QObject):
 
         logger.info(
             "Hotkey reload: %s → %s (enabled %s → %s)",
-            self._hotkey, new_hotkey, is_running, enabled,
+            self._hotkey,
+            new_hotkey,
+            is_running,
+            enabled,
         )
 
         self.stop()

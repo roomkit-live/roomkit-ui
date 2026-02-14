@@ -903,7 +903,7 @@ class Engine(QObject):
                 text = att.get("text", "")
                 name = att.get("name", "")
                 if text == description or name.lower() == description.lower():
-                    return name
+                    return str(name)
         except (json.JSONDecodeError, TypeError):
             pass
         # No match — use first few words as a short label

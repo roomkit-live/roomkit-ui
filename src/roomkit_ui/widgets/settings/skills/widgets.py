@@ -87,7 +87,7 @@ class FlowLayout(QLayout):
                 item.setGeometry(QRect(x, y, w, h))
             x += w + self._h_spacing
             row_height = max(row_height, h)
-        return y + row_height - rect.y() + m.bottom()
+        return int(y + row_height - rect.y() + m.bottom())
 
 
 # ---------------------------------------------------------------------------
