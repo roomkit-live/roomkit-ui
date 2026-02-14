@@ -106,7 +106,9 @@ class ChatView(QScrollArea):
 
     # -- public API ----------------------------------------------------------
 
-    def add_transcription(self, text: str, role: str, is_final: bool) -> None:
+    def add_transcription(
+        self, text: str, role: str, is_final: bool, speaker_name: str = ""
+    ) -> None:
         """Add or update a chat bubble from a transcription event.
 
         Partials (is_final=False) replace the current bubble text.
@@ -120,21 +122,19 @@ class ChatView(QScrollArea):
             and not self._current_bubble.finalized
             and self._current_bubble.role == role
         ):
-            if is_final:
-                self._current_bubble.set_text(text)
-            else:
-                # Update existing bubble — just replace text directly.
-                # (Streaming animation only runs on initial bubble creation.)
-                self._current_bubble.set_text(text)
+            self._current_bubble.set_text(text)
+            # Update speaker label when diarization catches up mid-utterance
+            if speaker_name and speaker_name != self._current_bubble._speaker_name:
+                self._current_bubble.set_speaker_name(speaker_name)
         else:
             # New bubble (finalize any previous in-progress bubble first)
             if self._current_bubble and not self._current_bubble.finalized:
                 self._current_bubble.finalize()
             if not is_final and role == "assistant":
                 # Create empty bubble then stream words in
-                bubble = ChatBubble("", role=role)
+                bubble = ChatBubble("", role=role, speaker_name=speaker_name)
             else:
-                bubble = ChatBubble(text, role=role)
+                bubble = ChatBubble(text, role=role, speaker_name=speaker_name)
             # Insert before status_label (last widget) and stretch (second-to-last)
             idx = self._layout.count() - 2
             if idx < 0:

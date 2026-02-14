@@ -394,6 +394,58 @@ class _ModelsPage(QWidget):
             self._tts_rows.append(row)
 
         layout.addWidget(tts_frame)
+
+        # -- Speaker Embedding Models section ------------------------------------
+        spk_section = QLabel("Speaker Embedding Models")
+        spk_section.setStyleSheet(
+            f"font-size: 12px; font-weight: 600; color: {c['TEXT_SECONDARY']};"
+            f" text-transform: uppercase; letter-spacing: 1px; background: transparent;"
+        )
+        layout.addWidget(spk_section)
+
+        spk_desc = QLabel(
+            "Download a speaker embedding model for voice identification. "
+            "Required for speaker diarization in Voice Channel mode."
+        )
+        spk_desc.setWordWrap(True)
+        spk_desc.setStyleSheet(
+            f"font-size: 13px; color: {c['TEXT_SECONDARY']}; background: transparent;"
+        )
+        layout.addWidget(spk_desc)
+
+        spk_frame = QWidget()
+        spk_frame.setStyleSheet(
+            f"background: {c['BG_SECONDARY']}; border: 1px solid {c['SEPARATOR']};"
+            f" border-radius: 8px;"
+        )
+        spk_frame_layout = QVBoxLayout(spk_frame)
+        spk_frame_layout.setContentsMargins(4, 4, 4, 4)
+        spk_frame_layout.setSpacing(0)
+
+        from roomkit_ui.model_manager import SPEAKER_MODELS, is_speaker_model_downloaded
+
+        @dataclass(frozen=True)
+        class _SpeakerInfo:
+            id: str
+            name: str
+            type: str
+            size: str
+
+        self._spk_rows: list[_ModelRow] = []
+        for spk_m in SPEAKER_MODELS:
+            info = _SpeakerInfo(id=spk_m.id, name=spk_m.name, type="speaker", size=spk_m.size)
+            row = _ModelRow(info, c, show_radio=False)
+            row._refresh_state(is_speaker_model_downloaded(spk_m.id))
+            row.action_btn.clicked.connect(
+                lambda _checked=False, mid=spk_m.id: self._download_speaker_model(mid)
+            )
+            row.delete_btn.clicked.connect(
+                lambda _checked=False, mid=spk_m.id: self._delete_speaker_model(mid)
+            )
+            spk_frame_layout.addWidget(row)
+            self._spk_rows.append(row)
+
+        layout.addWidget(spk_frame)
         layout.addStretch()
 
     def _find_row(self, model_id: str) -> _ModelRow | None:
@@ -577,5 +629,47 @@ class _ModelsPage(QWidget):
 
         delete_vad_model(model_id)
         row = self._find_vad_row(model_id)
+        if row is not None:
+            row.set_not_downloaded()
+
+    # -- Speaker embedding model handlers ------------------------------------
+
+    def _find_spk_row(self, model_id: str) -> _ModelRow | None:
+        for row in self._spk_rows:
+            if row.model.id == model_id:
+                return row
+        return None
+
+    def _download_speaker_model(self, model_id: str) -> None:
+        import asyncio
+        import logging
+
+        from roomkit_ui.model_manager import download_speaker_model
+
+        row = self._find_spk_row(model_id)
+        if row is None:
+            return
+        row.set_resolving()
+        loop = asyncio.get_event_loop()
+
+        def _progress(downloaded: int, total: int) -> None:
+            pct = min(int(downloaded * 100 / total), 100) if total > 0 else 0
+            loop.call_soon_threadsafe(row.set_downloading, pct)
+
+        async def _run() -> None:
+            try:
+                await download_speaker_model(model_id, _progress)
+                row.set_downloaded()
+            except Exception:
+                logging.exception("Speaker model download failed: %s", model_id)
+                row.set_error()
+
+        loop.create_task(_run())
+
+    def _delete_speaker_model(self, model_id: str) -> None:
+        from roomkit_ui.model_manager import delete_speaker_model
+
+        delete_speaker_model(model_id)
+        row = self._find_spk_row(model_id)
         if row is not None:
             row.set_not_downloaded()

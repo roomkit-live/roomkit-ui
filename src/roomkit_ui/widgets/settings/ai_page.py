@@ -486,19 +486,6 @@ class _AIPage(QWidget):
         self._deepgram_model_label = QLabel("Deepgram Model")
         vc_form.addRow(self._deepgram_model_label, self.deepgram_model)
 
-        # VAD model combo (local STT only)
-        self.vc_vad_model = QComboBox()
-        self._vc_vad_model_label = QLabel("VAD Model")
-        self._vc_vad_no_models = QLabel("No VAD models downloaded \u2014 go to AI Models tab.")
-        self._vc_vad_no_models.setWordWrap(True)
-        self._vc_vad_no_models.setStyleSheet(
-            f"font-size: 12px; color: {c['TEXT_SECONDARY']};"
-            f" font-style: italic; background: transparent;"
-        )
-        vc_form.addRow(self._vc_vad_model_label, self.vc_vad_model)
-        vc_form.addRow("", self._vc_vad_no_models)
-        self._vc_saved_vad = settings.get("vc_vad_model", "")
-
         # Interruption toggle
         self.vc_interruption = QCheckBox("Allow barge-in (interrupt TTS by speaking)")
         self.vc_interruption.setChecked(bool(settings.get("vc_interruption", False)))
@@ -817,13 +804,10 @@ class _AIPage(QWidget):
         prov = VC_STT_PROVIDERS[index][1]
         is_local = prov == "local"
         is_deepgram = prov == "deepgram"
-        # Local STT model + VAD
+        # Local STT model
         self._vc_stt_model_label.setVisible(is_local)
         self.vc_stt_model.setVisible(is_local)
         self._vc_stt_no_models.setVisible(is_local and self.vc_stt_model.count() == 0)
-        self._vc_vad_model_label.setVisible(is_local)
-        self.vc_vad_model.setVisible(is_local)
-        self._vc_vad_no_models.setVisible(is_local and self.vc_vad_model.count() <= 1)
         # Deepgram fields
         self._deepgram_key_label.setVisible(is_deepgram)
         self.deepgram_api_key.setVisible(is_deepgram)
@@ -901,14 +885,12 @@ class _AIPage(QWidget):
         return "" if text == "None" else text
 
     def refresh_vc_model_combos(self) -> None:
-        """Rebuild STT/TTS/VAD model combos with currently downloaded models."""
+        """Rebuild STT/TTS model combos with currently downloaded models."""
         from roomkit_ui.model_manager import (
             STT_MODELS,
             TTS_MODELS,
-            VAD_MODELS,
             is_model_downloaded,
             is_tts_model_downloaded,
-            is_vad_model_downloaded,
         )
 
         # STT
@@ -926,22 +908,6 @@ class _AIPage(QWidget):
                 break
         self.vc_stt_model.blockSignals(False)
         self._vc_stt_no_models.setVisible(self.vc_stt_model.count() == 0)
-
-        # VAD
-        self.vc_vad_model.blockSignals(True)
-        self.vc_vad_model.clear()
-        self.vc_vad_model.addItem("None (continuous mode)", "")
-        for vm in VAD_MODELS:
-            if is_vad_model_downloaded(vm.id):
-                self.vc_vad_model.addItem(vm.name, vm.id)
-        target = self._vc_saved_vad
-        for i in range(self.vc_vad_model.count()):
-            if self.vc_vad_model.itemData(i) == target:
-                self.vc_vad_model.setCurrentIndex(i)
-                break
-        self.vc_vad_model.blockSignals(False)
-        has_vad = self.vc_vad_model.count() > 1  # more than just "None"
-        self._vc_vad_no_models.setVisible(not has_vad)
 
         # TTS
         self.vc_tts_model.blockSignals(True)
@@ -1008,7 +974,6 @@ class _AIPage(QWidget):
             "gradium_temperature": self.gradium_temperature.text().strip(),
             "gradium_cfg_coef": self.gradium_cfg_coef.text().strip(),
             "gradium_rewrite_rules": self.gradium_rewrite_rules.text().strip(),
-            "vc_vad_model": self.vc_vad_model.currentData() or "",
             "vc_interruption": self.vc_interruption.isChecked(),
             "vc_tts_provider": VC_TTS_PROVIDERS[self.vc_tts_provider.currentIndex()][1],
             "vc_tts_model": self.vc_tts_model.currentData() or "",

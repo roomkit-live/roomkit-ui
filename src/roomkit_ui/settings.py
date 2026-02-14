@@ -69,6 +69,11 @@ _DEFAULTS = {
     "vc_stt_model": "",
     "vc_vad_model": "",
     "vc_interruption": False,
+    # Speaker diarization
+    "diarization_enabled": False,
+    "diarization_model": "",
+    "diarization_threshold": 0.4,
+    "primary_speaker_mode": False,
     # Agent Skills
     "skill_sources": "[]",  # JSON array of {type, url/path, label}
     "enabled_skills": "[]",  # JSON array of skill name strings
@@ -99,6 +104,12 @@ def load_settings() -> dict:
             val = "rnnoise" if val else "none"
         elif key == "denoise" and isinstance(val, str) and val.lower() in ("true", "false"):
             val = "rnnoise" if val.lower() == "true" else "none"
+        # QSettings returns strings for floats
+        if key == "diarization_threshold" and isinstance(val, str):
+            try:
+                val = float(val)
+            except (ValueError, TypeError):
+                val = 0.4
         # QSettings returns strings for ints stored as device indices
         if key in ("input_device", "output_device"):
             if val is not None and val != "":

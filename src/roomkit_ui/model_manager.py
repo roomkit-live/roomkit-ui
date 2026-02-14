@@ -722,6 +722,141 @@ async def download_espeak_ng_data(
     await asyncio.to_thread(_download_espeak_ng_sync, progress)
 
 
+# ---------------------------------------------------------------------------
+# Speaker embedding models (for diarization)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class SpeakerModel:
+    id: str
+    name: str
+    size: str
+    onnx_file: str
+
+
+SPEAKER_MODELS: list[SpeakerModel] = [
+    SpeakerModel(
+        "nemo-titanet-large",
+        "NeMo TitaNet Large",
+        "~90 MB",
+        "nemo_en_titanet_large.onnx",
+    ),
+    SpeakerModel(
+        "wespeaker-resnet34-lm",
+        "WeSpeaker ResNet34-LM (VoxCeleb)",
+        "~26 MB",
+        "wespeaker_en_voxceleb_resnet34_LM.onnx",
+    ),
+    SpeakerModel(
+        "3dspeaker-campplus-voxceleb",
+        "3D-Speaker CAM++ (VoxCeleb)",
+        "~28 MB",
+        "3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx",
+    ),
+]
+
+_SPEAKER_MODELS_BY_ID: dict[str, SpeakerModel] = {m.id: m for m in SPEAKER_MODELS}
+
+_SPEAKER_BASE = (
+    "https://github.com/k2-fsa/sherpa-onnx/releases/download"
+    "/speaker-recongition-models"
+)
+_SPEAKER_ASSET_URLS: dict[str, str] = {
+    "nemo-titanet-large": f"{_SPEAKER_BASE}/nemo_en_titanet_large.onnx",
+    "wespeaker-resnet34-lm": f"{_SPEAKER_BASE}/wespeaker_en_voxceleb_resnet34_LM.onnx",
+    "3dspeaker-campplus-voxceleb": (
+        f"{_SPEAKER_BASE}/3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx"
+    ),
+}
+
+
+def speaker_model_path(model_id: str) -> Path:
+    """Return the directory for a specific speaker embedding model."""
+    return get_models_dir() / "speaker" / model_id / "v1"
+
+
+def is_speaker_model_downloaded(model_id: str) -> bool:
+    """Check whether the speaker embedding model ONNX file exists."""
+    m = _SPEAKER_MODELS_BY_ID.get(model_id)
+    if m is None:
+        return False
+    return (speaker_model_path(model_id) / m.onnx_file).is_file()
+
+
+def delete_speaker_model(model_id: str) -> None:
+    """Remove a downloaded speaker embedding model's directory."""
+    d = get_models_dir() / "speaker" / model_id
+    if d.exists():
+        shutil.rmtree(d)
+
+
+def _download_speaker_model_sync(
+    model_id: str,
+    progress: ProgressCallback | None = None,
+) -> None:
+    """Download a speaker embedding model (blocking)."""
+    m = _SPEAKER_MODELS_BY_ID.get(model_id)
+    if m is None:
+        raise ValueError(f"Unknown speaker model: {model_id}")
+
+    dest = speaker_model_path(model_id)
+    dest.mkdir(parents=True, exist_ok=True)
+    target = dest / m.onnx_file
+    if target.is_file():
+        return
+
+    asset_url = _SPEAKER_ASSET_URLS.get(model_id)
+    if asset_url is None:
+        raise ValueError(f"No download URL for speaker model: {model_id}")
+
+    # HEAD request for content-length
+    req = urllib.request.Request(asset_url, method="HEAD")  # noqa: S310
+    with urllib.request.urlopen(req) as resp:  # noqa: S310
+        total = int(resp.headers.get("Content-Length", 0))
+
+    downloaded = 0
+    if progress is not None:
+        progress(0, total)
+
+    def _on_bytes(n: int) -> None:
+        nonlocal downloaded
+        downloaded += n
+        if progress is not None:
+            progress(downloaded, total)
+
+    _download_file(asset_url, target, expected_size=total, on_bytes=_on_bytes)
+
+
+async def download_speaker_model(
+    model_id: str,
+    progress: ProgressCallback | None = None,
+) -> None:
+    """Download speaker embedding model in a background thread."""
+    await asyncio.to_thread(_download_speaker_model_sync, model_id, progress)
+
+
+def build_diarization_config(model_id: str, *, provider: str = "cpu", threshold: float = 0.4):
+    """Build a ``SherpaOnnxDiarizationConfig`` for the given downloaded model."""
+    from roomkit.voice.pipeline.diarization.sherpa_onnx import SherpaOnnxDiarizationConfig
+
+    m = _SPEAKER_MODELS_BY_ID.get(model_id)
+    if m is None:
+        raise ValueError(f"Unknown speaker model: {model_id}")
+
+    d = speaker_model_path(model_id)
+    return SherpaOnnxDiarizationConfig(
+        model=str(d / m.onnx_file),
+        provider=provider,
+        search_threshold=threshold,
+    )
+
+
+# ---------------------------------------------------------------------------
+# TTS config builder
+# ---------------------------------------------------------------------------
+
+
 def build_tts_config(
     model_id: str,
     *,

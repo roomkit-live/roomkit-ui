@@ -12,7 +12,7 @@ from PySide6.QtCore import QObject, QTimer, Signal
 
 from roomkit_ui.builtin_tools import BUILTIN_TOOLS, handle_builtin_tool
 from roomkit_ui.cleanup import cleanup_stale_fds, post_cleanup_monitor
-from roomkit_ui.hooks import register_audio_hooks, register_vc_hooks
+from roomkit_ui.hooks import register_realtime_hooks, register_vc_hooks
 from roomkit_ui.mcp_manager import MCPManager
 from roomkit_ui.providers import create_ai_provider
 from roomkit_ui.tts import create_tts_provider
@@ -67,7 +67,8 @@ class Engine(QObject):
     """Manages a roomkit voice session and bridges events to Qt signals."""
 
     state_changed = Signal(str)  # idle / connecting / active / error
-    transcription = Signal(str, str, bool)  # text, role, is_final
+    transcription = Signal(str, str, bool, str)  # text, role, is_final, speaker_name
+    speaker_identified = Signal(str, float)  # speaker_name, confidence
     mic_audio_level = Signal(float)  # 0.0-1.0
     speaker_audio_level = Signal(float)  # 0.0-1.0
     user_speaking = Signal(bool)
@@ -95,9 +96,15 @@ class Engine(QObject):
         self._state = "idle"
         self._attitude: str = ""  # full description text (injected into prompt)
         self._attitude_name: str = ""  # short display name for the header
+        # Diarization state
+        self._diarization: Any = None
+        self._current_speaker_id: str = ""
+        self._primary_speaker_mode: bool = False
+        self._primary_speaker_name: str = ""
         # Realtime partial transcription accumulator: Gemini/OpenAI send
         # incremental fragments, but the UI expects full accumulated text.
         self._partial_buffers: dict[str, str] = {}  # role → accumulated text
+        self._partial_speakers: dict[str, str] = {}  # role → best speaker ID this utterance
 
         # Log handler to surface roomkit voice errors in the UI
         self._log_handler = _VoiceErrorLogHandler(self)
@@ -128,7 +135,9 @@ class Engine(QObject):
     # -- register our own callbacks (roomkit uses append-based lists) --------
 
     def _register_callbacks(self, provider: Any, transport: Any) -> None:
-        provider.on_transcription(self._on_transcription)
+        # NOTE: on_transcription is NOT registered here — the channel fires
+        # ON_TRANSCRIPTION hooks which register_realtime_hooks() handles.
+        # Registering both would cause double transcription in the UI.
         provider.on_speech_start(self._on_speech_start)
         provider.on_speech_end(self._on_speech_end)
         provider.on_response_start(self._on_response_start)
@@ -144,14 +153,29 @@ class Engine(QObject):
         Accumulate them so the signal always carries the full text.
         """
         try:
+            speaker = self._current_speaker_id if role == "user" else ""
+
+            # Primary speaker mode: block non-primary user transcriptions
+            if (
+                role == "user"
+                and self._primary_speaker_mode
+                and self._primary_speaker_name
+                and speaker != self._primary_speaker_name
+            ):
+                if is_final:
+                    self._partial_buffers.pop(role, None)
+                    label = speaker if speaker and speaker != "unknown" else "Unknown"
+                    self.transcription.emit(str(text), "other", True, label)
+                return
+
             if is_final:
                 self._partial_buffers.pop(role, None)
-                self.transcription.emit(str(text), str(role), True)
+                self.transcription.emit(str(text), str(role), True, speaker)
             else:
                 buf = self._partial_buffers.get(role, "")
                 buf += text
                 self._partial_buffers[role] = buf
-                self.transcription.emit(buf, str(role), False)
+                self.transcription.emit(buf, str(role), False, speaker)
         except Exception:
             pass
 
@@ -195,6 +219,28 @@ class Engine(QObject):
             self.error_occurred.emit(friendly)
         except Exception:
             pass
+
+    def _on_transport_speaker_change(self, session: Any, result: Any) -> None:
+        """Handle speaker change events directly from the transport pipeline."""
+        speaker_id = result.speaker_id
+        confidence = result.confidence
+        self._current_speaker_id = speaker_id
+        try:
+            self.speaker_identified.emit(speaker_id, confidence)
+        except Exception:
+            pass
+
+        # Primary speaker gating: gate audio when a *different* enrolled
+        # speaker is positively identified.  Unknown / empty speakers get
+        # benefit of the doubt (diarization hasn't decided yet).
+        if self._primary_speaker_mode and self._primary_speaker_name:
+            gate = (
+                bool(speaker_id)
+                and speaker_id != "unknown"
+                and speaker_id != self._primary_speaker_name
+            )
+            if self._transport is not None:
+                self._transport.set_input_gated(session, gate)
 
     @staticmethod
     def _friendly_error(code: str, message: str) -> str:
@@ -466,6 +512,114 @@ class Engine(QObject):
             input_device = settings.get("input_device")
             output_device = settings.get("output_device")
 
+            # -- Diarization (optional) ------------------------------------------
+            pipeline = None
+            diarization: Any = None
+            diarization_enabled = settings.get("diarization_enabled", False)
+            diarization_model_id = settings.get("diarization_model", "")
+            inference_device = settings.get("inference_device", "cpu")
+
+            if diarization_enabled and diarization_model_id:
+                from roomkit_ui.model_manager import (
+                    build_diarization_config,
+                    is_speaker_model_downloaded,
+                )
+
+                if is_speaker_model_downloaded(diarization_model_id):
+                    from roomkit.voice.pipeline.diarization.sherpa_onnx import (
+                        SherpaOnnxDiarizationProvider,
+                    )
+
+                    self.loading_status.emit("Loading speaker model\u2026")
+                    threshold = settings.get("diarization_threshold", 0.4)
+                    if isinstance(threshold, str):
+                        try:
+                            threshold = float(threshold)
+                        except (ValueError, TypeError):
+                            threshold = 0.5
+                    diar_config = build_diarization_config(
+                        diarization_model_id,
+                        provider=inference_device,
+                        threshold=threshold,
+                    )
+                    diarization = SherpaOnnxDiarizationProvider(diar_config)
+                    self._diarization = diarization
+
+                    # Load enrolled speakers
+                    from roomkit_ui.speaker_manager import load_speakers
+
+                    for speaker in load_speakers():
+                        if speaker.embeddings:
+                            ok = diarization.register_speaker(speaker.name, speaker.embeddings)
+                            logger.info(
+                                "Enrolled speaker: %s (%d samples) → %s",
+                                speaker.name,
+                                len(speaker.embeddings),
+                                ok,
+                            )
+
+                    # Primary speaker mode
+                    self._primary_speaker_mode = settings.get("primary_speaker_mode", False)
+                    if self._primary_speaker_mode:
+                        from roomkit_ui.speaker_manager import get_primary_speaker
+
+                        primary = get_primary_speaker()
+                        self._primary_speaker_name = primary.name if primary else ""
+
+                    logger.info(
+                        "Diarization: model=%s, threshold=%.2f, primary_mode=%s",
+                        diarization_model_id,
+                        threshold,
+                        self._primary_speaker_mode,
+                    )
+                else:
+                    logger.warning(
+                        "Speaker model %s not downloaded — no diarization",
+                        diarization_model_id,
+                    )
+
+            if diarization is not None:
+                from roomkit.voice.pipeline.config import AudioPipelineConfig
+
+                # Diarization needs VAD for speech boundary detection
+                vad: Any = None
+                vad_model_id = settings.get("vc_vad_model", "")
+                if vad_model_id:
+                    from roomkit_ui.model_manager import build_vad_config, is_vad_model_downloaded
+
+                    if is_vad_model_downloaded(vad_model_id):
+                        from roomkit.voice.pipeline.vad.sherpa_onnx import SherpaOnnxVADProvider
+
+                        vad_config = build_vad_config(vad_model_id, provider=inference_device)
+                        vad = SherpaOnnxVADProvider(vad_config)
+                        logger.info("Realtime VAD: %s", vad_model_id)
+                    else:
+                        logger.warning("VAD model %s not downloaded — no VAD", vad_model_id)
+
+                if vad is None:
+                    logger.warning("Diarization requires VAD — skipping diarization")
+                    diarization = None
+                    self._diarization = None
+                else:
+                    from roomkit.voice.pipeline.config import (
+                        AudioFormat,
+                        AudioPipelineContract,
+                    )
+
+                    # Realtime providers use 24kHz; VAD/diarization models need 16kHz.
+                    # No denoiser needed — the transport already denoises at 24kHz
+                    # before audio reaches the pipeline.
+                    contract = AudioPipelineContract(
+                        transport_inbound_format=AudioFormat(sample_rate=sample_rate),
+                        internal_format=AudioFormat(sample_rate=16000),
+                    )
+                    pipeline = AudioPipelineConfig(
+                        vad=vad,
+                        diarization=diarization,
+                        contract=contract,
+                    )
+
+            # -- Transport -------------------------------------------------------
             transport = LocalAudioTransport(
                 input_sample_rate=sample_rate,
                 output_sample_rate=sample_rate,
@@ -475,9 +629,14 @@ class Engine(QObject):
                 denoiser=denoiser,
                 input_device=input_device,
                 output_device=output_device,
+                pipeline=pipeline,
             )
 
             self._transport = transport
+
+            # Register speaker change callback directly on the transport
+            if pipeline is not None:
+                transport.on_speaker_change(self._on_transport_speaker_change)
 
             # Log audio pipeline configuration
             aec_label = type(aec).__name__ if aec else "none"
@@ -545,7 +704,7 @@ class Engine(QObject):
             if self._session is None:
                 raise RuntimeError("Failed to start voice session")
 
-            register_audio_hooks(self._kit, self)
+            register_realtime_hooks(self._kit, self)
 
             self._spk_rms_queue.clear()
             self._spk_timer.start()
@@ -791,6 +950,70 @@ class Engine(QObject):
                 else:
                     logger.warning("VAD model %s not downloaded — no VAD", vad_model_id)
 
+            # 6.5. Build diarization (optional — requires VAD)
+            diarization: Any = None
+            diarization_enabled = settings.get("diarization_enabled", False)
+            diarization_model_id = settings.get("diarization_model", "")
+            if diarization_enabled and diarization_model_id:
+                from roomkit_ui.model_manager import (
+                    build_diarization_config,
+                    is_speaker_model_downloaded,
+                )
+
+                if not vad:
+                    logger.warning("Diarization requires VAD — skipping")
+                elif is_speaker_model_downloaded(diarization_model_id):
+                    from roomkit.voice.pipeline.diarization.sherpa_onnx import (
+                        SherpaOnnxDiarizationProvider,
+                    )
+
+                    threshold = settings.get("diarization_threshold", 0.4)
+                    if isinstance(threshold, str):
+                        try:
+                            threshold = float(threshold)
+                        except (ValueError, TypeError):
+                            threshold = 0.5
+                    diar_config = build_diarization_config(
+                        diarization_model_id,
+                        provider=inference_device,
+                        threshold=threshold,
+                    )
+                    diarization = SherpaOnnxDiarizationProvider(diar_config)
+                    self._diarization = diarization
+
+                    # Load enrolled speakers
+                    from roomkit_ui.speaker_manager import load_speakers
+
+                    for speaker in load_speakers():
+                        if speaker.embeddings:
+                            ok = diarization.register_speaker(speaker.name, speaker.embeddings)
+                            logger.info(
+                                "Enrolled speaker: %s (%d samples) → %s",
+                                speaker.name,
+                                len(speaker.embeddings),
+                                ok,
+                            )
+
+                    # Primary speaker mode
+                    self._primary_speaker_mode = settings.get("primary_speaker_mode", False)
+                    if self._primary_speaker_mode:
+                        from roomkit_ui.speaker_manager import get_primary_speaker
+
+                        primary = get_primary_speaker()
+                        self._primary_speaker_name = primary.name if primary else ""
+
+                    logger.info(
+                        "Diarization: model=%s, threshold=%.2f, primary_mode=%s",
+                        diarization_model_id,
+                        threshold,
+                        self._primary_speaker_mode,
+                    )
+                else:
+                    logger.warning(
+                        "Speaker model %s not downloaded — no diarization",
+                        diarization_model_id,
+                    )
+
             # Interruption config
             from roomkit.voice.interruption import InterruptionConfig, InterruptionStrategy
 
@@ -804,7 +1027,11 @@ class Engine(QObject):
             logger.info("Interruption: %s", strategy.value)
 
             pipeline = AudioPipelineConfig(
-                aec=aec, denoiser=denoiser, vad=vad, interruption=interruption
+                aec=aec,
+                denoiser=denoiser,
+                vad=vad,
+                interruption=interruption,
+                diarization=diarization,
             )
 
             # 7. Create VoiceChannel
@@ -981,12 +1208,17 @@ class Engine(QObject):
             except ImportError:
                 logger.warning("Speex AEC not available — install libspeexdsp")
 
-        denoiser: Any = None
+        denoiser = self._build_denoiser(denoise_mode, sample_rate)
+        return aec, denoiser
+
+    @staticmethod
+    def _build_denoiser(denoise_mode: str, sample_rate: int) -> Any:
+        """Build a denoiser provider for the given mode and sample rate."""
         if denoise_mode == "rnnoise":
             try:
                 from roomkit.voice.pipeline.denoiser.rnnoise import RNNoiseDenoiserProvider
 
-                denoiser = RNNoiseDenoiserProvider(sample_rate=sample_rate)
+                return RNNoiseDenoiserProvider(sample_rate=sample_rate)
             except ImportError:
                 logger.warning("RNNoise denoiser not available")
         elif denoise_mode == "gtcrn":
@@ -998,13 +1230,12 @@ class Engine(QObject):
                     SherpaOnnxDenoiserProvider,
                 )
 
-                denoiser = SherpaOnnxDenoiserProvider(
+                return SherpaOnnxDenoiserProvider(
                     SherpaOnnxDenoiserConfig(model=str(gtcrn_model_path()))
                 )
             else:
                 logger.warning("GTCRN model not downloaded — denoiser disabled")
-
-        return aec, denoiser
+        return None
 
     async def _setup_mcp_tools(self, settings: dict) -> tuple[list[dict], bool]:
         """Connect MCP servers and return (tools_list, has_mcp_tools)."""
@@ -1139,6 +1370,11 @@ class Engine(QObject):
                 logger.info("cleanup: MCP closed")
             except Exception:
                 logger.exception("cleanup: mcp.close_all() failed")
+        if self._diarization is not None:
+            try:
+                self._diarization.close()
+            except Exception:
+                pass
         self._channel = None
         self._ai_channel = None
         self._session = None
@@ -1147,6 +1383,10 @@ class Engine(QObject):
         self._backend = None
         self._tts = None
         self._mcp = None
+        self._diarization = None
+        self._current_speaker_id = ""
+        self._primary_speaker_mode = False
+        self._primary_speaker_name = ""
         # Note: self._attitude is preserved across reconnects and only
         # cleared in stop() when the user explicitly ends the session.
         # Clean up stale event-loop state left by MCP/anyio.

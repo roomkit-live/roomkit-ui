@@ -59,9 +59,11 @@ class ChatBubble(QFrame):
         text: str,
         role: str = "assistant",
         parent=None,
+        speaker_name: str = "",
     ) -> None:
         super().__init__(parent)
         self._role = role
+        self._speaker_name = speaker_name
         self._finalized = False
         self._created = datetime.now()
         self._raw_text = text
@@ -73,12 +75,17 @@ class ChatBubble(QFrame):
         self._stream_timer.timeout.connect(self._stream_tick)
 
         c = colors()
-        is_user = role == "user"
+        is_user = role in ("user", "other")
 
         # ── Bubble container ──
         self._bubble = QFrame()
         self._bubble.setObjectName("bubbleFrame")
-        bg = c["BUBBLE_USER_BG"] if is_user else c["BUBBLE_AI_BG"]
+        if role == "other":
+            bg = c["BUBBLE_OTHER_BG"]
+        elif role == "user":
+            bg = c["BUBBLE_USER_BG"]
+        else:
+            bg = c["BUBBLE_AI_BG"]
         self._bubble.setStyleSheet(
             f"QFrame#bubbleFrame {{"
             f"  background-color: {bg};"
@@ -146,6 +153,25 @@ class ChatBubble(QFrame):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 3, 0, 1)
         outer.setSpacing(0)
+
+        # ── Speaker name label (shown above bubble for identified speakers) ──
+        self._speaker_label: QLabel | None = None
+        if is_user:
+            self._speaker_label = QLabel(speaker_name or "")
+            spk_align = Qt.AlignRight if role == "user" else Qt.AlignLeft
+            self._speaker_label.setAlignment(spk_align)
+            self._speaker_label.setStyleSheet(
+                f"QLabel {{"
+                f"  color: {c['SPEAKER_LABEL']};"
+                f"  font-size: 10px;"
+                f"  font-weight: 500;"
+                f"  background: transparent;"
+                f"  padding: 0px 14px 1px 14px;"
+                f"}}"
+            )
+            self._speaker_label.setVisible(bool(speaker_name))
+            outer.addWidget(self._speaker_label)
+
         outer.addLayout(row)
         outer.addLayout(time_row)
         self.setStyleSheet("background: transparent;")
@@ -157,6 +183,12 @@ class ChatBubble(QFrame):
     @property
     def finalized(self) -> bool:
         return self._finalized
+
+    def set_speaker_name(self, name: str) -> None:
+        self._speaker_name = name
+        if self._speaker_label is not None:
+            self._speaker_label.setText(name)
+            self._speaker_label.setVisible(bool(name))
 
     def set_text(self, text: str) -> None:
         self._raw_text = text
@@ -214,7 +246,7 @@ class ChatBubble(QFrame):
         self._time_label.setText(datetime.now().strftime("%H:%M"))
 
         # Render markdown for assistant bubbles only
-        if self._role != "user":
+        if self._role not in ("user", "other"):
             try:
                 c = colors()
                 html = _markdown_to_html(self._raw_text, c)

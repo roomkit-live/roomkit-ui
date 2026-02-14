@@ -21,6 +21,8 @@ DARK: dict[str, str] = {
     "BUBBLE_USER_TEXT": "#FFFFFF",
     "BUBBLE_AI_BG": "#2C2C2E",
     "BUBBLE_AI_TEXT": "#FFFFFF",
+    "BUBBLE_OTHER_BG": "#3A3A3C",
+    "SPEAKER_LABEL": "#8E8E93",
     "CODE_BG": "#1A1A1C",
     "SEPARATOR": "#2C2C2E",
 }
@@ -38,6 +40,8 @@ LIGHT: dict[str, str] = {
     "BUBBLE_USER_TEXT": "#FFFFFF",
     "BUBBLE_AI_BG": "#E5E5EA",
     "BUBBLE_AI_TEXT": "#000000",
+    "BUBBLE_OTHER_BG": "#D1D1D6",
+    "SPEAKER_LABEL": "#6C6C70",
     "CODE_BG": "#D8D8DD",
     "SEPARATOR": "#D1D1D6",
 }

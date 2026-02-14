@@ -24,6 +24,7 @@ from roomkit_ui.widgets.settings.general_page import _GeneralPage
 from roomkit_ui.widgets.settings.mcp_page import _MCPPage
 from roomkit_ui.widgets.settings.models_page import _ModelsPage
 from roomkit_ui.widgets.settings.skills import _SkillsPage
+from roomkit_ui.widgets.settings.speakers_page import _SpeakersPage
 
 
 class SettingsPanel(QDialog):
@@ -60,6 +61,7 @@ class SettingsPanel(QDialog):
             "General",
             "AI Provider",
             "Attitudes",
+            "Speakers",
             "Dictation",
             "AI Models",
             "Skills",
@@ -75,6 +77,7 @@ class SettingsPanel(QDialog):
         self._general = _GeneralPage(settings)
         self._ai = _AIPage(settings)
         self._attitudes = _AttitudesPage(settings)
+        self._speakers = _SpeakersPage(settings)
         self._dictation = _DictationPage(settings)
         self._models = _ModelsPage(settings)
         self._skills = _SkillsPage(settings)
@@ -84,6 +87,7 @@ class SettingsPanel(QDialog):
             self._general,
             self._ai,
             self._attitudes,
+            self._speakers,
             self._dictation,
             self._models,
             self._skills,
@@ -127,8 +131,9 @@ class SettingsPanel(QDialog):
 
     _AI_TAB = 1
     _ATTITUDES_TAB = 2
-    _DICTATION_TAB = 3
-    _SKILLS_TAB = 5
+    _SPEAKERS_TAB = 3
+    _DICTATION_TAB = 4
+    _SKILLS_TAB = 6
 
     def _on_tab_changed(self, index: int) -> None:
         self._stack.setCurrentIndex(index)

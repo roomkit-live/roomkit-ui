@@ -198,6 +198,29 @@ class _GeneralPage(QWidget):
                 break
         proc_form.addRow("Denoise", self.denoise)
 
+        # VAD model (used by both voice channel STT and realtime diarization)
+        from roomkit_ui.model_manager import VAD_MODELS, is_vad_model_downloaded
+
+        self.vad_model = QComboBox()
+        self.vad_model.addItem("None", "")
+        for vm in VAD_MODELS:
+            if is_vad_model_downloaded(vm.id):
+                self.vad_model.addItem(vm.name, vm.id)
+        saved_vad = settings.get("vc_vad_model", "")
+        for i in range(self.vad_model.count()):
+            if self.vad_model.itemData(i) == saved_vad:
+                self.vad_model.setCurrentIndex(i)
+                break
+        proc_form.addRow("VAD", self.vad_model)
+
+        self._vad_hint = QLabel("Voice activity detection — required for speaker diarization.")
+        self._vad_hint.setWordWrap(True)
+        self._vad_hint.setStyleSheet(
+            f"font-size: 11px; color: {c['TEXT_SECONDARY']};"
+            f" font-style: italic; background: transparent;"
+        )
+        proc_form.addRow("", self._vad_hint)
+
         # Inference device
         from roomkit_ui.model_manager import detect_providers
 
@@ -246,6 +269,7 @@ class _GeneralPage(QWidget):
             "theme": THEMES[self.theme_combo.currentIndex()][1],
             "aec_mode": AEC_MODES[self.aec.currentIndex()][1],
             "denoise": DENOISE_MODES[self.denoise.currentIndex()][1],
+            "vc_vad_model": self.vad_model.currentData() or "",
             "inference_device": self._inference_providers[self.inference_device.currentIndex()][1],
             "input_device": self.input_combo.currentData(),
             "output_device": self.output_combo.currentData(),

@@ -152,8 +152,10 @@ class MainWindow(QMainWindow):
             self._pending_app_results.clear()
             self.session_active_changed.emit(False)
 
-    def _on_transcription(self, text: str, role: str, is_final: bool) -> None:
-        self._chat.add_transcription(text, role, is_final)
+    def _on_transcription(
+        self, text: str, role: str, is_final: bool, speaker_name: str = ""
+    ) -> None:
+        self._chat.add_transcription(text, role, is_final, speaker_name)
 
     def _on_user_speaking(self, speaking: bool) -> None:
         if speaking:
