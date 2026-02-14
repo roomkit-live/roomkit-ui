@@ -103,19 +103,20 @@ def main() -> None:
 
     QTimer.singleShot(200, _prewarm_webengine)
 
-    # On macOS, check and request event-posting permissions.
+    # On macOS, check Accessibility and event-posting permissions.
+    # Prompt once on first launch so the app appears in System Settings for
+    # the user to toggle on, then just check silently on subsequent launches.
     if sys.platform == "darwin":
         try:
             from Quartz import CGPreflightPostEventAccess, CGRequestPostEventAccess
 
             logger = logging.getLogger(__name__)
 
-            # Use AXIsProcessTrustedWithOptions to prompt the user if not trusted
             try:
                 import HIServices
 
                 ax = HIServices.AXIsProcessTrustedWithOptions(
-                    {HIServices.kAXTrustedCheckOptionPrompt: True}
+                    {HIServices.kAXTrustedCheckOptionPrompt: not settings.get("ax_prompted")}
                 )
             except (ImportError, AttributeError):
                 from ApplicationServices import AXIsProcessTrusted
@@ -130,8 +131,14 @@ def main() -> None:
                 os.getpid(),
                 sys.executable,
             )
-            if not post:
+            if not post and not settings.get("ax_prompted"):
                 CGRequestPostEventAccess()
+
+            if not settings.get("ax_prompted"):
+                from roomkit_ui.settings import save_settings
+
+                settings["ax_prompted"] = True
+                save_settings(settings)
         except Exception:
             pass
 
