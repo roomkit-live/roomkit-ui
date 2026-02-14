@@ -10,6 +10,21 @@ from PySide6.QtCore import QMetaObject, QObject, Qt, QTimer, Signal, Slot
 
 logger = logging.getLogger(__name__)
 
+# pynput on macOS internally calls HIServices.AXIsProcessTrusted() in its
+# listener thread, which fails with newer pyobjc (KeyError on lazy import).
+# Patch it at module level so all pynput Listener instances work.
+if sys.platform == "darwin":
+    try:
+        import HIServices  # type: ignore[import-untyped]
+
+        if not hasattr(HIServices, "AXIsProcessTrusted"):
+            from ApplicationServices import AXIsProcessTrusted  # type: ignore[import-untyped]
+
+            HIServices.AXIsProcessTrusted = AXIsProcessTrusted
+            logger.debug("Patched HIServices.AXIsProcessTrusted for pynput compatibility")
+    except (ImportError, AttributeError):
+        pass
+
 # macOS virtual key codes for modifier keys
 _MAC_KEYCODES = {
     "<cmd_r>": 0x36,  # Right Command
@@ -59,6 +74,7 @@ class HotkeyListener(QObject):
         self._hotkey_key = hotkey_key
         self._listener: Any = None
         self._monitor: Any = None  # NSEvent global monitor
+        self._matcher: _KeyMatcher | None = None  # swappable key matching logic
 
     def start(self) -> None:
         if self._listener is not None or self._monitor is not None:
@@ -136,22 +152,30 @@ class HotkeyListener(QObject):
 
     def _start_pynput(self) -> None:
         """Fallback: use pynput for multi-key combos or non-macOS."""
-        # On macOS, pynput needs Accessibility (AXIsProcessTrusted).  Without
-        # it the CGEventTap can't receive events anyway, and — worse —
-        # creating a *second* tap crashes the process with Trace/BPT trap.
+        # On macOS, pynput needs Accessibility (AXIsProcessTrusted).
+        # We log a warning but still attempt to start — AXIsProcessTrusted()
+        # can return stale results, especially for signed PyInstaller apps
+        # where the TCC csreq may not match what the API checks.
         if sys.platform == "darwin":
             try:
-                from ApplicationServices import AXIsProcessTrusted
+                import HIServices
 
-                if not AXIsProcessTrusted():
-                    logger.warning(
-                        "pynput hotkey skipped — Accessibility not granted. "
-                        "Add this app in System Settings → Privacy & Security → Accessibility."
-                    )
-                    self.permission_required.emit()
-                    return
-            except ImportError:
-                pass
+                ax = HIServices.AXIsProcessTrustedWithOptions(
+                    {HIServices.kAXTrustedCheckOptionPrompt: True}
+                )
+            except (ImportError, AttributeError):
+                try:
+                    from ApplicationServices import AXIsProcessTrusted
+
+                    ax = AXIsProcessTrusted()
+                except ImportError:
+                    ax = None
+            if ax is False:
+                logger.warning(
+                    "Accessibility not granted (AXIsProcessTrusted=False). "
+                    "Attempting pynput anyway — grant access in System Settings "
+                    "→ Privacy & Security → Accessibility."
+                )
 
         try:
             from pynput import keyboard
@@ -159,42 +183,42 @@ class HotkeyListener(QObject):
             logger.error("pynput is not installed — global hotkey disabled")
             return
 
+        # Build the matcher for the current hotkey
+        self._matcher = _KeyMatcher(self._hotkey)
+        if not self._matcher.valid:
+            logger.error("Could not parse hotkey: %s", self._hotkey)
+            self._matcher = None
+            return
+
         # All pynput callbacks run in a background thread — use
         # QMetaObject.invokeMethod to safely call back into the Qt main thread.
-        def _safe_activate(*_args):
+        def _safe_activate():
             QMetaObject.invokeMethod(self, "_on_activate", Qt.QueuedConnection)
 
-        if "+" not in self._hotkey:
-            from pynput.keyboard import HotKey, Key, KeyCode
+        # Build a pynput HotKey that handles key canonicalization properly
+        # (e.g. Ctrl+K reports vk=40 not char='k').  Use it with a plain
+        # Listener instead of GlobalHotKeys to avoid the HIServices crash.
+        self._matcher = _KeyMatcher(self._hotkey, _safe_activate)
+        if not self._matcher.valid:
+            logger.error("Could not parse hotkey: %s", self._hotkey)
+            self._matcher = None
+            return
 
-            parsed = HotKey.parse(self._hotkey)
-            if not parsed:
-                logger.error("Could not parse hotkey: %s", self._hotkey)
-                return
-            target_key = parsed[0]
+        matcher = self._matcher
+        listener_ref: list[keyboard.Listener] = []
 
-            # Build a set of keys that should match — include both
-            # left/right variants for generic modifiers (e.g. <ctrl>
-            # should match both ctrl_l and ctrl_r).
-            # AltGr on many Linux keyboards reports as ISO_Level3_Shift
-            # (vk 65027) instead of pynput's Key.alt_gr (vk 65406).
-            variants: dict[Key | KeyCode, set[Key | KeyCode]] = {
-                Key.ctrl: {Key.ctrl, Key.ctrl_l, Key.ctrl_r},
-                Key.shift: {Key.shift, Key.shift_l, Key.shift_r},
-                Key.alt: {Key.alt, Key.alt_l, Key.alt_r, Key.alt_gr, KeyCode.from_vk(65027)},
-                Key.alt_gr: {Key.alt_gr, Key.alt_r, KeyCode.from_vk(65027)},
-                Key.cmd: {Key.cmd, Key.cmd_l, Key.cmd_r},
-            }
-            match_keys = variants.get(target_key, {target_key})
+        def on_press(key):
+            if listener_ref:
+                key = listener_ref[0].canonical(key)
+            matcher.press(key)
 
-            def on_release(key):
-                if key in match_keys:
-                    _safe_activate()
+        def on_release(key):
+            if listener_ref:
+                key = listener_ref[0].canonical(key)
+            matcher.release(key)
 
-            self._listener = keyboard.Listener(on_release=on_release)
-        else:
-            self._listener = keyboard.GlobalHotKeys({self._hotkey: _safe_activate})
-
+        self._listener = keyboard.Listener(on_press=on_press, on_release=on_release)
+        listener_ref.append(self._listener)
         self._listener.daemon = True
         self._listener.start()
         logger.info("pynput hotkey listener started: %s", self._hotkey)
@@ -215,6 +239,7 @@ class HotkeyListener(QObject):
             except Exception:
                 pass
             self._listener = None
+        self._matcher = None
         logger.info("Global hotkey listener stopped")
 
     def reload(self) -> None:
@@ -228,8 +253,6 @@ class HotkeyListener(QObject):
         is_running = self._listener is not None or self._monitor is not None
 
         # Nothing changed — skip the teardown/recreate cycle.
-        # Restarting pynput on macOS without Accessibility permissions causes
-        # a Trace/BPT trap (SIGTRAP) on the second CGEventTap creation.
         if new_hotkey == self._hotkey and enabled == is_running:
             logger.info("Hotkey unchanged (%s), skipping reload", self._hotkey)
             return
@@ -242,13 +265,28 @@ class HotkeyListener(QObject):
             enabled,
         )
 
-        self.stop()
+        self._hotkey = new_hotkey
 
         if not enabled:
+            self.stop()
             logger.info("Hotkey disabled by settings")
             return
 
-        self._hotkey = new_hotkey
+        # On macOS, restarting a pynput Listener (CGEventTap) causes a
+        # Trace/BPT trap (SIGTRAP) crash.  If we already have a running
+        # pynput listener, hot-swap the matcher instead of stop/start.
+        if sys.platform == "darwin" and self._listener is not None:
+            # Switching between pynput and NSEvent requires a full restart,
+            # but pynput→pynput can be done with a matcher swap.
+            if new_hotkey not in _MAC_KEYCODES:
+                new_matcher = _KeyMatcher(new_hotkey)
+                if new_matcher.valid and self._matcher is not None:
+                    self._matcher.swap(new_matcher)
+                    logger.info("Hotkey reloaded (matcher swap): %s", new_hotkey)
+                    return
+
+        # Full stop/start for non-macOS or when switching listener type
+        self.stop()
         self.start()
         logger.info("Hotkey reloaded: %s", new_hotkey)
 
@@ -256,3 +294,64 @@ class HotkeyListener(QObject):
     def _on_activate(self) -> None:
         logger.info("Hotkey activated: %s", self._hotkey)
         self.hotkey_pressed.emit()
+
+
+class _KeyMatcher:
+    """Hotkey matching that can be swapped at runtime.
+
+    Wraps pynput's ``HotKey`` for multi-key combos, and does simple
+    key-set matching for single-modifier hotkeys.  The ``swap()`` method
+    allows updating the target keys without destroying the pynput Listener
+    (avoids the macOS SIGTRAP crash on CGEventTap re-creation).
+    """
+
+    def __init__(self, hotkey: str, callback: Any = None) -> None:
+        from pynput.keyboard import HotKey, Key, KeyCode
+
+        parsed = HotKey.parse(hotkey)
+        self.valid = bool(parsed)
+        if not self.valid:
+            return
+
+        self._callback = callback
+        self._is_combo = "+" in hotkey
+
+        if self._is_combo:
+            self._hotkey = HotKey(parsed, self._on_activate)
+        else:
+            # Single-key hotkeys: build a match set with left/right variants
+            variants: dict[Key | KeyCode, set[Key | KeyCode]] = {
+                Key.ctrl: {Key.ctrl, Key.ctrl_l, Key.ctrl_r},
+                Key.shift: {Key.shift, Key.shift_l, Key.shift_r},
+                Key.alt: {Key.alt, Key.alt_l, Key.alt_r, Key.alt_gr, KeyCode.from_vk(65027)},
+                Key.alt_gr: {Key.alt_gr, Key.alt_r, KeyCode.from_vk(65027)},
+                Key.cmd: {Key.cmd, Key.cmd_l, Key.cmd_r},
+            }
+            self._match_keys = variants.get(parsed[0], {parsed[0]})
+            self._hotkey = None
+
+    def _on_activate(self) -> None:
+        if self._callback:
+            self._callback()
+
+    def swap(self, other: _KeyMatcher) -> None:
+        """Replace matching logic with *other*'s configuration."""
+        self._is_combo = other._is_combo
+        self._hotkey = other._hotkey
+        if hasattr(other, "_match_keys"):
+            self._match_keys = other._match_keys
+        # Re-point the swapped HotKey's callback to our own
+        if self._hotkey is not None:
+            self._hotkey._on_activate = self._on_activate
+
+    def press(self, key) -> None:
+        """Feed a canonicalized key press."""
+        if self._is_combo and self._hotkey is not None:
+            self._hotkey.press(key)
+
+    def release(self, key) -> None:
+        """Feed a canonicalized key release."""
+        if self._is_combo and self._hotkey is not None:
+            self._hotkey.release(key)
+        elif not self._is_combo and key in self._match_keys:
+            self._on_activate()

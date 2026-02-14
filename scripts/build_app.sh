@@ -3,8 +3,14 @@
 # Usage: bash scripts/build_app.sh
 #
 # Produces:
-#   macOS  → dist/RoomKit UI.app
+#   macOS  → dist/RoomKit UI.app  (signed + notarized if env vars set)
 #   Linux  → dist/RoomKit UI/  (one-dir bundle)
+#
+# Environment variables (macOS code signing & notarization):
+#   CODESIGN_IDENTITY  — e.g. "Developer ID Application: Your Name (TEAMID)"
+#   APPLE_ID           — Apple ID email for notarization
+#   APPLE_PASSWORD     — App-specific password for notarization
+#   APPLE_TEAM_ID      — 10-char Apple Developer Team ID
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -58,8 +64,9 @@ uv run pyinstaller \
     --add-data "src/roomkit_ui${SEP}roomkit_ui" \
     src/roomkit_ui/__main__.py
 
-# macOS: patch Info.plist and re-sign
-APP_PLIST="dist/RoomKit UI.app/Contents/Info.plist"
+# macOS: patch Info.plist, sign, and optionally notarize
+APP="dist/RoomKit UI.app"
+APP_PLIST="$APP/Contents/Info.plist"
 if [ -f "$APP_PLIST" ]; then
     /usr/libexec/PlistBuddy -c \
         "Set :CFBundleIdentifier com.roomkit.ui" \
@@ -68,7 +75,52 @@ if [ -f "$APP_PLIST" ]; then
         "Add :NSMicrophoneUsageDescription string 'RoomKit UI needs microphone access for voice conversations.'" \
         "$APP_PLIST" 2>/dev/null || true
     echo "==> Patched Info.plist (bundle ID + mic permission)"
-    codesign --force --deep --sign - "dist/RoomKit UI.app"
+
+    if [ -n "${CODESIGN_IDENTITY:-}" ]; then
+        echo "==> Signing with: $CODESIGN_IDENTITY"
+
+        # Sign all bundled shared libraries first
+        find "$APP/Contents/Frameworks" -type f \( -name '*.so' -o -name '*.dylib' \) | while read -r lib; do
+            codesign --force --options runtime --entitlements entitlements.plist \
+                --sign "$CODESIGN_IDENTITY" "$lib"
+        done
+        echo "==> Signed shared libraries"
+
+        # Sign the main executable
+        codesign --force --options runtime --entitlements entitlements.plist \
+            --sign "$CODESIGN_IDENTITY" "$APP/Contents/MacOS/RoomKit UI"
+        echo "==> Signed main executable"
+
+        # Sign the app bundle
+        codesign --force --options runtime --entitlements entitlements.plist \
+            --sign "$CODESIGN_IDENTITY" "$APP"
+        echo "==> Signed app bundle"
+
+        # Verify signature
+        codesign --verify --deep --strict "$APP"
+        echo "==> Signature verified"
+
+        # Notarize if Apple credentials are provided
+        if [ -n "${APPLE_ID:-}" ] && [ -n "${APPLE_PASSWORD:-}" ] && [ -n "${APPLE_TEAM_ID:-}" ]; then
+            echo "==> Notarizing..."
+            ZIP_PATH="dist/RoomKit UI-notarize.zip"
+            ditto -c -k --keepParent "$APP" "$ZIP_PATH"
+            xcrun notarytool submit "$ZIP_PATH" \
+                --apple-id "$APPLE_ID" \
+                --password "$APPLE_PASSWORD" \
+                --team-id "$APPLE_TEAM_ID" \
+                --wait
+            rm -f "$ZIP_PATH"
+            xcrun stapler staple "$APP"
+            echo "==> Notarization complete"
+        else
+            echo "==> Skipping notarization (APPLE_ID/APPLE_PASSWORD/APPLE_TEAM_ID not set)"
+        fi
+    else
+        echo "==> Ad-hoc signing (no CODESIGN_IDENTITY set)"
+        codesign --force --deep --sign - "$APP"
+    fi
+
     echo "==> Re-signed app bundle"
 fi
 

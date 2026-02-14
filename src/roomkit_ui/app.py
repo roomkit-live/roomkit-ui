@@ -106,11 +106,22 @@ def main() -> None:
     # On macOS, check and request event-posting permissions.
     if sys.platform == "darwin":
         try:
-            from ApplicationServices import AXIsProcessTrusted
             from Quartz import CGPreflightPostEventAccess, CGRequestPostEventAccess
 
             logger = logging.getLogger(__name__)
-            ax = AXIsProcessTrusted()
+
+            # Use AXIsProcessTrustedWithOptions to prompt the user if not trusted
+            try:
+                import HIServices
+
+                ax = HIServices.AXIsProcessTrustedWithOptions(
+                    {HIServices.kAXTrustedCheckOptionPrompt: True}
+                )
+            except (ImportError, AttributeError):
+                from ApplicationServices import AXIsProcessTrusted
+
+                ax = AXIsProcessTrusted()
+
             post = CGPreflightPostEventAccess()
             logger.info(
                 "macOS permissions: AXTrusted=%s PostEvent=%s pid=%d exe=%s",

@@ -2,19 +2,32 @@
 
 from __future__ import annotations
 
+import sys
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QPushButton
 
 from roomkit_ui.theme import colors
 
 # ── Qt modifier → pynput token ──────────────────────────────────────────
+# On macOS, Qt swaps Control and Meta: physical Command (⌘) → Qt.ControlModifier,
+# physical Control (⌃) → Qt.MetaModifier.  pynput uses <cmd> for Command and
+# <ctrl> for Control, so we must swap the mapping on macOS.
 
-_QT_MOD_TO_PYNPUT = [
-    (Qt.ControlModifier, "<ctrl>"),
-    (Qt.AltModifier, "<alt>"),
-    (Qt.ShiftModifier, "<shift>"),
-    (Qt.MetaModifier, "<cmd>"),
-]
+if sys.platform == "darwin":
+    _QT_MOD_TO_PYNPUT = [
+        (Qt.ControlModifier, "<cmd>"),   # physical Command (⌘)
+        (Qt.AltModifier, "<alt>"),
+        (Qt.ShiftModifier, "<shift>"),
+        (Qt.MetaModifier, "<ctrl>"),     # physical Control (⌃)
+    ]
+else:
+    _QT_MOD_TO_PYNPUT = [
+        (Qt.ControlModifier, "<ctrl>"),
+        (Qt.AltModifier, "<alt>"),
+        (Qt.ShiftModifier, "<shift>"),
+        (Qt.MetaModifier, "<cmd>"),
+    ]
 
 # ── Qt.Key → pynput token (special keys) ────────────────────────────────
 
@@ -62,15 +75,27 @@ _MODIFIER_KEYS = {
 }
 
 # Map Qt modifier Key_* → pynput token for single-modifier hotkeys
-_QT_MODIFIER_KEY_TO_PYNPUT: dict[int, str] = {
-    Qt.Key_Control: "<ctrl>",
-    Qt.Key_Shift: "<shift>",
-    Qt.Key_Alt: "<alt>",
-    Qt.Key_Meta: "<cmd>",
-    Qt.Key_AltGr: "<alt_gr>",
-    Qt.Key_Super_L: "<cmd_l>",
-    Qt.Key_Super_R: "<cmd_r>",
-}
+# On macOS Qt swaps Control/Meta (see comment above).
+if sys.platform == "darwin":
+    _QT_MODIFIER_KEY_TO_PYNPUT: dict[int, str] = {
+        Qt.Key_Control: "<cmd>",      # physical Command (⌘)
+        Qt.Key_Shift: "<shift>",
+        Qt.Key_Alt: "<alt>",
+        Qt.Key_Meta: "<ctrl>",        # physical Control (⌃)
+        Qt.Key_AltGr: "<alt_gr>",
+        Qt.Key_Super_L: "<cmd_l>",
+        Qt.Key_Super_R: "<cmd_r>",
+    }
+else:
+    _QT_MODIFIER_KEY_TO_PYNPUT: dict[int, str] = {
+        Qt.Key_Control: "<ctrl>",
+        Qt.Key_Shift: "<shift>",
+        Qt.Key_Alt: "<alt>",
+        Qt.Key_Meta: "<cmd>",
+        Qt.Key_AltGr: "<alt_gr>",
+        Qt.Key_Super_L: "<cmd_l>",
+        Qt.Key_Super_R: "<cmd_r>",
+    }
 
 
 def _qt_key_to_pynput(key: int) -> str | None:
@@ -89,39 +114,71 @@ def _qt_key_to_pynput(key: int) -> str | None:
 def pynput_to_display(pynput_str: str) -> str:
     """Convert a pynput hotkey string to a friendly display name.
 
-    ``<ctrl>+<shift>+h`` → ``Ctrl+Shift+H``
+    ``<cmd>+<shift>+h`` → ``⌘+Shift+H`` (macOS)
+    ``<ctrl>+<shift>+h`` → ``Ctrl+Shift+H`` (Linux/Windows)
     """
     if not pynput_str:
         return ""
-    names = {
-        "<ctrl>": "Ctrl",
-        "<ctrl_l>": "Ctrl L",
-        "<ctrl_r>": "Ctrl R",
-        "<alt>": "Alt",
-        "<alt_l>": "Alt L",
-        "<alt_r>": "Alt R",
-        "<alt_gr>": "AltGr",
-        "<shift>": "Shift",
-        "<shift_l>": "Shift L",
-        "<shift_r>": "Shift R",
-        "<cmd>": "Cmd",
-        "<cmd_l>": "Cmd L",
-        "<cmd_r>": "Cmd R",
-        "<space>": "Space",
-        "<tab>": "Tab",
-        "<enter>": "Enter",
-        "<backspace>": "Backspace",
-        "<delete>": "Delete",
-        "<home>": "Home",
-        "<end>": "End",
-        "<page_up>": "PageUp",
-        "<page_down>": "PageDown",
-        "<up>": "Up",
-        "<down>": "Down",
-        "<left>": "Left",
-        "<right>": "Right",
-        "<insert>": "Insert",
-    }
+    if sys.platform == "darwin":
+        names = {
+            "<ctrl>": "⌃",
+            "<ctrl_l>": "⌃L",
+            "<ctrl_r>": "⌃R",
+            "<alt>": "⌥",
+            "<alt_l>": "⌥L",
+            "<alt_r>": "⌥R",
+            "<alt_gr>": "⌥",
+            "<shift>": "⇧",
+            "<shift_l>": "⇧L",
+            "<shift_r>": "⇧R",
+            "<cmd>": "⌘",
+            "<cmd_l>": "⌘L",
+            "<cmd_r>": "⌘R",
+            "<space>": "Space",
+            "<tab>": "⇥",
+            "<enter>": "↩",
+            "<backspace>": "⌫",
+            "<delete>": "⌦",
+            "<home>": "Home",
+            "<end>": "End",
+            "<page_up>": "PageUp",
+            "<page_down>": "PageDown",
+            "<up>": "↑",
+            "<down>": "↓",
+            "<left>": "←",
+            "<right>": "→",
+            "<insert>": "Insert",
+        }
+    else:
+        names = {
+            "<ctrl>": "Ctrl",
+            "<ctrl_l>": "Ctrl L",
+            "<ctrl_r>": "Ctrl R",
+            "<alt>": "Alt",
+            "<alt_l>": "Alt L",
+            "<alt_r>": "Alt R",
+            "<alt_gr>": "AltGr",
+            "<shift>": "Shift",
+            "<shift_l>": "Shift L",
+            "<shift_r>": "Shift R",
+            "<cmd>": "Cmd",
+            "<cmd_l>": "Cmd L",
+            "<cmd_r>": "Cmd R",
+            "<space>": "Space",
+            "<tab>": "Tab",
+            "<enter>": "Enter",
+            "<backspace>": "Backspace",
+            "<delete>": "Delete",
+            "<home>": "Home",
+            "<end>": "End",
+            "<page_up>": "PageUp",
+            "<page_down>": "PageDown",
+            "<up>": "Up",
+            "<down>": "Down",
+            "<left>": "Left",
+            "<right>": "Right",
+            "<insert>": "Insert",
+        }
     parts: list[str] = []
     for tok in pynput_str.split("+"):
         tok_lower = tok.lower()

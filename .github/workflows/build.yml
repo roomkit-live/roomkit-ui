@@ -45,6 +45,35 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install librsvg
 
+      # macOS: import Developer ID certificate for code signing
+      # Required secrets:
+      #   MACOS_CERTIFICATE_P12_BASE64 — base64-encoded .p12 certificate
+      #   MACOS_CERTIFICATE_PASSWORD   — password for the .p12 file
+      #   APPLE_ID                     — Apple ID email (notarization)
+      #   APPLE_APP_PASSWORD           — app-specific password (notarization)
+      #   APPLE_TEAM_ID                — 10-char Developer Team ID
+      - name: Import code signing certificate (macOS)
+        if: runner.os == 'macOS' && env.MACOS_CERTIFICATE_P12_BASE64 != ''
+        env:
+          MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          CERT_FILE=$(mktemp /tmp/certificate.XXXXXX.p12)
+          echo "$MACOS_CERTIFICATE_P12_BASE64" | base64 --decode > "$CERT_FILE"
+          KEYCHAIN="build.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -hex 16)"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$CERT_FILE" -k "$KEYCHAIN" -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          rm -f "$CERT_FILE"
+          # Extract identity name for codesign
+          IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN" | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          echo "CODESIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+          echo "BUILD_KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
+
       # Windows: install cairo for icon generation (fallback)
       - name: Install system dependencies (Windows)
         if: runner.os == 'Windows'
@@ -99,16 +128,52 @@ jobs:
             --add-data "src/roomkit_ui${SEP}roomkit_ui" \
             src/roomkit_ui/__main__.py
 
-      # macOS: patch Info.plist + ad-hoc codesign
+      # macOS: patch Info.plist, sign (proper or ad-hoc), and notarize
       - name: Sign and patch (macOS)
         if: runner.os == 'macOS'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           APP="dist/RoomKit UI.app"
           /usr/libexec/PlistBuddy -c \
             "Add :NSMicrophoneUsageDescription string 'RoomKit UI needs microphone access for voice conversations.'" \
             "$APP/Contents/Info.plist" 2>/dev/null || true
-          # Ad-hoc codesign so Gatekeeper doesn't block immediately
-          codesign --force --deep --sign - "$APP"
+
+          if [ -n "${CODESIGN_IDENTITY:-}" ]; then
+            echo "==> Signing with: $CODESIGN_IDENTITY"
+            # Sign bundled shared libraries
+            find "$APP/Contents/Frameworks" -type f \( -name '*.so' -o -name '*.dylib' \) | while read -r lib; do
+              codesign --force --options runtime --entitlements entitlements.plist \
+                --sign "$CODESIGN_IDENTITY" "$lib"
+            done
+            # Sign main executable and app bundle
+            codesign --force --options runtime --entitlements entitlements.plist \
+              --sign "$CODESIGN_IDENTITY" "$APP/Contents/MacOS/RoomKit UI"
+            codesign --force --options runtime --entitlements entitlements.plist \
+              --sign "$CODESIGN_IDENTITY" "$APP"
+            codesign --verify --deep --strict "$APP"
+            echo "==> Signature verified"
+
+            # Notarize if credentials are available
+            if [ -n "${APPLE_ID:-}" ] && [ -n "${APPLE_PASSWORD:-}" ] && [ -n "${APPLE_TEAM_ID:-}" ]; then
+              echo "==> Notarizing..."
+              ZIP_PATH="dist/RoomKit UI-notarize.zip"
+              ditto -c -k --keepParent "$APP" "$ZIP_PATH"
+              xcrun notarytool submit "$ZIP_PATH" \
+                --apple-id "$APPLE_ID" \
+                --password "$APPLE_PASSWORD" \
+                --team-id "$APPLE_TEAM_ID" \
+                --wait
+              rm -f "$ZIP_PATH"
+              xcrun stapler staple "$APP"
+              echo "==> Notarization complete"
+            fi
+          else
+            echo "==> Ad-hoc signing (no certificate configured)"
+            codesign --force --deep --sign - "$APP"
+          fi
 
       # Windows
       - name: Build (Windows)
@@ -147,8 +212,13 @@ jobs:
       - name: Archive (macOS)
         if: runner.os == 'macOS'
         run: |
-          cd dist
-          zip -r "${{ matrix.artifact }}.zip" "RoomKit UI.app"
+          DMG_PATH="dist/${{ matrix.artifact }}.dmg"
+          hdiutil create -volname "RoomKit UI" -srcfolder "dist/RoomKit UI.app" \
+            -ov -format UDZO "$DMG_PATH"
+          # Staple notarization ticket to DMG if signed
+          if [ -n "${CODESIGN_IDENTITY:-}" ] && [ -n "${{ secrets.APPLE_ID }}" ]; then
+            xcrun stapler staple "$DMG_PATH" || true
+          fi
 
       - name: Archive (Linux)
         if: runner.os == 'Linux'
@@ -167,6 +237,7 @@ jobs:
         with:
           name: ${{ matrix.artifact }}
           path: |
+            dist/${{ matrix.artifact }}.dmg
             dist/${{ matrix.artifact }}.zip
             dist/${{ matrix.artifact }}.tar.gz
 
@@ -176,5 +247,11 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
+            dist/${{ matrix.artifact }}.dmg
             dist/${{ matrix.artifact }}.zip
             dist/${{ matrix.artifact }}.tar.gz
+
+      # Clean up temporary keychain
+      - name: Clean up keychain (macOS)
+        if: always() && runner.os == 'macOS' && env.BUILD_KEYCHAIN != ''
+        run: security delete-keychain "$BUILD_KEYCHAIN"
