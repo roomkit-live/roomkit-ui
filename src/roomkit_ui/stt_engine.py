@@ -89,10 +89,11 @@ def _is_terminal_focused() -> bool:
         return False
 
 
-def _simulate_paste() -> None:
+def _simulate_paste() -> bool:
     """Simulate paste keystroke into the focused window.
 
     Terminals typically use Ctrl+Shift+V, while other apps use Ctrl+V.
+    Returns True on success, False if permission is missing.
     """
     if sys.platform == "darwin":
         from Quartz import (
@@ -101,15 +102,19 @@ def _simulate_paste() -> None:
             CGEventSetFlags,
             CGEventSourceCreate,
             CGPreflightPostEventAccess,
+            CGRequestPostEventAccess,
             kCGEventFlagMaskCommand,
             kCGEventSourceStateHIDSystemState,
             kCGSessionEventTap,
         )
 
         if not CGPreflightPostEventAccess():
-            logger.warning("PostEvent access not granted — text copied to clipboard only")
-            # Text is already on clipboard; caller will show a notification.
-            return
+            CGRequestPostEventAccess()
+            logger.warning(
+                "Accessibility permission required for auto-paste. "
+                "Go to System Settings → Privacy & Security → Accessibility."
+            )
+            return False
 
         v_keycode = 0x09  # macOS virtual keycode for 'v'
         source = CGEventSourceCreate(kCGEventSourceStateHIDSystemState)
@@ -122,6 +127,7 @@ def _simulate_paste() -> None:
 
         CGEventPost(kCGSessionEventTap, down)
         CGEventPost(kCGSessionEventTap, up)
+        return True
     elif _is_wayland():
         subprocess.run(["wtype", "-M", "ctrl", "v", "-m", "ctrl"], check=True, timeout=5)
     elif _is_terminal_focused():
@@ -132,6 +138,7 @@ def _simulate_paste() -> None:
         )
     else:
         subprocess.run(["xdotool", "key", "--clearmodifiers", "ctrl+v"], check=True, timeout=5)
+    return True
 
 
 def _get_frontmost_bundle() -> str | None:
@@ -781,7 +788,15 @@ class STTEngine(QObject):
             front = _get_frontmost_bundle()
             logger.info("Pasting text to %s: %s", front or "(self)", text[:80])
             _copy_to_clipboard(text)
-            _simulate_paste()
+            if not _simulate_paste():
+                msg = (
+                    "Accessibility permission required for auto-paste. "
+                    "Text copied to clipboard — paste manually with ⌘V.\n"
+                    "Grant access in System Settings → Privacy & Security → Accessibility."
+                )
+                logger.warning(msg)
+                self.error_occurred.emit(msg)
+                return
             logger.info("Paste succeeded")
         except FileNotFoundError as exc:
             msg = (
