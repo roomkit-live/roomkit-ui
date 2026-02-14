@@ -144,3 +144,14 @@ class TrayService(QObject):
             QSystemTrayIcon.MessageIcon.Critical,
             4000,
         )
+
+    @Slot()
+    def on_permission_required(self) -> None:
+        self._tray.showMessage(
+            "Accessibility Permission Required",
+            "Global hotkeys need Accessibility access.\n"
+            "Go to System Settings → Privacy & Security → Accessibility "
+            "and add this app.",
+            QSystemTrayIcon.MessageIcon.Warning,
+            6000,
+        )

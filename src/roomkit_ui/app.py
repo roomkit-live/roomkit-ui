@@ -181,6 +181,10 @@ def main() -> None:
     if settings.get("assistant_hotkey_enabled", True):
         assistant_hotkey.start()
 
+    # Hotkey → tray notification when Accessibility permission is missing
+    hotkey.permission_required.connect(tray.on_permission_required)
+    assistant_hotkey.permission_required.connect(tray.on_permission_required)
+
     # Reload hotkeys when settings are saved
     window.settings_saved.connect(hotkey.reload)
     window.settings_saved.connect(assistant_hotkey.reload)

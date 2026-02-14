@@ -44,6 +44,7 @@ class HotkeyListener(QObject):
     """
 
     hotkey_pressed = Signal()
+    permission_required = Signal()  # emitted when macOS Accessibility is missing
 
     def __init__(
         self,
@@ -124,6 +125,7 @@ class HotkeyListener(QObject):
                 "NSEvent monitor creation failed — Accessibility permission required. "
                 "Go to System Settings → Privacy & Security → Accessibility and add this app."
             )
+            self.permission_required.emit()
             return
 
         logger.info(
@@ -134,6 +136,23 @@ class HotkeyListener(QObject):
 
     def _start_pynput(self) -> None:
         """Fallback: use pynput for multi-key combos or non-macOS."""
+        # On macOS, pynput needs Accessibility (AXIsProcessTrusted).  Without
+        # it the CGEventTap can't receive events anyway, and — worse —
+        # creating a *second* tap crashes the process with Trace/BPT trap.
+        if sys.platform == "darwin":
+            try:
+                from ApplicationServices import AXIsProcessTrusted
+
+                if not AXIsProcessTrusted():
+                    logger.warning(
+                        "pynput hotkey skipped — Accessibility not granted. "
+                        "Add this app in System Settings → Privacy & Security → Accessibility."
+                    )
+                    self.permission_required.emit()
+                    return
+            except ImportError:
+                pass
+
         try:
             from pynput import keyboard
         except ImportError:
@@ -191,6 +210,10 @@ class HotkeyListener(QObject):
             self._monitor = None
         if self._listener is not None:
             self._listener.stop()
+            try:
+                self._listener.join(timeout=2.0)
+            except Exception:
+                pass
             self._listener = None
         logger.info("Global hotkey listener stopped")
 
@@ -201,6 +224,20 @@ class HotkeyListener(QObject):
         settings = load_settings()
         enabled = settings.get(self._enabled_key, True)
         new_hotkey = settings.get(self._hotkey_key, "<ctrl>+<shift>+h")
+
+        is_running = self._listener is not None or self._monitor is not None
+
+        # Nothing changed — skip the teardown/recreate cycle.
+        # Restarting pynput on macOS without Accessibility permissions causes
+        # a Trace/BPT trap (SIGTRAP) on the second CGEventTap creation.
+        if new_hotkey == self._hotkey and enabled == is_running:
+            logger.info("Hotkey unchanged (%s), skipping reload", self._hotkey)
+            return
+
+        logger.info(
+            "Hotkey reload: %s → %s (enabled %s → %s)",
+            self._hotkey, new_hotkey, is_running, enabled,
+        )
 
         self.stop()
 
