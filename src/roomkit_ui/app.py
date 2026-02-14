@@ -156,15 +156,23 @@ def main() -> None:
     tray.log_action.triggered.connect(dictation_log.raise_)
 
     # session state → tray icon + notification sounds
-    from roomkit_ui.sounds import play_session_start, play_session_stop
+    from roomkit_ui.sounds import (
+        play_dictation_start,
+        play_dictation_stop,
+        play_session_start,
+        play_session_stop,
+    )
 
     window.session_active_changed.connect(tray.on_session_changed)
     window.session_active_changed.connect(
         lambda active: play_session_start() if active else play_session_stop()
     )
 
-    # engine → tray status + log
+    # engine → tray status + dictation sounds + log
     stt.recording_changed.connect(tray.on_recording_changed)
+    stt.recording_changed.connect(
+        lambda recording: play_dictation_start() if recording else play_dictation_stop()
+    )
     stt.recording_changed.connect(dictation_log.on_recording_changed)
     stt.text_ready.connect(tray.on_text_ready)
     stt.text_ready.connect(dictation_log.on_text_ready)

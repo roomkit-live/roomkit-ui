@@ -58,7 +58,7 @@ class TrayService(QObject):
             self._icon_idle = QIcon(str(_LOGO_PATH))
         else:
             self._icon_idle = svg_icon("microphone", color=_COLOR_IDLE, size=64)
-        self._icon_recording = svg_icon("microphone", color=_COLOR_RECORDING, size=64)
+        self._icon_recording = _icon_with_dot(self._icon_idle, _COLOR_RECORDING)
         self._icon_session = _icon_with_dot(self._icon_idle, "#30D158")
 
         self._tray = QSystemTrayIcon(self._icon_idle, self)

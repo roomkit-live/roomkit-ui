@@ -16,10 +16,10 @@ from roomkit_ui.theme import colors
 
 if sys.platform == "darwin":
     _QT_MOD_TO_PYNPUT = [
-        (Qt.ControlModifier, "<cmd>"),   # physical Command (⌘)
+        (Qt.ControlModifier, "<cmd>"),  # physical Command (⌘)
         (Qt.AltModifier, "<alt>"),
         (Qt.ShiftModifier, "<shift>"),
-        (Qt.MetaModifier, "<ctrl>"),     # physical Control (⌃)
+        (Qt.MetaModifier, "<ctrl>"),  # physical Control (⌃)
     ]
 else:
     _QT_MOD_TO_PYNPUT = [
@@ -78,10 +78,10 @@ _MODIFIER_KEYS = {
 # On macOS Qt swaps Control/Meta (see comment above).
 if sys.platform == "darwin":
     _QT_MODIFIER_KEY_TO_PYNPUT: dict[int, str] = {
-        Qt.Key_Control: "<cmd>",      # physical Command (⌘)
+        Qt.Key_Control: "<cmd>",  # physical Command (⌘)
         Qt.Key_Shift: "<shift>",
         Qt.Key_Alt: "<alt>",
-        Qt.Key_Meta: "<ctrl>",        # physical Control (⌃)
+        Qt.Key_Meta: "<ctrl>",  # physical Control (⌃)
         Qt.Key_AltGr: "<alt_gr>",
         Qt.Key_Super_L: "<cmd_l>",
         Qt.Key_Super_R: "<cmd_r>",
@@ -96,6 +96,22 @@ else:
         Qt.Key_Super_L: "<cmd_l>",
         Qt.Key_Super_R: "<cmd_r>",
     }
+
+# macOS native virtual keycodes → left/right pynput tokens.
+# Qt key events don't distinguish L/R modifiers, but nativeVirtualKey() does.
+if sys.platform == "darwin":
+    _MAC_VK_TO_PYNPUT: dict[int, str] = {
+        0x37: "<cmd_l>",
+        0x36: "<cmd_r>",
+        0x38: "<shift_l>",
+        0x3C: "<shift_r>",
+        0x3B: "<ctrl_l>",
+        0x3E: "<ctrl_r>",
+        0x3A: "<alt_l>",
+        0x3D: "<alt_r>",
+    }
+else:
+    _MAC_VK_TO_PYNPUT: dict[int, str] = {}
 
 
 def _qt_key_to_pynput(key: int) -> str | None:
@@ -280,7 +296,10 @@ class HotkeyButton(QPushButton):
         key = event.key()
         # Modifier released without any other key → use it as the hotkey
         if key == self._pending_modifier:
-            pynput_tok = _QT_MODIFIER_KEY_TO_PYNPUT.get(key)
+            # Prefer native keycode for left/right distinction (macOS)
+            pynput_tok = _MAC_VK_TO_PYNPUT.get(event.nativeVirtualKey())
+            if pynput_tok is None:
+                pynput_tok = _QT_MODIFIER_KEY_TO_PYNPUT.get(key)
             if pynput_tok:
                 self._pynput_value = pynput_tok
                 self._stop_recording()

@@ -14,6 +14,7 @@ import asyncio
 import json
 import logging
 import os
+import sys
 from contextlib import AsyncExitStack
 from typing import Any
 
@@ -24,6 +25,24 @@ _TOOL_CALL_TIMEOUT = 60  # seconds per tool call
 _STRIP_SCHEMA_KEYS = {"$schema", "additionalProperties"}
 
 logger = logging.getLogger(__name__)
+
+
+def _unraisable_hook(unraisable: sys.UnraisableHookArgs) -> None:
+    """Suppress noisy RuntimeError from anyio cancel-scope during MCP cleanup.
+
+    When an MCP task is cancelled, the streamable_http_client async generator
+    may be finalized by GC in a different task context, triggering an anyio
+    "Attempted to exit cancel scope in a different task" RuntimeError.
+    This is harmless — log it at debug level instead of printing a traceback.
+    """
+    exc = unraisable.exc_value
+    if isinstance(exc, RuntimeError) and "cancel scope" in str(exc):
+        logger.debug("Suppressed anyio cancel-scope error during cleanup: %s", exc)
+        return
+    sys.__unraisablehook__(unraisable)
+
+
+sys.unraisablehook = _unraisable_hook
 
 
 def _clean_schema(obj: Any) -> Any:
@@ -68,9 +87,11 @@ class MCPManager:
         can be cleaned up independently without crashing the whole task.
         """
         server_stacks: list[AsyncExitStack] = []
+        connecting_name: str | None = None  # server currently being connected
         try:
             for cfg in self._configs:
                 name = cfg.get("name", "<unnamed>")
+                connecting_name = name
                 stack = AsyncExitStack()
                 try:
                     await stack.__aenter__()
@@ -107,6 +128,7 @@ class MCPManager:
                                         "server": name,
                                     }
                     server_stacks.append(stack)
+                    connecting_name = None
                     logger.info(
                         "MCP server %r: %d tools",
                         name,
@@ -139,7 +161,14 @@ class MCPManager:
                 logger.info("No MCP servers connected")
 
         except asyncio.CancelledError:
-            logger.info("MCP manager task cancelled")
+            if connecting_name:
+                logger.warning(
+                    "MCP server %r: connection aborted (session ended before it connected)",
+                    connecting_name,
+                )
+                self.failed_servers.append(connecting_name)
+            else:
+                logger.info("MCP manager shutting down")
         except Exception:
             logger.exception("MCP manager task failed")
         finally:

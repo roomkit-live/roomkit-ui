@@ -85,6 +85,58 @@ def _generate_stop_sound() -> Path:
 # Module-level QSoundEffect instances (lazily created).
 _start_effect: QSoundEffect | None = None
 _stop_effect: QSoundEffect | None = None
+_dictation_start_effect: QSoundEffect | None = None
+_dictation_stop_effect: QSoundEffect | None = None
+
+
+def _generate_dictation_start_sound() -> Path:
+    """Single high tone — a light 'pip' for dictation start."""
+    path = _ensure_cache_dir() / "dictation_start.wav"
+    if path.exists():
+        return path
+    tone = _generate_tone(783.99, 0.10, volume=0.15)
+    _write_wav(tone, path)
+    return path
+
+
+def _generate_dictation_stop_sound() -> Path:
+    """Single lower tone — a soft 'pip' for dictation stop."""
+    path = _ensure_cache_dir() / "dictation_stop.wav"
+    if path.exists():
+        return path
+    tone = _generate_tone(587.33, 0.10, volume=0.12)
+    _write_wav(tone, path)
+    return path
+
+
+def play_dictation_start() -> None:
+    """Play the dictation-start notification sound."""
+    global _dictation_start_effect  # noqa: PLW0603
+    try:
+        if _dictation_start_effect is None:
+            _dictation_start_effect = QSoundEffect()
+            _dictation_start_effect.setSource(
+                QUrl.fromLocalFile(str(_generate_dictation_start_sound()))
+            )
+            _dictation_start_effect.setVolume(0.5)
+        _dictation_start_effect.play()
+    except Exception:
+        logger.debug("Could not play dictation start sound", exc_info=True)
+
+
+def play_dictation_stop() -> None:
+    """Play the dictation-stop notification sound."""
+    global _dictation_stop_effect  # noqa: PLW0603
+    try:
+        if _dictation_stop_effect is None:
+            _dictation_stop_effect = QSoundEffect()
+            _dictation_stop_effect.setSource(
+                QUrl.fromLocalFile(str(_generate_dictation_stop_sound()))
+            )
+            _dictation_stop_effect.setVolume(0.4)
+        _dictation_stop_effect.play()
+    except Exception:
+        logger.debug("Could not play dictation stop sound", exc_info=True)
 
 
 def play_session_start() -> None:
