@@ -162,6 +162,10 @@ class SettingsPanel(QDialog):
         settings["api_key"] = settings.pop("_rt_gemini_key", "") or settings.pop(
             "_vc_gemini_key", ""
         )
+        settings["deepgram_api_key"] = (
+            settings.pop("_vc_deepgram_key", "")
+            or settings.pop("_dict_deepgram_key", "")
+        )
 
         save_settings(settings)
 

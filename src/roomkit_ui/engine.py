@@ -585,6 +585,21 @@ class Engine(QObject):
                 )
                 stt = GradiumSTTProvider(stt_config)
                 logger.info("STT: gradium, region=%s, language=%s", region, stt_language)
+            elif stt_provider_name == "deepgram":
+                from roomkit.voice.stt.deepgram import DeepgramConfig, DeepgramSTTProvider
+
+                self.loading_status.emit("Connecting Deepgram STT\u2026")
+                api_key = settings.get("deepgram_api_key", "")
+                if not api_key:
+                    raise ValueError("Deepgram API key is required for Deepgram STT.")
+                dg_model = settings.get("deepgram_model", "nova-3")
+                dg_config = DeepgramConfig(
+                    api_key=api_key,
+                    model=dg_model,
+                    language=stt_language,
+                )
+                stt = DeepgramSTTProvider(dg_config)
+                logger.info("STT: deepgram, model=%s, language=%s", dg_model, stt_language)
             else:
                 from roomkit.voice.stt.sherpa_onnx import SherpaOnnxSTTProvider
 

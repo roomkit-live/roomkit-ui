@@ -77,6 +77,15 @@ VC_GEMINI_MODELS = ["gemini-2.0-flash", "gemini-2.5-flash"]
 VC_STT_PROVIDERS = [
     ("Local (sherpa-onnx)", "local"),
     ("Gradium", "gradium"),
+    ("Deepgram", "deepgram"),
+]
+
+DEEPGRAM_MODELS = [
+    ("Nova-3", "nova-3"),
+    ("Nova-2", "nova-2"),
+    ("Nova", "nova"),
+    ("Enhanced", "enhanced"),
+    ("Base", "base"),
 ]
 
 GRADIUM_REGIONS = [
@@ -458,6 +467,25 @@ class _AIPage(QWidget):
         self._gradium_region_label = QLabel("Gradium Region")
         vc_form.addRow(self._gradium_region_label, self.gradium_region)
 
+        # Deepgram API key (shown when STT provider is Deepgram)
+        self.deepgram_api_key = QLineEdit(settings.get("deepgram_api_key", ""))
+        self.deepgram_api_key.setEchoMode(QLineEdit.Password)
+        self.deepgram_api_key.setPlaceholderText("Enter your Deepgram API key")
+        self._deepgram_key_label = QLabel("Deepgram Key")
+        vc_form.addRow(self._deepgram_key_label, self.deepgram_api_key)
+
+        # Deepgram model selector
+        self.deepgram_model = QComboBox()
+        for label, val in DEEPGRAM_MODELS:
+            self.deepgram_model.addItem(label, val)
+        saved_dg_model = settings.get("deepgram_model", "nova-3")
+        for i, (_, val) in enumerate(DEEPGRAM_MODELS):
+            if val == saved_dg_model:
+                self.deepgram_model.setCurrentIndex(i)
+                break
+        self._deepgram_model_label = QLabel("Deepgram Model")
+        vc_form.addRow(self._deepgram_model_label, self.deepgram_model)
+
         # VAD model combo (local STT only)
         self.vc_vad_model = QComboBox()
         self._vc_vad_model_label = QLabel("VAD Model")
@@ -788,6 +816,7 @@ class _AIPage(QWidget):
     def _on_vc_stt_provider_changed(self, index: int) -> None:
         prov = VC_STT_PROVIDERS[index][1]
         is_local = prov == "local"
+        is_deepgram = prov == "deepgram"
         # Local STT model + VAD
         self._vc_stt_model_label.setVisible(is_local)
         self.vc_stt_model.setVisible(is_local)
@@ -795,6 +824,11 @@ class _AIPage(QWidget):
         self._vc_vad_model_label.setVisible(is_local)
         self.vc_vad_model.setVisible(is_local)
         self._vc_vad_no_models.setVisible(is_local and self.vc_vad_model.count() <= 1)
+        # Deepgram fields
+        self._deepgram_key_label.setVisible(is_deepgram)
+        self.deepgram_api_key.setVisible(is_deepgram)
+        self._deepgram_model_label.setVisible(is_deepgram)
+        self.deepgram_model.setVisible(is_deepgram)
         # Gradium shared fields
         self._update_gradium_fields_visibility()
 
@@ -958,6 +992,8 @@ class _AIPage(QWidget):
             "vc_gemini_model": self.vc_gemini_model.currentText().strip(),
             "vc_stt_provider": VC_STT_PROVIDERS[self.vc_stt_provider.currentIndex()][1],
             "vc_stt_model": self.vc_stt_model.currentData() or "",
+            "_vc_deepgram_key": self.deepgram_api_key.text().strip(),
+            "deepgram_model": self.deepgram_model.currentData() or "nova-3",
             "gradium_api_key": self.gradium_api_key.text().strip(),
             "gradium_region": self.gradium_region.currentData() or "us",
             "vc_gradium_voice": self.vc_gradium_voice.text().strip(),

@@ -70,6 +70,13 @@ class _DictationPage(QWidget):
         self._openai_key_label = QLabel("OpenAI Key")
         form.addRow(self._openai_key_label, self.openai_api_key)
 
+        # Deepgram API key (shown only for Deepgram provider)
+        self.deepgram_api_key = QLineEdit(settings.get("deepgram_api_key", ""))
+        self.deepgram_api_key.setEchoMode(QLineEdit.Password)
+        self.deepgram_api_key.setPlaceholderText("Required for dictation STT")
+        self._deepgram_key_label = QLabel("Deepgram Key")
+        form.addRow(self._deepgram_key_label, self.deepgram_api_key)
+
         # Local model combo (shown only for Local provider)
         self._model_combo = QComboBox()
         self._model_label = QLabel("Model")
@@ -125,12 +132,17 @@ class _DictationPage(QWidget):
         self._on_stt_provider_changed(self.stt_provider.currentIndex())
 
     def _on_stt_provider_changed(self, index: int) -> None:
-        is_openai = STT_PROVIDERS[index][1] == "openai"
+        prov = STT_PROVIDERS[index][1]
+        is_openai = prov == "openai"
+        is_deepgram = prov == "deepgram"
+        is_local = prov == "local"
         self._openai_key_label.setVisible(is_openai)
         self.openai_api_key.setVisible(is_openai)
-        self._model_label.setVisible(not is_openai)
-        self._model_combo.setVisible(not is_openai)
-        self._no_models_hint.setVisible(not is_openai and self._model_combo.count() == 0)
+        self._deepgram_key_label.setVisible(is_deepgram)
+        self.deepgram_api_key.setVisible(is_deepgram)
+        self._model_label.setVisible(is_local)
+        self._model_combo.setVisible(is_local)
+        self._no_models_hint.setVisible(is_local and self._model_combo.count() == 0)
         self._update_translate_visibility()
 
     def _update_translate_visibility(self) -> None:
@@ -175,4 +187,5 @@ class _DictationPage(QWidget):
             "stt_language": STT_LANGUAGES[self.language.currentIndex()][1],
             "stt_translate": self.translate.isChecked(),
             "_dict_openai_key": self.openai_api_key.text().strip(),
+            "_dict_deepgram_key": self.deepgram_api_key.text().strip(),
         }

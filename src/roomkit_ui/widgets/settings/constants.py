@@ -56,5 +56,6 @@ STT_LANGUAGES = [
 
 STT_PROVIDERS = [
     ("OpenAI", "openai"),
+    ("Deepgram", "deepgram"),
     ("Local", "local"),
 ]

@@ -253,6 +253,8 @@ class STTEngine(QObject):
 
         if stt_provider == "local":
             await self._start_local_recording(settings)
+        elif stt_provider == "deepgram":
+            await self._start_deepgram_recording(settings)
         else:
             await self._start_openai_recording(settings)
 
@@ -479,6 +481,113 @@ class STTEngine(QObject):
 
         except Exception as exc:
             logger.exception("Failed to start local STT session")
+            self._recording = False
+            self.recording_changed.emit(False)
+            self.error_occurred.emit(str(exc))
+            self._cleanup_local()
+        finally:
+            self._busy = False
+
+    # -- Deepgram STT (VoiceChannel + LocalAudioBackend + DeepgramSTTProvider) --
+
+    async def _start_deepgram_recording(self, settings: dict) -> None:
+        api_key = settings.get("deepgram_api_key", "")
+        if not api_key:
+            self.error_occurred.emit(
+                "Deepgram API key is required for dictation. Open Settings to enter it."
+            )
+            self._recording = False
+            self._busy = False
+            self.recording_changed.emit(False)
+            return
+
+        try:
+            from roomkit import (
+                ChannelBinding,
+                ChannelType,
+                HookResult,
+                HookTrigger,
+                RoomKit,
+                VoiceChannel,
+            )
+            from roomkit.voice.backends.local import LocalAudioBackend
+            from roomkit.voice.pipeline import AudioPipelineConfig
+            from roomkit.voice.stt.deepgram import DeepgramConfig, DeepgramSTTProvider
+        except ImportError as exc:
+            self.error_occurred.emit(f"Missing dependency for Deepgram STT: {exc}.")
+            self._recording = False
+            self._busy = False
+            self.recording_changed.emit(False)
+            return
+
+        try:
+            language = settings.get("stt_language", "") or "en"
+            dg_config = DeepgramConfig(
+                api_key=api_key,
+                model=settings.get("deepgram_model", "nova-3"),
+                language=language,
+            )
+            stt_provider = DeepgramSTTProvider(dg_config)
+
+            self._local_provider = stt_provider
+            self._batch_mode = False  # Deepgram is always streaming
+            input_device = settings.get("input_device")
+
+            backend = LocalAudioBackend(
+                input_sample_rate=16000,
+                output_sample_rate=16000,
+                channels=1,
+                block_duration_ms=20,
+                input_device=input_device,
+            )
+            self._local_backend = backend
+
+            voice = VoiceChannel(
+                "stt",
+                stt=stt_provider,
+                backend=backend,
+                pipeline=AudioPipelineConfig(),
+                batch_mode=False,
+            )
+            self._channel = voice
+
+            self._kit = RoomKit()
+            self._kit.register_channel(voice)
+
+            await self._kit.create_room(room_id="stt-room")
+            await self._kit.attach_channel("stt-room", "stt")
+
+            # Streaming: capture transcriptions via hook
+            accumulated = self._accumulated_text
+            self._local_flush_event = asyncio.Event()
+            flush_event = self._local_flush_event
+
+            @self._kit.hook(HookTrigger.ON_TRANSCRIPTION)
+            async def _on_transcription(text, ctx):
+                if text and text.strip():
+                    logger.info("Deepgram STT final: %s", text)
+                    accumulated.append(text.strip())
+                flush_event.set()
+                return HookResult.block("dictation-only")
+
+            # Connect backend, bind session, start listening.
+            self._local_session = await backend.connect("stt-room", "stt-user", "stt")
+            binding = ChannelBinding(
+                room_id="stt-room",
+                channel_id="stt",
+                channel_type=ChannelType.VOICE,
+            )
+            voice.bind_session(self._local_session, "stt-room", binding)
+            await backend.start_listening(self._local_session)
+
+            logger.info(
+                "Dictation started: provider=deepgram, model=%s, language=%s, rate=16000Hz",
+                dg_config.model,
+                language,
+            )
+
+        except Exception as exc:
+            logger.exception("Failed to start Deepgram STT session")
             self._recording = False
             self.recording_changed.emit(False)
             self.error_occurred.emit(str(exc))
