@@ -237,6 +237,10 @@ class Engine(QObject):
         except Exception:
             pass
 
+        # Handle paste_text — copy text to clipboard and simulate paste
+        if name == "paste_text":
+            return self._paste_text(arguments.get("text", ""))
+
         # Handle end_conversation — schedule stop after a delay so the
         # agent's goodbye response can be spoken before disconnecting.
         if name == "end_conversation":
@@ -336,6 +340,27 @@ class Engine(QObject):
                 "instruction": f"Adopt this attitude now: {description}",
             }
         )
+
+    @staticmethod
+    def _paste_text(text: str) -> str:
+        """Copy text to clipboard and simulate paste into the focused input."""
+        if not text:
+            return json.dumps({"error": "No text provided."})
+        try:
+            from roomkit_ui.stt_engine import _copy_to_clipboard, _simulate_paste
+
+            _copy_to_clipboard(text)
+            _simulate_paste()
+            logger.info("paste_text: pasted %d chars", len(text))
+            return json.dumps({"status": "ok", "chars": len(text)})
+        except FileNotFoundError as exc:
+            msg = f"Missing helper program: {exc.filename}"
+            logger.error("paste_text: %s", msg)
+            return json.dumps({"error": msg})
+        except Exception as exc:
+            msg = f"Paste failed: {exc}"
+            logger.error("paste_text: %s", msg)
+            return json.dumps({"error": msg})
 
     async def handle_app_tool_call(self, tool_name: str, arguments: dict[str, Any]) -> str:
         """Proxy a tool call initiated by an MCP App back through MCP."""

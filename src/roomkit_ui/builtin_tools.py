@@ -35,6 +35,27 @@ BUILTIN_TOOLS: list[dict] = [
     },
     {
         "type": "function",
+        "name": "paste_text",
+        "description": (
+            "Paste text directly into the user's currently focused input field. "
+            "Use this when the user asks you to type, paste, or insert text they "
+            "discussed with you (e.g. an email, a message, a code snippet, a reply). "
+            "The text is copied to the clipboard and pasted via simulated keystroke. "
+            "The user should have the target app or input field in focus."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "text": {
+                    "type": "string",
+                    "description": "The text to paste into the focused input field.",
+                },
+            },
+            "required": ["text"],
+        },
+    },
+    {
+        "type": "function",
         "name": "end_conversation",
         "description": (
             "IMPORTANT: You MUST call this tool whenever the user signals the end "
