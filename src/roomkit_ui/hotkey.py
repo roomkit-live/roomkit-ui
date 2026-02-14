@@ -170,7 +170,7 @@ class HotkeyListener(QObject):
                 import HIServices
 
                 ax = HIServices.AXIsProcessTrustedWithOptions(
-                    {HIServices.kAXTrustedCheckOptionPrompt: True}
+                    {HIServices.kAXTrustedCheckOptionPrompt: False}
                 )
             except (ImportError, AttributeError):
                 try:

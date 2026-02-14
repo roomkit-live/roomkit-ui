@@ -96,38 +96,28 @@ def _simulate_paste() -> bool:
     Returns True on success, False if permission is missing.
     """
     if sys.platform == "darwin":
-        from Quartz import (
-            CGEventCreateKeyboardEvent,
-            CGEventPost,
-            CGEventSetFlags,
-            CGEventSourceCreate,
-            CGPreflightPostEventAccess,
-            CGRequestPostEventAccess,
-            kCGEventFlagMaskCommand,
-            kCGEventSourceStateHIDSystemState,
-            kCGSessionEventTap,
-        )
-
-        if not CGPreflightPostEventAccess():
-            CGRequestPostEventAccess()
+        # Use AppleScript via System Events — this is more reliable than
+        # CGEventPost from PyInstaller bundles, where CGEventPost silently
+        # drops events even when Accessibility permission is granted.
+        try:
+            subprocess.run(
+                [
+                    "osascript",
+                    "-e",
+                    'tell application "System Events" to keystroke "v" using command down',
+                ],
+                check=True,
+                timeout=5,
+                capture_output=True,
+            )
+            return True
+        except subprocess.CalledProcessError as exc:
             logger.warning(
-                "Accessibility permission required for auto-paste. "
-                "Go to System Settings → Privacy & Security → Accessibility."
+                "AppleScript paste failed (rc=%d): %s",
+                exc.returncode,
+                exc.stderr.decode(errors="replace").strip(),
             )
             return False
-
-        v_keycode = 0x09  # macOS virtual keycode for 'v'
-        source = CGEventSourceCreate(kCGEventSourceStateHIDSystemState)
-
-        down = CGEventCreateKeyboardEvent(source, v_keycode, True)
-        CGEventSetFlags(down, kCGEventFlagMaskCommand)
-
-        up = CGEventCreateKeyboardEvent(source, v_keycode, False)
-        CGEventSetFlags(up, kCGEventFlagMaskCommand)
-
-        CGEventPost(kCGSessionEventTap, down)
-        CGEventPost(kCGSessionEventTap, up)
-        return True
     elif _is_wayland():
         subprocess.run(["wtype", "-M", "ctrl", "v", "-m", "ctrl"], check=True, timeout=5)
     elif _is_terminal_focused():

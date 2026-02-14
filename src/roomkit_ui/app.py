@@ -26,7 +26,7 @@ os.environ.setdefault(
 
 from PySide6.QtCore import QTimer  # noqa: E402
 from PySide6.QtGui import QIcon  # noqa: E402
-from PySide6.QtWidgets import QApplication  # noqa: E402
+from PySide6.QtWidgets import QApplication, QSystemTrayIcon  # noqa: E402
 from qasync import QEventLoop  # noqa: E402
 
 from roomkit_ui.hotkey import HotkeyListener  # noqa: E402
@@ -103,48 +103,49 @@ def main() -> None:
 
     QTimer.singleShot(200, _prewarm_webengine)
 
-    # On macOS, check Accessibility and event-posting permissions.
-    # Prompt once on first launch so the app appears in System Settings for
-    # the user to toggle on, then just check silently on subsequent launches.
-    if sys.platform == "darwin":
-        try:
-            from Quartz import CGPreflightPostEventAccess, CGRequestPostEventAccess
-
-            logger = logging.getLogger(__name__)
-
-            try:
-                import HIServices
-
-                ax = HIServices.AXIsProcessTrustedWithOptions(
-                    {HIServices.kAXTrustedCheckOptionPrompt: not settings.get("ax_prompted")}
-                )
-            except (ImportError, AttributeError):
-                from ApplicationServices import AXIsProcessTrusted
-
-                ax = AXIsProcessTrusted()
-
-            post = CGPreflightPostEventAccess()
-            logger.info(
-                "macOS permissions: AXTrusted=%s PostEvent=%s pid=%d exe=%s",
-                ax,
-                post,
-                os.getpid(),
-                sys.executable,
-            )
-            if not post and not settings.get("ax_prompted"):
-                CGRequestPostEventAccess()
-
-            if not settings.get("ax_prompted"):
-                from roomkit_ui.settings import save_settings
-
-                settings["ax_prompted"] = True
-                save_settings(settings)
-        except Exception:
-            pass
-
     # -- System-wide STT dictation --
     stt = STTEngine()
     tray = TrayService()
+
+    # On macOS, silently check permissions and show a tray notification
+    # with clear instructions if anything is missing (no system popups).
+    if sys.platform == "darwin":
+
+        def _check_macos_permissions() -> None:
+            try:
+                _logger = logging.getLogger(__name__)
+
+                try:
+                    import HIServices
+
+                    ax = HIServices.AXIsProcessTrustedWithOptions(
+                        {HIServices.kAXTrustedCheckOptionPrompt: False}
+                    )
+                except (ImportError, AttributeError):
+                    from ApplicationServices import AXIsProcessTrusted
+
+                    ax = AXIsProcessTrusted()
+
+                _logger.info(
+                    "macOS permissions: AXTrusted=%s pid=%d exe=%s",
+                    ax,
+                    os.getpid(),
+                    sys.executable,
+                )
+
+                if not ax:
+                    tray._tray.showMessage(
+                        "Permissions Required",
+                        "Add RoomKit UI in System Settings\n"
+                        "→ Privacy & Security → Accessibility\n"
+                        "for auto-paste after dictation.",
+                        QSystemTrayIcon.MessageIcon.Warning,
+                        8000,
+                    )
+            except Exception:
+                pass
+
+        QTimer.singleShot(2000, _check_macos_permissions)
 
     # tray → show/raise main window
     def _show_window() -> None:

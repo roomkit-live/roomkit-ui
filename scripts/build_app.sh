@@ -123,7 +123,7 @@ if [ -f "$APP_PLIST" ]; then
         fi
     else
         echo "==> Ad-hoc signing (no CODESIGN_IDENTITY set)"
-        codesign --force --deep --sign - "$APP"
+        codesign --force --deep --entitlements entitlements.plist --sign - "$APP"
     fi
 
     echo "==> Re-signed app bundle"
