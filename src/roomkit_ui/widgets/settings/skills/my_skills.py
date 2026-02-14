@@ -123,6 +123,7 @@ class MySkillsTab(QWidget):
         scroll = QScrollArea()
         scroll.setWidget(self._container)
         scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setFrameShape(QScrollArea.NoFrame)
         scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
         layout.addWidget(scroll, 1)

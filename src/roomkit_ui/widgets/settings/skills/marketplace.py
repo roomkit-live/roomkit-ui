@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -65,6 +65,7 @@ class MarketplaceTab(QWidget):
         scroll = QScrollArea()
         scroll.setWidget(self._container)
         scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setFrameShape(QScrollArea.NoFrame)
         scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
         layout.addWidget(scroll, 1)

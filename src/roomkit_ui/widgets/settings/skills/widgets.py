@@ -29,6 +29,7 @@ class FlowLayout(QLayout):
 
     def __init__(self, parent=None, h_spacing: int = 10, v_spacing: int = 10) -> None:
         super().__init__(parent)
+        self.setContentsMargins(0, 0, 0, 0)
         self._h_spacing = h_spacing
         self._v_spacing = v_spacing
         self._items: list[QWidgetItem] = []
@@ -73,20 +74,28 @@ class FlowLayout(QLayout):
     def _do_layout(self, rect: QRect, test_only: bool) -> int:
         m = self.contentsMargins()
         effective = rect.adjusted(m.left(), m.top(), -m.right(), -m.bottom())
+        if not self._items:
+            return int(effective.y() - rect.y() + m.bottom())
+        avail = effective.width()
+        hint_w = self._items[0].sizeHint().width()
+        cols = max(1, (avail + self._h_spacing) // (hint_w + self._h_spacing))
+        item_w = (avail - (cols - 1) * self._h_spacing) // cols
         x = effective.x()
         y = effective.y()
         row_height = 0
+        col = 0
         for item in self._items:
-            w = item.sizeHint().width()
             h = item.sizeHint().height()
-            if x + w > effective.right() + 1 and row_height > 0:
+            if col >= cols:
                 x = effective.x()
                 y += row_height + self._v_spacing
                 row_height = 0
+                col = 0
             if not test_only:
-                item.setGeometry(QRect(x, y, w, h))
-            x += w + self._h_spacing
+                item.setGeometry(QRect(x, y, item_w, h))
+            x += item_w + self._h_spacing
             row_height = max(row_height, h)
+            col += 1
         return int(y + row_height - rect.y() + m.bottom())
 
 
@@ -117,7 +126,7 @@ class SkillCard(QWidget):
         self._marketplace = marketplace
         c = colors()
 
-        self.setFixedWidth(CARD_WIDTH)
+        self.setMinimumWidth(CARD_WIDTH)
         self.setStyleSheet(
             f"SkillCard {{"
             f" background: {c['BG_SECONDARY']};"

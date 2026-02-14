@@ -32,7 +32,7 @@ class SettingsPanel(QDialog):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Settings")
-        self.setFixedSize(740, 600)
+        self.setFixedSize(880, 680)
         self.setModal(True)
 
         settings = load_settings()
