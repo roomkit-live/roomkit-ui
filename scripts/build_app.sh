@@ -19,6 +19,9 @@ echo "==> Installing dependencies..."
 if command -v uv &>/dev/null; then
     uv sync
     uv pip install pyinstaller
+    # uv sync removes sherpa-onnx-core (platform-specific binary wheel not
+    # in the lock file).  Reinstall it so PyInstaller can bundle libonnxruntime.
+    uv pip install sherpa-onnx-core
 else
     pip install -e ".[dev]"
 fi
@@ -58,6 +61,8 @@ uv run pyinstaller \
     --hidden-import=certifi \
     --hidden-import=aec_audio_processing \
     --collect-binaries=aec_audio_processing \
+    --collect-binaries=sherpa_onnx \
+    --hidden-import=sherpa_onnx \
     --hidden-import=pynput \
     --hidden-import=pynput.keyboard \
     --hidden-import=pynput.keyboard._darwin \
@@ -122,6 +127,21 @@ if [ -f "$APP_PLIST" ]; then
     fi
 
     echo "==> Re-signed app bundle"
+fi
+
+# Create DMG (drag-to-Applications disk image)
+if [[ "$OSTYPE" == "darwin"* ]] && [ -d "$APP" ]; then
+    DMG_PATH="dist/RoomKit-UI.dmg"
+    echo "==> Creating DMG..."
+    hdiutil create -volname "RoomKit UI" -srcfolder "$APP" \
+        -ov -format UDZO "$DMG_PATH"
+
+    # Staple notarization ticket to DMG if available
+    if [ -n "${CODESIGN_IDENTITY:-}" ] && [ -n "${APPLE_ID:-}" ]; then
+        xcrun stapler staple "$DMG_PATH" || true
+    fi
+
+    echo "==> DMG ready: $DMG_PATH"
 fi
 
 echo "==> Build complete: dist/RoomKit UI"

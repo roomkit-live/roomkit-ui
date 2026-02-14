@@ -25,16 +25,22 @@ if sys.platform == "darwin":
     except (ImportError, AttributeError):
         pass
 
-# macOS virtual key codes for modifier keys
-_MAC_KEYCODES = {
-    "<cmd_r>": 0x36,  # Right Command
-    "<cmd_l>": 0x37,  # Left Command
-    "<shift_r>": 0x3C,  # Right Shift
-    "<shift_l>": 0x38,  # Left Shift
-    "<ctrl_r>": 0x3E,  # Right Control
-    "<ctrl_l>": 0x3B,  # Left Control
-    "<alt_r>": 0x3D,  # Right Option
-    "<alt_l>": 0x3A,  # Left Option
+# macOS virtual key codes for modifier keys.
+# Generic names (e.g. "<alt>") map to both left and right keycodes so the
+# NSEvent handler fires on either side.
+_MAC_KEYCODES: dict[str, tuple[int, ...]] = {
+    "<cmd_r>": (0x36,),
+    "<cmd_l>": (0x37,),
+    "<cmd>": (0x37, 0x36),
+    "<shift_r>": (0x3C,),
+    "<shift_l>": (0x38,),
+    "<shift>": (0x38, 0x3C),
+    "<ctrl_r>": (0x3E,),
+    "<ctrl_l>": (0x3B,),
+    "<ctrl>": (0x3B, 0x3E),
+    "<alt_r>": (0x3D,),
+    "<alt_l>": (0x3A,),
+    "<alt>": (0x3A, 0x3D),
 }
 
 # Map keycodes to their modifier flag mask (NSEvent constants)
@@ -94,8 +100,9 @@ class HotkeyListener(QObject):
             self._start_pynput()
             return
 
-        target_keycode = _MAC_KEYCODES[self._hotkey]
-        flag_name = _KEYCODE_TO_FLAG[target_keycode]
+        target_keycodes = _MAC_KEYCODES[self._hotkey]
+        # All keycodes for a given modifier share the same flag
+        flag_name = _KEYCODE_TO_FLAG[target_keycodes[0]]
 
         try:
             from AppKit import (
@@ -118,10 +125,11 @@ class HotkeyListener(QObject):
             return
 
         listener = self
+        kc_set = set(target_keycodes)
 
         def handler(event):
             try:
-                if event.keyCode() == target_keycode:
+                if event.keyCode() in kc_set:
                     flags = event.modifierFlags()
                     # Fire on release: modifier flag is no longer set
                     if not (flags & mask_value):
@@ -144,10 +152,11 @@ class HotkeyListener(QObject):
             self.permission_required.emit()
             return
 
+        kc_hex = ", ".join(f"0x{kc:02X}" for kc in target_keycodes)
         logger.info(
-            "NSEvent hotkey listener started: %s (keycode 0x%02X)",
+            "NSEvent hotkey listener started: %s (keycodes %s)",
             self._hotkey,
-            target_keycode,
+            kc_hex,
         )
 
     def _start_pynput(self) -> None:
