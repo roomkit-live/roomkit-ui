@@ -320,6 +320,60 @@ class _ModelsPage(QWidget):
 
         layout.addWidget(vad_frame)
 
+        # -- Turn Detection section ---------------------------------------------
+        turn_section = QLabel("Turn Detection Model")
+        turn_section.setStyleSheet(
+            f"font-size: 12px; font-weight: 600; color: {c['TEXT_SECONDARY']};"
+            f" text-transform: uppercase; letter-spacing: 1px; background: transparent;"
+        )
+        layout.addWidget(turn_section)
+
+        turn_desc = QLabel(
+            "Audio-native turn completion detector (pipecat-ai/smart-turn). "
+            "Analyzes prosody to decide when the user has finished speaking."
+        )
+        turn_desc.setWordWrap(True)
+        turn_desc.setStyleSheet(
+            f"font-size: 13px; color: {c['TEXT_SECONDARY']}; background: transparent;"
+        )
+        layout.addWidget(turn_desc)
+
+        turn_frame = QWidget()
+        turn_frame.setStyleSheet(
+            f"background: {c['BG_SECONDARY']}; border: 1px solid {c['SEPARATOR']};"
+            f" border-radius: 8px;"
+        )
+        turn_frame_layout = QVBoxLayout(turn_frame)
+        turn_frame_layout.setContentsMargins(4, 4, 4, 4)
+        turn_frame_layout.setSpacing(0)
+
+        from roomkit_ui.model_manager import (
+            SMART_TURN_MODEL_ID,
+            SMART_TURN_SIZE,
+            is_smart_turn_downloaded,
+        )
+
+        @dataclass(frozen=True)
+        class _SmartTurnInfo:
+            id: str
+            name: str
+            type: str
+            size: str
+
+        smart_turn_info = _SmartTurnInfo(
+            id=SMART_TURN_MODEL_ID,
+            name="Smart Turn v3.2 (CPU, int8)",
+            type="turn",
+            size=SMART_TURN_SIZE,
+        )
+        self._smart_turn_row = _ModelRow(smart_turn_info, c, show_radio=False)
+        self._smart_turn_row._refresh_state(is_smart_turn_downloaded())
+        self._smart_turn_row.action_btn.clicked.connect(self._download_smart_turn)
+        self._smart_turn_row.delete_btn.clicked.connect(self._delete_smart_turn)
+        turn_frame_layout.addWidget(self._smart_turn_row)
+
+        layout.addWidget(turn_frame)
+
         # -- TTS Models section -------------------------------------------------
         tts_section = QLabel("Text-to-Speech Models")
         tts_section.setStyleSheet(
@@ -631,6 +685,38 @@ class _ModelsPage(QWidget):
         row = self._find_vad_row(model_id)
         if row is not None:
             row.set_not_downloaded()
+
+    # -- Smart Turn model handlers -------------------------------------------
+
+    def _download_smart_turn(self) -> None:
+        import asyncio
+        import logging
+
+        from roomkit_ui.model_manager import download_smart_turn
+
+        row = self._smart_turn_row
+        row.set_resolving()
+        loop = asyncio.get_event_loop()
+
+        def _progress(downloaded: int, total: int) -> None:
+            pct = min(int(downloaded * 100 / total), 100) if total > 0 else 0
+            loop.call_soon_threadsafe(row.set_downloading, pct)
+
+        async def _run() -> None:
+            try:
+                await download_smart_turn(_progress)
+                row.set_downloaded()
+            except Exception:
+                logging.exception("Smart Turn download failed")
+                row.set_error()
+
+        loop.create_task(_run())
+
+    def _delete_smart_turn(self) -> None:
+        from roomkit_ui.model_manager import delete_smart_turn
+
+        delete_smart_turn()
+        self._smart_turn_row.set_not_downloaded()
 
     # -- Speaker embedding model handlers ------------------------------------
 

@@ -477,8 +477,17 @@ async def download_vad_model(
     await asyncio.to_thread(_download_vad_model_sync, model_id, progress)
 
 
-def build_vad_config(model_id: str, *, provider: str = "cpu"):
-    """Build a ``SherpaOnnxVADConfig`` for the given downloaded VAD model."""
+def build_vad_config(
+    model_id: str,
+    *,
+    provider: str = "cpu",
+    settings: dict | None = None,
+):
+    """Build a ``SherpaOnnxVADConfig`` for the given downloaded VAD model.
+
+    If *settings* is provided, VAD advanced fields (``vad_threshold``, etc.)
+    are read from it; empty strings fall back to SherpaOnnxVADConfig defaults.
+    """
     from roomkit.voice.pipeline.vad.sherpa_onnx import SherpaOnnxVADConfig
 
     m = _VAD_MODELS_BY_ID.get(model_id)
@@ -486,11 +495,89 @@ def build_vad_config(model_id: str, *, provider: str = "cpu"):
         raise ValueError(f"Unknown VAD model: {model_id}")
 
     d = vad_model_path(model_id)
-    return SherpaOnnxVADConfig(
-        model=str(d / m.onnx_file),
-        model_type=m.type,
-        provider=provider,
-    )
+    kwargs: dict = {
+        "model": str(d / m.onnx_file),
+        "model_type": m.type,
+        "provider": provider,
+    }
+
+    if settings:
+        _float_keys = {
+            "vad_threshold": "threshold",
+            "vad_silence_ms": "silence_threshold_ms",
+            "vad_min_speech_ms": "min_speech_duration_ms",
+            "vad_speech_pad_ms": "speech_pad_ms",
+            "vad_energy_silence_rms": "energy_silence_rms",
+        }
+        for settings_key, config_key in _float_keys.items():
+            raw = str(settings.get(settings_key, "") or "").strip()
+            if raw:
+                try:
+                    kwargs[config_key] = float(raw)
+                except ValueError:
+                    pass
+
+    return SherpaOnnxVADConfig(**kwargs)
+
+
+# ---------------------------------------------------------------------------
+# Smart Turn model (pipecat-ai/smart-turn ONNX)
+# ---------------------------------------------------------------------------
+
+SMART_TURN_MODEL_ID = "smart-turn-v3"
+SMART_TURN_URL = (
+    "https://huggingface.co/pipecat-ai/smart-turn-v3/resolve/main/smart-turn-v3.2-cpu.onnx"
+)
+SMART_TURN_SIZE = "~8 MB"
+_SMART_TURN_FILENAME = "smart-turn-v3.2-cpu.onnx"
+
+
+def smart_turn_model_path() -> Path:
+    """Return the path to the smart-turn ONNX model file."""
+    return get_models_dir() / SMART_TURN_MODEL_ID / _SMART_TURN_FILENAME
+
+
+def is_smart_turn_downloaded() -> bool:
+    """Check whether the smart-turn model file exists."""
+    return smart_turn_model_path().is_file()
+
+
+def delete_smart_turn() -> None:
+    """Remove the smart-turn model directory."""
+    d = get_models_dir() / SMART_TURN_MODEL_ID
+    if d.exists():
+        shutil.rmtree(d)
+
+
+def _download_smart_turn_sync(progress: ProgressCallback | None = None) -> None:
+    """Download the smart-turn ONNX model (blocking)."""
+    dest = get_models_dir() / SMART_TURN_MODEL_ID
+    dest.mkdir(parents=True, exist_ok=True)
+    target = dest / _SMART_TURN_FILENAME
+    if target.is_file():
+        return
+
+    downloaded = 0
+
+    def _on_bytes(n: int) -> None:
+        nonlocal downloaded
+        downloaded += n
+        if progress is not None:
+            progress(downloaded, total)
+
+    req = urllib.request.Request(SMART_TURN_URL, method="HEAD")  # noqa: S310
+    with urllib.request.urlopen(req) as resp:  # noqa: S310
+        total = int(resp.headers.get("Content-Length", 0))
+
+    if progress is not None:
+        progress(0, total)
+
+    _download_file(SMART_TURN_URL, target, expected_size=total, on_bytes=_on_bytes)
+
+
+async def download_smart_turn(progress: ProgressCallback | None = None) -> None:
+    """Download the smart-turn model in a background thread."""
+    await asyncio.to_thread(_download_smart_turn_sync, progress)
 
 
 # ---------------------------------------------------------------------------

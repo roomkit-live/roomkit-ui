@@ -8,6 +8,8 @@ from PySide6.QtWidgets import (
     QComboBox,
     QFormLayout,
     QLabel,
+    QLineEdit,
+    QPushButton,
     QVBoxLayout,
     QWidget,
 )
@@ -221,6 +223,85 @@ class _GeneralPage(QWidget):
         )
         proc_form.addRow("", self._vad_hint)
 
+        # ── VAD Advanced (collapsible) ──
+        self._vad_adv_toggle = QPushButton("\u25b8 Advanced")
+        self._vad_adv_toggle.setFlat(True)
+        self._vad_adv_toggle.setCursor(Qt.PointingHandCursor)
+        self._vad_adv_toggle.setStyleSheet(
+            "text-align: left; font-size: 12px; font-weight: 600;"
+            f" color: {c['TEXT_SECONDARY']}; background: transparent; border: none;"
+            " padding: 2px 0;"
+        )
+        self._vad_adv_toggle.clicked.connect(self._toggle_vad_advanced)
+        proc_form.addRow("", self._vad_adv_toggle)
+
+        self._vad_adv_container = QWidget()
+        vad_form = QFormLayout(self._vad_adv_container)
+        vad_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        vad_form.setSpacing(10)
+        vad_form.setLabelAlignment(Qt.AlignRight)
+
+        self.vad_threshold = QLineEdit(str(settings.get("vad_threshold", "") or ""))
+        self.vad_threshold.setPlaceholderText("0.35 (lower = more sensitive)")
+        vad_form.addRow("Threshold", self.vad_threshold)
+
+        self.vad_silence_ms = QLineEdit(str(settings.get("vad_silence_ms", "") or ""))
+        self.vad_silence_ms.setPlaceholderText("500")
+        vad_form.addRow("Silence (ms)", self.vad_silence_ms)
+
+        self.vad_min_speech_ms = QLineEdit(str(settings.get("vad_min_speech_ms", "") or ""))
+        self.vad_min_speech_ms.setPlaceholderText("250")
+        vad_form.addRow("Min Speech (ms)", self.vad_min_speech_ms)
+
+        self.vad_speech_pad_ms = QLineEdit(str(settings.get("vad_speech_pad_ms", "") or ""))
+        self.vad_speech_pad_ms.setPlaceholderText("300")
+        vad_form.addRow("Speech Pad (ms)", self.vad_speech_pad_ms)
+
+        self.vad_energy_silence_rms = QLineEdit(
+            str(settings.get("vad_energy_silence_rms", "") or "")
+        )
+        self.vad_energy_silence_rms.setPlaceholderText("20 (0 = disabled)")
+        vad_form.addRow("Energy Silence", self.vad_energy_silence_rms)
+
+        self._vad_adv_container.hide()
+        proc_form.addRow("", self._vad_adv_container)
+
+        self.vad_model.currentIndexChanged.connect(self._on_vad_changed)
+        self._on_vad_changed(self.vad_model.currentIndex())
+
+        # Turn detector (smart turn)
+        from roomkit_ui.model_manager import is_smart_turn_downloaded
+
+        self.turn_detector = QComboBox()
+        self.turn_detector.addItem("None", "")
+        if is_smart_turn_downloaded():
+            self.turn_detector.addItem("Smart Turn v3", "smart-turn")
+        saved_td = settings.get("vc_turn_detector", "")
+        for i in range(self.turn_detector.count()):
+            if self.turn_detector.itemData(i) == saved_td:
+                self.turn_detector.setCurrentIndex(i)
+                break
+        proc_form.addRow("Turn Detector", self.turn_detector)
+
+        self.turn_threshold = QLineEdit(str(settings.get("vc_turn_threshold", "") or ""))
+        self.turn_threshold.setPlaceholderText("0.5 (0 = eager … 1 = patient)")
+        self._turn_threshold_label = QLabel("Turn Threshold")
+        proc_form.addRow(self._turn_threshold_label, self.turn_threshold)
+
+        self._turn_hint = QLabel(
+            "Audio-native turn completion — detects when the user has finished speaking "
+            "from prosody alone. Download the model in AI Models tab."
+        )
+        self._turn_hint.setWordWrap(True)
+        self._turn_hint.setStyleSheet(
+            f"font-size: 11px; color: {c['TEXT_SECONDARY']};"
+            f" font-style: italic; background: transparent;"
+        )
+        proc_form.addRow("", self._turn_hint)
+
+        self.turn_detector.currentIndexChanged.connect(self._on_turn_detector_changed)
+        self._on_turn_detector_changed(self.turn_detector.currentIndex())
+
         # Inference device
         from roomkit_ui.model_manager import detect_providers
 
@@ -248,6 +329,23 @@ class _GeneralPage(QWidget):
         layout.addLayout(proc_form)
         layout.addStretch()
 
+    def _toggle_vad_advanced(self) -> None:
+        visible = not self._vad_adv_container.isVisible()
+        self._vad_adv_container.setVisible(visible)
+        self._vad_adv_toggle.setText("\u25be Advanced" if visible else "\u25b8 Advanced")
+
+    def _on_vad_changed(self, index: int) -> None:
+        has_vad = bool(self.vad_model.currentData())
+        self._vad_adv_toggle.setVisible(has_vad)
+        if not has_vad:
+            self._vad_adv_container.hide()
+            self._vad_adv_toggle.setText("\u25b8 Advanced")
+
+    def _on_turn_detector_changed(self, index: int) -> None:
+        has_detector = bool(self.turn_detector.currentData())
+        self._turn_threshold_label.setVisible(has_detector)
+        self.turn_threshold.setVisible(has_detector)
+
     def _on_device_changed(self, index: int) -> None:
         val = self._inference_providers[index][1]
         if val == "cuda":
@@ -270,6 +368,13 @@ class _GeneralPage(QWidget):
             "aec_mode": AEC_MODES[self.aec.currentIndex()][1],
             "denoise": DENOISE_MODES[self.denoise.currentIndex()][1],
             "vc_vad_model": self.vad_model.currentData() or "",
+            "vad_threshold": self.vad_threshold.text().strip(),
+            "vad_silence_ms": self.vad_silence_ms.text().strip(),
+            "vad_min_speech_ms": self.vad_min_speech_ms.text().strip(),
+            "vad_speech_pad_ms": self.vad_speech_pad_ms.text().strip(),
+            "vad_energy_silence_rms": self.vad_energy_silence_rms.text().strip(),
+            "vc_turn_detector": self.turn_detector.currentData() or "",
+            "vc_turn_threshold": self.turn_threshold.text().strip(),
             "inference_device": self._inference_providers[self.inference_device.currentIndex()][1],
             "input_device": self.input_combo.currentData(),
             "output_device": self.output_combo.currentData(),
