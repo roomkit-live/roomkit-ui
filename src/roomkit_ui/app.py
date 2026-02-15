@@ -68,6 +68,10 @@ if os.environ.get("DEBUG"):
 else:
     logging.getLogger("roomkit.channels.realtime_voice").setLevel(logging.DEBUG)
 
+# OpenTelemetry SDK is very chatty at INFO (batch exports, connection status,
+# retries).  Keep it at WARNING so only actual problems reach the console.
+logging.getLogger("opentelemetry").setLevel(logging.WARNING)
+
 
 def main() -> None:
     app = QApplication(sys.argv)

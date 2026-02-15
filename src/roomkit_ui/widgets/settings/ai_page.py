@@ -8,6 +8,8 @@ from PySide6.QtWidgets import (
     QComboBox,
     QFormLayout,
     QLabel,
+    QStackedWidget,
+    QTabBar,
     QTextEdit,
     QVBoxLayout,
     QWidget,
@@ -94,29 +96,41 @@ class _AIPage(QWidget):
         )
         vc_layout.addWidget(vc_section_label)
 
-        vc_form = QFormLayout()
-        vc_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
-        vc_form.setSpacing(10)
-        vc_form.setLabelAlignment(Qt.AlignRight)
-
-        # Sub-module instances (fields added in interleaved order below)
+        # Sub-module instances
         self._local = VCLocalFields(self, settings)
         self._cloud = VCCloudFields(settings)
 
-        # -- LLM Provider selector + fields --
-        self.vc_provider = QComboBox()
-        for label, _value in VC_LLM_PROVIDERS:
-            self.vc_provider.addItem(label)
-        current_vc_provider = settings.get("vc_llm_provider", "anthropic")
-        for i, (_, val) in enumerate(VC_LLM_PROVIDERS):
-            if val == current_vc_provider:
-                self.vc_provider.setCurrentIndex(i)
-                break
-        vc_form.addRow("LLM Provider", self.vc_provider)
-        self._cloud.add_llm_fields(vc_form)
-        self._local.add_llm_fields(vc_form)
+        # -- Horizontal tab bar --
+        self._vc_tab_bar = QTabBar()
+        self._vc_tab_bar.addTab("STT")
+        self._vc_tab_bar.addTab("LLM")
+        self._vc_tab_bar.addTab("TTS")
+        self._vc_tab_bar.setExpanding(False)
+        self._vc_tab_bar.setDocumentMode(True)
+        self._vc_tab_bar.setStyleSheet(f"""
+            QTabBar::tab {{
+                padding: 5px 16px;
+                margin-right: 4px;
+                border-radius: 6px;
+                color: {c["TEXT_SECONDARY"]};
+                background: transparent;
+            }}
+            QTabBar::tab:selected {{
+                background: {c["BG_TERTIARY"]};
+                color: {c["TEXT_PRIMARY"]};
+            }}
+        """)
+        vc_layout.addWidget(self._vc_tab_bar)
 
-        # -- STT Provider selector + fields --
+        self._vc_stack = QStackedWidget()
+
+        # -- Page 0: STT --
+        stt_page = QWidget()
+        stt_form = QFormLayout(stt_page)
+        stt_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        stt_form.setSpacing(10)
+        stt_form.setLabelAlignment(Qt.AlignRight)
+
         self.vc_stt_provider = QComboBox()
         for label, _value in VC_STT_PROVIDERS:
             self.vc_stt_provider.addItem(label)
@@ -125,16 +139,40 @@ class _AIPage(QWidget):
             if val == current_stt_prov:
                 self.vc_stt_provider.setCurrentIndex(i)
                 break
-        vc_form.addRow("STT Provider", self.vc_stt_provider)
-        self._local.add_stt_fields(vc_form)
-        self._cloud.add_stt_fields(vc_form)
+        stt_form.addRow("Provider", self.vc_stt_provider)
+        self._local.add_stt_fields(stt_form)
+        self._cloud.add_stt_fields(stt_form)
 
-        # -- Interruption toggle --
-        self.vc_interruption = QCheckBox("Allow barge-in (interrupt TTS by speaking)")
-        self.vc_interruption.setChecked(bool(settings.get("vc_interruption", False)))
-        vc_form.addRow("", self.vc_interruption)
+        self._vc_stack.addWidget(stt_page)
 
-        # -- TTS Provider selector + fields --
+        # -- Page 1: LLM --
+        llm_page = QWidget()
+        llm_form = QFormLayout(llm_page)
+        llm_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        llm_form.setSpacing(10)
+        llm_form.setLabelAlignment(Qt.AlignRight)
+
+        self.vc_provider = QComboBox()
+        for label, _value in VC_LLM_PROVIDERS:
+            self.vc_provider.addItem(label)
+        current_vc_provider = settings.get("vc_llm_provider", "anthropic")
+        for i, (_, val) in enumerate(VC_LLM_PROVIDERS):
+            if val == current_vc_provider:
+                self.vc_provider.setCurrentIndex(i)
+                break
+        llm_form.addRow("Provider", self.vc_provider)
+        self._cloud.add_llm_fields(llm_form)
+        self._local.add_llm_fields(llm_form)
+
+        self._vc_stack.addWidget(llm_page)
+
+        # -- Page 2: TTS --
+        tts_page = QWidget()
+        tts_form = QFormLayout(tts_page)
+        tts_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        tts_form.setSpacing(10)
+        tts_form.setLabelAlignment(Qt.AlignRight)
+
         self.vc_tts_provider = QComboBox()
         for label, _value in VC_TTS_PROVIDERS:
             self.vc_tts_provider.addItem(label)
@@ -143,13 +181,20 @@ class _AIPage(QWidget):
             if val == current_tts_prov:
                 self.vc_tts_provider.setCurrentIndex(i)
                 break
-        vc_form.addRow("TTS Provider", self.vc_tts_provider)
-        self._local.add_tts_fields(vc_form)
-        self._cloud.add_tts_fields(vc_form)
+        tts_form.addRow("Provider", self.vc_tts_provider)
+        self._local.add_tts_fields(tts_form)
+        self._cloud.add_tts_fields(tts_form)
 
-        vc_layout.addLayout(vc_form)
+        self.vc_interruption = QCheckBox("Allow barge-in (interrupt TTS by speaking)")
+        self.vc_interruption.setChecked(bool(settings.get("vc_interruption", False)))
+        tts_form.addRow("", self.vc_interruption)
 
-        # Gradium Advanced collapsible (outside form grid)
+        self._vc_stack.addWidget(tts_page)
+
+        self._vc_tab_bar.currentChanged.connect(self._vc_stack.setCurrentIndex)
+        vc_layout.addWidget(self._vc_stack)
+
+        # Gradium Advanced collapsible (below tabs, visible when Gradium selected)
         self._cloud.add_gradium_advanced(vc_layout)
 
         layout.addWidget(self._vc_section)
