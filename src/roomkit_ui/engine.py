@@ -492,7 +492,7 @@ class Engine(QObject):
 
                 provider = GeminiLiveProvider(api_key=api_key, model=model)
 
-            # Build provider_config for Gemini advanced settings
+            # Build provider_config for provider-specific advanced settings
             provider_config: dict[str, Any] = {}
             if provider_name == "gemini":
                 lang = settings.get("gemini_language", "")
@@ -519,6 +519,43 @@ class Engine(QObject):
                         provider_config["silence_duration_ms"] = int(silence_ms)
                     except (ValueError, TypeError):
                         pass
+            elif provider_name == "openai":
+                td_type = settings.get("openai_turn_detection", "server_vad")
+                if td_type in ("server_vad", "semantic_vad"):
+                    provider_config["turn_detection_type"] = td_type
+                    if td_type == "semantic_vad":
+                        eagerness = settings.get("openai_eagerness", "")
+                        if eagerness:
+                            try:
+                                provider_config["eagerness"] = float(eagerness)
+                            except (ValueError, TypeError):
+                                pass
+                    elif td_type == "server_vad":
+                        threshold = settings.get("openai_vad_threshold", "")
+                        if threshold:
+                            try:
+                                provider_config["threshold"] = float(threshold)
+                            except (ValueError, TypeError):
+                                pass
+                        silence_ms = settings.get("openai_silence_duration_ms", "")
+                        if silence_ms:
+                            try:
+                                provider_config["silence_duration_ms"] = int(silence_ms)
+                            except (ValueError, TypeError):
+                                pass
+                        prefix_ms = settings.get("openai_prefix_padding_ms", "")
+                        if prefix_ms:
+                            try:
+                                provider_config["prefix_padding_ms"] = int(prefix_ms)
+                            except (ValueError, TypeError):
+                                pass
+                    if not settings.get("openai_interrupt_response", True):
+                        provider_config["interrupt_response"] = False
+                    if not settings.get("openai_create_response", True):
+                        provider_config["create_response"] = False
+                else:
+                    # "none" — disable turn detection entirely
+                    provider_config["turn_detection_type"] = None
 
             sample_rate = 24000
             block_ms = 20

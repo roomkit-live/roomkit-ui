@@ -87,6 +87,14 @@ _DEFAULTS = {
     "gemini_start_sensitivity": "",
     "gemini_end_sensitivity": "",
     "gemini_silence_duration_ms": "",
+    # OpenAI advanced settings
+    "openai_turn_detection": "server_vad",  # "server_vad" | "semantic_vad" | "none"
+    "openai_eagerness": "",  # 0.0–1.0, semantic_vad only (empty = default)
+    "openai_vad_threshold": "",  # 0.0–1.0, server_vad only (empty = default)
+    "openai_silence_duration_ms": "",  # server_vad only (empty = default)
+    "openai_prefix_padding_ms": "",  # server_vad only (empty = default)
+    "openai_interrupt_response": True,  # Allow interrupting AI response
+    "openai_create_response": True,  # Auto-generate response on turn end
 }
 
 
