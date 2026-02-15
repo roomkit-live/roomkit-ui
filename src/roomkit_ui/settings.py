@@ -30,6 +30,18 @@ _DEFAULTS = {
     "inference_device": "cpu",
     "assistant_hotkey_enabled": True,
     "assistant_hotkey": "<ctrl>+<shift>+a",
+    "telemetry_provider": "none",  # "none" | "console" | "otlp"
+    "otlp_endpoint": "",  # OTLP gRPC endpoint (e.g. http://localhost:4317)
+    "otlp_protocol": "grpc",  # "grpc" | "http"
+    "otlp_service_name": "roomkit-ui",
+    # Audio debug & recording
+    "debug_taps_enabled": False,
+    "debug_taps_stages": "all",  # "all" or comma-separated: "raw,post_denoiser,..."
+    "debug_output_dir": "",  # empty = ~/.local/share/roomkit-ui/debug_audio/
+    "recording_enabled": False,
+    "recording_mode": "both",  # "inbound_only" | "outbound_only" | "both"
+    "recording_channels": "stereo",  # "mixed" | "separate" | "stereo"
+    "recording_output_dir": "",  # empty = ~/.local/share/roomkit-ui/recordings/
     "theme": "dark",
     "mcp_servers": "[]",
     # Voice channel (STT → LLM → TTS) settings
@@ -68,6 +80,13 @@ _DEFAULTS = {
     "gradium_rewrite_rules": "",  # "en","fr","de","es","pt" or custom rules
     "vc_stt_model": "",
     "vc_vad_model": "",
+    "vad_threshold": "",  # 0.0–1.0 (empty = 0.35)
+    "vad_silence_ms": "",  # ms of silence before SPEECH_END (empty = 500)
+    "vad_min_speech_ms": "",  # minimum utterance length in ms (empty = 250)
+    "vad_speech_pad_ms": "",  # pre-roll buffer in ms (empty = 300)
+    "vad_energy_silence_rms": "",  # energy fast-exit RMS threshold (empty = 20, 0 = off)
+    "vc_turn_detector": "",  # "" (none) or "smart-turn"
+    "vc_turn_threshold": "",  # 0.0–1.0 (empty = 0.5)
     "vc_interruption": False,
     # Speaker diarization
     "diarization_enabled": False,

@@ -59,6 +59,111 @@ class _VoiceErrorLogHandler(logging.Handler):
 
 
 # ---------------------------------------------------------------------------
+# Telemetry helpers
+# ---------------------------------------------------------------------------
+
+
+def _build_telemetry(settings: dict | None):
+    """Build a telemetry provider from settings, or ``None`` to use the noop default."""
+    if not settings:
+        return None
+    provider = settings.get("telemetry_provider", "none")
+    if provider == "console":
+        from roomkit.telemetry import ConsoleTelemetryProvider
+
+        return ConsoleTelemetryProvider()
+    if provider == "otlp":
+        return _build_otlp_telemetry(settings)
+    return None
+
+
+def _build_otlp_telemetry(settings: dict):
+    """Build an OpenTelemetryProvider with an OTLP exporter."""
+    try:
+        from opentelemetry.sdk.resources import Resource
+        from opentelemetry.sdk.trace import TracerProvider
+        from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
+        service_name = settings.get("otlp_service_name", "") or "roomkit-ui"
+        resource = Resource.create({"service.name": service_name})
+        tracer_provider = TracerProvider(resource=resource)
+
+        endpoint = settings.get("otlp_endpoint", "").strip()
+        protocol = settings.get("otlp_protocol", "grpc")
+
+        if protocol == "http":
+            from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+
+            exporter = OTLPSpanExporter(endpoint=endpoint or "http://localhost:4318/v1/traces")
+        else:
+            from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+
+            exporter = OTLPSpanExporter(endpoint=endpoint or "http://localhost:4317")
+
+        tracer_provider.add_span_processor(BatchSpanProcessor(exporter))
+
+        from roomkit.telemetry.opentelemetry import OpenTelemetryProvider
+
+        return OpenTelemetryProvider(tracer_provider=tracer_provider, service_name=service_name)
+    except ImportError:
+        logger.warning(
+            "OpenTelemetry packages not installed — falling back to console telemetry. "
+            "Install with: pip install opentelemetry-api opentelemetry-sdk "
+            "opentelemetry-exporter-otlp"
+        )
+        from roomkit.telemetry import ConsoleTelemetryProvider
+
+        return ConsoleTelemetryProvider()
+
+
+# ---------------------------------------------------------------------------
+# Audio debug helpers
+# ---------------------------------------------------------------------------
+
+
+def _build_debug_taps(settings: dict):
+    """Build a PipelineDebugTaps from settings, or ``None`` if disabled."""
+    if not settings.get("debug_taps_enabled"):
+        return None
+    from pathlib import Path
+
+    from roomkit.voice.pipeline.debug_taps import PipelineDebugTaps
+
+    output_dir = settings.get("debug_output_dir", "").strip()
+    if not output_dir:
+        output_dir = str(Path.home() / ".local/share/roomkit-ui/debug_audio")
+    stages_str = settings.get("debug_taps_stages", "all")
+    stages = [s.strip() for s in stages_str.split(",") if s.strip()]
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
+    return PipelineDebugTaps(output_dir=output_dir, stages=stages)
+
+
+def _build_recorder(settings: dict):
+    """Build a (WavFileRecorder, RecordingConfig) pair, or (None, None) if disabled."""
+    if not settings.get("recording_enabled"):
+        return None, None
+    from pathlib import Path
+
+    from roomkit.voice.pipeline.recorder.base import (
+        RecordingChannelMode,
+        RecordingConfig,
+        RecordingMode,
+    )
+    from roomkit.voice.pipeline.recorder.wav import WavFileRecorder
+
+    output_dir = settings.get("recording_output_dir", "").strip()
+    if not output_dir:
+        output_dir = str(Path.home() / ".local/share/roomkit-ui/recordings")
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
+    config = RecordingConfig(
+        mode=RecordingMode(settings.get("recording_mode", "both")),
+        channels=RecordingChannelMode(settings.get("recording_channels", "stereo")),
+        storage=output_dir,
+    )
+    return WavFileRecorder(), config
+
+
+# ---------------------------------------------------------------------------
 # Engine
 # ---------------------------------------------------------------------------
 
@@ -647,6 +752,9 @@ class Engine(QObject):
                         diarization_model_id,
                     )
 
+            debug_taps = _build_debug_taps(settings)
+            recorder, recording_config = _build_recorder(settings)
+
             if diarization is not None:
                 from roomkit.voice.pipeline.config import AudioPipelineConfig
 
@@ -659,7 +767,9 @@ class Engine(QObject):
                     if is_vad_model_downloaded(vad_model_id):
                         from roomkit.voice.pipeline.vad.sherpa_onnx import SherpaOnnxVADProvider
 
-                        vad_config = build_vad_config(vad_model_id, provider=inference_device)
+                        vad_config = build_vad_config(
+                            vad_model_id, provider=inference_device, settings=settings
+                        )
                         vad = SherpaOnnxVADProvider(vad_config)
                         logger.info("Realtime VAD: %s", vad_model_id)
                     else:
@@ -686,7 +796,19 @@ class Engine(QObject):
                         vad=vad,
                         diarization=diarization,
                         contract=contract,
+                        debug_taps=debug_taps,
+                        recorder=recorder,
+                        recording_config=recording_config,
                     )
+
+            if pipeline is None and (debug_taps is not None or recorder is not None):
+                from roomkit.voice.pipeline.config import AudioPipelineConfig
+
+                pipeline = AudioPipelineConfig(
+                    debug_taps=debug_taps,
+                    recorder=recorder,
+                    recording_config=recording_config,
+                )
 
             # -- Transport -------------------------------------------------------
             transport = LocalAudioTransport(
@@ -750,6 +872,7 @@ class Engine(QObject):
                 tools,
                 tool_handler,
                 provider_config=provider_config or None,
+                settings=settings,
             )
             if self._session is None and has_mcp_tools:
                 # MCP tools broke the session — retry without them
@@ -765,6 +888,7 @@ class Engine(QObject):
                     list(BUILTIN_TOOLS),
                     tool_handler,
                     provider_config=provider_config or None,
+                    settings=settings,
                 )
                 if self._session is not None:
                     self.mcp_status.emit("MCP tools disabled — incompatible with this provider")
@@ -1034,7 +1158,9 @@ class Engine(QObject):
                 if is_vad_model_downloaded(vad_model_id):
                     from roomkit.voice.pipeline.vad.sherpa_onnx import SherpaOnnxVADProvider
 
-                    vad_config = build_vad_config(vad_model_id, provider=inference_device)
+                    vad_config = build_vad_config(
+                        vad_model_id, provider=inference_device, settings=settings
+                    )
                     vad = SherpaOnnxVADProvider(vad_config)
                     logger.info("VAD: %s", vad_model_id)
                 else:
@@ -1129,12 +1255,51 @@ class Engine(QObject):
             interruption = InterruptionConfig(strategy=strategy)
             logger.info("Interruption: %s", strategy.value)
 
+            # Smart turn detector (optional)
+            turn_detector: Any = None
+            td_name = settings.get("vc_turn_detector", "")
+            if td_name == "smart-turn":
+                from roomkit_ui.model_manager import (
+                    is_smart_turn_downloaded,
+                    smart_turn_model_path,
+                )
+
+                if is_smart_turn_downloaded():
+                    from roomkit.voice.pipeline.turn.smart_turn import (
+                        SmartTurnConfig,
+                        SmartTurnDetector,
+                    )
+
+                    threshold_str = settings.get("vc_turn_threshold", "")
+                    threshold = 0.5
+                    if threshold_str:
+                        try:
+                            threshold = float(threshold_str)
+                        except (ValueError, TypeError):
+                            pass
+                    turn_detector = SmartTurnDetector(
+                        SmartTurnConfig(
+                            model_path=str(smart_turn_model_path()),
+                            threshold=threshold,
+                            provider=inference_device,
+                        )
+                    )
+                    logger.info("Turn detector: smart-turn, threshold=%.2f", threshold)
+                else:
+                    logger.warning("Smart Turn model not downloaded — skipping")
+
+            debug_taps = _build_debug_taps(settings)
+            recorder, recording_config = _build_recorder(settings)
             pipeline = AudioPipelineConfig(
                 aec=aec,
                 denoiser=denoiser,
                 vad=vad,
                 interruption=interruption,
                 diarization=diarization,
+                turn_detector=turn_detector,
+                debug_taps=debug_taps,
+                recorder=recorder,
+                recording_config=recording_config,
             )
 
             # 7. Create VoiceChannel
@@ -1201,7 +1366,8 @@ class Engine(QObject):
                 tools, _has_mcp = await self._setup_mcp_tools(settings)
 
             # 10. Wire up framework
-            kit = RoomKit()
+            telemetry = _build_telemetry(settings)
+            kit = RoomKit(telemetry=telemetry)
             self._kit = kit
 
             kit.register_channel(voice)
@@ -1381,10 +1547,12 @@ class Engine(QObject):
         tools: list[dict],
         tool_handler: Any,
         provider_config: dict[str, Any] | None = None,
+        settings: dict | None = None,
     ) -> Any:
         """Try to create a room and start a session. Returns None on failure."""
         try:
-            self._kit = RoomKit()
+            telemetry = _build_telemetry(settings) if settings else None
+            self._kit = RoomKit(telemetry=telemetry)
             self._channel = RealtimeVoiceChannel(
                 "voice",
                 provider=provider,

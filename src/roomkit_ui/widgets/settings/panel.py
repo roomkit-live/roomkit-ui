@@ -19,12 +19,14 @@ from roomkit_ui.theme import colors
 from roomkit_ui.widgets.settings.about_page import _AboutPage
 from roomkit_ui.widgets.settings.ai_page import _AIPage
 from roomkit_ui.widgets.settings.attitudes_page import _AttitudesPage
+from roomkit_ui.widgets.settings.audio_debug_page import _AudioDebugPage
 from roomkit_ui.widgets.settings.dictation_page import _DictationPage
 from roomkit_ui.widgets.settings.general_page import _GeneralPage
 from roomkit_ui.widgets.settings.mcp_page import _MCPPage
 from roomkit_ui.widgets.settings.models_page import _ModelsPage
 from roomkit_ui.widgets.settings.skills import _SkillsPage
 from roomkit_ui.widgets.settings.speakers_page import _SpeakersPage
+from roomkit_ui.widgets.settings.telemetry_page import _TelemetryPage
 
 
 class SettingsPanel(QDialog):
@@ -66,6 +68,8 @@ class SettingsPanel(QDialog):
             "AI Models",
             "Skills",
             "MCP Servers",
+            "Audio Debug",
+            "Telemetry",
             "About",
         ):
             item = QListWidgetItem(label)
@@ -82,6 +86,8 @@ class SettingsPanel(QDialog):
         self._models = _ModelsPage(settings)
         self._skills = _SkillsPage(settings)
         self._mcp = _MCPPage(settings)
+        self._audio_debug = _AudioDebugPage(settings)
+        self._telemetry = _TelemetryPage(settings)
         self._about = _AboutPage()
         self._pages = (
             self._general,
@@ -92,6 +98,8 @@ class SettingsPanel(QDialog):
             self._models,
             self._skills,
             self._mcp,
+            self._audio_debug,
+            self._telemetry,
             self._about,
         )
 
@@ -134,6 +142,7 @@ class SettingsPanel(QDialog):
     _SPEAKERS_TAB = 3
     _DICTATION_TAB = 4
     _SKILLS_TAB = 6
+    _AUDIO_DEBUG_TAB = 8
 
     def _on_tab_changed(self, index: int) -> None:
         self._stack.setCurrentIndex(index)
@@ -144,6 +153,8 @@ class SettingsPanel(QDialog):
             self._dictation.refresh_model_combo()
         elif index == self._SKILLS_TAB:
             self._skills._refresh_skills()
+        elif index == self._AUDIO_DEBUG_TAB:
+            self._audio_debug.refresh_files()
 
     def closeEvent(self, event) -> None:  # noqa: N802
         self._save()
