@@ -433,8 +433,8 @@ class _ModelsPage(QWidget):
 
         self._spk_rows: list[_ModelRow] = []
         for spk_m in SPEAKER_MODELS:
-            info = _SpeakerInfo(id=spk_m.id, name=spk_m.name, type="speaker", size=spk_m.size)
-            row = _ModelRow(info, c, show_radio=False)
+            spk_info = _SpeakerInfo(id=spk_m.id, name=spk_m.name, type="speaker", size=spk_m.size)
+            row = _ModelRow(spk_info, c, show_radio=False)
             row._refresh_state(is_speaker_model_downloaded(spk_m.id))
             row.action_btn.clicked.connect(
                 lambda _checked=False, mid=spk_m.id: self._download_speaker_model(mid)

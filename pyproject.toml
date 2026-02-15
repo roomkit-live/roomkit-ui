@@ -92,6 +92,10 @@ ignore_missing_imports = true
 module = ["sounddevice", "sounddevice.*"]
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = ["sherpa_onnx", "sherpa_onnx.*"]
+ignore_missing_imports = true
+
 # ── Bandit ────────────────────────────────────────────────────────────────
 [tool.bandit]
 exclude_dirs = ["tests"]

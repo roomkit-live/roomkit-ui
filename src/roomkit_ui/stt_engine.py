@@ -144,7 +144,7 @@ def _get_frontmost_bundle() -> str | None:
 
         front = NSWorkspace.sharedWorkspace().frontmostApplication()
         if front and front.processIdentifier() != os.getpid():
-            return front.bundleIdentifier()
+            return front.bundleIdentifier()  # type: ignore[no-any-return]
         return None
     except Exception:
         return None

@@ -15,10 +15,12 @@ logger = logging.getLogger(__name__)
 # Patch it at module level so all pynput Listener instances work.
 if sys.platform == "darwin":
     try:
-        import HIServices  # type: ignore[import-untyped]
+        import HIServices  # type: ignore[import-untyped,import-not-found]
 
         if not hasattr(HIServices, "AXIsProcessTrusted"):
-            from ApplicationServices import AXIsProcessTrusted  # type: ignore[import-untyped]
+            from ApplicationServices import (  # type: ignore[import-not-found]
+                AXIsProcessTrusted,
+            )
 
             HIServices.AXIsProcessTrusted = AXIsProcessTrusted
             logger.debug("Patched HIServices.AXIsProcessTrusted for pynput compatibility")

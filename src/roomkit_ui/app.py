@@ -116,13 +116,15 @@ def main() -> None:
                 _logger = logging.getLogger(__name__)
 
                 try:
-                    import HIServices
+                    import HIServices  # type: ignore[import-not-found]
 
                     ax = HIServices.AXIsProcessTrustedWithOptions(
                         {HIServices.kAXTrustedCheckOptionPrompt: False}
                     )
                 except (ImportError, AttributeError):
-                    from ApplicationServices import AXIsProcessTrusted
+                    from ApplicationServices import (  # type: ignore[import-not-found]
+                        AXIsProcessTrusted,
+                    )
 
                     ax = AXIsProcessTrusted()
 

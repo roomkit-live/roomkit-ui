@@ -188,9 +188,7 @@ class _EnrollDialog(QDialog):
                 self.result_name = name
                 self.result_embeddings = embeddings
                 n = len(embeddings)
-                self._status.setText(
-                    f"Done! Extracted {n} embedding{'s' if n != 1 else ''}."
-                )
+                self._status.setText(f"Done! Extracted {n} embedding{'s' if n != 1 else ''}.")
                 self._status.setStyleSheet(
                     f"font-size: 12px; color: {colors()['ACCENT_GREEN']}; background: transparent;"
                 )

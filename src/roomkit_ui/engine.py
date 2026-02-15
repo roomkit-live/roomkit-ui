@@ -1489,9 +1489,16 @@ class Engine(QObject):
         # Cancel any remaining session tasks that didn't finalize
         current = asyncio.current_task()
         _session_task_names = (
-            "speech_end", "_play_stream", "speaker_change", "audio_level",
-            "barge_in", "speech_start", "session_started", "vad_silence",
-            "_process_target", "EventRouter",
+            "speech_end",
+            "_play_stream",
+            "speaker_change",
+            "audio_level",
+            "barge_in",
+            "speech_start",
+            "session_started",
+            "vad_silence",
+            "_process_target",
+            "EventRouter",
         )
         for task in list(asyncio.all_tasks()):
             if task is current or task.done():

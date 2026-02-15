@@ -759,8 +759,7 @@ SPEAKER_MODELS: list[SpeakerModel] = [
 _SPEAKER_MODELS_BY_ID: dict[str, SpeakerModel] = {m.id: m for m in SPEAKER_MODELS}
 
 _SPEAKER_BASE = (
-    "https://github.com/k2-fsa/sherpa-onnx/releases/download"
-    "/speaker-recongition-models"
+    "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models"
 )
 _SPEAKER_ASSET_URLS: dict[str, str] = {
     "nemo-titanet-large": f"{_SPEAKER_BASE}/nemo_en_titanet_large.onnx",

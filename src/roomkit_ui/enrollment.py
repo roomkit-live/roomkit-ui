@@ -48,9 +48,7 @@ def _record_sync(
     return b"".join(chunks)
 
 
-def _extract_embedding(
-    extractor, pcm_float: list[float], sample_rate: int
-) -> list[float] | None:
+def _extract_embedding(extractor, pcm_float: list[float], sample_rate: int) -> list[float] | None:
     """Extract a single embedding from float PCM samples."""
     stream = extractor.create_stream()
     stream.accept_waveform(sample_rate=sample_rate, waveform=pcm_float)
