@@ -105,6 +105,11 @@ class Engine(QObject):
         # incremental fragments, but the UI expects full accumulated text.
         self._partial_buffers: dict[str, str] = {}  # role → accumulated text
         self._partial_speakers: dict[str, str] = {}  # role → best speaker ID this utterance
+        # Model cache: persist heavy ONNX models across sessions to avoid
+        # reloading STT / TTS / diarization on every conversation start.
+        # Maps type → (cache_key_tuple, provider_instance).
+        self._cached_models: dict[str, tuple[tuple, Any]] = {}
+        self._cleanup_monitor_task: asyncio.Task | None = None
 
         # Log handler to surface roomkit voice errors in the UI
         self._log_handler = _VoiceErrorLogHandler(self)
@@ -118,6 +123,22 @@ class Engine(QObject):
         self._spk_timer = QTimer(self)
         self._spk_timer.setInterval(20)  # one playback block
         self._spk_timer.timeout.connect(self._drain_speaker_level)
+
+    # -- model cache ---------------------------------------------------------
+
+    def _get_cached(self, model_type: str, cache_key: tuple) -> Any | None:
+        """Return a cached provider if the key matches, else None."""
+        entry = self._cached_models.get(model_type)
+        if entry is not None and entry[0] == cache_key:
+            return entry[1]
+        return None
+
+    def _set_cached(self, model_type: str, cache_key: tuple, provider: Any) -> None:
+        self._cached_models[model_type] = (cache_key, provider)
+
+    def clear_model_cache(self) -> None:
+        """Release all cached models (call on app quit)."""
+        self._cached_models.clear()
 
     @property
     def state(self) -> str:
@@ -530,19 +551,30 @@ class Engine(QObject):
                         SherpaOnnxDiarizationProvider,
                     )
 
-                    self.loading_status.emit("Loading speaker model\u2026")
                     threshold = settings.get("diarization_threshold", 0.4)
                     if isinstance(threshold, str):
                         try:
                             threshold = float(threshold)
                         except (ValueError, TypeError):
                             threshold = 0.5
-                    diar_config = build_diarization_config(
-                        diarization_model_id,
-                        provider=inference_device,
-                        threshold=threshold,
-                    )
-                    diarization = SherpaOnnxDiarizationProvider(diar_config)
+                    diar_key = ("diar", diarization_model_id, inference_device, threshold)
+                    cached_diar = self._get_cached("diarization", diar_key)
+                    if cached_diar is not None:
+                        diarization = cached_diar
+                        diarization.reset()
+                        for name in list(diarization._manager.all_speakers):
+                            diarization.remove_speaker(name)
+                        diarization._enrolled_embeddings.clear()
+                        logger.info("Diarization: reusing cached %s", diarization_model_id)
+                    else:
+                        self.loading_status.emit("Loading speaker model\u2026")
+                        diar_config = build_diarization_config(
+                            diarization_model_id,
+                            provider=inference_device,
+                            threshold=threshold,
+                        )
+                        diarization = SherpaOnnxDiarizationProvider(diar_config)
+                        self._set_cached("diarization", diar_key, diarization)
                     self._diarization = diarization
 
                     # Load enrolled speakers
@@ -836,7 +868,6 @@ class Engine(QObject):
 
                 from roomkit_ui.model_manager import build_stt_config
 
-                self.loading_status.emit("Loading STT model\u2026")
                 stt_model_id = settings.get("vc_stt_model", "")
                 if not stt_model_id:
                     raise ValueError(
@@ -844,30 +875,52 @@ class Engine(QObject):
                         " and select it in Settings."
                     )
                 stt_translate = settings.get("stt_translate", False)
-                local_stt_config = build_stt_config(
-                    stt_model_id,
-                    language=stt_language,
-                    translate=stt_translate,
-                    provider=inference_device,
-                )
-                stt = SherpaOnnxSTTProvider(local_stt_config)
-                logger.info("STT: model=%s, language=%s", stt_model_id, stt_language)
+                stt_key = ("stt", stt_model_id, stt_language, stt_translate, inference_device)
+                cached_stt = self._get_cached("stt", stt_key)
+                if cached_stt is not None:
+                    stt = cached_stt
+                    logger.info("STT: reusing cached %s", stt_model_id)
+                else:
+                    self.loading_status.emit("Loading STT model\u2026")
+                    local_stt_config = build_stt_config(
+                        stt_model_id,
+                        language=stt_language,
+                        translate=stt_translate,
+                        provider=inference_device,
+                    )
+                    stt = SherpaOnnxSTTProvider(local_stt_config)
+                    logger.info("STT: model=%s, language=%s", stt_model_id, stt_language)
+                    if hasattr(stt, "warmup"):
+                        self.loading_status.emit("Warming up STT model\u2026")
+                        await stt.warmup()
+                    self._set_cached("stt", stt_key, stt)
 
-            if hasattr(stt, "warmup"):
-                self.loading_status.emit("Warming up STT model\u2026")
+            # Remote providers (gradium, deepgram) may also have warmup
+            if stt_provider_name != "local" and hasattr(stt, "warmup"):
+                self.loading_status.emit("Warming up STT\u2026")
                 await stt.warmup()
 
             # 2. Build TTS
-            self.loading_status.emit("Loading TTS model\u2026")
             tts_provider_name = settings.get("vc_tts_provider", "piper")
-            tts, output_sample_rate = create_tts_provider(tts_provider_name, settings)
+            tts_model_id = settings.get("vc_tts_model", "")
+            tts_key = ("tts", tts_provider_name, tts_model_id, inference_device)
+            cached_tts = self._get_cached("tts", tts_key)
+            if cached_tts is not None:
+                tts, output_sample_rate = cached_tts
+                logger.info("TTS: reusing cached %s/%s", tts_provider_name, tts_model_id)
+            else:
+                self.loading_status.emit("Loading TTS model\u2026")
+                tts, output_sample_rate = create_tts_provider(tts_provider_name, settings)
+                if hasattr(tts, "warmup"):
+                    self.loading_status.emit("Warming up TTS model\u2026")
+                    await tts.warmup()
+                # Cache local TTS providers (ONNX models are expensive to load)
+                if tts_provider_name in ("piper", "qwen3", "neutts"):
+                    self._set_cached("tts", tts_key, (tts, output_sample_rate))
             self._tts = tts
-            if hasattr(tts, "warmup"):
-                self.loading_status.emit("Warming up TTS model\u2026")
-                await tts.warmup()
             logger.info(
                 "TTS: provider=%s, sample_rate=%d",
-                settings.get("vc_tts_provider", "piper"),
+                tts_provider_name,
                 output_sample_rate,
             )
 
@@ -973,12 +1026,25 @@ class Engine(QObject):
                             threshold = float(threshold)
                         except (ValueError, TypeError):
                             threshold = 0.5
-                    diar_config = build_diarization_config(
-                        diarization_model_id,
-                        provider=inference_device,
-                        threshold=threshold,
-                    )
-                    diarization = SherpaOnnxDiarizationProvider(diar_config)
+                    diar_key = ("diar", diarization_model_id, inference_device, threshold)
+                    cached_diar = self._get_cached("diarization", diar_key)
+                    if cached_diar is not None:
+                        diarization = cached_diar
+                        diarization.reset()
+                        # Clear and re-enroll speakers (enrollment may have changed)
+                        for name in list(diarization._manager.all_speakers):
+                            diarization.remove_speaker(name)
+                        diarization._enrolled_embeddings.clear()
+                        logger.info("Diarization: reusing cached %s", diarization_model_id)
+                    else:
+                        diar_config = build_diarization_config(
+                            diarization_model_id,
+                            provider=inference_device,
+                            threshold=threshold,
+                        )
+                        self.loading_status.emit("Loading speaker model\u2026")
+                        diarization = SherpaOnnxDiarizationProvider(diar_config)
+                        self._set_cached("diarization", diar_key, diarization)
                     self._diarization = diarization
 
                     # Load enrolled speakers
@@ -1329,6 +1395,10 @@ class Engine(QObject):
     async def _cleanup(self) -> None:
         self._spk_timer.stop()
         self._spk_rms_queue.clear()
+        # Cancel any lingering post_cleanup_monitor from previous session
+        if self._cleanup_monitor_task is not None:
+            self._cleanup_monitor_task.cancel()
+            self._cleanup_monitor_task = None
         # Voice channel mode: disconnect backend
         if self._backend and self._session:
             try:
@@ -1346,7 +1416,12 @@ class Engine(QObject):
                 logger.info("cleanup: voice session ended")
             except Exception:
                 logger.exception("cleanup: end_session failed")
-        if self._tts is not None and hasattr(self._tts, "close"):
+        # Skip close for cached TTS (model survives for next session)
+        if (
+            self._tts is not None
+            and hasattr(self._tts, "close")
+            and "tts" not in self._cached_models
+        ):
             try:
                 await self._tts.close()
             except Exception:
@@ -1356,6 +1431,17 @@ class Engine(QObject):
                 await self._backend.close()
             except Exception:
                 logger.exception("cleanup: backend.close() failed")
+        # Detach STT/TTS/backend from the channel — the Engine handles their
+        # lifecycle directly.  Without this, VoiceChannel.close() would
+        # double-close them (e.g. ElevenLabs httpx client hang on second
+        # aclose, or backend.close() called twice).
+        if self._channel:
+            try:
+                self._channel._stt = None
+                self._channel._tts = None
+                self._channel._backend = None
+            except Exception:
+                pass
         if self._kit:
             try:
                 logger.info("cleanup: closing roomkit …")
@@ -1370,7 +1456,8 @@ class Engine(QObject):
                 logger.info("cleanup: MCP closed")
             except Exception:
                 logger.exception("cleanup: mcp.close_all() failed")
-        if self._diarization is not None:
+        # Skip close for cached diarization (extractor survives)
+        if self._diarization is not None and "diarization" not in self._cached_models:
             try:
                 self._diarization.close()
             except Exception:
@@ -1389,11 +1476,40 @@ class Engine(QObject):
         self._primary_speaker_name = ""
         # Note: self._attitude is preserved across reconnects and only
         # cleared in stop() when the user explicitly ends the session.
-        # Clean up stale event-loop state left by MCP/anyio.
+
+        # --- Task finalization ---
+        # kit.close() cancels VoiceChannel's scheduled tasks, but they
+        # need event-loop iterations to actually finalize (receive
+        # CancelledError).  Yield here so they can complete before we
+        # run cleanup_stale_fds() — otherwise cleanup kills the timer
+        # handles those tasks need, leaving them stuck in "cancelling"
+        # state forever and accumulating across sessions.
+        await asyncio.sleep(0)
+
+        # Cancel any remaining session tasks that didn't finalize
+        current = asyncio.current_task()
+        _session_task_names = (
+            "speech_end", "_play_stream", "speaker_change", "audio_level",
+            "barge_in", "speech_start", "session_started", "vad_silence",
+            "_process_target", "EventRouter",
+        )
+        for task in list(asyncio.all_tasks()):
+            if task is current or task.done():
+                continue
+            name = task.get_name() or ""
+            if any(k in name for k in _session_task_names):
+                logger.info("cleanup: cancelling lingering task: %s", name)
+                task.cancel()
+
+        # Second yield to let freshly-cancelled tasks finalize
+        await asyncio.sleep(0)
+
+        # Now safe to clean up stale event-loop state left by MCP/anyio.
         cleanup_stale_fds()
         # The orphaned anyio timers may only appear after the current
         # event-loop iteration completes (they re-create themselves via
-        # call_soon).  Schedule a second pass to catch them.
-        asyncio.get_event_loop().call_soon(cleanup_stale_fds)
+        # call_soon).  Schedule a delayed second pass to catch them
+        # without interfering with ongoing task finalization.
+        asyncio.get_event_loop().call_later(0.1, cleanup_stale_fds)
         # Monitor CPU after cleanup to verify the fix worked
-        asyncio.ensure_future(post_cleanup_monitor())
+        self._cleanup_monitor_task = asyncio.ensure_future(post_cleanup_monitor())

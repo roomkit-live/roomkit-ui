@@ -129,7 +129,17 @@ class ChatView(QScrollArea):
         else:
             # New bubble (finalize any previous in-progress bubble first)
             if self._current_bubble and not self._current_bubble.finalized:
-                self._current_bubble.finalize()
+                # Same utterance re-classified by diarization (user↔other):
+                # replace the old bubble instead of keeping both.
+                if self._current_bubble.role in ("user", "other") and role in (
+                    "user",
+                    "other",
+                ):
+                    self._layout.removeWidget(self._current_bubble)
+                    self._current_bubble.deleteLater()
+                    self._current_bubble = None
+                else:
+                    self._current_bubble.finalize()
             if not is_final and role == "assistant":
                 # Create empty bubble then stream words in
                 bubble = ChatBubble("", role=role, speaker_name=speaker_name)

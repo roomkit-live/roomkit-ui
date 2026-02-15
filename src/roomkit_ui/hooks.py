@@ -50,18 +50,26 @@ def register_vc_hooks(kit: Any, engine: Any) -> None:
     async def _on_user_transcription(text, context):
         from roomkit import HookResult
 
-        speaker = engine._current_speaker_id or ""
+        # Sticky speaker: use the best ID seen during this utterance so that
+        # a single low-score diarization segment doesn't flip to "unknown".
+        current = engine._current_speaker_id or ""
+        stored = engine._partial_speakers.get("user", "")
+        speaker = current if current and current != "unknown" else stored or current
+        engine._partial_speakers.pop("user", None)
 
         # Primary speaker mode: only the primary speaker triggers the AI.
         # Everyone else (other enrolled speakers AND unknown voices) is blocked.
-        if engine._primary_speaker_mode and engine._primary_speaker_name:
-            if speaker != engine._primary_speaker_name:
-                label = speaker if speaker and speaker != "unknown" else "Unknown"
-                try:
-                    engine.transcription.emit(str(text), "other", True, label)
-                except Exception:
-                    pass
-                return HookResult.block("non-primary speaker")
+        if (
+            engine._primary_speaker_mode
+            and engine._primary_speaker_name
+            and speaker != engine._primary_speaker_name
+        ):
+            label = speaker if speaker and speaker != "unknown" else "Unknown"
+            try:
+                engine.transcription.emit(str(text), "other", True, label)
+            except Exception:
+                pass
+            return HookResult.block("non-primary speaker")
 
         try:
             engine.transcription.emit(str(text), "user", True, speaker)
@@ -72,7 +80,11 @@ def register_vc_hooks(kit: Any, engine: Any) -> None:
     @kit.hook(HookTrigger.ON_PARTIAL_TRANSCRIPTION, HookExecution.ASYNC)
     async def _on_partial_transcription(event, context):
         try:
-            speaker = engine._current_speaker_id or ""
+            current = engine._current_speaker_id or ""
+            # Remember the best speaker ID seen during this utterance.
+            if current and current != "unknown":
+                engine._partial_speakers["user"] = current
+            speaker = engine._partial_speakers.get("user", "") or current
             engine.transcription.emit(str(event.text), "user", False, speaker)
         except Exception:
             pass
@@ -95,6 +107,8 @@ def register_vc_hooks(kit: Any, engine: Any) -> None:
     async def _on_ai_response(text, context):
         from roomkit import HookResult
 
+        if engine._state != "active":
+            return HookResult.allow()
         try:
             # Emit as partial — the chat bubble will stream words progressively
             engine.transcription.emit(str(text), "assistant", False, "")
@@ -105,6 +119,8 @@ def register_vc_hooks(kit: Any, engine: Any) -> None:
 
     @kit.hook(HookTrigger.AFTER_TTS, HookExecution.ASYNC)
     async def _on_tts_done(text, context):
+        if engine._state != "active":
+            return
         try:
             # Finalize the assistant bubble (renders markdown, shows full text)
             engine.transcription.emit(str(text), "assistant", True, "")
