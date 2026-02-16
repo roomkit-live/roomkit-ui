@@ -80,9 +80,11 @@ def _build_telemetry(settings: dict | None):
 def _build_otlp_telemetry(settings: dict):
     """Build an OpenTelemetryProvider with an OTLP exporter."""
     try:
-        from opentelemetry.sdk.resources import Resource
-        from opentelemetry.sdk.trace import TracerProvider
-        from opentelemetry.sdk.trace.export import BatchSpanProcessor
+        from opentelemetry.sdk.resources import Resource  # type: ignore[import-not-found]
+        from opentelemetry.sdk.trace import TracerProvider  # type: ignore[import-not-found]
+        from opentelemetry.sdk.trace.export import (
+            BatchSpanProcessor,  # type: ignore[import-not-found]
+        )
 
         service_name = settings.get("otlp_service_name", "") or "roomkit-ui"
         resource = Resource.create({"service.name": service_name})
@@ -92,11 +94,15 @@ def _build_otlp_telemetry(settings: dict):
         protocol = settings.get("otlp_protocol", "grpc")
 
         if protocol == "http":
-            from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+            from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
+                OTLPSpanExporter,  # type: ignore[import-not-found]
+            )
 
             exporter = OTLPSpanExporter(endpoint=endpoint or "http://localhost:4318/v1/traces")
         else:
-            from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+            from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (
+                OTLPSpanExporter,  # type: ignore[import-not-found]
+            )
 
             exporter = OTLPSpanExporter(endpoint=endpoint or "http://localhost:4317")
 

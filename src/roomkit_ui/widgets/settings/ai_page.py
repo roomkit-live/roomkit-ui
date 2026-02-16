@@ -32,13 +32,13 @@ VC_LLM_PROVIDERS = [
     ("Local (vLLM / Ollama)", "local"),
 ]
 
-VC_STT_PROVIDERS = [
+VC_STT_PROVIDERS: list[tuple[str, str]] = [
     ("Local (sherpa-onnx)", "local"),
     ("Gradium", "gradium"),
     ("Deepgram", "deepgram"),
 ]
 
-VC_TTS_PROVIDERS = [
+VC_TTS_PROVIDERS: list[tuple[str, str]] = [
     ("Piper (sherpa-onnx)", "piper"),
     ("Qwen3-TTS (voice clone)", "qwen3"),
     ("NeuTTS (voice clone)", "neutts"),
