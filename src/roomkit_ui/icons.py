@@ -123,8 +123,10 @@ def svg_icon(name: str, color: str = "#FFFFFF", size: int = 24) -> QIcon:
     pixmap = QPixmap(size, size)
     pixmap.fill(QColor(0, 0, 0, 0))  # transparent
     painter = QPainter(pixmap)
-    renderer.render(painter, QRectF(0, 0, size, size))
-    painter.end()
+    try:
+        renderer.render(painter, QRectF(0, 0, size, size))
+    finally:
+        painter.end()
 
     return QIcon(pixmap)
 
@@ -149,8 +151,10 @@ def svg_icon_dual(
         pixmap = QPixmap(size, size)
         pixmap.fill(QColor(0, 0, 0, 0))
         painter = QPainter(pixmap)
-        renderer.render(painter, QRectF(0, 0, size, size))
-        painter.end()
+        try:
+            renderer.render(painter, QRectF(0, 0, size, size))
+        finally:
+            painter.end()
         icon.addPixmap(pixmap, mode)
 
     return icon

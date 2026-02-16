@@ -124,7 +124,7 @@ class ChatView(QScrollArea):
         ):
             self._current_bubble.set_text(text)
             # Update speaker label when diarization catches up mid-utterance
-            if speaker_name and speaker_name != self._current_bubble._speaker_name:
+            if speaker_name:
                 self._current_bubble.set_speaker_name(speaker_name)
         else:
             # New bubble (finalize any previous in-progress bubble first)
@@ -153,7 +153,7 @@ class ChatView(QScrollArea):
             self._current_bubble = bubble
             if not is_final and role == "assistant":
                 bubble.start_streaming(text)
-                bubble._stream_timer.timeout.connect(self._scroll_to_bottom)
+                bubble.streaming_tick.connect(self._scroll_to_bottom)
 
         if is_final:
             self._current_bubble.finalize()

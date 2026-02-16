@@ -184,7 +184,12 @@ class MCPManager:
                     # shield was cancelled but the inner coro may still
                     # be running — give it one more chance
                     logger.info("_run finally: shield cancelled for stack %d, retrying", i + 1)
-                    await self._safe_close_stack(stack, "<cleanup>")
+                    try:
+                        await asyncio.wait_for(
+                            self._safe_close_stack(stack, "<cleanup>"), timeout=5.0
+                        )
+                    except TimeoutError:
+                        logger.error("_run finally: retry timed out for stack %d", i + 1)
                 logger.info("_run finally: stack %d closed", i + 1)
             logger.info("_run finally: all stacks closed")
 

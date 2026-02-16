@@ -28,18 +28,20 @@ def _icon_with_dot(base_icon: QIcon, color: str, size: int = 64) -> QIcon:
         return base_icon
 
     p = QPainter(pixmap)
-    p.setRenderHint(QPainter.Antialiasing)
+    try:
+        p.setRenderHint(QPainter.Antialiasing)
 
-    dot_d = max(int(size * 0.30), 8)  # dot diameter ~30% of icon
-    margin = max(int(size * 0.02), 1)
-    x = size - dot_d - margin
-    y = size - dot_d - margin
+        dot_d = max(int(size * 0.30), 8)  # dot diameter ~30% of icon
+        margin = max(int(size * 0.02), 1)
+        x = size - dot_d - margin
+        y = size - dot_d - margin
 
-    # White border ring
-    p.setPen(QPen(QColor("#FFFFFF"), max(int(dot_d * 0.18), 2)))
-    p.setBrush(QColor(color))
-    p.drawEllipse(x, y, dot_d, dot_d)
-    p.end()
+        # White border ring
+        p.setPen(QPen(QColor("#FFFFFF"), max(int(dot_d * 0.18), 2)))
+        p.setBrush(QColor(color))
+        p.drawEllipse(x, y, dot_d, dot_d)
+    finally:
+        p.end()
 
     return QIcon(pixmap)
 

@@ -1615,6 +1615,10 @@ class Engine(QObject):
         # Cancel any lingering post_cleanup_monitor from previous session
         if self._cleanup_monitor_task is not None:
             self._cleanup_monitor_task.cancel()
+            try:
+                await self._cleanup_monitor_task
+            except (asyncio.CancelledError, Exception):
+                pass
             self._cleanup_monitor_task = None
         # Voice channel mode: disconnect backend
         if self._backend and self._session:

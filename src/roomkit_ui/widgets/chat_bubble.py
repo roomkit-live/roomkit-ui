@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout
 
 from roomkit_ui.theme import colors
@@ -53,6 +53,8 @@ def _markdown_to_html(text: str, c: dict[str, str]) -> str:
 
 class ChatBubble(QFrame):
     """A rounded chat bubble — blue/right for user, gray/left for AI."""
+
+    streaming_tick = Signal()
 
     def __init__(
         self,
@@ -208,6 +210,7 @@ class ChatBubble(QFrame):
         speed (~150 WPM).  The timer is stopped when finalize() is called.
         """
         self._stream_timer.stop()
+        self._stream_timer.timeout.connect(self.streaming_tick.emit)
         self._raw_text = full_text
         self._stream_words = full_text.split()
         self._stream_index = 0
@@ -241,6 +244,10 @@ class ChatBubble(QFrame):
 
     def finalize(self) -> None:
         self._stream_timer.stop()
+        try:
+            self._stream_timer.timeout.disconnect(self.streaming_tick.emit)
+        except RuntimeError:
+            pass  # not connected
         self._finalized = True
         # Update timestamp to finalization time
         self._time_label.setText(datetime.now().strftime("%H:%M"))

@@ -119,15 +119,27 @@ def _simulate_paste() -> bool:
             )
             return False
     elif _is_wayland():
-        subprocess.run(["wtype", "-M", "ctrl", "v", "-m", "ctrl"], check=True, timeout=5)
+        try:
+            subprocess.run(["wtype", "-M", "ctrl", "v", "-m", "ctrl"], check=True, timeout=5)
+        except subprocess.CalledProcessError as exc:
+            logger.warning("wtype paste failed (rc=%d)", exc.returncode)
+            return False
     elif _is_terminal_focused():
-        subprocess.run(
-            ["xdotool", "key", "--clearmodifiers", "ctrl+shift+v"],
-            check=True,
-            timeout=5,
-        )
+        try:
+            subprocess.run(
+                ["xdotool", "key", "--clearmodifiers", "ctrl+shift+v"],
+                check=True,
+                timeout=5,
+            )
+        except subprocess.CalledProcessError as exc:
+            logger.warning("xdotool paste failed (rc=%d)", exc.returncode)
+            return False
     else:
-        subprocess.run(["xdotool", "key", "--clearmodifiers", "ctrl+v"], check=True, timeout=5)
+        try:
+            subprocess.run(["xdotool", "key", "--clearmodifiers", "ctrl+v"], check=True, timeout=5)
+        except subprocess.CalledProcessError as exc:
+            logger.warning("xdotool paste failed (rc=%d)", exc.returncode)
+            return False
     return True
 
 

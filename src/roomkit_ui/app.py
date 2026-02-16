@@ -171,11 +171,16 @@ def main() -> None:
 
     # session state → tray icon + notification sounds
     from roomkit_ui.sounds import (
+        cleanup as sounds_cleanup,
+    )
+    from roomkit_ui.sounds import (
         play_dictation_start,
         play_dictation_stop,
         play_session_start,
         play_session_stop,
     )
+
+    app.aboutToQuit.connect(sounds_cleanup)
 
     window.session_active_changed.connect(tray.on_session_changed)
     window.session_active_changed.connect(

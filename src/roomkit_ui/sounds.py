@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import logging
 import math
+import shutil
 import struct
 import tempfile
 import wave
@@ -163,3 +164,24 @@ def play_session_stop() -> None:
         _stop_effect.play()
     except Exception:
         logger.debug("Could not play stop sound", exc_info=True)
+
+
+def cleanup() -> None:
+    """Stop and delete all QSoundEffect instances, remove temp cache dir."""
+    global _start_effect, _stop_effect  # noqa: PLW0603
+    global _dictation_start_effect, _dictation_stop_effect  # noqa: PLW0603
+    global _cache_dir  # noqa: PLW0603
+    for effect in (_start_effect, _stop_effect, _dictation_start_effect, _dictation_stop_effect):
+        if effect is not None:
+            try:
+                effect.stop()
+                effect.deleteLater()
+            except Exception:
+                pass
+    _start_effect = None
+    _stop_effect = None
+    _dictation_start_effect = None
+    _dictation_stop_effect = None
+    if _cache_dir is not None:
+        shutil.rmtree(_cache_dir, ignore_errors=True)
+        _cache_dir = None

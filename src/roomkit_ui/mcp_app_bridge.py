@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+import urllib.parse
 import webbrowser
 from typing import Any
 
@@ -177,8 +178,13 @@ class MCPAppBridge(QObject):
     @staticmethod
     def _handle_open_link(params: dict[str, Any]) -> None:
         url = params.get("uri") or params.get("url", "")
-        if url:
-            webbrowser.open(url)
+        if not url:
+            return
+        parsed = urllib.parse.urlparse(url)
+        if parsed.scheme not in ("http", "https"):
+            logger.warning("MCPAppBridge: blocked open_link scheme %r: %s", parsed.scheme, url)
+            return
+        webbrowser.open(url)
 
     def _handle_display_mode(self, msg_id: str | None, params: dict[str, Any]) -> None:
         mode = params.get("mode", "inline")
