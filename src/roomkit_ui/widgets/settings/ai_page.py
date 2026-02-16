@@ -281,10 +281,12 @@ class _AIPage(QWidget):
         self._cloud.update_gradium_visibility(self._current_stt_provider(), prov)
 
     def _current_stt_provider(self) -> str:
-        return VC_STT_PROVIDERS[self.vc_stt_provider.currentIndex()][1]
+        idx: int = self.vc_stt_provider.currentIndex()
+        return VC_STT_PROVIDERS[idx][1]
 
     def _current_tts_provider(self) -> str:
-        return VC_TTS_PROVIDERS[self.vc_tts_provider.currentIndex()][1]
+        idx: int = self.vc_tts_provider.currentIndex()
+        return VC_TTS_PROVIDERS[idx][1]
 
     # -- Public API (panel.py compatibility) --
 

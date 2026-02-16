@@ -82,8 +82,8 @@ def _build_otlp_telemetry(settings: dict):
     try:
         from opentelemetry.sdk.resources import Resource  # type: ignore[import-not-found]
         from opentelemetry.sdk.trace import TracerProvider  # type: ignore[import-not-found]
-        from opentelemetry.sdk.trace.export import (
-            BatchSpanProcessor,  # type: ignore[import-not-found]
+        from opentelemetry.sdk.trace.export import (  # type: ignore[import-not-found]
+            BatchSpanProcessor,
         )
 
         service_name = settings.get("otlp_service_name", "") or "roomkit-ui"
@@ -94,14 +94,14 @@ def _build_otlp_telemetry(settings: dict):
         protocol = settings.get("otlp_protocol", "grpc")
 
         if protocol == "http":
-            from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
-                OTLPSpanExporter,  # type: ignore[import-not-found]
+            from opentelemetry.exporter.otlp.proto.http.trace_exporter import (  # type: ignore[import-not-found]
+                OTLPSpanExporter,
             )
 
             exporter = OTLPSpanExporter(endpoint=endpoint or "http://localhost:4318/v1/traces")
         else:
-            from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (
-                OTLPSpanExporter,  # type: ignore[import-not-found]
+            from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (  # type: ignore[import-not-found]
+                OTLPSpanExporter,
             )
 
             exporter = OTLPSpanExporter(endpoint=endpoint or "http://localhost:4317")
