@@ -581,7 +581,7 @@ class Engine(QObject):
             denoise_mode = settings.get("denoise", "none")
 
             from roomkit import RealtimeVoiceChannel, RoomKit
-            from roomkit.voice.realtime.local_transport import LocalAudioTransport
+            from roomkit.voice.backends.local import LocalAudioBackend
 
             provider: Any
             if provider_name == "openai":
@@ -792,13 +792,13 @@ class Engine(QObject):
                     )
 
                     # Realtime providers use 24kHz; VAD/diarization models need 16kHz.
-                    # No denoiser needed — the transport already denoises at 24kHz
-                    # before audio reaches the pipeline.
                     contract = AudioPipelineContract(
                         transport_inbound_format=AudioFormat(sample_rate=sample_rate),
                         internal_format=AudioFormat(sample_rate=16000),
                     )
                     pipeline = AudioPipelineConfig(
+                        aec=aec,
+                        denoiser=denoiser,
                         vad=vad,
                         diarization=diarization,
                         contract=contract,
@@ -807,23 +807,29 @@ class Engine(QObject):
                         recording_config=recording_config,
                     )
 
-            if pipeline is None and (debug_taps is not None or recorder is not None):
+            if pipeline is None and (
+                aec is not None
+                or denoiser is not None
+                or debug_taps is not None
+                or recorder is not None
+            ):
                 from roomkit.voice.pipeline.config import AudioPipelineConfig
 
                 pipeline = AudioPipelineConfig(
+                    aec=aec,
+                    denoiser=denoiser,
                     debug_taps=debug_taps,
                     recorder=recorder,
                     recording_config=recording_config,
                 )
 
             # -- Transport -------------------------------------------------------
-            transport = LocalAudioTransport(
+            transport = LocalAudioBackend(
                 input_sample_rate=sample_rate,
                 output_sample_rate=sample_rate,
                 block_duration_ms=block_ms,
                 mute_mic_during_playback=mute_mic,
                 aec=aec,
-                denoiser=denoiser,
                 input_device=input_device,
                 output_device=output_device,
                 pipeline=pipeline,

@@ -269,7 +269,7 @@ class STTEngine(QObject):
         try:
             from roomkit import RealtimeVoiceChannel, RoomKit
             from roomkit.providers.openai.realtime import OpenAIRealtimeProvider
-            from roomkit.voice.realtime.local_transport import LocalAudioTransport
+            from roomkit.voice.backends.local import LocalAudioBackend
 
             self._kit = RoomKit()
 
@@ -283,7 +283,7 @@ class STTEngine(QObject):
             sample_rate = 24000
             input_device = settings.get("input_device")
 
-            transport = LocalAudioTransport(
+            transport = LocalAudioBackend(
                 input_sample_rate=sample_rate,
                 output_sample_rate=sample_rate,
                 block_duration_ms=20,
