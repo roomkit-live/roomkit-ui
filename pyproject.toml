@@ -10,7 +10,7 @@ requires-python = ">=3.12"
 dependencies = [
     "PySide6>=6.7",
     "qasync>=0.27",
-    "roomkit[realtime-gemini,realtime-openai,local-audio,webrtc-aec,sherpa-onnx]>=0.5.0",
+    "roomkit[realtime-gemini,realtime-openai,local-audio,webrtc-aec,sherpa-onnx]>=0.5.3",
     "pynput>=1.7",
     "mcp>=1.0",
     "markdown-it-py>=3.0",
