@@ -225,7 +225,7 @@ class ChatBubble(QFrame):
         # Pace: spread words across estimated speaking time.
         # ~150 WPM = 400ms/word, but cap interval to keep it snappy.
         n = len(self._stream_words)
-        interval = max(40, min(120, int(n * 400 / n)))  # clamp 40-120ms
+        interval = max(40, min(120, 400 // max(n, 1)))  # clamp 40-120ms
         # For short responses, reveal faster
         if n <= 5:
             interval = 40

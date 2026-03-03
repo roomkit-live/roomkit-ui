@@ -131,7 +131,7 @@ class LocalOAuthCallbackServer:
                     f"<h2>Authorization Failed</h2><p>{desc}</p>"
                     "<p>You can close this tab.</p></body></html>"
                 )
-                self._send_response(writer, 200, body)
+                await self._send_response(writer, 200, body)
                 if self._future and not self._future.done():
                     self._future.set_exception(RuntimeError(f"OAuth error: {desc}"))
                 return
@@ -147,7 +147,7 @@ class LocalOAuthCallbackServer:
                     "<p>You can close this tab and return to RoomKit.</p>"
                     "</body></html>"
                 )
-                self._send_response(writer, 200, body)
+                await self._send_response(writer, 200, body)
                 if self._future and not self._future.done():
                     self._future.set_result((code, state))
             else:
@@ -157,7 +157,7 @@ class LocalOAuthCallbackServer:
                     "<h2>Missing authorization code</h2>"
                     "<p>You can close this tab.</p></body></html>"
                 )
-                self._send_response(writer, 400, body)
+                await self._send_response(writer, 400, body)
         except Exception:
             logger.debug("OAuth callback handler error", exc_info=True)
         finally:
@@ -168,7 +168,7 @@ class LocalOAuthCallbackServer:
                 pass
 
     @staticmethod
-    def _send_response(writer: asyncio.StreamWriter, status: int, body: str) -> None:
+    async def _send_response(writer: asyncio.StreamWriter, status: int, body: str) -> None:
         reason = "OK" if status == 200 else "Bad Request"
         encoded = body.encode("utf-8")
         header = (
@@ -179,6 +179,7 @@ class LocalOAuthCallbackServer:
             f"\r\n"
         )
         writer.write(header.encode("utf-8") + encoded)
+        await writer.drain()
 
     async def stop(self) -> None:
         if self._server is not None:

@@ -16,6 +16,7 @@ from roomkit_ui.hooks import register_realtime_hooks, register_vc_hooks
 from roomkit_ui.mcp_manager import MCPManager
 from roomkit_ui.providers import create_ai_provider
 from roomkit_ui.tts import create_tts_provider
+from roomkit_ui.watchdog import SessionWatchdog
 
 logger = logging.getLogger(__name__)
 
@@ -170,6 +171,27 @@ def _build_recorder(settings: dict):
 
 
 # ---------------------------------------------------------------------------
+# Diarization helpers
+# ---------------------------------------------------------------------------
+
+
+def _reset_diarization(diarization: Any) -> None:
+    """Reset a cached diarization provider, clearing all enrolled speakers.
+
+    Uses private attributes ``_manager`` and ``_enrolled_embeddings`` because
+    ``reset()`` alone does not clear enrollment state.  Guarded with
+    ``hasattr`` so a roomkit refactor degrades gracefully.
+    """
+    diarization.reset()
+    if hasattr(diarization, "_manager"):
+        mgr = diarization._manager
+        for name in list(getattr(mgr, "all_speakers", [])):
+            diarization.remove_speaker(name)
+    if hasattr(diarization, "_enrolled_embeddings"):
+        diarization._enrolled_embeddings.clear()
+
+
+# ---------------------------------------------------------------------------
 # Engine
 # ---------------------------------------------------------------------------
 
@@ -222,6 +244,9 @@ class Engine(QObject):
         self._cached_models: dict[str, tuple[tuple, Any]] = {}
         self._cleanup_monitor_task: asyncio.Task | None = None
 
+        self._pending_tool_calls: int = 0
+        self._watchdog = SessionWatchdog(self)
+
         # Log handler to surface roomkit voice errors in the UI
         self._log_handler = _VoiceErrorLogHandler(self)
         logging.getLogger("roomkit.voice").addHandler(self._log_handler)
@@ -234,6 +259,8 @@ class Engine(QObject):
         self._spk_timer = QTimer(self)
         self._spk_timer.setInterval(20)  # one playback block
         self._spk_timer.timeout.connect(self._drain_speaker_level)
+
+        # (watchdog connects to transcription/speaking signals internally)
 
     # -- model cache ---------------------------------------------------------
 
@@ -422,7 +449,8 @@ class Engine(QObject):
         # Handle end_conversation — schedule stop after a delay so the
         # agent's goodbye response can be spoken before disconnecting.
         if name == "end_conversation":
-            asyncio.get_event_loop().call_later(3.0, lambda: asyncio.ensure_future(self.stop()))
+            loop = asyncio.get_running_loop()
+            loop.call_later(3.0, lambda: loop.create_task(self.stop()))
             return '{"status": "ok", "message": "Ending conversation in a few seconds."}'
 
         # Handle attitude changes (needs engine state, not pure builtin)
@@ -436,7 +464,14 @@ class Engine(QObject):
 
         if self._mcp is None:
             return '{"error": "Unknown tool"}'
-        result = await self._mcp.handle_tool_call(session, name, arguments)
+
+        self._pending_tool_calls += 1
+        self._watchdog.tool_call_started()
+        try:
+            result = await self._mcp.handle_tool_call(session, name, arguments)
+        finally:
+            self._pending_tool_calls -= 1
+            self._watchdog.tool_call_ended()
         # MCP/anyio can leak orphaned timer callbacks under qasync when a
         # tool call fails or the server crashes.  Run a lightweight cleanup
         # after every MCP call to prevent 100% CPU spin loops.
@@ -497,14 +532,17 @@ class Engine(QObject):
         """Apply a known attitude and update the live system prompt."""
         self._attitude = description
         self._attitude_name = name
-        # Voice channel: update the system prompt on AIChannel for subsequent requests
-        if self._ai_channel is not None:
+        # Voice channel: update the system prompt on AIChannel for subsequent requests.
+        # Uses private _system_prompt — no public API for live prompt updates.
+        if self._ai_channel is not None and hasattr(self._ai_channel, "_system_prompt"):
             base = self._ai_channel._system_prompt or ""
-            # Strip any existing attitude section
-            if "\n\n# Attitude\n" in base:
-                base = base.split("\n\n# Attitude\n")[0]
+            # Strip any existing attitude section (guard against sentinel in text)
+            marker = "\n\n# Attitude\n"
+            idx = base.find(marker)
+            if idx != -1:
+                base = base[:idx]
             if description:
-                self._ai_channel._system_prompt = f"{base}\n\n# Attitude\n{description}"
+                self._ai_channel._system_prompt = f"{base}{marker}{description}"
             else:
                 self._ai_channel._system_prompt = base
         try:
@@ -552,6 +590,11 @@ class Engine(QObject):
         if self._state not in ("idle", "error"):
             return
         self._mic_muted = False
+        # Re-attach the log handler (removed during cleanup to break ref cycle)
+        voice_logger = logging.getLogger("roomkit.voice")
+        if self._log_handler not in voice_logger.handlers:
+            self._log_handler._engine_ref = self
+            voice_logger.addHandler(self._log_handler)
 
         mode = settings.get("conversation_mode", "realtime")
         if mode == "voice_channel":
@@ -709,10 +752,7 @@ class Engine(QObject):
                     cached_diar = self._get_cached("diarization", diar_key)
                     if cached_diar is not None:
                         diarization = cached_diar
-                        diarization.reset()
-                        for name in list(diarization._manager.all_speakers):
-                            diarization.remove_speaker(name)
-                        diarization._enrolled_embeddings.clear()
+                        _reset_diarization(diarization)
                         logger.info("Diarization: reusing cached %s", diarization_model_id)
                     else:
                         self.loading_status.emit("Loading speaker model\u2026")
@@ -913,6 +953,8 @@ class Engine(QObject):
 
             self._spk_rms_queue.clear()
             self._spk_timer.start()
+            self._pending_tool_calls = 0
+            self._watchdog.start()
 
             self._state = "active"
             self.state_changed.emit("active")
@@ -1205,11 +1247,7 @@ class Engine(QObject):
                     cached_diar = self._get_cached("diarization", diar_key)
                     if cached_diar is not None:
                         diarization = cached_diar
-                        diarization.reset()
-                        # Clear and re-enroll speakers (enrollment may have changed)
-                        for name in list(diarization._manager.all_speakers):
-                            diarization.remove_speaker(name)
-                        diarization._enrolled_embeddings.clear()
+                        _reset_diarization(diarization)
                         logger.info("Diarization: reusing cached %s", diarization_model_id)
                     else:
                         diar_config = build_diarization_config(
@@ -1407,6 +1445,8 @@ class Engine(QObject):
 
             self._spk_rms_queue.clear()
             self._spk_timer.start()
+            self._pending_tool_calls = 0
+            self._watchdog.start()
 
             self._state = "active"
             self.state_changed.emit("active")
@@ -1610,6 +1650,8 @@ class Engine(QObject):
             self.state_changed.emit("idle")
 
     async def _cleanup(self) -> None:
+        self._watchdog.stop()
+        self._pending_tool_calls = 0
         self._spk_timer.stop()
         self._spk_rms_queue.clear()
         # Cancel any lingering post_cleanup_monitor from previous session
@@ -1647,22 +1689,21 @@ class Engine(QObject):
                 await self._tts.close()
             except Exception:
                 logger.exception("cleanup: tts.close() failed")
-        if self._backend:
-            try:
-                await self._backend.close()
-            except Exception:
-                logger.exception("cleanup: backend.close() failed")
-        # Detach STT/TTS/backend from the channel — the Engine handles their
-        # lifecycle directly.  Without this, VoiceChannel.close() would
-        # double-close them (e.g. ElevenLabs httpx client hang on second
-        # aclose, or backend.close() called twice).
+        # Detach STT/TTS from the channel to prevent VoiceChannel.close()
+        # from double-closing them (e.g. ElevenLabs httpx client hang on
+        # second aclose).  Keep _backend attached so in-flight streaming
+        # tasks can reference it during kit.close() teardown — nulling it
+        # earlier causes a race where _handle_streaming_response hits
+        # NoneType on channel._backend.
         if self._channel:
             try:
                 self._channel._stt = None
                 self._channel._tts = None
-                self._channel._backend = None
             except Exception:
                 pass
+        # Close roomkit — cancels in-flight streaming tasks and
+        # VoiceChannel.close() will close the backend via _backend ref
+        # (still attached above), avoiding double-close.
         if self._kit:
             try:
                 logger.info("cleanup: closing roomkit …")
@@ -1670,6 +1711,16 @@ class Engine(QObject):
                 logger.info("cleanup: roomkit closed")
             except Exception:
                 logger.exception("cleanup: kit.close() failed")
+        # Now safe to detach backend — streaming tasks are cancelled.
+        if self._channel:
+            try:
+                self._channel._backend = None
+            except Exception:
+                pass
+        # Remove the voice error log handler to prevent handler accumulation
+        # and release the strong reference to this Engine instance.
+        logging.getLogger("roomkit.voice").removeHandler(self._log_handler)
+        self._log_handler._engine_ref = None
         if self._mcp:
             try:
                 logger.info("cleanup: closing MCP …")
@@ -1695,6 +1746,8 @@ class Engine(QObject):
         self._current_speaker_id = ""
         self._primary_speaker_mode = False
         self._primary_speaker_name = ""
+        self._partial_buffers.clear()
+        self._partial_speakers.clear()
         # Note: self._attitude is preserved across reconnects and only
         # cleared in stop() when the user explicitly ends the session.
 

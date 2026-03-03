@@ -12,6 +12,8 @@ def register_audio_hooks(kit: Any, engine: Any) -> None:
     @kit.hook(HookTrigger.ON_INPUT_AUDIO_LEVEL, HookExecution.ASYNC)
     async def _on_input_level(event, context):
         try:
+            if engine._state != "active":
+                return
             db = getattr(event, "level_db", -60.0)
             level = max(0.0, min(1.0, (db + 60.0) / 60.0))
             if engine._mic_muted:
@@ -23,6 +25,8 @@ def register_audio_hooks(kit: Any, engine: Any) -> None:
     @kit.hook(HookTrigger.ON_OUTPUT_AUDIO_LEVEL, HookExecution.ASYNC)
     async def _on_output_level(event, context):
         try:
+            if engine._state != "active":
+                return
             db = getattr(event, "level_db", -60.0)
             level = max(0.0, min(1.0, (db + 60.0) / 60.0))
             engine._spk_rms_queue.append(level)

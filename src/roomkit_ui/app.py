@@ -3,11 +3,36 @@
 from __future__ import annotations
 
 import asyncio
+import ctypes
+import ctypes.util
 import logging
 import os
 import signal
 import sys
 from pathlib import Path
+
+
+def _opengl_available() -> bool:
+    """Probe whether the system can create an EGL/OpenGL context.
+
+    Tries to load libEGL and call eglGetDisplay + eglInitialize.
+    Returns False if any step fails — meaning Chromium/ANGLE would crash.
+    """
+    try:
+        egl_name = ctypes.util.find_library("EGL")
+        if not egl_name:
+            return False
+        egl = ctypes.cdll.LoadLibrary(egl_name)
+        display = egl.eglGetDisplay(ctypes.c_void_p(0))
+        if display is None or display == 0:
+            return False
+        major, minor = ctypes.c_int(0), ctypes.c_int(0)
+        ok = egl.eglInitialize(display, ctypes.byref(major), ctypes.byref(minor))
+        egl.eglTerminate(display)
+        return bool(ok)
+    except (OSError, AttributeError):
+        return False
+
 
 # ── Software rendering fallback ──────────────────────────────────────────
 # When the hardware GPU driver is broken or absent, we need software GL.
@@ -17,12 +42,31 @@ from pathlib import Path
 # The Chromium flags tell the embedded browser to allow software WebGL,
 # ignore the GPU blocklist, and disable CORS for MCP App ES-module imports
 # (esm.sh rejects http://127.0.0.1 origins).  Must be set *before* PySide6.
+_has_opengl = _opengl_available()
+
 os.environ.setdefault("LIBGL_ALWAYS_SOFTWARE", "1")
-os.environ.setdefault(
-    "QTWEBENGINE_CHROMIUM_FLAGS",
+
+# Base Chromium flags (always set).
+# SECURITY NOTE: --disable-web-security disables the Same-Origin Policy for
+# all QWebEngineView content.  This is required for MCP App iframes that load
+# ES modules from CDNs (esm.sh rejects http://127.0.0.1 origins).  The flag
+# is process-wide — it cannot be scoped to individual WebViews.  Accept the
+# trade-off because MCP Apps are user-configured and trusted, and the embedded
+# browser never navigates to untrusted pages.
+_chromium_flags = (
     "--enable-webgl-software-rendering --ignore-gpu-blocklist --disable-vulkan"
-    " --disable-web-security",
+    " --disable-web-security"
 )
+
+if not _has_opengl:
+    # OpenGL is completely broken — tell Chromium to not touch the GPU at all,
+    # and force Qt Quick / RHI to use CPU rendering.  Without these, ANGLE
+    # attempts to create an EGL context and abort()s the whole process.
+    _chromium_flags += " --disable-gpu --disable-gpu-compositing --in-process-gpu"
+    os.environ.setdefault("QSG_RHI_BACKEND", "sw")
+    os.environ.setdefault("QT_QUICK_BACKEND", "software")
+
+os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", _chromium_flags)
 
 from PySide6.QtCore import QTimer  # noqa: E402
 from PySide6.QtGui import QIcon  # noqa: E402
@@ -74,6 +118,13 @@ logging.getLogger("opentelemetry").setLevel(logging.WARNING)
 
 
 def main() -> None:
+    _logger = logging.getLogger(__name__)
+    if not _has_opengl:
+        _logger.warning(
+            "OpenGL not available — running in software rendering mode. "
+            "MCP App WebViews may be limited."
+        )
+
     app = QApplication(sys.argv)
     app.setApplicationName("RoomKit UI")
     app.setOrganizationName("RoomKit")
@@ -102,8 +153,8 @@ def main() -> None:
             page = QWebEnginePage()
             page.setHtml("")
             page.loadFinished.connect(page.deleteLater)
-        except ImportError:
-            pass
+        except (ImportError, RuntimeError) as exc:
+            _logger.warning("WebEngine prewarm skipped: %s", exc)
 
     QTimer.singleShot(200, _prewarm_webengine)
 

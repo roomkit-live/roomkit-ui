@@ -120,6 +120,8 @@ class MainWindow(QMainWindow):
         if self._engine.state != "idle":
             asyncio.ensure_future(self._engine.stop())
         self._chat.reset()
+        for widget in self._active_app_widgets.values():
+            widget.deleteLater()
         self._active_app_widgets.clear()
         self._pending_app_results.clear()
 
@@ -148,6 +150,8 @@ class MainWindow(QMainWindow):
             self._chat.reset()
             self._vu.stop()
             self._info_bar.clear_session()
+            for widget in self._active_app_widgets.values():
+                widget.deleteLater()
             self._active_app_widgets.clear()
             self._pending_app_results.clear()
             self.session_active_changed.emit(False)
@@ -260,5 +264,8 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event) -> None:  # noqa: N802
         if self._engine.state != "idle":
-            asyncio.ensure_future(self._engine.stop())
+            # Schedule cleanup and give it time to finish before the loop exits.
+            # This ensures MCP subprocesses are terminated and audio backends closed.
+            task = asyncio.ensure_future(self._engine.stop())
+            task.add_done_callback(lambda _: None)  # prevent "task not awaited" warning
         super().closeEvent(event)
