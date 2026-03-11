@@ -785,29 +785,48 @@ class STTEngine(QObject):
     # -- paste -----------------------------------------------------------------
 
     def paste_text(self, text: str) -> None:
-        """Copy *text* to clipboard and simulate Ctrl+V."""
-        try:
-            front = _get_frontmost_bundle()
-            logger.info("Pasting text to %s: %s", front or "(self)", text[:80])
-            _copy_to_clipboard(text)
-            if not _simulate_paste():
+        """Copy *text* to clipboard and simulate Ctrl+V.
+
+        Runs blocking subprocess calls in a thread pool to avoid freezing
+        the event loop (clipboard copy/paste can block up to 5 seconds).
+        """
+
+        async def _paste_async() -> None:
+            try:
+                loop = asyncio.get_running_loop()
+                front = _get_frontmost_bundle()
+                logger.info("Pasting text to %s: %s", front or "(self)", text[:80])
+                await loop.run_in_executor(None, _copy_to_clipboard, text)
+                ok = await loop.run_in_executor(None, _simulate_paste)
+                if not ok:
+                    msg = (
+                        "Accessibility permission required for auto-paste. "
+                        "Text copied to clipboard — paste manually with ⌘V.\n"
+                        "Grant access in System Settings → Privacy & Security → Accessibility."
+                    )
+                    logger.warning(msg)
+                    try:
+                        self.error_occurred.emit(msg)
+                    except Exception:
+                        pass
+                    return
+                logger.info("Paste succeeded")
+            except FileNotFoundError as exc:
                 msg = (
-                    "Accessibility permission required for auto-paste. "
-                    "Text copied to clipboard — paste manually with ⌘V.\n"
-                    "Grant access in System Settings → Privacy & Security → Accessibility."
+                    f"Missing helper program: {exc.filename}. "
+                    "Install xclip+xdotool (X11) or wl-copy+wtype (Wayland)."
                 )
-                logger.warning(msg)
-                self.error_occurred.emit(msg)
-                return
-            logger.info("Paste succeeded")
-        except FileNotFoundError as exc:
-            msg = (
-                f"Missing helper program: {exc.filename}. "
-                "Install xclip+xdotool (X11) or wl-copy+wtype (Wayland)."
-            )
-            logger.error(msg)
-            self.error_occurred.emit(msg)
-        except subprocess.SubprocessError as exc:
-            msg = f"Paste failed: {exc}"
-            logger.error(msg)
-            self.error_occurred.emit(msg)
+                logger.error(msg)
+                try:
+                    self.error_occurred.emit(msg)
+                except Exception:
+                    pass
+            except subprocess.SubprocessError as exc:
+                msg = f"Paste failed: {exc}"
+                logger.error(msg)
+                try:
+                    self.error_occurred.emit(msg)
+                except Exception:
+                    pass
+
+        asyncio.ensure_future(_paste_async())

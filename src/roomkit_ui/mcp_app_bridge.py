@@ -79,6 +79,7 @@ class MCPAppBridge(QObject):
         self._server_name = server_name
         self._initialized = False
         self._pending: list[str] = []  # queued JSON messages until app is ready
+        self._MAX_PENDING = 50
 
     # -- JS → Python ----------------------------------------------------------
 
@@ -211,6 +212,9 @@ class MCPAppBridge(QObject):
         if self._initialized:
             self.messageToApp.emit(msg_json)
         else:
+            if len(self._pending) >= self._MAX_PENDING:
+                logger.warning("MCPAppBridge: pending queue full, dropping oldest message")
+                self._pending.pop(0)
             self._pending.append(msg_json)
             logger.debug("MCPAppBridge: queued %s (app not ready)", method)
 

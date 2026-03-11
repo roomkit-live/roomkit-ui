@@ -91,8 +91,9 @@ class VUMeter(QWidget):
         h = self.height()
         cy = h * 0.5
 
-        # Background from theme
-        p.fillRect(0, 0, w, h, QColor(colors()["BG_PRIMARY"]))
+        # Background from theme — read once per frame
+        bg_primary = QColor(colors()["BG_PRIMARY"])
+        p.fillRect(0, 0, w, h, bg_primary)
 
         mic = self._mic_display
         spk = self._spk_display
@@ -163,7 +164,7 @@ class VUMeter(QWidget):
             p.drawLine(0, int(cy), w, int(cy))
 
         # ── Edge fade: blend into surrounding background ──
-        bg = QColor(colors()["BG_PRIMARY"])
+        bg = QColor(bg_primary)
         fade_h = int(h * 0.35)
         p.setPen(Qt.NoPen)
 

@@ -104,6 +104,13 @@ class ChatView(QScrollArea):
         self._pulse_base = ""
         self._pulse_timer.timeout.connect(self._pulse_tick)
 
+        # Reusable single-shot timer for scroll-to-bottom — avoids creating
+        # a new QTimer on every streaming tick (~25/sec during responses).
+        self._scroll_timer = QTimer(self)
+        self._scroll_timer.setSingleShot(True)
+        self._scroll_timer.setInterval(10)
+        self._scroll_timer.timeout.connect(self._do_scroll)
+
     # -- public API ----------------------------------------------------------
 
     def add_transcription(
@@ -329,6 +336,9 @@ class ChatView(QScrollArea):
                 continue
             w = item.widget()
             if w and w not in (self._empty_state, self._status_label):
+                # Finalize streaming bubbles to stop their timers before deletion
+                if isinstance(w, ChatBubble) and not w.finalized:
+                    w.finalize()
                 w.deleteLater()
         # Rebuild base layout: stretch (pushes to bottom) + status_label
         self._layout.addStretch()
@@ -345,6 +355,8 @@ class ChatView(QScrollArea):
                 continue
             w = item.widget()
             if w and w not in (self._empty_state, self._status_label):
+                if isinstance(w, ChatBubble) and not w.finalized:
+                    w.finalize()
                 w.deleteLater()
         self._current_bubble = None
         # Rebuild with empty state centered
@@ -374,6 +386,7 @@ class ChatView(QScrollArea):
         self._status_label.setText(self._pulse_base + dots)
 
     def _scroll_to_bottom(self) -> None:
-        QTimer.singleShot(
-            10, lambda: self.verticalScrollBar().setValue(self.verticalScrollBar().maximum())
-        )
+        self._scroll_timer.start()  # restarts if already running
+
+    def _do_scroll(self) -> None:
+        self.verticalScrollBar().setValue(self.verticalScrollBar().maximum())

@@ -216,6 +216,13 @@ class MainWindow(QMainWindow):
         if widget is None:
             return
 
+        # Clean up any existing widget for the same tool name to prevent leaks
+        if name in self._active_app_widgets:
+            old = self._active_app_widgets.pop(name)
+            try:
+                old.deleteLater()
+            except Exception:
+                pass
         self._active_app_widgets[name] = widget
 
         # Push tool input to the app

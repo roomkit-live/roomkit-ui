@@ -122,13 +122,18 @@ def cleanup_stale_fds(*, timers_only: bool = False) -> None:
             logger.info("cleanup L3: killed %d timers", len(kill_tids))
 
     # --- Layer 4: purge cancelled handles from asyncio _ready queue ---
+    # Rotate through the deque in O(N): pop from left, re-append if active.
+    # This is safe even if new handles are appended during the iteration
+    # (they land at the right end, beyond our rotation count).
     ready = getattr(loop, "_ready", None)
     if ready is not None:
-        before = len(ready)
-        active = [h for h in ready if not h._cancelled]
-        ready.clear()
-        ready.extend(active)
-        dropped = before - len(active)
+        dropped = 0
+        for _ in range(len(ready)):
+            h = ready.popleft()
+            if h._cancelled:
+                dropped += 1
+            else:
+                ready.append(h)
         if dropped:
             logger.info("cleanup L4: dropped %d cancelled handles", dropped)
             removed += dropped

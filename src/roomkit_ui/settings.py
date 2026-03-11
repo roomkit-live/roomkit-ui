@@ -63,6 +63,8 @@ _DEFAULTS = {
     "vc_local_model": "",
     "vc_local_api_key": "",
     "vc_local_tools": True,
+    "deepgram_api_key": "",
+    "deepgram_model": "nova-3",
     "gradium_api_key": "",
     "gradium_region": "us",
     "vc_gradium_voice": "",  # Gradium TTS voice ID

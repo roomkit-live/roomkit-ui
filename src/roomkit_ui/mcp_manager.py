@@ -178,18 +178,19 @@ class MCPManager:
             # terminated even if close_all() is impatient.
             for i, stack in enumerate(server_stacks):
                 logger.info("_run finally: closing stack %d/%d …", i + 1, len(server_stacks))
+                # Wrap in a task so we can shield it from cancellation
+                # and retry the *same* task (not a new close call).
+                close_task = asyncio.ensure_future(self._safe_close_stack(stack, "<cleanup>"))
                 try:
-                    await asyncio.shield(self._safe_close_stack(stack, "<cleanup>"))
+                    await asyncio.shield(close_task)
                 except asyncio.CancelledError:
-                    # shield was cancelled but the inner coro may still
-                    # be running — give it one more chance
+                    # Shield was cancelled but close_task continues.
+                    # Wait for the *same* task to finish — no double-close.
                     logger.info("_run finally: shield cancelled for stack %d, retrying", i + 1)
                     try:
-                        await asyncio.wait_for(
-                            self._safe_close_stack(stack, "<cleanup>"), timeout=5.0
-                        )
-                    except TimeoutError:
-                        logger.error("_run finally: retry timed out for stack %d", i + 1)
+                        await asyncio.wait_for(close_task, timeout=5.0)
+                    except (TimeoutError, asyncio.CancelledError):
+                        logger.error("_run finally: retry failed for stack %d", i + 1)
                 logger.info("_run finally: stack %d closed", i + 1)
             logger.info("_run finally: all stacks closed")
 
@@ -299,6 +300,10 @@ class MCPManager:
         logger.info("close_all: signalling shutdown")
         if self._close_event:
             self._close_event.set()
+        elif self._task:
+            # _close_event is None → connect_all raised before setting it.
+            # Cancel the task directly to avoid a 15s hang.
+            self._task.cancel()
         if self._task:
             logger.info("close_all: waiting for _run task (timeout=15s) …")
             try:

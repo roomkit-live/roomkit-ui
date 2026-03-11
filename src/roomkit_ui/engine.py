@@ -6,6 +6,7 @@ import asyncio
 import collections
 import json
 import logging
+import weakref
 from typing import Any
 
 from PySide6.QtCore import QObject, QTimer, Signal
@@ -36,12 +37,12 @@ class _VoiceErrorLogHandler(logging.Handler):
 
     def __init__(self, engine: Engine) -> None:  # type: ignore[name-defined]
         super().__init__(level=logging.ERROR)
-        self._engine_ref: Any = engine
+        self._engine_ref: weakref.ref = weakref.ref(engine)
         self._last_msg = ""
 
     def emit(self, record: logging.LogRecord) -> None:
         try:
-            engine = self._engine_ref
+            engine = self._engine_ref()  # dereference weakref
             if engine is None or engine._state != "active":
                 return
             msg = record.getMessage()
@@ -55,6 +56,14 @@ class _VoiceErrorLogHandler(logging.Handler):
                 return
             self._last_msg = msg
             engine.error_occurred.emit(msg)
+            # Voice errors (especially TTS WebSocket disconnects) can leave
+            # orphaned anyio timer callbacks in qasync → 100% CPU.
+            # Schedule a lightweight cleanup (timers only — FDs still needed).
+            try:
+                loop = asyncio.get_running_loop()
+                loop.call_later(0.5, lambda: cleanup_stale_fds(timers_only=True))
+            except RuntimeError:
+                pass  # no running loop (called from non-main thread)
         except Exception:
             pass
 
@@ -243,6 +252,7 @@ class Engine(QObject):
         # Maps type → (cache_key_tuple, provider_instance).
         self._cached_models: dict[str, tuple[tuple, Any]] = {}
         self._cleanup_monitor_task: asyncio.Task | None = None
+        self._end_conv_handle: asyncio.TimerHandle | None = None
 
         self._pending_tool_calls: int = 0
         self._watchdog = SessionWatchdog(self)
@@ -255,7 +265,7 @@ class Engine(QObject):
         # plays back at a steady 20 ms cadence.  We split incoming chunks
         # into block-sized RMS values and drain them with a timer that
         # matches the real playback rate.
-        self._spk_rms_queue: collections.deque[float] = collections.deque()
+        self._spk_rms_queue: collections.deque[float] = collections.deque(maxlen=200)
         self._spk_timer = QTimer(self)
         self._spk_timer.setInterval(20)  # one playback block
         self._spk_timer.timeout.connect(self._drain_speaker_level)
@@ -444,13 +454,16 @@ class Engine(QObject):
 
         # Handle paste_text — copy text to clipboard and simulate paste
         if name == "paste_text":
-            return self._paste_text(arguments.get("text", ""))
+            return await self._paste_text(arguments.get("text", ""))
 
         # Handle end_conversation — schedule stop after a delay so the
         # agent's goodbye response can be spoken before disconnecting.
         if name == "end_conversation":
             loop = asyncio.get_running_loop()
-            loop.call_later(3.0, lambda: loop.create_task(self.stop()))
+            # Cancel any previously scheduled end_conversation to avoid races
+            if self._end_conv_handle is not None:
+                self._end_conv_handle.cancel()
+            self._end_conv_handle = loop.call_later(3.0, lambda: loop.create_task(self.stop()))
             return '{"status": "ok", "message": "Ending conversation in a few seconds."}'
 
         # Handle attitude changes (needs engine state, not pure builtin)
@@ -558,15 +571,16 @@ class Engine(QObject):
         )
 
     @staticmethod
-    def _paste_text(text: str) -> str:
+    async def _paste_text(text: str) -> str:
         """Copy text to clipboard and simulate paste into the focused input."""
         if not text:
             return json.dumps({"error": "No text provided."})
         try:
             from roomkit_ui.stt_engine import _copy_to_clipboard, _simulate_paste
 
-            _copy_to_clipboard(text)
-            _simulate_paste()
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, _copy_to_clipboard, text)
+            await loop.run_in_executor(None, _simulate_paste)
             logger.info("paste_text: pasted %d chars", len(text))
             return json.dumps({"status": "ok", "chars": len(text)})
         except FileNotFoundError as exc:
@@ -582,7 +596,18 @@ class Engine(QObject):
         """Proxy a tool call initiated by an MCP App back through MCP."""
         if self._mcp is None:
             return json.dumps({"error": "MCP not connected"})
-        return await self._mcp.handle_tool_call(None, tool_name, arguments)
+        self._pending_tool_calls += 1
+        self._watchdog.tool_call_started()
+        try:
+            result = await self._mcp.handle_tool_call(None, tool_name, arguments)
+        except Exception as exc:
+            logger.exception("MCP App tool call %r failed", tool_name)
+            result = json.dumps({"error": str(exc)})
+        finally:
+            self._pending_tool_calls -= 1
+            self._watchdog.tool_call_ended()
+        cleanup_stale_fds(timers_only=True)
+        return result
 
     # -- lifecycle -----------------------------------------------------------
 
@@ -590,10 +615,10 @@ class Engine(QObject):
         if self._state not in ("idle", "error"):
             return
         self._mic_muted = False
-        # Re-attach the log handler (removed during cleanup to break ref cycle)
+        # Re-attach the log handler (removed during cleanup)
         voice_logger = logging.getLogger("roomkit.voice")
         if self._log_handler not in voice_logger.handlers:
-            self._log_handler._engine_ref = self
+            self._log_handler._engine_ref = weakref.ref(self)
             voice_logger.addHandler(self._log_handler)
 
         mode = settings.get("conversation_mode", "realtime")
@@ -1584,6 +1609,13 @@ class Engine(QObject):
                 names = ", ".join(t["name"] for t in discovered)
                 logger.info("MCP tools: %s", names)
 
+            # MCP connection failures (especially aborts) leak anyio
+            # CancelScope timers that spin at 0ms → 100% CPU.
+            # Clean immediately + delayed pass for timers that re-create
+            # themselves via call_soon.
+            cleanup_stale_fds(timers_only=True)
+            asyncio.get_running_loop().call_later(0.5, lambda: cleanup_stale_fds(timers_only=True))
+
         has_mcp_tools = len(tools) > len(BUILTIN_TOOLS)
         return tools, has_mcp_tools
 
@@ -1638,6 +1670,13 @@ class Engine(QObject):
     async def stop(self) -> None:
         if self._state not in ("active", "connecting", "error"):
             return
+        # Guard re-entrancy immediately — before any await — so a second
+        # call (e.g. end_conversation timer + user click) is rejected.
+        self._state = "stopping"
+        # Cancel any pending end_conversation timer to prevent a late fire
+        if self._end_conv_handle is not None:
+            self._end_conv_handle.cancel()
+            self._end_conv_handle = None
         try:
             await self._cleanup()
         except Exception:
@@ -1679,7 +1718,18 @@ class Engine(QObject):
                 logger.info("cleanup: voice session ended")
             except Exception:
                 logger.exception("cleanup: end_session failed")
-        # Skip close for cached TTS (model survives for next session)
+        # Detach STT/TTS from the channel FIRST to prevent VoiceChannel.close()
+        # from double-closing them (e.g. ElevenLabs httpx client hang on
+        # second aclose).  Keep _backend attached so in-flight streaming
+        # tasks can reference it during kit.close() teardown.
+        if self._channel:
+            try:
+                self._channel._stt = None
+                self._channel._tts = None
+            except Exception:
+                pass
+        # Now safe to close TTS — channel won't try to close it again.
+        # Skip close for cached TTS (model survives for next session).
         if (
             self._tts is not None
             and hasattr(self._tts, "close")
@@ -1689,18 +1739,6 @@ class Engine(QObject):
                 await self._tts.close()
             except Exception:
                 logger.exception("cleanup: tts.close() failed")
-        # Detach STT/TTS from the channel to prevent VoiceChannel.close()
-        # from double-closing them (e.g. ElevenLabs httpx client hang on
-        # second aclose).  Keep _backend attached so in-flight streaming
-        # tasks can reference it during kit.close() teardown — nulling it
-        # earlier causes a race where _handle_streaming_response hits
-        # NoneType on channel._backend.
-        if self._channel:
-            try:
-                self._channel._stt = None
-                self._channel._tts = None
-            except Exception:
-                pass
         # Close roomkit — cancels in-flight streaming tasks and
         # VoiceChannel.close() will close the backend via _backend ref
         # (still attached above), avoiding double-close.
@@ -1717,10 +1755,8 @@ class Engine(QObject):
                 self._channel._backend = None
             except Exception:
                 pass
-        # Remove the voice error log handler to prevent handler accumulation
-        # and release the strong reference to this Engine instance.
+        # Remove the voice error log handler to prevent handler accumulation.
         logging.getLogger("roomkit.voice").removeHandler(self._log_handler)
-        self._log_handler._engine_ref = None
         if self._mcp:
             try:
                 logger.info("cleanup: closing MCP …")
@@ -1791,6 +1827,6 @@ class Engine(QObject):
         # event-loop iteration completes (they re-create themselves via
         # call_soon).  Schedule a delayed second pass to catch them
         # without interfering with ongoing task finalization.
-        asyncio.get_event_loop().call_later(0.1, cleanup_stale_fds)
+        asyncio.get_running_loop().call_later(0.1, cleanup_stale_fds)
         # Monitor CPU after cleanup to verify the fix worked
         self._cleanup_monitor_task = asyncio.ensure_future(post_cleanup_monitor())

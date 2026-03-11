@@ -182,6 +182,9 @@ class LocalOAuthCallbackServer:
         await writer.drain()
 
     async def stop(self) -> None:
+        # Cancel pending future to prevent leaks if browser never redirected
+        if self._future is not None and not self._future.done():
+            self._future.cancel()
         if self._server is not None:
             self._server.close()
             await self._server.wait_closed()

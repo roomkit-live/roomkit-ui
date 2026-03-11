@@ -34,6 +34,7 @@ class SessionInfoBar(QWidget):
         self._expanded = False
         self._target_height = 0
         self._anim_step = 0
+        self._anim_start_height = 0
 
         self._anim_timer = QTimer(self)
         self._anim_timer.setInterval(_ANIM_INTERVAL)
