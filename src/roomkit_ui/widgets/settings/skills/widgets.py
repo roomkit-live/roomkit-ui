@@ -142,6 +142,7 @@ class SkillCard(QWidget):
         # Header row: checkbox (my skills) or just the name (marketplace)
         header = QHBoxLayout()
         header.setSpacing(8)
+        self.checkbox: QCheckBox | None
         if not marketplace:
             self.checkbox = QCheckBox()
             self.checkbox.setChecked(checked)
@@ -171,6 +172,7 @@ class SkillCard(QWidget):
         # Footer row
         footer = QHBoxLayout()
         footer.setSpacing(6)
+        self.action_btn: QPushButton | None
 
         if marketplace:
             stats_parts: list[str] = []

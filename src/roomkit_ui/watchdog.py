@@ -47,6 +47,10 @@ class SessionWatchdog(QObject):
         self._stall_warned: bool = False
         self._ai_responding: bool = False
         self._pending_tool_calls: int = 0
+        # Tracks the fire-and-forget nudge tasks so that (a) exceptions
+        # surface via a done-callback instead of going to sys.excepthook,
+        # and (b) we can cancel them on stop() if they're still in flight.
+        self._nudge_tasks: set[asyncio.Task[None]] = set()
 
         self._timer = QTimer(self)
         self._timer.setInterval(_CHECK_INTERVAL_MS)
@@ -72,6 +76,11 @@ class SessionWatchdog(QObject):
         self._timer.stop()
         self._pending_tool_calls = 0
         self._ai_responding = False
+        # Cancel any in-flight nudges so they don't outlive the session.
+        for task in list(self._nudge_tasks):
+            if not task.done():
+                task.cancel()
+        self._nudge_tasks.clear()
 
     def touch(self) -> None:
         """Record that a provider event was received."""
@@ -123,7 +132,23 @@ class SessionWatchdog(QObject):
         if not hasattr(channel, "inject_text"):
             return
         try:
-            asyncio.ensure_future(channel.inject_text(session, _NUDGE_TEXT))
-            logger.info("Nudged stalled session")
-        except Exception:
-            logger.exception("Failed to nudge session")
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            logger.warning("Nudge skipped: no running event loop")
+            return
+        task = loop.create_task(
+            channel.inject_text(session, _NUDGE_TEXT),
+            name="watchdog_nudge",
+        )
+        self._nudge_tasks.add(task)
+        task.add_done_callback(self._on_nudge_done)
+        logger.info("Nudged stalled session")
+
+    def _on_nudge_done(self, task: asyncio.Task[None]) -> None:
+        """Log any exception from a nudge instead of dropping it silently."""
+        self._nudge_tasks.discard(task)
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc is not None:
+            logger.exception("Failed to nudge session", exc_info=exc)

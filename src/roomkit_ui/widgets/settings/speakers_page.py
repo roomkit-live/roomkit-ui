@@ -451,8 +451,11 @@ class _SpeakersPage(QWidget):
         # Clear existing rows
         while self._speakers_layout.count():
             item = self._speakers_layout.takeAt(0)
-            if item and item.widget():
-                item.widget().deleteLater()
+            if item is None:
+                continue
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
         self._speaker_rows.clear()
 
         from roomkit_ui.speaker_manager import load_speakers

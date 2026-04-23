@@ -1,4 +1,16 @@
-"""Async engine wrapping roomkit — emits Qt signals for the UI."""
+"""Async engine wrapping roomkit — emits Qt signals for the UI.
+
+The heavy lifting lives in sibling modules:
+
+* :mod:`roomkit_ui.engine_audio` — pure-function pipeline builders.
+* :mod:`roomkit_ui.engine_callbacks` — provider / transport callback mixin.
+* :mod:`roomkit_ui.engine_tools` — tool dispatch + attitude + paste mixin.
+* :mod:`roomkit_ui.engine_realtime` — Gemini / OpenAI realtime startup mixin.
+* :mod:`roomkit_ui.engine_vc` — classic STT → LLM → TTS startup mixin.
+
+This file keeps only the Engine class shell: signals, state, session
+dispatcher, teardown, and the roomkit-voice error-log bridge.
+"""
 
 from __future__ import annotations
 
@@ -11,12 +23,14 @@ from typing import Any
 
 from PySide6.QtCore import QObject, QTimer, Signal
 
-from roomkit_ui.builtin_tools import BUILTIN_TOOLS, handle_builtin_tool
+from roomkit_ui.builtin_tools import BUILTIN_TOOLS
 from roomkit_ui.cleanup import cleanup_stale_fds, post_cleanup_monitor
-from roomkit_ui.hooks import register_realtime_hooks, register_vc_hooks
+from roomkit_ui.engine_callbacks import CallbackMixin
+from roomkit_ui.engine_realtime import RealtimeMixin
+from roomkit_ui.engine_tools import ToolMixin
+from roomkit_ui.engine_vc import VoiceChannelMixin
 from roomkit_ui.mcp_manager import MCPManager
-from roomkit_ui.providers import create_ai_provider
-from roomkit_ui.tts import create_tts_provider
+from roomkit_ui.roomkit_compat import detach_channel_backend, detach_channel_providers
 from roomkit_ui.watchdog import SessionWatchdog
 
 logger = logging.getLogger(__name__)
@@ -35,14 +49,22 @@ class _VoiceErrorLogHandler(logging.Handler):
     Debounces repeated identical messages.
     """
 
-    def __init__(self, engine: Engine) -> None:  # type: ignore[name-defined]
+    def __init__(self, engine: Engine) -> None:
         super().__init__(level=logging.ERROR)
         self._engine_ref: weakref.ref = weakref.ref(engine)
         self._last_msg = ""
 
+    def reset(self) -> None:
+        """Clear the debounce state so the next error is guaranteed to emit.
+
+        Called by ``Engine.stop()`` so errors from a new session aren't
+        debounced against stale messages from the previous one.
+        """
+        self._last_msg = ""
+
     def emit(self, record: logging.LogRecord) -> None:
         try:
-            engine = self._engine_ref()  # dereference weakref
+            engine = self._engine_ref()
             if engine is None or engine._state != "active":
                 return
             msg = record.getMessage()
@@ -69,143 +91,11 @@ class _VoiceErrorLogHandler(logging.Handler):
 
 
 # ---------------------------------------------------------------------------
-# Telemetry helpers
-# ---------------------------------------------------------------------------
-
-
-def _build_telemetry(settings: dict | None):
-    """Build a telemetry provider from settings, or ``None`` to use the noop default."""
-    if not settings:
-        return None
-    provider = settings.get("telemetry_provider", "none")
-    if provider == "console":
-        from roomkit.telemetry import ConsoleTelemetryProvider
-
-        return ConsoleTelemetryProvider()
-    if provider == "otlp":
-        return _build_otlp_telemetry(settings)
-    return None
-
-
-def _build_otlp_telemetry(settings: dict):
-    """Build an OpenTelemetryProvider with an OTLP exporter."""
-    try:
-        from opentelemetry.sdk.resources import Resource  # type: ignore[import-not-found]
-        from opentelemetry.sdk.trace import TracerProvider  # type: ignore[import-not-found]
-        from opentelemetry.sdk.trace.export import (  # type: ignore[import-not-found]
-            BatchSpanProcessor,
-        )
-
-        service_name = settings.get("otlp_service_name", "") or "roomkit-ui"
-        resource = Resource.create({"service.name": service_name})
-        tracer_provider = TracerProvider(resource=resource)
-
-        endpoint = settings.get("otlp_endpoint", "").strip()
-        protocol = settings.get("otlp_protocol", "grpc")
-
-        if protocol == "http":
-            from opentelemetry.exporter.otlp.proto.http.trace_exporter import (  # type: ignore[import-not-found]
-                OTLPSpanExporter,
-            )
-
-            exporter = OTLPSpanExporter(endpoint=endpoint or "http://localhost:4318/v1/traces")
-        else:
-            from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (  # type: ignore[import-not-found]
-                OTLPSpanExporter,
-            )
-
-            exporter = OTLPSpanExporter(endpoint=endpoint or "http://localhost:4317")
-
-        tracer_provider.add_span_processor(BatchSpanProcessor(exporter))
-
-        from roomkit.telemetry.opentelemetry import OpenTelemetryProvider
-
-        return OpenTelemetryProvider(tracer_provider=tracer_provider, service_name=service_name)
-    except ImportError:
-        logger.warning(
-            "OpenTelemetry packages not installed — falling back to console telemetry. "
-            "Install with: pip install opentelemetry-api opentelemetry-sdk "
-            "opentelemetry-exporter-otlp"
-        )
-        from roomkit.telemetry import ConsoleTelemetryProvider
-
-        return ConsoleTelemetryProvider()
-
-
-# ---------------------------------------------------------------------------
-# Audio debug helpers
-# ---------------------------------------------------------------------------
-
-
-def _build_debug_taps(settings: dict):
-    """Build a PipelineDebugTaps from settings, or ``None`` if disabled."""
-    if not settings.get("debug_taps_enabled"):
-        return None
-    from pathlib import Path
-
-    from roomkit.voice.pipeline.debug_taps import PipelineDebugTaps
-
-    output_dir = settings.get("debug_output_dir", "").strip()
-    if not output_dir:
-        output_dir = str(Path.home() / ".local/share/roomkit-ui/debug_audio")
-    stages_str = settings.get("debug_taps_stages", "all")
-    stages = [s.strip() for s in stages_str.split(",") if s.strip()]
-    Path(output_dir).mkdir(parents=True, exist_ok=True)
-    return PipelineDebugTaps(output_dir=output_dir, stages=stages)
-
-
-def _build_recorder(settings: dict):
-    """Build a (WavFileRecorder, RecordingConfig) pair, or (None, None) if disabled."""
-    if not settings.get("recording_enabled"):
-        return None, None
-    from pathlib import Path
-
-    from roomkit.voice.pipeline.recorder.base import (
-        RecordingChannelMode,
-        RecordingConfig,
-        RecordingMode,
-    )
-    from roomkit.voice.pipeline.recorder.wav import WavFileRecorder
-
-    output_dir = settings.get("recording_output_dir", "").strip()
-    if not output_dir:
-        output_dir = str(Path.home() / ".local/share/roomkit-ui/recordings")
-    Path(output_dir).mkdir(parents=True, exist_ok=True)
-    config = RecordingConfig(
-        mode=RecordingMode(settings.get("recording_mode", "both")),
-        channels=RecordingChannelMode(settings.get("recording_channels", "stereo")),
-        storage=output_dir,
-    )
-    return WavFileRecorder(), config
-
-
-# ---------------------------------------------------------------------------
-# Diarization helpers
-# ---------------------------------------------------------------------------
-
-
-def _reset_diarization(diarization: Any) -> None:
-    """Reset a cached diarization provider, clearing all enrolled speakers.
-
-    Uses private attributes ``_manager`` and ``_enrolled_embeddings`` because
-    ``reset()`` alone does not clear enrollment state.  Guarded with
-    ``hasattr`` so a roomkit refactor degrades gracefully.
-    """
-    diarization.reset()
-    if hasattr(diarization, "_manager"):
-        mgr = diarization._manager
-        for name in list(getattr(mgr, "all_speakers", [])):
-            diarization.remove_speaker(name)
-    if hasattr(diarization, "_enrolled_embeddings"):
-        diarization._enrolled_embeddings.clear()
-
-
-# ---------------------------------------------------------------------------
 # Engine
 # ---------------------------------------------------------------------------
 
 
-class Engine(QObject):
+class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject):
     """Manages a roomkit voice session and bridges events to Qt signals."""
 
     state_changed = Signal(str)  # idle / connecting / active / error
@@ -238,6 +128,10 @@ class Engine(QObject):
         self._state = "idle"
         self._attitude: str = ""  # full description text (injected into prompt)
         self._attitude_name: str = ""  # short display name for the header
+        # User's base system prompt (without attitude) — captured at session
+        # start so mid-session attitude changes can recompute the full
+        # prompt without reaching into channel internals.
+        self._base_system_prompt: str = ""
         # Diarization state
         self._diarization: Any = None
         self._current_speaker_id: str = ""
@@ -253,6 +147,12 @@ class Engine(QObject):
         self._cached_models: dict[str, tuple[tuple, Any]] = {}
         self._cleanup_monitor_task: asyncio.Task | None = None
         self._end_conv_handle: asyncio.TimerHandle | None = None
+        # Snapshot of asyncio.all_tasks() taken at session start.  Any task
+        # still alive at _cleanup() time that is NOT in this set was spawned
+        # by the session (roomkit, provider, transport, pipeline, etc.) and
+        # should be cancelled.  Replaces a hard-coded name-prefix allowlist
+        # that went stale every time roomkit added or renamed a task.
+        self._pre_session_tasks: frozenset[asyncio.Task[Any]] = frozenset()
 
         self._pending_tool_calls: int = 0
         self._watchdog = SessionWatchdog(self)
@@ -269,8 +169,6 @@ class Engine(QObject):
         self._spk_timer = QTimer(self)
         self._spk_timer.setInterval(20)  # one playback block
         self._spk_timer.timeout.connect(self._drain_speaker_level)
-
-        # (watchdog connects to transcription/speaking signals internally)
 
     # -- model cache ---------------------------------------------------------
 
@@ -301,315 +199,7 @@ class Engine(QObject):
                 pass
         # Voice channel mode uses LocalAudioBackend (no set_input_muted)
 
-    # -- register our own callbacks (roomkit uses append-based lists) --------
-
-    def _register_callbacks(self, provider: Any, transport: Any) -> None:
-        # NOTE: on_transcription is NOT registered here — the channel fires
-        # ON_TRANSCRIPTION hooks which register_realtime_hooks() handles.
-        # Registering both would cause double transcription in the UI.
-        provider.on_speech_start(self._on_speech_start)
-        provider.on_speech_end(self._on_speech_end)
-        provider.on_response_start(self._on_response_start)
-        provider.on_response_end(self._on_response_end)
-        provider.on_error(self._on_provider_error)
-
-    # -- callbacks -----------------------------------------------------------
-
-    def _on_transcription(self, _s: Any, text: str, role: str, is_final: bool) -> None:
-        """Realtime transcription callback.
-
-        Gemini/OpenAI send incremental fragments for partials.
-        Accumulate them so the signal always carries the full text.
-        """
-        try:
-            speaker = self._current_speaker_id if role == "user" else ""
-
-            # Primary speaker mode: block non-primary user transcriptions
-            if (
-                role == "user"
-                and self._primary_speaker_mode
-                and self._primary_speaker_name
-                and speaker != self._primary_speaker_name
-            ):
-                if is_final:
-                    self._partial_buffers.pop(role, None)
-                    label = speaker if speaker and speaker != "unknown" else "Unknown"
-                    self.transcription.emit(str(text), "other", True, label)
-                return
-
-            if is_final:
-                self._partial_buffers.pop(role, None)
-                self.transcription.emit(str(text), str(role), True, speaker)
-            else:
-                buf = self._partial_buffers.get(role, "")
-                buf += text
-                self._partial_buffers[role] = buf
-                self.transcription.emit(buf, str(role), False, speaker)
-        except Exception:
-            pass
-
-    def _drain_speaker_level(self) -> None:
-        """Pop one RMS value per timer tick → matches real playback cadence."""
-        if self._spk_rms_queue:
-            self.speaker_audio_level.emit(self._spk_rms_queue.popleft())
-
-    def _on_speech_start(self, _s: Any) -> None:
-        try:
-            self.user_speaking.emit(True)
-        except Exception:
-            pass
-
-    def _on_speech_end(self, _s: Any) -> None:
-        try:
-            self.user_speaking.emit(False)
-        except Exception:
-            pass
-
-    def _on_response_start(self, _s: Any) -> None:
-        try:
-            self.ai_speaking.emit(True)
-        except Exception:
-            pass
-
-    def _on_response_end(self, _s: Any) -> None:
-        try:
-            self.ai_speaking.emit(False)
-        except Exception:
-            pass
-
-    def _on_provider_error(self, _s: Any, code: str, message: str) -> None:
-        # Suppress errors during shutdown — WebSocket close races are expected
-        if self._state not in ("active", "connecting"):
-            logger.debug("Suppressed provider error (%s): %s: %s", self._state, code, message)
-            return
-        try:
-            friendly = self._friendly_error(code, message)
-            logger.warning("Provider error: %s: %s → %s", code, message, friendly)
-            self.error_occurred.emit(friendly)
-        except Exception:
-            pass
-
-    def _on_transport_speaker_change(self, session: Any, result: Any) -> None:
-        """Handle speaker change events directly from the transport pipeline."""
-        speaker_id = result.speaker_id
-        confidence = result.confidence
-        self._current_speaker_id = speaker_id
-        try:
-            self.speaker_identified.emit(speaker_id, confidence)
-        except Exception:
-            pass
-
-        # Primary speaker gating: gate audio when a *different* enrolled
-        # speaker is positively identified.  Unknown / empty speakers get
-        # benefit of the doubt (diarization hasn't decided yet).
-        if self._primary_speaker_mode and self._primary_speaker_name:
-            gate = (
-                bool(speaker_id)
-                and speaker_id != "unknown"
-                and speaker_id != self._primary_speaker_name
-            )
-            if self._transport is not None:
-                self._transport.set_input_gated(session, gate)
-
-    @staticmethod
-    def _friendly_error(code: str, message: str) -> str:
-        """Map raw provider errors to user-friendly messages."""
-        low = f"{code} {message}".lower()
-        if "1011" in low or "internal error" in low:
-            return "Connection lost — the server closed unexpectedly. Try again."
-        if "1006" in low or "abnormal" in low:
-            return "Connection lost — network interruption."
-        if "send_audio_failed" in low:
-            return "Audio interrupted — please repeat."
-        if "rate_limit" in low or "429" in low:
-            return "Rate limited by the provider. Wait a moment and try again."
-        if "auth" in low or "401" in low or "403" in low:
-            return "Authentication failed — check your API key in Settings."
-        return f"{code}: {message}"
-
-    # -- tool calls ----------------------------------------------------------
-
-    async def _handle_tool_call(
-        self,
-        session: Any,
-        name: str,
-        arguments: dict[str, Any],
-    ) -> str:
-        """Handle built-in tools or forward to MCP manager."""
-        # Check if this is an MCP App tool (has ui:// resource)
-        app_info = self._mcp.get_app_tool_info(name) if self._mcp else None
-
-        try:
-            if app_info is not None:
-                self.tool_use_app.emit(
-                    name,
-                    json.dumps(arguments),
-                    app_info["uri"],
-                    app_info["server"],
-                )
-            else:
-                self.tool_use.emit(name, json.dumps(arguments))
-        except Exception:
-            pass
-
-        # Handle paste_text — copy text to clipboard and simulate paste
-        if name == "paste_text":
-            return await self._paste_text(arguments.get("text", ""))
-
-        # Handle end_conversation — schedule stop after a delay so the
-        # agent's goodbye response can be spoken before disconnecting.
-        if name == "end_conversation":
-            loop = asyncio.get_running_loop()
-            # Cancel any previously scheduled end_conversation to avoid races
-            if self._end_conv_handle is not None:
-                self._end_conv_handle.cancel()
-            self._end_conv_handle = loop.call_later(3.0, lambda: loop.create_task(self.stop()))
-            return '{"status": "ok", "message": "Ending conversation in a few seconds."}'
-
-        # Handle attitude changes (needs engine state, not pure builtin)
-        if name == "set_attitude":
-            return self._apply_attitude_by_name(arguments.get("name", ""))
-
-        # Try built-in tools first
-        builtin_result = handle_builtin_tool(name)
-        if builtin_result is not None:
-            return builtin_result
-
-        if self._mcp is None:
-            return '{"error": "Unknown tool"}'
-
-        self._pending_tool_calls += 1
-        self._watchdog.tool_call_started()
-        try:
-            result = await self._mcp.handle_tool_call(session, name, arguments)
-        finally:
-            self._pending_tool_calls -= 1
-            self._watchdog.tool_call_ended()
-        # MCP/anyio can leak orphaned timer callbacks under qasync when a
-        # tool call fails or the server crashes.  Run a lightweight cleanup
-        # after every MCP call to prevent 100% CPU spin loops.
-        # timers_only=True: don't touch FD notifiers during an active session.
-        cleanup_stale_fds(timers_only=True)
-
-        # Notify the UI so the app widget can display the result
-        if app_info is not None:
-            try:
-                self.tool_result_app.emit(name, result)
-            except Exception:
-                pass
-
-        return result
-
-    def _apply_attitude_by_name(self, name: str) -> str:
-        """Look up an attitude by name and apply it. Rejects unknown names."""
-        if not name:
-            return json.dumps({"error": "Attitude name is required."})
-
-        # Look up in presets
-        from roomkit_ui.widgets.settings.constants import ATTITUDE_PRESETS
-
-        for pname, ptext in ATTITUDE_PRESETS:
-            if pname.lower() == name.lower():
-                return self._apply_attitude(pname, ptext)
-
-        # Look up in custom attitudes
-        try:
-            from roomkit_ui.settings import load_settings
-
-            settings = load_settings()
-            for att in json.loads(settings.get("custom_attitudes", "[]")):
-                if att.get("name", "").lower() == name.lower():
-                    return self._apply_attitude(att["name"], att.get("text", ""))
-        except (json.JSONDecodeError, TypeError):
-            pass
-
-        # Not found — return error with available names
-        available = [n for n, _ in ATTITUDE_PRESETS]
-        try:
-            from roomkit_ui.settings import load_settings
-
-            settings = load_settings()
-            for att in json.loads(settings.get("custom_attitudes", "[]")):
-                if att.get("name"):
-                    available.append(att["name"])
-        except (json.JSONDecodeError, TypeError):
-            pass
-        return json.dumps(
-            {
-                "error": f"Unknown attitude '{name}'.",
-                "available": available,
-            }
-        )
-
-    def _apply_attitude(self, name: str, description: str) -> str:
-        """Apply a known attitude and update the live system prompt."""
-        self._attitude = description
-        self._attitude_name = name
-        # Voice channel: update the system prompt on AIChannel for subsequent requests.
-        # Uses private _system_prompt — no public API for live prompt updates.
-        if self._ai_channel is not None and hasattr(self._ai_channel, "_system_prompt"):
-            base = self._ai_channel._system_prompt or ""
-            # Strip any existing attitude section (guard against sentinel in text)
-            marker = "\n\n# Attitude\n"
-            idx = base.find(marker)
-            if idx != -1:
-                base = base[:idx]
-            if description:
-                self._ai_channel._system_prompt = f"{base}{marker}{description}"
-            else:
-                self._ai_channel._system_prompt = base
-        try:
-            self.attitude_changed.emit(self._attitude_name)
-        except Exception:
-            pass
-        return json.dumps(
-            {
-                "status": "ok",
-                "attitude": name,
-                "instruction": f"Adopt this attitude now: {description}",
-            }
-        )
-
-    @staticmethod
-    async def _paste_text(text: str) -> str:
-        """Copy text to clipboard and simulate paste into the focused input."""
-        if not text:
-            return json.dumps({"error": "No text provided."})
-        try:
-            from roomkit_ui.stt_engine import _copy_to_clipboard, _simulate_paste
-
-            loop = asyncio.get_running_loop()
-            await loop.run_in_executor(None, _copy_to_clipboard, text)
-            await loop.run_in_executor(None, _simulate_paste)
-            logger.info("paste_text: pasted %d chars", len(text))
-            return json.dumps({"status": "ok", "chars": len(text)})
-        except FileNotFoundError as exc:
-            msg = f"Missing helper program: {exc.filename}"
-            logger.error("paste_text: %s", msg)
-            return json.dumps({"error": msg})
-        except Exception as exc:
-            msg = f"Paste failed: {exc}"
-            logger.error("paste_text: %s", msg)
-            return json.dumps({"error": msg})
-
-    async def handle_app_tool_call(self, tool_name: str, arguments: dict[str, Any]) -> str:
-        """Proxy a tool call initiated by an MCP App back through MCP."""
-        if self._mcp is None:
-            return json.dumps({"error": "MCP not connected"})
-        self._pending_tool_calls += 1
-        self._watchdog.tool_call_started()
-        try:
-            result = await self._mcp.handle_tool_call(None, tool_name, arguments)
-        except Exception as exc:
-            logger.exception("MCP App tool call %r failed", tool_name)
-            result = json.dumps({"error": str(exc)})
-        finally:
-            self._pending_tool_calls -= 1
-            self._watchdog.tool_call_ended()
-        cleanup_stale_fds(timers_only=True)
-        return result
-
-    # -- lifecycle -----------------------------------------------------------
+    # -- lifecycle dispatcher ------------------------------------------------
 
     async def start(self, settings: dict) -> None:
         if self._state not in ("idle", "error"):
@@ -621,967 +211,17 @@ class Engine(QObject):
             self._log_handler._engine_ref = weakref.ref(self)
             voice_logger.addHandler(self._log_handler)
 
+        # Snapshot currently-running tasks BEFORE starting the session so
+        # _cleanup() can tell which tasks the session spawned.  Captured
+        # here (not inside the mode-specific helpers) so an error during
+        # setup still gets the benefit of the diff.
+        self._pre_session_tasks = frozenset(asyncio.all_tasks())
+
         mode = settings.get("conversation_mode", "realtime")
         if mode == "voice_channel":
             await self._start_voice_channel(settings)
         else:
             await self._start_realtime(settings)
-
-    # -- Realtime (speech-to-speech) path ------------------------------------
-
-    async def _start_realtime(self, settings: dict) -> None:
-        self._state = "connecting"
-        self.state_changed.emit("connecting")
-
-        try:
-            provider_name = settings.get("provider", "gemini")
-            system_prompt = settings.get(
-                "system_prompt",
-                "You are a friendly voice assistant. Be concise and helpful.",
-            )
-            attitude = self._attitude or self._resolve_attitude(settings)
-            if attitude:
-                system_prompt = f"{system_prompt}\n\n# Attitude\n{attitude}"
-                self._attitude = attitude
-                if not self._attitude_name:
-                    self._attitude_name = settings.get("selected_attitude", "") or attitude
-            aec_mode = settings.get("aec_mode", "webrtc")
-            denoise_mode = settings.get("denoise", "none")
-
-            from roomkit import RealtimeVoiceChannel, RoomKit
-            from roomkit.voice.backends.local import LocalAudioBackend
-
-            provider: Any
-            if provider_name == "openai":
-                api_key = settings.get("openai_api_key", "")
-                if not api_key:
-                    raise ValueError("OpenAI API key is required. Open Settings to enter it.")
-                model = settings.get("openai_model", "gpt-4o-realtime-preview")
-                voice = settings.get("openai_voice", "alloy")
-                from roomkit.providers.openai.realtime import OpenAIRealtimeProvider
-
-                provider = OpenAIRealtimeProvider(api_key=api_key, model=model)
-            else:
-                api_key = settings.get("api_key", "")
-                if not api_key:
-                    raise ValueError("Google API key is required. Open Settings to enter it.")
-                model = settings.get("model", "gemini-2.5-flash-native-audio-preview-12-2025")
-                voice = settings.get("voice", "Aoede")
-                from roomkit.providers.gemini.realtime import GeminiLiveProvider
-
-                provider = GeminiLiveProvider(api_key=api_key, model=model)
-
-            # Build provider_config for provider-specific advanced settings
-            provider_config: dict[str, Any] = {}
-            if provider_name == "gemini":
-                lang = settings.get("gemini_language", "")
-                if lang:
-                    provider_config["language"] = lang
-                if settings.get("gemini_no_interruption"):
-                    provider_config["no_interruption"] = True
-                # enable_affective_dialog: not yet supported by the Gemini API
-                # (serialized under generation_config, rejected with 1007).
-                # Uncomment when the API adds support.
-                # if settings.get("gemini_affective_dialog"):
-                #     provider_config["enable_affective_dialog"] = True
-                if settings.get("gemini_proactive_audio"):
-                    provider_config["proactive_audio"] = True
-                start_sens = settings.get("gemini_start_sensitivity", "")
-                if start_sens:
-                    provider_config["start_of_speech_sensitivity"] = start_sens
-                end_sens = settings.get("gemini_end_sensitivity", "")
-                if end_sens:
-                    provider_config["end_of_speech_sensitivity"] = end_sens
-                silence_ms = settings.get("gemini_silence_duration_ms", "")
-                if silence_ms:
-                    try:
-                        provider_config["silence_duration_ms"] = int(silence_ms)
-                    except (ValueError, TypeError):
-                        pass
-            elif provider_name == "openai":
-                td_type = settings.get("openai_turn_detection", "server_vad")
-                if td_type in ("server_vad", "semantic_vad"):
-                    provider_config["turn_detection_type"] = td_type
-                    if td_type == "semantic_vad":
-                        eagerness = settings.get("openai_eagerness", "")
-                        if eagerness:
-                            try:
-                                provider_config["eagerness"] = float(eagerness)
-                            except (ValueError, TypeError):
-                                pass
-                    elif td_type == "server_vad":
-                        threshold = settings.get("openai_vad_threshold", "")
-                        if threshold:
-                            try:
-                                provider_config["threshold"] = float(threshold)
-                            except (ValueError, TypeError):
-                                pass
-                        silence_ms = settings.get("openai_silence_duration_ms", "")
-                        if silence_ms:
-                            try:
-                                provider_config["silence_duration_ms"] = int(silence_ms)
-                            except (ValueError, TypeError):
-                                pass
-                        prefix_ms = settings.get("openai_prefix_padding_ms", "")
-                        if prefix_ms:
-                            try:
-                                provider_config["prefix_padding_ms"] = int(prefix_ms)
-                            except (ValueError, TypeError):
-                                pass
-                    if not settings.get("openai_interrupt_response", True):
-                        provider_config["interrupt_response"] = False
-                    if not settings.get("openai_create_response", True):
-                        provider_config["create_response"] = False
-                else:
-                    # "none" — disable turn detection entirely
-                    provider_config["turn_detection_type"] = None
-
-            sample_rate = 24000
-            block_ms = 20
-            frame_size = sample_rate * block_ms // 1000
-
-            aec, denoiser = self._build_audio_processing(
-                aec_mode, denoise_mode, sample_rate, frame_size
-            )
-
-            mute_mic = aec is None
-
-            input_device = settings.get("input_device")
-            output_device = settings.get("output_device")
-
-            # -- Diarization (optional) ------------------------------------------
-            pipeline = None
-            diarization: Any = None
-            diarization_enabled = settings.get("diarization_enabled", False)
-            diarization_model_id = settings.get("diarization_model", "")
-            inference_device = settings.get("inference_device", "cpu")
-
-            if diarization_enabled and diarization_model_id:
-                from roomkit_ui.model_manager import (
-                    build_diarization_config,
-                    is_speaker_model_downloaded,
-                )
-
-                if is_speaker_model_downloaded(diarization_model_id):
-                    from roomkit.voice.pipeline.diarization.sherpa_onnx import (
-                        SherpaOnnxDiarizationProvider,
-                    )
-
-                    threshold = settings.get("diarization_threshold", 0.4)
-                    if isinstance(threshold, str):
-                        try:
-                            threshold = float(threshold)
-                        except (ValueError, TypeError):
-                            threshold = 0.5
-                    diar_key = ("diar", diarization_model_id, inference_device, threshold)
-                    cached_diar = self._get_cached("diarization", diar_key)
-                    if cached_diar is not None:
-                        diarization = cached_diar
-                        _reset_diarization(diarization)
-                        logger.info("Diarization: reusing cached %s", diarization_model_id)
-                    else:
-                        self.loading_status.emit("Loading speaker model\u2026")
-                        diar_config = build_diarization_config(
-                            diarization_model_id,
-                            provider=inference_device,
-                            threshold=threshold,
-                        )
-                        diarization = SherpaOnnxDiarizationProvider(diar_config)
-                        self._set_cached("diarization", diar_key, diarization)
-                    self._diarization = diarization
-
-                    # Load enrolled speakers
-                    from roomkit_ui.speaker_manager import load_speakers
-
-                    for speaker in load_speakers():
-                        if speaker.embeddings:
-                            ok = diarization.register_speaker(speaker.name, speaker.embeddings)
-                            logger.info(
-                                "Enrolled speaker: %s (%d samples) → %s",
-                                speaker.name,
-                                len(speaker.embeddings),
-                                ok,
-                            )
-
-                    # Primary speaker mode
-                    self._primary_speaker_mode = settings.get("primary_speaker_mode", False)
-                    if self._primary_speaker_mode:
-                        from roomkit_ui.speaker_manager import get_primary_speaker
-
-                        primary = get_primary_speaker()
-                        self._primary_speaker_name = primary.name if primary else ""
-
-                    logger.info(
-                        "Diarization: model=%s, threshold=%.2f, primary_mode=%s",
-                        diarization_model_id,
-                        threshold,
-                        self._primary_speaker_mode,
-                    )
-                else:
-                    logger.warning(
-                        "Speaker model %s not downloaded — no diarization",
-                        diarization_model_id,
-                    )
-
-            debug_taps = _build_debug_taps(settings)
-            recorder, recording_config = _build_recorder(settings)
-
-            if diarization is not None:
-                from roomkit.voice.pipeline.config import AudioPipelineConfig
-
-                # Diarization needs VAD for speech boundary detection
-                vad: Any = None
-                vad_model_id = settings.get("vc_vad_model", "")
-                if vad_model_id:
-                    from roomkit_ui.model_manager import build_vad_config, is_vad_model_downloaded
-
-                    if is_vad_model_downloaded(vad_model_id):
-                        from roomkit.voice.pipeline.vad.sherpa_onnx import SherpaOnnxVADProvider
-
-                        vad_config = build_vad_config(
-                            vad_model_id, provider=inference_device, settings=settings
-                        )
-                        vad = SherpaOnnxVADProvider(vad_config)
-                        logger.info("Realtime VAD: %s", vad_model_id)
-                    else:
-                        logger.warning("VAD model %s not downloaded — no VAD", vad_model_id)
-
-                if vad is None:
-                    logger.warning("Diarization requires VAD — skipping diarization")
-                    diarization = None
-                    self._diarization = None
-                else:
-                    from roomkit.voice.pipeline.config import (
-                        AudioFormat,
-                        AudioPipelineContract,
-                    )
-
-                    # Realtime providers use 24kHz; VAD/diarization models need 16kHz.
-                    contract = AudioPipelineContract(
-                        transport_inbound_format=AudioFormat(sample_rate=sample_rate),
-                        internal_format=AudioFormat(sample_rate=16000),
-                    )
-                    pipeline = AudioPipelineConfig(
-                        aec=aec,
-                        denoiser=denoiser,
-                        vad=vad,
-                        diarization=diarization,
-                        contract=contract,
-                        debug_taps=debug_taps,
-                        recorder=recorder,
-                        recording_config=recording_config,
-                    )
-
-            if pipeline is None and (
-                aec is not None
-                or denoiser is not None
-                or debug_taps is not None
-                or recorder is not None
-            ):
-                from roomkit.voice.pipeline.config import AudioPipelineConfig
-
-                pipeline = AudioPipelineConfig(
-                    aec=aec,
-                    denoiser=denoiser,
-                    debug_taps=debug_taps,
-                    recorder=recorder,
-                    recording_config=recording_config,
-                )
-
-            # -- Transport -------------------------------------------------------
-            transport = LocalAudioBackend(
-                input_sample_rate=sample_rate,
-                output_sample_rate=sample_rate,
-                block_duration_ms=block_ms,
-                mute_mic_during_playback=mute_mic,
-                aec=aec,
-                input_device=input_device,
-                output_device=output_device,
-                pipeline=pipeline,
-            )
-
-            self._transport = transport
-
-            # Register speaker change callback directly on the transport
-            if pipeline is not None:
-                transport.on_speaker_change(self._on_transport_speaker_change)
-
-            # Log audio pipeline configuration
-            aec_label = type(aec).__name__ if aec else "none"
-            denoise_label = type(denoiser).__name__ if denoiser else "none"
-            logger.info(
-                "Audio pipeline: aec=%s, denoiser=%s, rate=%dHz, block=%dms",
-                aec_label,
-                denoise_label,
-                sample_rate,
-                block_ms,
-            )
-
-            self._register_callbacks(provider, transport)
-
-            # -- MCP tools -------------------------------------------------------
-            mcp_servers_configured = False
-            try:
-                mcp_servers_configured = any(
-                    s.get("enabled", True) for s in json.loads(settings.get("mcp_servers", "[]"))
-                )
-            except (json.JSONDecodeError, TypeError):
-                pass
-            if mcp_servers_configured:
-                self.loading_status.emit("Connecting MCP servers\u2026")
-            tools, has_mcp_tools = await self._setup_mcp_tools(settings)
-            tool_handler = self._handle_tool_call
-
-            all_names = ", ".join(t["name"] for t in tools)
-            logger.info("Tools: %s", all_names)
-
-            self.loading_status.emit("Connecting to provider\u2026")
-            if provider_config:
-                logger.info("provider_config: %s", provider_config)
-            self._session = await self._start_session(
-                RoomKit,
-                RealtimeVoiceChannel,
-                provider,
-                transport,
-                system_prompt,
-                voice,
-                sample_rate,
-                tools,
-                tool_handler,
-                provider_config=provider_config or None,
-                settings=settings,
-            )
-            if self._session is None and has_mcp_tools:
-                # MCP tools broke the session — retry without them
-                logger.warning("Retrying session without MCP tools")
-                self._session = await self._start_session(
-                    RoomKit,
-                    RealtimeVoiceChannel,
-                    provider,
-                    transport,
-                    system_prompt,
-                    voice,
-                    sample_rate,
-                    list(BUILTIN_TOOLS),
-                    tool_handler,
-                    provider_config=provider_config or None,
-                    settings=settings,
-                )
-                if self._session is not None:
-                    self.mcp_status.emit("MCP tools disabled — incompatible with this provider")
-                    tools = list(BUILTIN_TOOLS)
-
-            if self._session is None:
-                raise RuntimeError("Failed to start voice session")
-
-            register_realtime_hooks(self._kit, self)
-
-            self._spk_rms_queue.clear()
-            self._spk_timer.start()
-            self._pending_tool_calls = 0
-            self._watchdog.start()
-
-            self._state = "active"
-            self.state_changed.emit("active")
-
-            # Emit structured session info for the UI info bar
-            tool_info = [
-                {"name": t.get("name", ""), "description": t.get("description", "")} for t in tools
-            ]
-            info: dict = {
-                "provider": provider_name,
-                "model": model,
-                "tools": tool_info,
-            }
-            if self._mcp and self._mcp.failed_servers:
-                info["failed_servers"] = list(self._mcp.failed_servers)
-            self.session_info.emit(info)
-            if self._attitude_name:
-                self.attitude_changed.emit(self._attitude_name)
-
-        except Exception as e:
-            logger.exception("Failed to start voice session")
-            self._state = "error"
-            self.state_changed.emit("error")
-            self.error_occurred.emit(str(e))
-            await self._cleanup()
-
-    # -- Voice Channel (STT → LLM → TTS) path -------------------------------
-
-    async def _start_voice_channel(self, settings: dict) -> None:
-        self._state = "connecting"
-        self.state_changed.emit("connecting")
-
-        try:
-            from roomkit import RoomKit, VoiceChannel
-            from roomkit.channels.ai import AIChannel
-            from roomkit.voice.backends.local import LocalAudioBackend
-            from roomkit.voice.pipeline.config import AudioPipelineConfig
-
-            system_prompt = settings.get(
-                "system_prompt",
-                "You are a friendly voice assistant. Be concise and helpful.",
-            )
-            attitude = self._attitude or self._resolve_attitude(settings)
-            if attitude:
-                system_prompt = f"{system_prompt}\n\n# Attitude\n{attitude}"
-                self._attitude = attitude
-                if not self._attitude_name:
-                    self._attitude_name = settings.get("selected_attitude", "") or attitude
-            inference_device = settings.get("inference_device", "cpu")
-            aec_mode = settings.get("aec_mode", "webrtc")
-            denoise_mode = settings.get("denoise", "none")
-
-            # 1. Build STT
-            stt_provider_name = settings.get("vc_stt_provider", "local")
-            stt_language = settings.get("stt_language", "") or "en"
-
-            if stt_provider_name == "gradium":
-                from roomkit.voice.stt.gradium import GradiumSTTConfig, GradiumSTTProvider
-
-                self.loading_status.emit("Connecting Gradium STT\u2026")
-                api_key = settings.get("gradium_api_key", "")
-                if not api_key:
-                    raise ValueError("Gradium API key is required for Gradium STT.")
-                region = settings.get("gradium_region", "us")
-                # Prefer Gradium-specific language, fall back to global
-                gradium_lang = settings.get("gradium_language", "")
-                if gradium_lang:
-                    stt_language = gradium_lang
-                stt_kwargs: dict[str, Any] = {}
-                model_name = settings.get("gradium_stt_model", "")
-                if model_name:
-                    stt_kwargs["model_name"] = model_name
-                delay = settings.get("gradium_stt_delay", "")
-                if delay:
-                    try:
-                        stt_kwargs["delay_in_frames"] = int(delay)
-                    except (ValueError, TypeError):
-                        pass
-                vad_thresh = settings.get("gradium_vad_threshold", "")
-                if vad_thresh:
-                    try:
-                        stt_kwargs["vad_threshold"] = float(vad_thresh)
-                    except (ValueError, TypeError):
-                        pass
-                vad_steps = settings.get("gradium_vad_steps", "")
-                if vad_steps:
-                    try:
-                        stt_kwargs["vad_steps"] = int(vad_steps)
-                    except (ValueError, TypeError):
-                        pass
-                # json_config for STT temperature
-                json_config: dict[str, Any] = {}
-                stt_temp = settings.get("gradium_stt_temperature", "")
-                if stt_temp:
-                    try:
-                        json_config["temperature"] = float(stt_temp)
-                    except (ValueError, TypeError):
-                        pass
-                if json_config:
-                    stt_kwargs["json_config"] = json_config
-                stt_config = GradiumSTTConfig(
-                    api_key=api_key,
-                    region=region,
-                    language=stt_language,
-                    **stt_kwargs,
-                )
-                stt = GradiumSTTProvider(stt_config)
-                logger.info("STT: gradium, region=%s, language=%s", region, stt_language)
-            elif stt_provider_name == "deepgram":
-                from roomkit.voice.stt.deepgram import DeepgramConfig, DeepgramSTTProvider
-
-                self.loading_status.emit("Connecting Deepgram STT\u2026")
-                api_key = settings.get("deepgram_api_key", "")
-                if not api_key:
-                    raise ValueError("Deepgram API key is required for Deepgram STT.")
-                dg_model = settings.get("deepgram_model", "nova-3")
-                dg_config = DeepgramConfig(
-                    api_key=api_key,
-                    model=dg_model,
-                    language=stt_language,
-                )
-                stt = DeepgramSTTProvider(dg_config)
-                logger.info("STT: deepgram, model=%s, language=%s", dg_model, stt_language)
-            else:
-                from roomkit.voice.stt.sherpa_onnx import SherpaOnnxSTTProvider
-
-                from roomkit_ui.model_manager import build_stt_config
-
-                stt_model_id = settings.get("vc_stt_model", "")
-                if not stt_model_id:
-                    raise ValueError(
-                        "No STT model selected. Download one in AI Models"
-                        " and select it in Settings."
-                    )
-                stt_translate = settings.get("stt_translate", False)
-                stt_key = ("stt", stt_model_id, stt_language, stt_translate, inference_device)
-                cached_stt = self._get_cached("stt", stt_key)
-                if cached_stt is not None:
-                    stt = cached_stt
-                    logger.info("STT: reusing cached %s", stt_model_id)
-                else:
-                    self.loading_status.emit("Loading STT model\u2026")
-                    local_stt_config = build_stt_config(
-                        stt_model_id,
-                        language=stt_language,
-                        translate=stt_translate,
-                        provider=inference_device,
-                    )
-                    stt = SherpaOnnxSTTProvider(local_stt_config)
-                    logger.info("STT: model=%s, language=%s", stt_model_id, stt_language)
-                    if hasattr(stt, "warmup"):
-                        self.loading_status.emit("Warming up STT model\u2026")
-                        await stt.warmup()
-                    self._set_cached("stt", stt_key, stt)
-
-            # Remote providers (gradium, deepgram) may also have warmup
-            if stt_provider_name != "local" and hasattr(stt, "warmup"):
-                self.loading_status.emit("Warming up STT\u2026")
-                await stt.warmup()
-
-            # 2. Build TTS
-            tts_provider_name = settings.get("vc_tts_provider", "piper")
-            tts_model_id = settings.get("vc_tts_model", "")
-            tts_key = ("tts", tts_provider_name, tts_model_id, inference_device)
-            cached_tts = self._get_cached("tts", tts_key)
-            if cached_tts is not None:
-                tts, output_sample_rate = cached_tts
-                logger.info("TTS: reusing cached %s/%s", tts_provider_name, tts_model_id)
-            else:
-                self.loading_status.emit("Loading TTS model\u2026")
-                tts, output_sample_rate = create_tts_provider(tts_provider_name, settings)
-                if hasattr(tts, "warmup"):
-                    self.loading_status.emit("Warming up TTS model\u2026")
-                    await tts.warmup()
-                # Cache local TTS providers (ONNX models are expensive to load)
-                if tts_provider_name in ("piper", "qwen3", "neutts"):
-                    self._set_cached("tts", tts_key, (tts, output_sample_rate))
-            self._tts = tts
-            logger.info(
-                "TTS: provider=%s, sample_rate=%d",
-                tts_provider_name,
-                output_sample_rate,
-            )
-
-            # 3. Build AI provider
-            self.loading_status.emit("Connecting to LLM\u2026")
-            llm_provider_name = settings.get("vc_llm_provider", "anthropic")
-            ai_provider = create_ai_provider(llm_provider_name, settings)
-            model = ai_provider.model_name
-
-            # Wrap local provider so "does not support tools" errors reach the UI
-            if llm_provider_name == "local":
-                _orig_generate = ai_provider.generate
-                _tool_error_emitted = False
-
-                async def _generate_with_tool_hint(context: Any) -> Any:
-                    nonlocal _tool_error_emitted
-                    try:
-                        return await _orig_generate(context)
-                    except Exception as exc:
-                        if not _tool_error_emitted and "does not support tools" in str(exc):
-                            _tool_error_emitted = True
-                            try:
-                                self.error_occurred.emit(
-                                    "This model does not support tool use. "
-                                    'Disable "Model supports tool use" in '
-                                    "Settings \u2192 AI Provider."
-                                )
-                            except Exception:
-                                pass
-                        raise
-
-                ai_provider.generate = _generate_with_tool_hint  # type: ignore[method-assign]
-
-            # 4. Audio processing
-            input_sample_rate = 16000
-            block_ms = 20
-            frame_size = input_sample_rate * block_ms // 1000
-
-            aec, denoiser = self._build_audio_processing(
-                aec_mode, denoise_mode, input_sample_rate, frame_size
-            )
-
-            # 5. Build audio backend
-            input_device = settings.get("input_device")
-            output_device = settings.get("output_device")
-
-            backend = LocalAudioBackend(
-                input_sample_rate=input_sample_rate,
-                output_sample_rate=output_sample_rate,
-                block_duration_ms=block_ms,
-                input_device=input_device,
-                output_device=output_device,
-                aec=aec,
-                mute_mic_during_playback=aec is None,
-            )
-            self._backend = backend
-
-            aec_label = type(aec).__name__ if aec else "none"
-            denoise_label = type(denoiser).__name__ if denoiser else "none"
-            logger.info(
-                "VC audio pipeline: aec=%s, denoiser=%s, in_rate=%dHz, out_rate=%dHz",
-                aec_label,
-                denoise_label,
-                input_sample_rate,
-                output_sample_rate,
-            )
-
-            # 6. Build pipeline config (with optional VAD — local STT only)
-            vad: Any = None
-            vad_model_id = settings.get("vc_vad_model", "") if stt_provider_name == "local" else ""
-            if vad_model_id:
-                from roomkit_ui.model_manager import build_vad_config, is_vad_model_downloaded
-
-                if is_vad_model_downloaded(vad_model_id):
-                    from roomkit.voice.pipeline.vad.sherpa_onnx import SherpaOnnxVADProvider
-
-                    vad_config = build_vad_config(
-                        vad_model_id, provider=inference_device, settings=settings
-                    )
-                    vad = SherpaOnnxVADProvider(vad_config)
-                    logger.info("VAD: %s", vad_model_id)
-                else:
-                    logger.warning("VAD model %s not downloaded — no VAD", vad_model_id)
-
-            # 6.5. Build diarization (optional — requires VAD)
-            diarization: Any = None
-            diarization_enabled = settings.get("diarization_enabled", False)
-            diarization_model_id = settings.get("diarization_model", "")
-            if diarization_enabled and diarization_model_id:
-                from roomkit_ui.model_manager import (
-                    build_diarization_config,
-                    is_speaker_model_downloaded,
-                )
-
-                if not vad:
-                    logger.warning("Diarization requires VAD — skipping")
-                elif is_speaker_model_downloaded(diarization_model_id):
-                    from roomkit.voice.pipeline.diarization.sherpa_onnx import (
-                        SherpaOnnxDiarizationProvider,
-                    )
-
-                    threshold = settings.get("diarization_threshold", 0.4)
-                    if isinstance(threshold, str):
-                        try:
-                            threshold = float(threshold)
-                        except (ValueError, TypeError):
-                            threshold = 0.5
-                    diar_key = ("diar", diarization_model_id, inference_device, threshold)
-                    cached_diar = self._get_cached("diarization", diar_key)
-                    if cached_diar is not None:
-                        diarization = cached_diar
-                        _reset_diarization(diarization)
-                        logger.info("Diarization: reusing cached %s", diarization_model_id)
-                    else:
-                        diar_config = build_diarization_config(
-                            diarization_model_id,
-                            provider=inference_device,
-                            threshold=threshold,
-                        )
-                        self.loading_status.emit("Loading speaker model\u2026")
-                        diarization = SherpaOnnxDiarizationProvider(diar_config)
-                        self._set_cached("diarization", diar_key, diarization)
-                    self._diarization = diarization
-
-                    # Load enrolled speakers
-                    from roomkit_ui.speaker_manager import load_speakers
-
-                    for speaker in load_speakers():
-                        if speaker.embeddings:
-                            ok = diarization.register_speaker(speaker.name, speaker.embeddings)
-                            logger.info(
-                                "Enrolled speaker: %s (%d samples) → %s",
-                                speaker.name,
-                                len(speaker.embeddings),
-                                ok,
-                            )
-
-                    # Primary speaker mode
-                    self._primary_speaker_mode = settings.get("primary_speaker_mode", False)
-                    if self._primary_speaker_mode:
-                        from roomkit_ui.speaker_manager import get_primary_speaker
-
-                        primary = get_primary_speaker()
-                        self._primary_speaker_name = primary.name if primary else ""
-
-                    logger.info(
-                        "Diarization: model=%s, threshold=%.2f, primary_mode=%s",
-                        diarization_model_id,
-                        threshold,
-                        self._primary_speaker_mode,
-                    )
-                else:
-                    logger.warning(
-                        "Speaker model %s not downloaded — no diarization",
-                        diarization_model_id,
-                    )
-
-            # Interruption config
-            from roomkit.voice.interruption import InterruptionConfig, InterruptionStrategy
-
-            interruption_enabled = settings.get("vc_interruption", False)
-            strategy = (
-                InterruptionStrategy.IMMEDIATE
-                if interruption_enabled
-                else InterruptionStrategy.DISABLED
-            )
-            interruption = InterruptionConfig(strategy=strategy)
-            logger.info("Interruption: %s", strategy.value)
-
-            # Smart turn detector (optional)
-            turn_detector: Any = None
-            td_name = settings.get("vc_turn_detector", "")
-            if td_name == "smart-turn":
-                from roomkit_ui.model_manager import (
-                    is_smart_turn_downloaded,
-                    smart_turn_model_path,
-                )
-
-                if is_smart_turn_downloaded():
-                    from roomkit.voice.pipeline.turn.smart_turn import (
-                        SmartTurnConfig,
-                        SmartTurnDetector,
-                    )
-
-                    threshold_str = settings.get("vc_turn_threshold", "")
-                    threshold = 0.5
-                    if threshold_str:
-                        try:
-                            threshold = float(threshold_str)
-                        except (ValueError, TypeError):
-                            pass
-                    turn_detector = SmartTurnDetector(
-                        SmartTurnConfig(
-                            model_path=str(smart_turn_model_path()),
-                            threshold=threshold,
-                            provider=inference_device,
-                        )
-                    )
-                    logger.info("Turn detector: smart-turn, threshold=%.2f", threshold)
-                else:
-                    logger.warning("Smart Turn model not downloaded — skipping")
-
-            debug_taps = _build_debug_taps(settings)
-            recorder, recording_config = _build_recorder(settings)
-            pipeline = AudioPipelineConfig(
-                aec=aec,
-                denoiser=denoiser,
-                vad=vad,
-                interruption=interruption,
-                diarization=diarization,
-                turn_detector=turn_detector,
-                debug_taps=debug_taps,
-                recorder=recorder,
-                recording_config=recording_config,
-            )
-
-            # 7. Create VoiceChannel
-            voice = VoiceChannel(
-                "voice",
-                stt=stt,
-                tts=tts,
-                backend=backend,
-                pipeline=pipeline,
-            )
-            self._channel = voice
-
-            # 7.5. Check if tools are supported (local models may not)
-            skip_tools = llm_provider_name == "local" and not settings.get("vc_local_tools", True)
-
-            # 7.6. Build skill registry from enabled skills
-            skills_registry = None
-            if not skip_tools:
-                try:
-                    from roomkit_ui.skill_manager import build_registry
-
-                    sources = json.loads(settings.get("skill_sources", "[]"))
-                    enabled = json.loads(settings.get("enabled_skills", "[]"))
-                    if sources and enabled:
-                        self.loading_status.emit("Loading skills\u2026")
-                        skills_registry = build_registry(sources, enabled)
-                        if skills_registry.skill_count > 0:
-                            logger.info(
-                                "Skills loaded: %s", ", ".join(skills_registry.skill_names)
-                            )
-                        else:
-                            skills_registry = None
-                except Exception:
-                    logger.exception("Failed to load skills")
-
-            # 8. Create AIChannel (with tool handler for MCP + built-in tools)
-            async def _vc_tool_handler(name: str, arguments: dict[str, Any]) -> str:
-                return await self._handle_tool_call(None, name, arguments)
-
-            ai_channel = AIChannel(
-                "ai",
-                provider=ai_provider,
-                system_prompt=system_prompt,
-                tool_handler=_vc_tool_handler,
-                skills=skills_registry,
-            )
-            self._ai_channel = ai_channel
-
-            # 9. MCP tools (skip when the local model has no tool support)
-            tools: list[dict] = []
-            if skip_tools:
-                logger.info("Local model tool support disabled — skipping MCP/tools")
-            else:
-                mcp_servers_configured = False
-                try:
-                    mcp_servers_configured = any(
-                        s.get("enabled", True)
-                        for s in json.loads(settings.get("mcp_servers", "[]"))
-                    )
-                except (json.JSONDecodeError, TypeError):
-                    pass
-                if mcp_servers_configured:
-                    self.loading_status.emit("Connecting MCP servers\u2026")
-                tools, _has_mcp = await self._setup_mcp_tools(settings)
-
-            # 10. Wire up framework
-            telemetry = _build_telemetry(settings)
-            kit = RoomKit(telemetry=telemetry)
-            self._kit = kit
-
-            kit.register_channel(voice)
-            kit.register_channel(ai_channel)
-            await kit.create_room(room_id="local-demo")
-            from roomkit.models.enums import ChannelCategory
-
-            voice_binding = await kit.attach_channel("local-demo", "voice")
-            await kit.attach_channel(
-                "local-demo",
-                "ai",
-                category=ChannelCategory.INTELLIGENCE,
-                metadata={"tools": tools},
-            )
-
-            # 11. Register hooks for UI callbacks
-            register_vc_hooks(kit, self)
-
-            # 12. Connect and start
-            self.loading_status.emit("Starting voice channel\u2026")
-            session = await backend.connect("local-demo", "local-user", "voice")
-            self._session = session
-            voice.bind_session(session, "local-demo", voice_binding)
-            await backend.start_listening(session)
-
-            self._spk_rms_queue.clear()
-            self._spk_timer.start()
-            self._pending_tool_calls = 0
-            self._watchdog.start()
-
-            self._state = "active"
-            self.state_changed.emit("active")
-
-            # Emit session info
-            tool_info = [
-                {"name": t.get("name", ""), "description": t.get("description", "")} for t in tools
-            ]
-            skill_info: list[dict] = []
-            if skills_registry and skills_registry.skill_count > 0:
-                skill_info = [
-                    {"name": m.name, "description": m.description}
-                    for m in skills_registry.all_metadata()
-                ]
-            info: dict = {
-                "provider": llm_provider_name,
-                "model": model,
-                "tools": tool_info,
-                "skills": skill_info,
-            }
-            if self._mcp and self._mcp.failed_servers:
-                info["failed_servers"] = list(self._mcp.failed_servers)
-            self.session_info.emit(info)
-            if self._attitude_name:
-                self.attitude_changed.emit(self._attitude_name)
-
-        except Exception as e:
-            logger.exception("Failed to start voice channel session")
-            self._state = "error"
-            self.state_changed.emit("error")
-            self.error_occurred.emit(str(e))
-            await self._cleanup()
-
-    # -- Shared helpers ------------------------------------------------------
-
-    @staticmethod
-    def _resolve_attitude(settings: dict) -> str:
-        """Resolve the selected attitude name to its text content."""
-        name = settings.get("selected_attitude", "")
-        if not name:
-            return ""
-        from roomkit_ui.widgets.settings.constants import ATTITUDE_PRESETS
-
-        for pname, ptext in ATTITUDE_PRESETS:
-            if pname == name:
-                return ptext
-        try:
-            for att in json.loads(settings.get("custom_attitudes", "[]")):
-                if att.get("name") == name:
-                    return str(att.get("text", ""))
-        except (json.JSONDecodeError, TypeError):
-            pass
-        return ""
-
-    def _build_audio_processing(
-        self,
-        aec_mode: str,
-        denoise_mode: str,
-        sample_rate: int,
-        frame_size: int,
-    ) -> tuple[Any, Any]:
-        """Build AEC and denoiser providers. Returns (aec, denoiser)."""
-        aec: Any = None
-        if aec_mode in ("webrtc", "1"):
-            try:
-                from roomkit.voice.pipeline.aec.webrtc import WebRTCAECProvider
-
-                aec = WebRTCAECProvider(sample_rate=sample_rate)
-            except ImportError:
-                logger.warning("WebRTC AEC not available — install aec-audio-processing")
-        elif aec_mode == "speex":
-            try:
-                from roomkit.voice.pipeline.aec.speex import SpeexAECProvider
-
-                aec = SpeexAECProvider(
-                    frame_size=frame_size,
-                    filter_length=frame_size * 10,
-                    sample_rate=sample_rate,
-                )
-            except ImportError:
-                logger.warning("Speex AEC not available — install libspeexdsp")
-
-        denoiser = self._build_denoiser(denoise_mode, sample_rate)
-        return aec, denoiser
-
-    @staticmethod
-    def _build_denoiser(denoise_mode: str, sample_rate: int) -> Any:
-        """Build a denoiser provider for the given mode and sample rate."""
-        if denoise_mode == "rnnoise":
-            try:
-                from roomkit.voice.pipeline.denoiser.rnnoise import RNNoiseDenoiserProvider
-
-                return RNNoiseDenoiserProvider(sample_rate=sample_rate)
-            except ImportError:
-                logger.warning("RNNoise denoiser not available")
-        elif denoise_mode == "gtcrn":
-            from roomkit_ui.model_manager import gtcrn_model_path, is_gtcrn_downloaded
-
-            if is_gtcrn_downloaded():
-                from roomkit.voice.pipeline.denoiser.sherpa_onnx import (
-                    SherpaOnnxDenoiserConfig,
-                    SherpaOnnxDenoiserProvider,
-                )
-
-                return SherpaOnnxDenoiserProvider(
-                    SherpaOnnxDenoiserConfig(model=str(gtcrn_model_path()))
-                )
-            else:
-                logger.warning("GTCRN model not downloaded — denoiser disabled")
-        return None
 
     async def _setup_mcp_tools(self, settings: dict) -> tuple[list[dict], bool]:
         """Connect MCP servers and return (tools_list, has_mcp_tools)."""
@@ -1619,54 +259,6 @@ class Engine(QObject):
         has_mcp_tools = len(tools) > len(BUILTIN_TOOLS)
         return tools, has_mcp_tools
 
-    async def _start_session(
-        self,
-        RoomKit: type,  # noqa: N803
-        RealtimeVoiceChannel: type,  # noqa: N803
-        provider: Any,
-        transport: Any,
-        system_prompt: str,
-        voice: str,
-        sample_rate: int,
-        tools: list[dict],
-        tool_handler: Any,
-        provider_config: dict[str, Any] | None = None,
-        settings: dict | None = None,
-    ) -> Any:
-        """Try to create a room and start a session. Returns None on failure."""
-        try:
-            telemetry = _build_telemetry(settings) if settings else None
-            self._kit = RoomKit(telemetry=telemetry)
-            self._channel = RealtimeVoiceChannel(
-                "voice",
-                provider=provider,
-                transport=transport,
-                system_prompt=system_prompt,
-                voice=voice,
-                input_sample_rate=sample_rate,
-                tools=tools,
-                tool_handler=tool_handler,
-            )
-            self._kit.register_channel(self._channel)
-            await self._kit.create_room(room_id="local-demo")
-            await self._kit.attach_channel("local-demo", "voice")
-            metadata = {"provider_config": provider_config} if provider_config else None
-            return await self._channel.start_session(
-                "local-demo",
-                "local-user",
-                connection=None,
-                metadata=metadata,
-            )
-        except Exception:
-            logger.exception("_start_session failed")
-            try:
-                await self._kit.close()
-            except Exception:
-                pass
-            self._kit = None
-            self._channel = None
-            return None
-
     async def stop(self) -> None:
         if self._state not in ("active", "connecting", "error"):
             return
@@ -1684,7 +276,7 @@ class Engine(QObject):
         finally:
             self._attitude = ""
             self._attitude_name = ""
-            self._log_handler._last_msg = ""
+            self._log_handler.reset()
             self._state = "idle"
             self.state_changed.emit("idle")
 
@@ -1722,12 +314,7 @@ class Engine(QObject):
         # from double-closing them (e.g. ElevenLabs httpx client hang on
         # second aclose).  Keep _backend attached so in-flight streaming
         # tasks can reference it during kit.close() teardown.
-        if self._channel:
-            try:
-                self._channel._stt = None
-                self._channel._tts = None
-            except Exception:
-                pass
+        detach_channel_providers(self._channel)
         # Now safe to close TTS — channel won't try to close it again.
         # Skip close for cached TTS (model survives for next session).
         if (
@@ -1750,11 +337,7 @@ class Engine(QObject):
             except Exception:
                 logger.exception("cleanup: kit.close() failed")
         # Now safe to detach backend — streaming tasks are cancelled.
-        if self._channel:
-            try:
-                self._channel._backend = None
-            except Exception:
-                pass
+        detach_channel_backend(self._channel)
         # Remove the voice error log handler to prevent handler accumulation.
         logging.getLogger("roomkit.voice").removeHandler(self._log_handler)
         if self._mcp:
@@ -1784,6 +367,7 @@ class Engine(QObject):
         self._primary_speaker_name = ""
         self._partial_buffers.clear()
         self._partial_speakers.clear()
+        self._base_system_prompt = ""
         # Note: self._attitude is preserved across reconnects and only
         # cleared in stop() when the user explicitly ends the session.
 
@@ -1796,27 +380,21 @@ class Engine(QObject):
         # state forever and accumulating across sessions.
         await asyncio.sleep(0)
 
-        # Cancel any remaining session tasks that didn't finalize
+        # Cancel any task that appeared during the session and didn't
+        # finalize.  The snapshot captured in start() pins the set of
+        # tasks that existed before the session, so anything new here
+        # belongs to roomkit / the provider / the transport / the pipeline.
+        # This is more durable than matching roomkit-specific task-name
+        # prefixes, which went stale every time roomkit added a task.
         current = asyncio.current_task()
-        _session_task_names = (
-            "speech_end",
-            "_play_stream",
-            "speaker_change",
-            "audio_level",
-            "barge_in",
-            "speech_start",
-            "session_started",
-            "vad_silence",
-            "_process_target",
-            "EventRouter",
-        )
+        pre = self._pre_session_tasks
         for task in list(asyncio.all_tasks()):
-            if task is current or task.done():
+            if task is current or task.done() or task in pre:
                 continue
-            name = task.get_name() or ""
-            if any(k in name for k in _session_task_names):
-                logger.info("cleanup: cancelling lingering task: %s", name)
-                task.cancel()
+            logger.info("cleanup: cancelling lingering task: %s", task.get_name() or task)
+            task.cancel()
+        # Next session captures a fresh snapshot in start().
+        self._pre_session_tasks = frozenset()
 
         # Second yield to let freshly-cancelled tasks finalize
         await asyncio.sleep(0)

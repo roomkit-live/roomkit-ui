@@ -229,6 +229,7 @@ def discover_all_skills(
         if root is None:
             continue
         for skill_dir in _find_skill_dirs(root):
+            meta: SkillMetadata | None
             try:
                 meta = parse_skill_metadata(skill_dir)
             except Exception:

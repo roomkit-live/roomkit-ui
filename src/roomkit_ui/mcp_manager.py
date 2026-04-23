@@ -27,22 +27,52 @@ _STRIP_SCHEMA_KEYS = {"$schema", "additionalProperties"}
 logger = logging.getLogger(__name__)
 
 
-def _unraisable_hook(unraisable: sys.UnraisableHookArgs) -> None:
-    """Suppress noisy RuntimeError from anyio cancel-scope during MCP cleanup.
+# ---------------------------------------------------------------------------
+# Scoped unraisable-hook install
+# ---------------------------------------------------------------------------
+#
+# When an MCP task is cancelled, the streamable_http_client async generator
+# may be finalized by GC in a different task context, triggering an anyio
+# "Attempted to exit cancel scope in a different task" RuntimeError.  This
+# is harmless but very noisy.  We install a hook to suppress it, but do so
+# only while an MCPManager is active — touching ``sys.unraisablehook`` at
+# module import time would silently affect every other library in the
+# process (tests, pyinstaller bootstrap, etc.).
 
-    When an MCP task is cancelled, the streamable_http_client async generator
-    may be finalized by GC in a different task context, triggering an anyio
-    "Attempted to exit cancel scope in a different task" RuntimeError.
-    This is harmless — log it at debug level instead of printing a traceback.
-    """
+_hook_install_count = 0
+_previous_unraisable_hook: Any = None
+
+
+def _anyio_cancel_scope_hook(unraisable: sys.UnraisableHookArgs) -> None:
     exc = unraisable.exc_value
     if isinstance(exc, RuntimeError) and "cancel scope" in str(exc):
         logger.debug("Suppressed anyio cancel-scope error during cleanup: %s", exc)
         return
-    sys.__unraisablehook__(unraisable)
+    prev = _previous_unraisable_hook or sys.__unraisablehook__
+    prev(unraisable)
 
 
-sys.unraisablehook = _unraisable_hook
+def _install_unraisable_hook() -> None:
+    """Install the anyio-cancel-scope suppressor.  Idempotent, refcounted."""
+    global _hook_install_count, _previous_unraisable_hook
+    if _hook_install_count == 0:
+        _previous_unraisable_hook = sys.unraisablehook
+        sys.unraisablehook = _anyio_cancel_scope_hook
+    _hook_install_count += 1
+
+
+def _uninstall_unraisable_hook() -> None:
+    """Restore whatever hook was in place before ``_install_unraisable_hook``."""
+    global _hook_install_count, _previous_unraisable_hook
+    if _hook_install_count == 0:
+        return
+    _hook_install_count -= 1
+    if _hook_install_count == 0:
+        # Only restore if nothing else has replaced us — don't stomp on a
+        # later installer.
+        if sys.unraisablehook is _anyio_cancel_scope_hook:
+            sys.unraisablehook = _previous_unraisable_hook or sys.__unraisablehook__
+        _previous_unraisable_hook = None
 
 
 def _clean_schema(obj: Any) -> Any:
@@ -64,6 +94,7 @@ class MCPManager:
         self._app_tools: dict[str, dict[str, str]] = {}  # tool name → {uri, server}
         self._close_event: asyncio.Event | None = None
         self._task: asyncio.Task | None = None
+        self._hook_installed = False
         self.failed_servers: list[str] = []  # names of servers that failed
 
     # -- lifecycle -----------------------------------------------------------
@@ -72,6 +103,9 @@ class MCPManager:
         """Connect to every configured MCP server and discover tools."""
         if not self._configs:
             return
+
+        _install_unraisable_hook()
+        self._hook_installed = True
 
         self._close_event = asyncio.Event()
         ready = asyncio.Event()
@@ -326,6 +360,9 @@ class MCPManager:
         self._tools.clear()
         self._tool_to_session.clear()
         self._app_tools.clear()
+        if self._hook_installed:
+            _uninstall_unraisable_hook()
+            self._hook_installed = False
         logger.info("close_all: done")
 
     # -- tools ---------------------------------------------------------------
@@ -360,11 +397,14 @@ class MCPManager:
 
     async def handle_tool_call(
         self,
-        _session: Any,
         name: str,
         arguments: dict[str, Any],
     ) -> str:
-        """Route a tool call to the owning MCP server and return the result."""
+        """Route a tool call to the owning MCP server and return the result.
+
+        Matches the 0.7.x unified ``ToolHandler`` signature: ``async
+        (name, arguments) -> str``.
+        """
         mcp_session = self._tool_to_session.get(name)
         if mcp_session is None:
             return json.dumps({"error": f"Unknown tool: {name}"})

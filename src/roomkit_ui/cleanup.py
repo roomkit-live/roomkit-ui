@@ -25,7 +25,7 @@ def cleanup_stale_fds(*, timers_only: bool = False) -> None:
     When *timers_only* is True, skip FD notifier cleanup (Layers 1-2).
     Use this during an active session where FDs may still be needed.
     """
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     self_pipe_fd = getattr(getattr(loop, "_ssock", None), "fileno", lambda: -1)()
 
     removed = 0
@@ -157,7 +157,7 @@ def cleanup_stale_fds(*, timers_only: bool = False) -> None:
 
 async def post_cleanup_monitor() -> None:
     """Log CPU usage after cleanup to verify the fix worked."""
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     t0 = resource.getrusage(resource.RUSAGE_SELF)
     for i in range(3):
         await asyncio.sleep(3)
