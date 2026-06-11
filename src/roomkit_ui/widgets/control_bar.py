@@ -18,6 +18,18 @@ from roomkit_ui.theme import colors
 # ---------------------------------------------------------------------------
 
 
+def _set_label(btn: QPushButton, text: str) -> None:
+    """Keep the tooltip and the screen-reader name in sync."""
+    btn.setToolTip(text)
+    btn.setAccessibleName(text)
+
+
+def _focus_ring_color() -> QColor:
+    ring = QColor(colors()["TEXT_PRIMARY"])
+    ring.setAlpha(160)
+    return ring
+
+
 class _PillButton(QPushButton):
     """Rounded-rectangle (pill) button with custom painted background."""
 
@@ -39,6 +51,7 @@ class _PillButton(QPushButton):
         self.setFixedSize(btn_width + 2 * padding, btn_height + 2 * padding)
         self.setFlat(True)
         self.setCursor(Qt.PointingHandCursor)
+        self.setFocusPolicy(Qt.StrongFocus)
         self.setStyleSheet("QPushButton { background: transparent; border: none; }")
 
     def set_bg(self, normal: str, hover: str) -> None:
@@ -69,6 +82,10 @@ class _PillButton(QPushButton):
             self._btn_h - 2,
         )
         p.drawRoundedRect(rect, self._radius, self._radius)
+        if self.hasFocus():
+            p.setPen(QPen(_focus_ring_color(), 2))
+            p.setBrush(Qt.NoBrush)
+            p.drawRoundedRect(rect.adjusted(-3, -3, 3, 3), self._radius + 3, self._radius + 3)
         p.end()
         super().paintEvent(_ev)
 
@@ -218,6 +235,7 @@ class _SideButton(QPushButton):
         self.setFixedSize(diameter + 4, diameter + 4)  # extra room for shadow
         self.setFlat(True)
         self.setCursor(Qt.PointingHandCursor)
+        self.setFocusPolicy(Qt.StrongFocus)
         self.setStyleSheet("QPushButton { background: transparent; border: none; }")
 
     def enterEvent(self, ev) -> None:  # noqa: N802
@@ -257,6 +275,10 @@ class _SideButton(QPushButton):
         p.setPen(QPen(border, 1.5))
         p.setBrush(bg)
         p.drawEllipse(ox + 1, oy + 1, d - 2, d - 2)
+        if self.hasFocus():
+            p.setPen(QPen(_focus_ring_color(), 2))
+            p.setBrush(Qt.NoBrush)
+            p.drawEllipse(ox - 2, oy - 2, d + 4, d + 4)
         p.end()
         super().paintEvent(_ev)
 
@@ -289,10 +311,10 @@ class _ContextButton(_SideButton):
         self._muted = False
         if mode == "reset":
             self._apply_reset_icon()
-            self.setToolTip("Reset conversation")
+            _set_label(self, "Reset conversation")
         else:
             self._apply_mute_icon()
-            self.setToolTip("Mute microphone")
+            _set_label(self, "Mute microphone")
         self.update()
 
     def toggle_mute(self) -> None:
@@ -309,10 +331,10 @@ class _ContextButton(_SideButton):
         c = colors()
         if self._muted:
             self.setIcon(svg_icon("microphone-slash", c["ACCENT_RED"], 18))
-            self.setToolTip("Unmute microphone")
+            _set_label(self, "Unmute microphone")
         else:
             self.setIcon(svg_icon("microphone", c["TEXT_PRIMARY"], 18))
-            self.setToolTip("Mute microphone")
+            _set_label(self, "Mute microphone")
 
 
 # ---------------------------------------------------------------------------
@@ -351,14 +373,14 @@ class ControlBar(QWidget):
         self._center_btn.set_bg(*_BTN_COLORS["idle"])
         self._center_btn.setIcon(svg_icon("sparkles", "#FFFFFF", 24))
         self._center_btn.setIconSize(self._center_btn.size() * 0.30)
-        self._center_btn.setToolTip("Start voice session")
+        _set_label(self._center_btn, "Start voice session")
         self._center_btn.clicked.connect(self._on_action)
 
         # ── Right: settings ──
         self._right_btn = _SideButton(36)
         self._right_btn.setIcon(svg_icon("cog-6-tooth", c["TEXT_SECONDARY"], 18))
         self._right_btn.setIconSize(self._right_btn.size() * 0.45)
-        self._right_btn.setToolTip("Settings")
+        _set_label(self._right_btn, "Settings")
         self._right_btn.clicked.connect(self.settings_requested.emit)
 
         # ── Layout ──
@@ -381,21 +403,21 @@ class ControlBar(QWidget):
             self._is_active = False
             self._center_btn.setIcon(svg_icon("sparkles", "#FFFFFF", 24))
             self._center_btn.setIconSize(self._center_btn.size() * 0.30)
-            self._center_btn.setToolTip("Start voice session")
+            _set_label(self._center_btn, "Start voice session")
             self._center_btn.stop_pulse()
             self._left_btn.set_mode("reset")
         elif state == EngineState.CONNECTING:
             self._is_active = False
             self._center_btn.setIcon(svg_icon("stop", "#FFFFFF", 22))
             self._center_btn.setIconSize(self._center_btn.size() * 0.28)
-            self._center_btn.setToolTip("Cancel")
+            _set_label(self._center_btn, "Cancel")
             self._center_btn.start_pulse()
             self._left_btn.set_mode("mute")
         elif state == EngineState.ACTIVE:
             self._is_active = True
             self._center_btn.setIcon(svg_icon("stop", "#FFFFFF", 22))
             self._center_btn.setIconSize(self._center_btn.size() * 0.28)
-            self._center_btn.setToolTip("End voice session")
+            _set_label(self._center_btn, "End voice session")
             self._center_btn.start_pulse()
             self._left_btn.set_mode("mute")
 
