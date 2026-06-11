@@ -19,6 +19,19 @@ BASE_URL = "https://wry-manatee-359.convex.site/api/v1"
 _TIMEOUT = 30.0
 
 
+def _validate_members(zf: zipfile.ZipFile, dest: Path) -> None:
+    """Reject archive members that would extract outside *dest*.
+
+    A crafted archive can carry ``../``-style or absolute member names that
+    ``extractall`` would happily write outside the target directory.
+    """
+    resolved_dest = dest.resolve()
+    for member in zf.infolist():
+        target = (dest / member.filename).resolve()
+        if not target.is_relative_to(resolved_dest):
+            raise ValueError(f"unsafe path in skill archive: {member.filename!r}")
+
+
 @dataclass
 class ClawHubSkillInfo:
     """Lightweight representation of a skill from the marketplace."""
@@ -84,7 +97,9 @@ class ClawHubClient:
                 tmp_path = Path(tmp.name)
             try:
                 with zipfile.ZipFile(tmp_path) as zf:
-                    # Clear previous install
+                    # Validate before clearing the previous install so a
+                    # malicious archive cannot destroy an existing skill.
+                    _validate_members(zf, dest)
                     if dest.exists():
                         import shutil
 

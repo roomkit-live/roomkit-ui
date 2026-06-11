@@ -14,6 +14,7 @@ import asyncio
 import json
 import logging
 import os
+import shlex
 import sys
 from contextlib import AsyncExitStack
 from typing import Any
@@ -82,6 +83,28 @@ def _clean_schema(obj: Any) -> Any:
     if isinstance(obj, list):
         return [_clean_schema(v) for v in obj]
     return obj
+
+
+def _parse_stdio_config(cfg: dict[str, Any]) -> tuple[str, list[str], dict[str, str] | None]:
+    """Parse a stdio server config into (command, args, env).
+
+    shlex honours quoting, so executables with spaces in their path
+    (e.g. ``"/Applications/My App/server"``) parse as one token.
+    """
+    command_parts = shlex.split(cfg.get("command", ""))
+    command = command_parts[0] if command_parts else ""
+    args = cfg.get("args", "")
+    arg_list = command_parts[1:] + (shlex.split(args) if args else [])
+
+    env: dict[str, str] | None = None
+    env_str = cfg.get("env", "")
+    if env_str and env_str.strip():
+        env = os.environ.copy()
+        for line in env_str.strip().splitlines():
+            if "=" in line:
+                k, v = line.split("=", 1)
+                env[k.strip()] = v.strip()
+    return command, arg_list, env
 
 
 class MCPManager:
@@ -272,19 +295,7 @@ class MCPManager:
         transport = cfg.get("transport", "stdio")
 
         if transport == "stdio":
-            command_parts = cfg.get("command", "").split()
-            command = command_parts[0] if command_parts else ""
-            args = cfg.get("args", "")
-            arg_list = command_parts[1:] + (args.split() if args else [])
-
-            env: dict[str, str] | None = None
-            env_str = cfg.get("env", "")
-            if env_str and env_str.strip():
-                env = os.environ.copy()
-                for line in env_str.strip().splitlines():
-                    if "=" in line:
-                        k, v = line.split("=", 1)
-                        env[k.strip()] = v.strip()
+            command, arg_list, env = _parse_stdio_config(cfg)
 
             params = StdioServerParameters(
                 command=command,

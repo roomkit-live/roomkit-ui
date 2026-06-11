@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import ctypes
+import hashlib
 import json
 import shutil
 import sys
@@ -154,9 +155,17 @@ def _download_file(
     target: Path,
     expected_size: int = 0,
     on_bytes: Callable[[int], None] | None = None,
+    expected_sha256: str | None = None,
 ) -> None:
-    """Download *url* to *target* atomically, reporting bytes via *on_bytes*."""
+    """Download *url* to *target* atomically, reporting bytes via *on_bytes*.
+
+    Integrity: when *expected_size* is non-zero the byte count must match,
+    and when *expected_sha256* is given (the Git LFS OID) the digest must
+    match — otherwise the partial file is removed and RuntimeError raised.
+    """
     tmp = target.with_suffix(target.suffix + ".part")
+    hasher = hashlib.sha256() if expected_sha256 else None
+    received = 0
     try:
         req = urllib.request.Request(url)  # noqa: S310
         with urllib.request.urlopen(req) as resp, open(tmp, "wb") as fp:  # noqa: S310
@@ -165,8 +174,17 @@ def _download_file(
                 if not chunk:
                     break
                 fp.write(chunk)
+                received += len(chunk)
+                if hasher is not None:
+                    hasher.update(chunk)
                 if on_bytes is not None:
                     on_bytes(len(chunk))
+        if expected_size and received != expected_size:
+            raise RuntimeError(
+                f"size mismatch for {target.name}: expected {expected_size}, got {received}"
+            )
+        if hasher is not None and hasher.hexdigest() != expected_sha256:
+            raise RuntimeError(f"sha256 mismatch for {target.name}: download corrupted")
         tmp.rename(target)
     except Exception:
         tmp.unlink(missing_ok=True)
@@ -190,7 +208,7 @@ def _download_model_sync(
     dest.mkdir(parents=True, exist_ok=True)
 
     # First pass: resolve LFS pointers to get total size
-    file_infos: list[tuple[str, str, int]] = []  # (fname, url, size)
+    file_infos: list[tuple[str, str, int, str]] = []  # (fname, url, size, oid)
     total_bytes = 0
     for fname in m.files:
         target = dest / fname
@@ -203,7 +221,7 @@ def _download_model_sync(
         if lfs is not None:
             oid, size = lfs
             real_url = _lfs_download_url(oid, size)
-            file_infos.append((fname, real_url, size))
+            file_infos.append((fname, real_url, size, oid))
             total_bytes += size
         else:
             # Small file — write directly
@@ -217,7 +235,7 @@ def _download_model_sync(
     if progress is not None:
         progress(0, total_bytes)
 
-    for fname, url, size in file_infos:
+    for fname, url, size, oid in file_infos:
         target = dest / fname
 
         def _on_bytes(n: int) -> None:
@@ -226,7 +244,7 @@ def _download_model_sync(
             if progress is not None:
                 progress(downloaded, total_bytes)
 
-        _download_file(url, target, expected_size=size, on_bytes=_on_bytes)
+        _download_file(url, target, expected_size=size, on_bytes=_on_bytes, expected_sha256=oid)
 
 
 def is_streaming_model(model_id: str) -> bool:
@@ -459,7 +477,9 @@ def _download_vad_model_sync(
             if progress is not None:
                 progress(downloaded, size)
 
-        _download_file(real_url, target, expected_size=size, on_bytes=_on_bytes)
+        _download_file(
+            real_url, target, expected_size=size, on_bytes=_on_bytes, expected_sha256=oid
+        )
     else:
         total = len(raw_bytes)
         if progress is not None:
@@ -695,7 +715,7 @@ def _download_tts_model_sync(
     dest = tts_model_path(model_id)
     dest.mkdir(parents=True, exist_ok=True)
 
-    files_to_download: list[tuple[str, str, int]] = []
+    files_to_download: list[tuple[str, str, int, str]] = []
     total_bytes = 0
 
     for fname in (m.onnx_file, m.config_file, "tokens.txt"):
@@ -712,7 +732,7 @@ def _download_tts_model_sync(
         if lfs is not None:
             oid, size = lfs
             real_url = _lfs_download_url(oid, size)
-            files_to_download.append((fname, real_url, size))
+            files_to_download.append((fname, real_url, size, oid))
             total_bytes += size
         else:
             target.write_bytes(raw_bytes)
@@ -722,7 +742,7 @@ def _download_tts_model_sync(
         if progress is not None:
             progress(0, total_bytes)
 
-        for fname, url, size in files_to_download:
+        for fname, url, size, oid in files_to_download:
             target = dest / fname
 
             def _on_bytes(n: int) -> None:
@@ -731,7 +751,9 @@ def _download_tts_model_sync(
                 if progress is not None:
                     progress(downloaded, total_bytes)
 
-            _download_file(url, target, expected_size=size, on_bytes=_on_bytes)
+            _download_file(
+                url, target, expected_size=size, on_bytes=_on_bytes, expected_sha256=oid
+            )
 
     # Fallback: generate tokens.txt from .onnx.json if not downloaded
     json_path = dest / m.config_file
