@@ -234,7 +234,10 @@ def discover_all_skills(
                 meta = parse_skill_metadata(skill_dir)
             except Exception:
                 # Strict parse failed — try lenient (e.g. ClawHub slug mismatch)
-                meta = _lenient_parse(skill_dir)
+                try:
+                    meta = _lenient_parse(skill_dir)
+                except Exception:
+                    meta = None
                 if meta is None:
                     logger.debug("Skipping invalid skill in %s", skill_dir, exc_info=True)
                     continue
