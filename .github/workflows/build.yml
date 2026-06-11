@@ -213,8 +213,20 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           DMG_PATH="dist/${{ matrix.artifact }}.dmg"
-          hdiutil create -volname "RoomKit UI" -srcfolder "dist/RoomKit UI.app" \
-            -ov -format UDZO "$DMG_PATH"
+          # hdiutil intermittently fails with "Resource busy" on GitHub
+          # runners (Spotlight/XProtect scanning the fresh .app) — retry.
+          for i in 1 2 3 4 5; do
+            if hdiutil create -volname "RoomKit UI" -srcfolder "dist/RoomKit UI.app" \
+              -ov -format UDZO "$DMG_PATH"; then
+              break
+            fi
+            if [ "$i" = "5" ]; then
+              echo "hdiutil failed after 5 attempts" >&2
+              exit 1
+            fi
+            echo "hdiutil attempt $i failed — retrying in 15s"
+            sleep 15
+          done
           # Staple notarization ticket to DMG if signed
           if [ -n "${CODESIGN_IDENTITY:-}" ] && [ -n "${{ secrets.APPLE_ID }}" ]; then
             xcrun stapler staple "$DMG_PATH" || true
