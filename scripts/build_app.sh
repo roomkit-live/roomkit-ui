@@ -19,9 +19,6 @@ echo "==> Installing dependencies..."
 if command -v uv &>/dev/null; then
     uv sync
     uv pip install pyinstaller
-    # uv sync removes sherpa-onnx-core (platform-specific binary wheel not
-    # in the lock file).  Reinstall it so PyInstaller can bundle libonnxruntime.
-    uv pip install sherpa-onnx-core
 else
     pip install -e ".[dev]"
 fi

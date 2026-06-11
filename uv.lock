@@ -1382,14 +1382,14 @@ wheels = [
 
 [[package]]
 name = "roomkit"
-version = "0.9.1"
+version = "0.10.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/9f/68/65e8806f784fa75286c3901cac2ac6b1f39cb18542ff600d1d263c548c1f/roomkit-0.9.1.tar.gz", hash = "sha256:186e0cf5a34ab55505ca6511f31ee1b7b4fa600caf828789918a31a45bb84db2", size = 1292711, upload-time = "2026-06-11T11:43:19.235Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ba/c9/3bdb25153dc05600459122271a6b07c3c16444ea5ec0cc1f45f588304277/roomkit-0.10.0.tar.gz", hash = "sha256:2c0bce25f00a44cffa72d783e8a1c50d396d0b86239ae5904c3f2a185788fb10", size = 1293689, upload-time = "2026-06-11T15:02:40.963Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/96/32/459616d747b0dec5a444f2f8de38e6177ec2215219f8f1d58dbb1930290e/roomkit-0.9.1-py3-none-any.whl", hash = "sha256:a53f4d83a1ecef995b6f860bf18b939e97eca26a195cb88783681fa2f249fa61", size = 1028146, upload-time = "2026-06-11T11:43:26.774Z" },
+    { url = "https://files.pythonhosted.org/packages/72/96/40ca4c82d48104f852687d45d4c91bfbdf27e1203feb735077475e10f9bc/roomkit-0.10.0-py3-none-any.whl", hash = "sha256:470f8407df59c44967aaf7ef43ebe94b049b54e187f552e793fc9cccf3fa7578", size = 1028779, upload-time = "2026-06-11T15:02:42.943Z" },
 ]
 
 [package.optional-dependencies]
@@ -1413,7 +1413,7 @@ webrtc-aec = [
 
 [[package]]
 name = "roomkit-ui"
-version = "0.1.5"
+version = "0.1.6"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },
@@ -1423,6 +1423,7 @@ dependencies = [
     { name = "pyside6" },
     { name = "qasync" },
     { name = "roomkit", extra = ["local-audio", "realtime-gemini", "realtime-openai", "sherpa-onnx", "webrtc-aec"] },
+    { name = "sherpa-onnx-core" },
 ]
 
 [package.optional-dependencies]
@@ -1450,8 +1451,9 @@ requires-dist = [
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24" },
     { name = "pytest-qt", marker = "extra == 'dev'", specifier = ">=4.4" },
     { name = "qasync", specifier = ">=0.27" },
-    { name = "roomkit", extras = ["realtime-gemini", "realtime-openai", "local-audio", "webrtc-aec", "sherpa-onnx"], specifier = ">=0.9.1" },
+    { name = "roomkit", extras = ["realtime-gemini", "realtime-openai", "local-audio", "webrtc-aec", "sherpa-onnx"], specifier = ">=0.10.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6" },
+    { name = "sherpa-onnx-core", specifier = ">=1.13" },
 ]
 provides-extras = ["dev"]
 
@@ -1629,6 +1631,21 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/4e/c6/6e2675a0f1eb5de084bd430c732ac399684af9f90a51b46a39987b84d762/sherpa_onnx-1.13.2-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:7bbb87806c51547222fab7a352b41d795046a425b87c3fccc84a69532e8a3c54", size = 4297544, upload-time = "2026-05-13T11:58:21.906Z" },
     { url = "https://files.pythonhosted.org/packages/b3/03/f7ee7e603a73d215aea211718af2ad8961a3c8d032f4cc8cfd522e4aa63a/sherpa_onnx-1.13.2-cp314-cp314-win32.whl", hash = "sha256:1746857c790513d3026a72dff7cb61ee149f462b215ca731bea3f042c891f504", size = 1922164, upload-time = "2026-05-13T11:35:20.951Z" },
     { url = "https://files.pythonhosted.org/packages/f9/e1/9f0f34e9ee7423001252824c174ee8deb587ce68cc675dfbdd59aa93fd8e/sherpa_onnx-1.13.2-cp314-cp314-win_amd64.whl", hash = "sha256:38e81796705aa872327848880281d7d57cf08f01b6b1ee41198828811f7d32f9", size = 2247271, upload-time = "2026-05-13T11:37:14.281Z" },
+]
+
+[[package]]
+name = "sherpa-onnx-core"
+version = "1.13.2"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8c/af/34d3e70fb565ea97114743686466cc4c560f5420bef232c816fdda86251d/sherpa_onnx_core-1.13.2-py3-none-macosx_10_15_universal2.whl", hash = "sha256:56becb53e49c5d5f4d243c6d0ae908ceac3680dd3906350dabd6d24284234414", size = 33979422, upload-time = "2026-05-13T12:00:19.352Z" },
+    { url = "https://files.pythonhosted.org/packages/a4/02/a931139e40cf9a497b533d43bcc652f0699a90c81da8865e3e4051c0a9d1/sherpa_onnx_core-1.13.2-py3-none-macosx_10_15_x86_64.whl", hash = "sha256:c51a3ecee1c44e7fb059d78058025b3b9f3c5654bee638d7089ef781ef37f9ac", size = 18263588, upload-time = "2026-05-13T11:20:49.003Z" },
+    { url = "https://files.pythonhosted.org/packages/24/2f/ffd3cb412473cc2f1df6ae13d0f190c958e27aef695223db340adbc9be2b/sherpa_onnx_core-1.13.2-py3-none-macosx_11_0_arm64.whl", hash = "sha256:a107153c933eaedf35cb0e6af9ffd9a2298133add4de192b8ca176c8d9d25181", size = 21157625, upload-time = "2026-05-13T11:23:32.165Z" },
+    { url = "https://files.pythonhosted.org/packages/d2/98/c77a9d19a715348b29233ab24071e515cda5e9ddfdc4db0ef14fbde6416b/sherpa_onnx_core-1.13.2-py3-none-manylinux2014_aarch64.whl", hash = "sha256:f5adb0d892b14704a51922d6550970f470054ddf56be08a7f20176c480ae2e11", size = 12392834, upload-time = "2026-05-13T11:26:48.27Z" },
+    { url = "https://files.pythonhosted.org/packages/f5/50/e93be26781b168f3c99fb1f26b4f1aaf11f57a04b4e48569f33a7cce21a8/sherpa_onnx_core-1.13.2-py3-none-manylinux2014_x86_64.whl", hash = "sha256:544e81156c832ed24f9bf7176c4592705a86103a6d545bfa4449953c5bdb4e76", size = 9804956, upload-time = "2026-05-13T11:26:58.112Z" },
+    { url = "https://files.pythonhosted.org/packages/20/0b/6baea0f27cb77ca194b57bc6084c4b30f767af9429864e0727d8b6b5fbfa/sherpa_onnx_core-1.13.2-py3-none-manylinux_2_35_armv7l.whl", hash = "sha256:41b667bc5f0e314b1ed4e6b6bbe3685baa280b745acc0d54284a19d4490e68d1", size = 9472303, upload-time = "2026-05-13T13:24:29.077Z" },
+    { url = "https://files.pythonhosted.org/packages/e8/62/13b09de0b62882bbdd31ad36b39af14756e2d1e2d087a6a1bea536f6d572/sherpa_onnx_core-1.13.2-py3-none-win32.whl", hash = "sha256:587e12371a9bb5955ac3f20c42af3993e546b7d795bd14a129cf912dd08623c8", size = 13731862, upload-time = "2026-05-13T11:14:57.094Z" },
+    { url = "https://files.pythonhosted.org/packages/7e/0c/3f35f89e94e2fec3d48655e3f3c91f5bc970cf470cac795181e64d490ccb/sherpa_onnx_core-1.13.2-py3-none-win_amd64.whl", hash = "sha256:34a97701ce754a83cb9c3dee1fe760064e3b65b3c973c9eb51f6fda06f995659", size = 15665357, upload-time = "2026-05-13T11:14:54.441Z" },
 ]
 
 [[package]]
