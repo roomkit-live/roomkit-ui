@@ -3,9 +3,11 @@
 Connects to configured MCP servers, collects their tools, and routes
 tool calls from the voice assistant to the correct server.
 
-All MCP context managers live inside a single long-running asyncio Task
-so that anyio cancel-scopes are entered and exited in the same task
-(required by anyio, which MCP uses internally).
+Each server's MCP context managers live inside their own long-running
+asyncio Task so that anyio cancel-scopes are entered and exited in the
+same task (required by anyio, which MCP uses internally) — and so the
+servers can connect in parallel instead of one slow server stalling
+session start for everyone.
 """
 
 from __future__ import annotations
@@ -19,7 +21,7 @@ import sys
 from contextlib import AsyncExitStack
 from typing import Any
 
-_CONNECT_TIMEOUT = 30  # seconds per server
+_CONNECT_TIMEOUT = 10  # seconds per connection step, per server
 _TOOL_CALL_TIMEOUT = 60  # seconds per tool call
 
 # JSON Schema keys that voice providers (especially Gemini) reject.
@@ -116,14 +118,19 @@ class MCPManager:
         self._tool_to_session: dict[str, Any] = {}  # tool name → ClientSession
         self._app_tools: dict[str, dict[str, str]] = {}  # tool name → {uri, server}
         self._close_event: asyncio.Event | None = None
-        self._task: asyncio.Task | None = None
+        self._tasks: list[asyncio.Task] = []  # one long-lived task per server
         self._hook_installed = False
         self.failed_servers: list[str] = []  # names of servers that failed
 
     # -- lifecycle -----------------------------------------------------------
 
     async def connect_all(self) -> None:
-        """Connect to every configured MCP server and discover tools."""
+        """Connect to every configured MCP server in parallel.
+
+        One unreachable server no longer delays the others: total wait is
+        the slowest single server (bounded by ``_CONNECT_TIMEOUT`` per
+        step), not the sum across servers.
+        """
         if not self._configs:
             return
 
@@ -131,125 +138,98 @@ class MCPManager:
         self._hook_installed = True
 
         self._close_event = asyncio.Event()
-        ready = asyncio.Event()
+        ready_events: list[asyncio.Event] = []
+        for cfg in self._configs:
+            ready = asyncio.Event()
+            ready_events.append(ready)
+            self._tasks.append(asyncio.create_task(self._run_server(cfg, ready)))
+        # Wait for every server to finish connecting (success or failure)
+        await asyncio.gather(*(e.wait() for e in ready_events))
 
-        self._task = asyncio.create_task(self._run(ready))
-        # Wait for all servers to finish connecting (or timeout)
-        await ready.wait()
+    async def _run_server(self, cfg: dict[str, Any], ready: asyncio.Event) -> None:
+        """Long-lived task owning ONE server's MCP context managers.
 
-    async def _run(self, ready: asyncio.Event) -> None:
-        """Long-lived task owning all MCP context managers.
-
-        Each server gets its own AsyncExitStack so that a failed connection
-        can be cleaned up independently without crashing the whole task.
+        anyio requires cancel scopes to be entered and exited in the same
+        task, so each server's AsyncExitStack lives entirely inside its own
+        task — this is what allows the servers to connect in parallel.
         """
-        server_stacks: list[AsyncExitStack] = []
-        connecting_name: str | None = None  # server currently being connected
+        name = cfg.get("name", "<unnamed>")
+        stack = AsyncExitStack()
+        connected = False
         try:
-            for cfg in self._configs:
-                name = cfg.get("name", "<unnamed>")
-                connecting_name = name
-                stack = AsyncExitStack()
-                try:
-                    await stack.__aenter__()
-                    logger.info("Connecting to MCP server %r ...", name)
-                    session = await asyncio.wait_for(
-                        self._connect_one(cfg, stack),
-                        timeout=_CONNECT_TIMEOUT,
-                    )
-                    result = await asyncio.wait_for(
-                        session.list_tools(),
-                        timeout=_CONNECT_TIMEOUT,
-                    )
-                    for tool in result.tools:
-                        self._tool_to_session[tool.name] = session
-                        self._tools.append(
-                            {
-                                "type": "function",
-                                "name": tool.name,
-                                "description": tool.description or "",
-                                "parameters": _clean_schema(tool.inputSchema or {}),
-                            }
-                        )
-                        # Track MCP App tools (tools with ui:// resourceUri)
-                        meta = getattr(tool, "meta", None)
-                        if isinstance(meta, dict):
-                            ui = meta.get("ui", {})
-                            if isinstance(ui, dict):
-                                resource_uri = ui.get("resourceUri", "")
-                                if isinstance(resource_uri, str) and resource_uri.startswith(
-                                    "ui://"
-                                ):
-                                    self._app_tools[tool.name] = {
-                                        "uri": resource_uri,
-                                        "server": name,
-                                    }
-                    server_stacks.append(stack)
-                    connecting_name = None
-                    logger.info(
-                        "MCP server %r: %d tools",
-                        name,
-                        len(result.tools),
-                    )
-                except TimeoutError:
-                    logger.error(
-                        "MCP server %r: timed out after %ds",
-                        name,
-                        _CONNECT_TIMEOUT,
-                    )
-                    self.failed_servers.append(name)
-                    await self._safe_close_stack(stack, name)
-                except Exception:
-                    logger.exception(
-                        "Failed to connect to MCP server %r",
-                        name,
-                    )
-                    self.failed_servers.append(name)
-                    await self._safe_close_stack(stack, name)
-
-            # Signal caller that tools are ready
+            await stack.__aenter__()
+            logger.info("Connecting to MCP server %r ...", name)
+            session = await asyncio.wait_for(
+                self._connect_one(cfg, stack),
+                timeout=_CONNECT_TIMEOUT,
+            )
+            result = await asyncio.wait_for(
+                session.list_tools(),
+                timeout=_CONNECT_TIMEOUT,
+            )
+            self._register_tools(session, result, name)
+            connected = True
+            logger.info("MCP server %r: %d tools", name, len(result.tools))
             ready.set()
 
             # Keep context managers alive until close is requested
-            if server_stacks and self._close_event is not None:
+            if self._close_event is not None:
                 await self._close_event.wait()
-                logger.info("MCP manager shutting down")
-            else:
-                logger.info("No MCP servers connected")
+                logger.info("MCP server %r shutting down", name)
 
+        except TimeoutError:
+            logger.error("MCP server %r: timed out after %ds", name, _CONNECT_TIMEOUT)
+            self.failed_servers.append(name)
         except asyncio.CancelledError:
-            if connecting_name:
+            if not connected:
                 logger.warning(
                     "MCP server %r: connection aborted (session ended before it connected)",
-                    connecting_name,
+                    name,
                 )
-                self.failed_servers.append(connecting_name)
-            else:
-                logger.info("MCP manager shutting down")
+                self.failed_servers.append(name)
         except Exception:
-            logger.exception("MCP manager task failed")
+            logger.exception("Failed to connect to MCP server %r", name)
+            self.failed_servers.append(name)
         finally:
-            ready.set()  # unblock caller if we failed early
-            # Clean up all successfully-connected servers.
-            # Shield from cancellation so the subprocess gets properly
-            # terminated even if close_all() is impatient.
-            for i, stack in enumerate(server_stacks):
-                logger.info("_run finally: closing stack %d/%d …", i + 1, len(server_stacks))
-                # Wrap in a task so we can shield it from cancellation
-                # and retry the *same* task (not a new close call).
-                close_task = asyncio.ensure_future(self._safe_close_stack(stack, "<cleanup>"))
+            ready.set()  # unblock connect_all on any exit path
+            # Shield the close from cancellation so the subprocess gets
+            # properly terminated even if close_all() is impatient.
+            close_task = asyncio.ensure_future(self._safe_close_stack(stack, name))
+            try:
+                await asyncio.shield(close_task)
+            except asyncio.CancelledError:
+                # Shield was cancelled but close_task continues.
+                # Wait for the *same* task to finish — no double-close.
+                logger.info("MCP server %r: close shield cancelled, retrying", name)
                 try:
-                    await asyncio.shield(close_task)
-                except asyncio.CancelledError:
-                    # Shield was cancelled but close_task continues.
-                    # Wait for the *same* task to finish — no double-close.
-                    logger.info("_run finally: shield cancelled for stack %d, retrying", i + 1)
-                    try:
-                        await asyncio.wait_for(close_task, timeout=5.0)
-                    except (TimeoutError, asyncio.CancelledError):
-                        logger.error("_run finally: retry failed for stack %d", i + 1)
-                logger.info("_run finally: stack %d closed", i + 1)
-            logger.info("_run finally: all stacks closed")
+                    await asyncio.wait_for(close_task, timeout=5.0)
+                except (TimeoutError, asyncio.CancelledError):
+                    logger.error("MCP server %r: stack close retry failed", name)
+            logger.info("MCP server %r: stack closed", name)
+
+    def _register_tools(self, session: Any, result: Any, name: str) -> None:
+        """Record a server's tools in the shared lookup tables."""
+        for tool in result.tools:
+            self._tool_to_session[tool.name] = session
+            self._tools.append(
+                {
+                    "type": "function",
+                    "name": tool.name,
+                    "description": tool.description or "",
+                    "parameters": _clean_schema(tool.inputSchema or {}),
+                }
+            )
+            # Track MCP App tools (tools with ui:// resourceUri)
+            meta = getattr(tool, "meta", None)
+            if isinstance(meta, dict):
+                ui = meta.get("ui", {})
+                if isinstance(ui, dict):
+                    resource_uri = ui.get("resourceUri", "")
+                    if isinstance(resource_uri, str) and resource_uri.startswith("ui://"):
+                        self._app_tools[tool.name] = {
+                            "uri": resource_uri,
+                            "server": name,
+                        }
 
     @staticmethod
     async def _safe_close_stack(stack: AsyncExitStack, name: str) -> None:
@@ -341,33 +321,38 @@ class MCPManager:
         return session
 
     async def close_all(self) -> None:
-        """Signal the background task to exit and wait for cleanup."""
+        """Signal the server tasks to exit and wait for cleanup."""
         logger.info("close_all: signalling shutdown")
         if self._close_event:
             self._close_event.set()
-        elif self._task:
+        else:
             # _close_event is None → connect_all raised before setting it.
-            # Cancel the task directly to avoid a 15s hang.
-            self._task.cancel()
-        if self._task:
-            logger.info("close_all: waiting for _run task (timeout=15s) …")
+            # Cancel the tasks directly to avoid a 15s hang.
+            for task in self._tasks:
+                task.cancel()
+        if self._tasks:
+            logger.info(
+                "close_all: waiting for %d server task(s) (timeout=15s) …", len(self._tasks)
+            )
             try:
                 # Use asyncio.wait (not wait_for) to avoid auto-cancelling
-                # the task on timeout — the task needs uninterrupted time
-                # to properly terminate MCP subprocesses.
-                done, _ = await asyncio.wait([self._task], timeout=15)
-                if done:
-                    logger.info("close_all: _run task finished normally")
+                # the tasks on timeout — they need uninterrupted time to
+                # properly terminate MCP subprocesses.
+                done, pending = await asyncio.wait(self._tasks, timeout=15)
+                if not pending:
+                    logger.info("close_all: all server tasks finished normally")
                 else:
-                    logger.warning("close_all: timed out after 15s, cancelling task")
-                    self._task.cancel()
-                    try:
-                        await self._task
-                    except asyncio.CancelledError:
-                        logger.info("close_all: task cancelled")
+                    logger.warning("close_all: %d task(s) timed out, cancelling", len(pending))
+                    for task in pending:
+                        task.cancel()
+                    for task in pending:
+                        try:
+                            await task
+                        except asyncio.CancelledError:
+                            pass
             except Exception:
                 logger.exception("Error during MCP shutdown")
-            self._task = None
+            self._tasks = []
         self._tools.clear()
         self._tool_to_session.clear()
         self._app_tools.clear()

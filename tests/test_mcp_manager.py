@@ -1,8 +1,9 @@
-"""Tests for MCP schema cleaning and stdio config parsing."""
+"""Tests for MCP schema cleaning, stdio config parsing, and tool registration."""
 
 import os
+from types import SimpleNamespace
 
-from roomkit_ui.mcp_manager import _clean_schema, _parse_stdio_config
+from roomkit_ui.mcp_manager import MCPManager, _clean_schema, _parse_stdio_config
 
 
 def test_clean_schema_strips_rejected_keys_recursively():
@@ -61,3 +62,34 @@ def test_parse_stdio_empty_command():
     assert cmd == ""
     assert args == []
     assert env is None
+
+
+def test_register_tools_tracks_sessions_and_apps():
+    mgr = MCPManager([])
+    session = object()
+    result = SimpleNamespace(
+        tools=[
+            SimpleNamespace(
+                name="plain_tool",
+                description="does things",
+                inputSchema={"type": "object", "$schema": "x"},
+                meta=None,
+            ),
+            SimpleNamespace(
+                name="app_tool",
+                description="",
+                inputSchema={},
+                meta={"ui": {"resourceUri": "ui://widget/main"}},
+            ),
+        ]
+    )
+    mgr._register_tools(session, result, "srv")
+
+    assert mgr._tool_to_session["plain_tool"] is session
+    assert mgr._tool_to_session["app_tool"] is session
+    names = [t["name"] for t in mgr.get_tools()]
+    assert names == ["plain_tool", "app_tool"]
+    # $schema stripped on the way in
+    assert "$schema" not in mgr.get_tools()[0]["parameters"]
+    # ui:// tools tracked as MCP Apps with their server name
+    assert mgr._app_tools == {"app_tool": {"uri": "ui://widget/main", "server": "srv"}}

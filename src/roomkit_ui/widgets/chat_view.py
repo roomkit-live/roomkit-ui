@@ -111,6 +111,16 @@ class ChatView(QScrollArea):
         self._scroll_timer.setInterval(10)
         self._scroll_timer.timeout.connect(self._do_scroll)
 
+        # Auto-follow: a growing bubble updates the scroll range AFTER the
+        # 10 ms timer fired, leaving the view stuck one line above the
+        # bottom.  rangeChanged fires after every layout pass — the only
+        # reliable moment to jump.  The flag disengages when the user
+        # scrolls up to read history and re-engages at the bottom.
+        self._autoscroll = True
+        sb = self.verticalScrollBar()
+        sb.rangeChanged.connect(self._on_scroll_range_changed)
+        sb.valueChanged.connect(self._on_scroll_value_changed)
+
     # -- public API ----------------------------------------------------------
 
     def add_transcription(
@@ -328,4 +338,12 @@ class ChatView(QScrollArea):
         self._scroll_timer.start()  # restarts if already running
 
     def _do_scroll(self) -> None:
-        self.verticalScrollBar().setValue(self.verticalScrollBar().maximum())
+        if self._autoscroll:
+            self.verticalScrollBar().setValue(self.verticalScrollBar().maximum())
+
+    def _on_scroll_value_changed(self, value: int) -> None:
+        self._autoscroll = value >= self.verticalScrollBar().maximum() - 4
+
+    def _on_scroll_range_changed(self, _lo: int, _hi: int) -> None:
+        if self._autoscroll:
+            self.verticalScrollBar().setValue(self.verticalScrollBar().maximum())
