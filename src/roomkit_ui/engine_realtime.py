@@ -69,7 +69,6 @@ class RealtimeMixin:
                 if not self._attitude_name:
                     self._attitude_name = settings.get("selected_attitude", "") or attitude
             aec_mode = settings.get("aec_mode", "webrtc")
-            denoise_mode = settings.get("denoise", "none")
 
             from roomkit import RealtimeVoiceChannel, RoomKit
             from roomkit.voice.backends.local import LocalAudioBackend
@@ -81,7 +80,13 @@ class RealtimeMixin:
             block_ms = 20
             frame_size = sample_rate * block_ms // 1000
 
-            aec, denoiser = build_audio_processing(aec_mode, denoise_mode, sample_rate, frame_size)
+            # Denoisers are voice-channel only: a speech enhancer on the mic
+            # path keeps the *dominant* voice, so during doubletalk it eats
+            # the user's barge-in speech before the provider's VAD sees it.
+            aec, _ = build_audio_processing(aec_mode, "none", sample_rate, frame_size)
+            denoise_mode = settings.get("denoise", "none")
+            if denoise_mode != "none":
+                logger.info("Denoiser (%s) not applied in realtime mode", denoise_mode)
             mute_mic = aec is None
 
             input_device = settings.get("input_device")
@@ -97,6 +102,11 @@ class RealtimeMixin:
             diarization = setup_diarization(
                 self, settings, vad_available=vad is not None, inference_device=inference_device
             )
+            if settings.get("diarization_enabled") and diarization is None:
+                self.session_notice.emit(  # type: ignore[attr-defined]
+                    "Speaker diarization is inactive for this session — it needs both "
+                    "a speaker model and a VAD model (Settings → AI Models)."
+                )
 
             debug_taps = build_debug_taps(settings)
             recorder, recording_config = build_recorder(settings)
@@ -105,7 +115,6 @@ class RealtimeMixin:
                 diarization=diarization,
                 vad=vad,
                 aec=aec,
-                denoiser=denoiser,
                 debug_taps=debug_taps,
                 recorder=recorder,
                 recording_config=recording_config,
@@ -114,14 +123,16 @@ class RealtimeMixin:
 
             # -- Transport -------------------------------------------------------
             # Pipeline attaches to the RealtimeVoiceChannel (see _start_session),
-            # NOT the transport — 0.7.x LocalAudioBackend no longer exposes a
-            # pipeline kwarg.
+            # NOT the transport.  AEC deliberately does NOT go to the backend:
+            # LocalAudioBackend(aec=...) flags NATIVE_AEC, which makes the
+            # pipeline skip its AEC stage and lose the continuous playback
+            # reference (the 0.9.0 barge-in fix).  Same wiring as roomkit's
+            # examples/realtime_voice_local_gemini.py.
             transport = LocalAudioBackend(
                 input_sample_rate=sample_rate,
                 output_sample_rate=sample_rate,
                 block_duration_ms=block_ms,
                 mute_mic_during_playback=mute_mic,
-                aec=aec,
                 input_device=input_device,
                 output_device=output_device,
             )
@@ -137,11 +148,9 @@ class RealtimeMixin:
                 transport.on_speaker_change(self._on_transport_speaker_change)  # type: ignore[attr-defined]
 
             aec_label = type(aec).__name__ if aec else "none"
-            denoise_label = type(denoiser).__name__ if denoiser else "none"
             logger.info(
-                "Audio pipeline: aec=%s, denoiser=%s, rate=%dHz, block=%dms",
+                "Audio pipeline: aec=%s (pipeline stage), rate=%dHz, block=%dms",
                 aec_label,
-                denoise_label,
                 sample_rate,
                 block_ms,
             )
@@ -423,7 +432,6 @@ def _build_realtime_pipeline(
     diarization: Any,
     vad: Any,
     aec: Any,
-    denoiser: Any,
     debug_taps: Any,
     recorder: Any,
     recording_config: Any,
@@ -433,8 +441,9 @@ def _build_realtime_pipeline(
 
     Diarization + VAD get wired together with a 24 kHz→16 kHz contract because
     realtime providers stream at 24 kHz but the VAD / diarization models are
-    16 kHz-only.  Other stages (AEC, denoiser, debug taps, recorder) attach
-    at the transport's native sample rate.
+    16 kHz-only.  Other stages (AEC, debug taps, recorder) attach at the
+    transport's native sample rate.  No denoiser in realtime — see
+    ``_start_realtime``.
     """
     from roomkit.voice.pipeline.config import AudioPipelineConfig
 
@@ -447,7 +456,6 @@ def _build_realtime_pipeline(
         )
         return AudioPipelineConfig(
             aec=aec,
-            denoiser=denoiser,
             vad=vad,
             diarization=diarization,
             contract=contract,
@@ -456,10 +464,9 @@ def _build_realtime_pipeline(
             recording_config=recording_config,
         )
 
-    if aec is not None or denoiser is not None or debug_taps is not None or recorder is not None:
+    if aec is not None or debug_taps is not None or recorder is not None:
         return AudioPipelineConfig(
             aec=aec,
-            denoiser=denoiser,
             debug_taps=debug_taps,
             recorder=recorder,
             recording_config=recording_config,

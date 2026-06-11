@@ -84,5 +84,7 @@ mixins hold no state; all attributes live on `Engine`. Docs: `docs/architecture.
 - MCP tool schemas: strip `$schema` and `additionalProperties` keys for Gemini compatibility (`_clean_schema()` in mcp_manager.py)
 - MCP session retry: if provider rejects MCP tools, retry with built-in tools only
 - qasync timer cleanup: after MCP session closes, anyio leaves orphaned 0ms timers → 100% CPU. See `cleanup.py`
-- `AudioPipelineConfig`: pass `aec` + `denoiser` here AND `aec` to LocalAudioBackend (both needed)
+- AEC wiring (realtime): pass `aec` to `AudioPipelineConfig` ONLY — `LocalAudioBackend(aec=...)` flags NATIVE_AEC, the pipeline skips its AEC stage and loses the continuous playback reference (roomkit 0.9.0 barge-in fix). Same wiring as roomkit's `examples/realtime_voice_local_gemini.py`. VC mode still passes both.
+- No denoiser on the realtime mic path — speech enhancers keep the dominant voice and eat the user's barge-in during doubletalk. Denoisers are VC-mode only.
+- With a pipeline VAD (diarization), roomkit hands barge-in authority to the LOCAL VAD and ignores the provider's server-VAD events (`_realtime_speech.py` early-returns) — interruption quality then depends entirely on the local VAD.
 - `InterruptionConfig`: pass `InterruptionStrategy.DISABLED` explicitly, not `None`

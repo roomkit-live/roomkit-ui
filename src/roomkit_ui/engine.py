@@ -110,7 +110,8 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
     tool_use = Signal(str, str)  # tool_name, arguments_json
     tool_use_app = Signal(str, str, str, str)  # name, args_json, resource_uri, server_name
     tool_result_app = Signal(str, str)  # name, result_json
-    mcp_status = Signal(str)  # status message
+    mcp_status = Signal(str)  # MCP status message
+    session_notice = Signal(str)  # non-fatal session info shown in the chat
     loading_status = Signal(str)  # loading progress message
     session_info = Signal(dict)  # {provider, model, tools, failed_servers}
     attitude_changed = Signal(str)  # attitude name (empty string = cleared)

@@ -198,7 +198,9 @@ class _GeneralPage(QWidget):
             if val == current_denoise:
                 self.denoise.setCurrentIndex(i)
                 break
-        proc_form.addRow("Denoise", self.denoise)
+        # Denoisers only apply to Voice Channel mode — in realtime they
+        # suppress the user's barge-in speech during doubletalk.
+        proc_form.addRow("Denoise (Voice Channel)", self.denoise)
 
         # VAD model (used by both voice channel STT and realtime diarization)
         from roomkit_ui.model_manager import VAD_MODELS, is_vad_model_downloaded

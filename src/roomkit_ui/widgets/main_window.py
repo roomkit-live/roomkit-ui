@@ -97,6 +97,7 @@ class MainWindow(QMainWindow):
         self._engine.tool_use_app.connect(self._on_tool_use_app)
         self._engine.tool_result_app.connect(self._on_tool_result_app)
         self._engine.mcp_status.connect(self._on_mcp_status)
+        self._engine.session_notice.connect(self._chat.add_info)
         self._engine.loading_status.connect(self._on_loading_status)
         self._engine.session_info.connect(self._on_session_info)
         self._engine.attitude_changed.connect(self._info_bar.set_attitude)
