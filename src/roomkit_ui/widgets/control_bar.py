@@ -9,6 +9,7 @@ from PySide6.QtCore import QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QHBoxLayout, QPushButton, QWidget
 
+from roomkit_ui.engine_state import EngineState
 from roomkit_ui.icons import svg_icon
 from roomkit_ui.theme import colors
 
@@ -376,21 +377,21 @@ class ControlBar(QWidget):
         self._center_btn.set_bg(normal, hover)
         self._center_btn.set_glow_color(state)
 
-        if state in ("idle", "error"):
+        if state in (EngineState.IDLE, EngineState.ERROR):
             self._is_active = False
             self._center_btn.setIcon(svg_icon("sparkles", "#FFFFFF", 24))
             self._center_btn.setIconSize(self._center_btn.size() * 0.30)
             self._center_btn.setToolTip("Start voice session")
             self._center_btn.stop_pulse()
             self._left_btn.set_mode("reset")
-        elif state == "connecting":
+        elif state == EngineState.CONNECTING:
             self._is_active = False
             self._center_btn.setIcon(svg_icon("stop", "#FFFFFF", 22))
             self._center_btn.setIconSize(self._center_btn.size() * 0.28)
             self._center_btn.setToolTip("Cancel")
             self._center_btn.start_pulse()
             self._left_btn.set_mode("mute")
-        elif state == "active":
+        elif state == EngineState.ACTIVE:
             self._is_active = True
             self._center_btn.setIcon(svg_icon("stop", "#FFFFFF", 22))
             self._center_btn.setIconSize(self._center_btn.size() * 0.28)

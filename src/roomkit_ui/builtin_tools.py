@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import datetime
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 BUILTIN_TOOLS: list[dict] = [
     {
@@ -124,7 +127,7 @@ def handle_builtin_tool(name: str) -> str | None:
                         }
                     )
         except (json.JSONDecodeError, TypeError):
-            pass
+            logger.debug("Ignoring malformed custom_attitudes setting", exc_info=True)
         return json.dumps({"attitudes": attitudes})
     if name == "get_roomkit_info":
         return json.dumps(

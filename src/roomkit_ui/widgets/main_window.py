@@ -12,6 +12,7 @@ from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QMainWindow, QVBoxLayout, QWidget
 
 from roomkit_ui.engine import Engine
+from roomkit_ui.engine_state import EngineState
 from roomkit_ui.settings import load_settings
 from roomkit_ui.theme import colors
 from roomkit_ui.widgets.chat_view import ChatView
@@ -106,7 +107,7 @@ class MainWindow(QMainWindow):
 
     def toggle_session(self) -> None:
         """Toggle the voice session on/off (used by global hotkey)."""
-        if self._engine.state in ("active", "connecting"):
+        if self._engine.state in (EngineState.ACTIVE, EngineState.CONNECTING):
             self._on_stop()
         else:
             self._on_start()
@@ -117,7 +118,7 @@ class MainWindow(QMainWindow):
         self.settings_saved.emit()
 
     def _on_reset(self) -> None:
-        if self._engine.state != "idle":
+        if self._engine.state != EngineState.IDLE:
             asyncio.ensure_future(self._engine.stop())
         self._chat.reset()
         for widget in self._active_app_widgets.values():
@@ -142,11 +143,11 @@ class MainWindow(QMainWindow):
 
     def _on_state_changed(self, state: str) -> None:
         self._controls.set_state(state)
-        if state == "active":
+        if state == EngineState.ACTIVE:
             self._chat.clear_loading_status()
             self._vu.start()
             self.session_active_changed.emit(True)
-        elif state in ("idle", "error"):
+        elif state in (EngineState.IDLE, EngineState.ERROR):
             self._chat.reset()
             self._vu.stop()
             self._info_bar.clear_session()
@@ -210,7 +211,7 @@ class MainWindow(QMainWindow):
                     f.write(html)
                 logger.debug("MCP App HTML cached: %s (%d bytes)", path, len(html))
             except Exception:
-                pass
+                logger.debug("MCP App HTML cache write failed: %s", path, exc_info=True)
 
         widget = self._chat.add_app_tool_call(name, args_json, html, server_name)
         if widget is None:
@@ -222,13 +223,14 @@ class MainWindow(QMainWindow):
             try:
                 old.deleteLater()
             except Exception:
-                pass
+                logger.debug("deleteLater failed for stale app widget %s", name, exc_info=True)
         self._active_app_widgets[name] = widget
 
         # Push tool input to the app
         try:
             arguments = json.loads(args_json)
         except (json.JSONDecodeError, TypeError):
+            logger.debug("Malformed tool arguments for %s, sending empty input", name)
             arguments = {}
         widget.send_tool_input(arguments)
 
@@ -270,7 +272,7 @@ class MainWindow(QMainWindow):
         self._chat.add_error(msg)
 
     def closeEvent(self, event) -> None:  # noqa: N802
-        if self._engine.state != "idle":
+        if self._engine.state != EngineState.IDLE:
             # Schedule cleanup and give it time to finish before the loop exits.
             # This ensures MCP subprocesses are terminated and audio backends closed.
             task = asyncio.ensure_future(self._engine.stop())

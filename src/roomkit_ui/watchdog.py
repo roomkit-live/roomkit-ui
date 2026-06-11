@@ -22,6 +22,8 @@ import time
 
 from PySide6.QtCore import QObject, QTimer
 
+from roomkit_ui.engine_state import EngineState
+
 logger = logging.getLogger(__name__)
 
 # How often the timer fires (seconds)
@@ -104,7 +106,7 @@ class SessionWatchdog(QObject):
 
     def _check(self) -> None:
         engine = self._engine
-        if getattr(engine, "_state", None) != "active" or self._last_activity <= 0:
+        if getattr(engine, "_state", None) != EngineState.ACTIVE or self._last_activity <= 0:
             return
         # Don't nudge while the AI is actively outputting audio
         if self._ai_responding:

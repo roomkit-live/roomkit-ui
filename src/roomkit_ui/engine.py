@@ -27,6 +27,7 @@ from roomkit_ui.builtin_tools import BUILTIN_TOOLS
 from roomkit_ui.cleanup import cleanup_stale_fds, post_cleanup_monitor
 from roomkit_ui.engine_callbacks import CallbackMixin
 from roomkit_ui.engine_realtime import RealtimeMixin
+from roomkit_ui.engine_state import EngineState
 from roomkit_ui.engine_tools import ToolMixin
 from roomkit_ui.engine_vc import VoiceChannelMixin
 from roomkit_ui.mcp_manager import MCPManager
@@ -65,7 +66,7 @@ class _VoiceErrorLogHandler(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:
         try:
             engine = self._engine_ref()
-            if engine is None or engine._state != "active":
+            if engine is None or engine._state != EngineState.ACTIVE:
                 return
             msg = record.getMessage()
             # Extract the root cause from the traceback if present
@@ -125,7 +126,7 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         self._tts: Any = None
         self._mcp: MCPManager | None = None
         self._mic_muted = False
-        self._state = "idle"
+        self._state = EngineState.IDLE
         self._attitude: str = ""  # full description text (injected into prompt)
         self._attitude_name: str = ""  # short display name for the header
         # User's base system prompt (without attitude) — captured at session
@@ -187,8 +188,13 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         self._cached_models.clear()
 
     @property
-    def state(self) -> str:
+    def state(self) -> EngineState:
         return self._state
+
+    def _set_state(self, state: EngineState) -> None:
+        """Assign the session state and notify the UI."""
+        self._state = state
+        self.state_changed.emit(state)
 
     def set_mic_muted(self, muted: bool) -> None:
         self._mic_muted = muted
@@ -202,7 +208,7 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
     # -- lifecycle dispatcher ------------------------------------------------
 
     async def start(self, settings: dict) -> None:
-        if self._state not in ("idle", "error"):
+        if self._state not in (EngineState.IDLE, EngineState.ERROR):
             return
         self._mic_muted = False
         # Re-attach the log handler (removed during cleanup)
@@ -260,11 +266,11 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         return tools, has_mcp_tools
 
     async def stop(self) -> None:
-        if self._state not in ("active", "connecting", "error"):
+        if self._state not in (EngineState.ACTIVE, EngineState.CONNECTING, EngineState.ERROR):
             return
         # Guard re-entrancy immediately — before any await — so a second
         # call (e.g. end_conversation timer + user click) is rejected.
-        self._state = "stopping"
+        self._state = EngineState.STOPPING
         # Cancel any pending end_conversation timer to prevent a late fire
         if self._end_conv_handle is not None:
             self._end_conv_handle.cancel()
@@ -277,8 +283,7 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
             self._attitude = ""
             self._attitude_name = ""
             self._log_handler.reset()
-            self._state = "idle"
-            self.state_changed.emit("idle")
+            self._set_state(EngineState.IDLE)
 
     async def _cleanup(self) -> None:
         self._watchdog.stop()

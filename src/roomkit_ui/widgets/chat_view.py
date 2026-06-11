@@ -177,28 +177,44 @@ class ChatView(QScrollArea):
     def hide_status(self) -> None:
         self._hide_status()
 
+    def _make_status_label(self, text: str, color: str) -> QLabel:
+        """Centered pill-style label shared by loading/info/tool/error rows."""
+        c = colors()
+        label = QLabel(text)
+        label.setWordWrap(True)
+        label.setAlignment(Qt.AlignCenter)
+        label.setStyleSheet(
+            f"QLabel {{"
+            f"  color: {color};"
+            f"  font-size: 12px;"
+            f"  background: {c['BG_TERTIARY']};"
+            f"  border: 1px solid {c['SEPARATOR']};"
+            f"  border-radius: 8px;"
+            f"  padding: 8px 16px;"
+            f"  margin: 4px 20px;"
+            f"}}"
+        )
+        return label
+
+    def _insert_status_row(self, widget: QWidget) -> None:
+        """Insert a widget above the bottom status area and scroll."""
+        idx = self._layout.count() - 2
+        if idx < 0:
+            idx = 0
+        self._layout.insertWidget(idx, widget)
+        self._scroll_to_bottom()
+
+    def _finalize_current_bubble(self) -> None:
+        self._hide_status()
+        if self._current_bubble and not self._current_bubble.finalized:
+            self._current_bubble.finalize()
+            self._current_bubble = None
+
     def set_loading_status(self, message: str) -> None:
         """Show or update a single loading status label (replaces previous)."""
-        c = colors()
         if self._loading_label is None:
-            self._loading_label = QLabel()
-            self._loading_label.setWordWrap(True)
-            self._loading_label.setAlignment(Qt.AlignCenter)
-            self._loading_label.setStyleSheet(
-                f"QLabel {{"
-                f"  color: {c['TEXT_SECONDARY']};"
-                f"  font-size: 12px;"
-                f"  background: {c['BG_TERTIARY']};"
-                f"  border: 1px solid {c['SEPARATOR']};"
-                f"  border-radius: 8px;"
-                f"  padding: 8px 16px;"
-                f"  margin: 4px 20px;"
-                f"}}"
-            )
-            idx = self._layout.count() - 2
-            if idx < 0:
-                idx = 0
-            self._layout.insertWidget(idx, self._loading_label)
+            self._loading_label = self._make_status_label("", colors()["TEXT_SECONDARY"])
+            self._insert_status_row(self._loading_label)
         self._loading_label.setText(message)
         self._scroll_to_bottom()
 
@@ -211,59 +227,13 @@ class ChatView(QScrollArea):
 
     def add_info(self, message: str) -> None:
         """Show a neutral info message in the chat area."""
-        self._hide_status()
-        if self._current_bubble and not self._current_bubble.finalized:
-            self._current_bubble.finalize()
-            self._current_bubble = None
-
-        c = colors()
-        label = QLabel(message)
-        label.setWordWrap(True)
-        label.setAlignment(Qt.AlignCenter)
-        label.setStyleSheet(
-            f"QLabel {{"
-            f"  color: {c['TEXT_SECONDARY']};"
-            f"  font-size: 12px;"
-            f"  background: {c['BG_TERTIARY']};"
-            f"  border: 1px solid {c['SEPARATOR']};"
-            f"  border-radius: 8px;"
-            f"  padding: 8px 16px;"
-            f"  margin: 4px 20px;"
-            f"}}"
-        )
-        idx = self._layout.count() - 2
-        if idx < 0:
-            idx = 0
-        self._layout.insertWidget(idx, label)
-        self._scroll_to_bottom()
+        self._finalize_current_bubble()
+        self._insert_status_row(self._make_status_label(message, colors()["TEXT_SECONDARY"]))
 
     def add_tool_call(self, name: str, arguments: str) -> None:
         """Show a tool-call indicator in the chat area."""
-        self._hide_status()
-        if self._current_bubble and not self._current_bubble.finalized:
-            self._current_bubble.finalize()
-            self._current_bubble = None
-
-        c = colors()
-        label = QLabel(f"\u2699  {name}({arguments})")
-        label.setWordWrap(True)
-        label.setAlignment(Qt.AlignCenter)
-        label.setStyleSheet(
-            f"QLabel {{"
-            f"  color: #BF5AF2;"
-            f"  font-size: 12px;"
-            f"  background: {c['BG_TERTIARY']};"
-            f"  border: 1px solid {c['SEPARATOR']};"
-            f"  border-radius: 8px;"
-            f"  padding: 8px 16px;"
-            f"  margin: 4px 20px;"
-            f"}}"
-        )
-        idx = self._layout.count() - 2
-        if idx < 0:
-            idx = 0
-        self._layout.insertWidget(idx, label)
-        self._scroll_to_bottom()
+        self._finalize_current_bubble()
+        self._insert_status_row(self._make_status_label(f"\u2699  {name}({arguments})", "#BF5AF2"))
 
     def add_app_tool_call(
         self,
@@ -282,48 +252,17 @@ class ChatView(QScrollArea):
             self.add_tool_call(tool_name, arguments_json)
             return None
 
-        self._hide_status()
-        if self._current_bubble and not self._current_bubble.finalized:
-            self._current_bubble.finalize()
-            self._current_bubble = None
+        self._finalize_current_bubble()
 
         widget = MCPAppWidget(tool_name, server_name, parent=self._container)
         widget.load_html(html_content)
-
-        idx = self._layout.count() - 2
-        if idx < 0:
-            idx = 0
-        self._layout.insertWidget(idx, widget)
-        self._scroll_to_bottom()
+        self._insert_status_row(widget)
         return widget
 
     def add_error(self, message: str) -> None:
         """Show a centered error message in the chat area."""
-        self._hide_status()
-        if self._current_bubble and not self._current_bubble.finalized:
-            self._current_bubble.finalize()
-            self._current_bubble = None
-
-        c = colors()
-        label = QLabel(message)
-        label.setWordWrap(True)
-        label.setAlignment(Qt.AlignCenter)
-        label.setStyleSheet(
-            f"QLabel {{"
-            f"  color: {c['ACCENT_RED']};"
-            f"  font-size: 12px;"
-            f"  background: {c['BG_TERTIARY']};"
-            f"  border: 1px solid {c['SEPARATOR']};"
-            f"  border-radius: 8px;"
-            f"  padding: 8px 16px;"
-            f"  margin: 4px 20px;"
-            f"}}"
-        )
-        idx = self._layout.count() - 2
-        if idx < 0:
-            idx = 0
-        self._layout.insertWidget(idx, label)
-        self._scroll_to_bottom()
+        self._finalize_current_bubble()
+        self._insert_status_row(self._make_status_label(message, colors()["ACCENT_RED"]))
 
     def clear(self) -> None:
         """Remove all bubbles and error labels, switch to chat layout."""

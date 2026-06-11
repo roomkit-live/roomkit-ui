@@ -20,6 +20,7 @@ from roomkit_ui.engine_audio import (
     resolve_attitude,
     setup_diarization,
 )
+from roomkit_ui.engine_state import EngineState
 from roomkit_ui.hooks import register_vc_hooks
 from roomkit_ui.providers import create_ai_provider
 from roomkit_ui.tts import create_tts_provider
@@ -34,7 +35,7 @@ class VoiceChannelMixin:
     ``self._attitude`` and friends from inside mixin methods.
     """
 
-    _state: str
+    _state: EngineState
     _attitude: str
     _attitude_name: str
     _base_system_prompt: str
@@ -51,8 +52,7 @@ class VoiceChannelMixin:
     _pending_tool_calls: int
 
     async def _start_voice_channel(self, settings: dict) -> None:
-        self._state = "connecting"  # type: ignore[attr-defined]
-        self.state_changed.emit("connecting")  # type: ignore[attr-defined]
+        self._set_state(EngineState.CONNECTING)  # type: ignore[attr-defined]
 
         try:
             from roomkit import RoomKit, VoiceChannel
@@ -194,8 +194,7 @@ class VoiceChannelMixin:
             self._pending_tool_calls = 0  # type: ignore[attr-defined]
             self._watchdog.start()  # type: ignore[attr-defined]
 
-            self._state = "active"  # type: ignore[attr-defined]
-            self.state_changed.emit("active")  # type: ignore[attr-defined]
+            self._set_state(EngineState.ACTIVE)  # type: ignore[attr-defined]
 
             # Emit session info
             self._emit_vc_session_info(
@@ -207,8 +206,7 @@ class VoiceChannelMixin:
 
         except Exception as e:
             logger.exception("Failed to start voice channel session")
-            self._state = "error"  # type: ignore[attr-defined]
-            self.state_changed.emit("error")  # type: ignore[attr-defined]
+            self._set_state(EngineState.ERROR)  # type: ignore[attr-defined]
             self.error_occurred.emit(str(e))  # type: ignore[attr-defined]
             await self._cleanup()  # type: ignore[attr-defined]
 

@@ -22,6 +22,7 @@ from roomkit_ui.engine_audio import (
     resolve_attitude,
     setup_diarization,
 )
+from roomkit_ui.engine_state import EngineState
 from roomkit_ui.hooks import register_realtime_hooks
 
 logger = logging.getLogger(__name__)
@@ -34,7 +35,7 @@ class RealtimeMixin:
     ``self._attitude`` and friends from inside mixin methods.
     """
 
-    _state: str
+    _state: EngineState
     _attitude: str
     _attitude_name: str
     _base_system_prompt: str
@@ -48,8 +49,7 @@ class RealtimeMixin:
     _pending_tool_calls: int
 
     async def _start_realtime(self, settings: dict) -> None:
-        self._state = "connecting"  # type: ignore[attr-defined]
-        self.state_changed.emit("connecting")  # type: ignore[attr-defined]
+        self._set_state(EngineState.CONNECTING)  # type: ignore[attr-defined]
 
         try:
             provider_name = settings.get("provider", "gemini")
@@ -214,8 +214,7 @@ class RealtimeMixin:
             self._pending_tool_calls = 0  # type: ignore[attr-defined]
             self._watchdog.start()  # type: ignore[attr-defined]
 
-            self._state = "active"  # type: ignore[attr-defined]
-            self.state_changed.emit("active")  # type: ignore[attr-defined]
+            self._set_state(EngineState.ACTIVE)  # type: ignore[attr-defined]
 
             # Emit structured session info for the UI info bar
             tool_info = [
@@ -234,8 +233,7 @@ class RealtimeMixin:
 
         except Exception as e:
             logger.exception("Failed to start voice session")
-            self._state = "error"  # type: ignore[attr-defined]
-            self.state_changed.emit("error")  # type: ignore[attr-defined]
+            self._set_state(EngineState.ERROR)  # type: ignore[attr-defined]
             self.error_occurred.emit(str(e))  # type: ignore[attr-defined]
             await self._cleanup()  # type: ignore[attr-defined]
 

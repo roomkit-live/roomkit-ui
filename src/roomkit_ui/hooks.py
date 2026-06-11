@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from roomkit_ui.engine_state import EngineState
+
 
 def register_audio_hooks(kit: Any, engine: Any) -> None:
     """Register ON_INPUT/OUTPUT_AUDIO_LEVEL hooks — shared by both modes."""
@@ -12,7 +14,7 @@ def register_audio_hooks(kit: Any, engine: Any) -> None:
     @kit.hook(HookTrigger.ON_INPUT_AUDIO_LEVEL, HookExecution.ASYNC)
     async def _on_input_level(event, context):
         try:
-            if engine._state != "active":
+            if engine._state != EngineState.ACTIVE:
                 return
             db = getattr(event, "level_db", -60.0)
             level = max(0.0, min(1.0, (db + 60.0) / 60.0))
@@ -25,7 +27,7 @@ def register_audio_hooks(kit: Any, engine: Any) -> None:
     @kit.hook(HookTrigger.ON_OUTPUT_AUDIO_LEVEL, HookExecution.ASYNC)
     async def _on_output_level(event, context):
         try:
-            if engine._state != "active":
+            if engine._state != EngineState.ACTIVE:
                 return
             db = getattr(event, "level_db", -60.0)
             level = max(0.0, min(1.0, (db + 60.0) / 60.0))
@@ -111,7 +113,7 @@ def register_vc_hooks(kit: Any, engine: Any) -> None:
     async def _on_ai_response(text, context):
         from roomkit import HookResult
 
-        if engine._state != "active":
+        if engine._state != EngineState.ACTIVE:
             return HookResult.allow()
         try:
             # Emit as partial — the chat bubble will stream words progressively
@@ -123,7 +125,7 @@ def register_vc_hooks(kit: Any, engine: Any) -> None:
 
     @kit.hook(HookTrigger.AFTER_TTS, HookExecution.ASYNC)
     async def _on_tts_done(text, context):
-        if engine._state != "active":
+        if engine._state != EngineState.ACTIVE:
             return
         try:
             # Finalize the assistant bubble (renders markdown, shows full text)
