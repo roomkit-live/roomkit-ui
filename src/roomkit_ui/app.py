@@ -60,10 +60,11 @@ _chromium_flags = (
 
 if not _has_opengl:
     # OpenGL is completely broken — tell Chromium to not touch the GPU at all,
-    # and force Qt Quick / RHI to use CPU rendering.  Without these, ANGLE
+    # and force Qt Quick to use CPU rendering.  Without these, ANGLE
     # attempts to create an EGL context and abort()s the whole process.
+    # (QSG_RHI_BACKEND has no software value — CPU rendering is selected
+    # via QT_QUICK_BACKEND alone; Qt 6.11 warns on unknown RHI keys.)
     _chromium_flags += " --disable-gpu --disable-gpu-compositing --in-process-gpu"
-    os.environ.setdefault("QSG_RHI_BACKEND", "sw")
     os.environ.setdefault("QT_QUICK_BACKEND", "software")
 
 os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", _chromium_flags)
