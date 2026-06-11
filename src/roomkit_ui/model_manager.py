@@ -4,247 +4,65 @@ from __future__ import annotations
 
 import asyncio
 import ctypes
-import hashlib
-import json
-import shutil
 import sys
-import urllib.request
-from collections.abc import Callable
-from dataclasses import dataclass
-from pathlib import Path
 
-_RAW_URL = "https://raw.githubusercontent.com/anganyAI/edge-ai-models/main"
-_LFS_BATCH_URL = "https://github.com/anganyAI/edge-ai-models.git/info/lfs/objects/batch"
-_GH_API_URL = "https://api.github.com/repos/anganyAI/edge-ai-models/contents"
-
-# Progress callback: (bytes_downloaded, total_bytes)
-ProgressCallback = Callable[[int, int], None]
-
-
-@dataclass(frozen=True)
-class STTModel:
-    id: str
-    name: str
-    type: str  # "offline" or "streaming"
-    size: str
-    files: tuple[str, ...]
-
-
-STT_MODELS: list[STTModel] = [
-    STTModel(
-        id="whisper-small",
-        name="Whisper Small",
-        type="offline",
-        size="~357 MB",
-        files=("encoder.int8.onnx", "decoder.int8.onnx", "tokens.txt"),
-    ),
-    STTModel(
-        id="parakeet-offline",
-        name="Parakeet",
-        type="offline",
-        size="~640 MB",
-        files=(
-            "encoder.int8.onnx",
-            "decoder.int8.onnx",
-            "joiner.int8.onnx",
-            "tokens.txt",
-        ),
-    ),
-    STTModel(
-        id="kroko-streaming-fr",
-        name="Kroko Streaming (FR)",
-        type="streaming",
-        size="~147 MB",
-        files=(
-            "encoder.int8.onnx",
-            "decoder.int8.onnx",
-            "joiner.int8.onnx",
-            "tokens.txt",
-        ),
-    ),
-    STTModel(
-        id="zipformer-streaming",
-        name="Zipformer Streaming",
-        type="streaming",
-        size="~122 MB",
-        files=(
-            "encoder-epoch-29-avg-9-with-averaged-model.int8.onnx",
-            "decoder-epoch-29-avg-9-with-averaged-model.int8.onnx",
-            "joiner-epoch-29-avg-9-with-averaged-model.int8.onnx",
-            "tokens.txt",
-        ),
-    ),
-]
-
-_MODELS_BY_ID: dict[str, STTModel] = {m.id: m for m in STT_MODELS}
-
-
-def get_models_dir() -> Path:
-    """Return (and create) the local models storage directory."""
-    p = Path.home() / ".local" / "share" / "roomkit-ui" / "models"
-    p.mkdir(parents=True, exist_ok=True)
-    return p
-
-
-def model_path(model_id: str) -> Path:
-    """Return the directory for a specific model."""
-    return get_models_dir() / model_id / "v1"
-
-
-def is_model_downloaded(model_id: str) -> bool:
-    """Check whether all expected files exist for a model."""
-    m = _MODELS_BY_ID.get(model_id)
-    if m is None:
-        return False
-    d = model_path(model_id)
-    return all((d / f).is_file() for f in m.files)
-
-
-def delete_model(model_id: str) -> None:
-    """Remove a downloaded model's directory."""
-    d = get_models_dir() / model_id
-    if d.exists():
-        shutil.rmtree(d)
-
-
-def _resolve_lfs_pointer(raw_content: bytes) -> tuple[str, int] | None:
-    """Parse a Git LFS pointer and return (oid, size), or None if not LFS."""
-    text = raw_content.decode("utf-8", errors="replace")
-    if not text.startswith("version https://git-lfs"):
-        return None
-    oid = ""
-    size = 0
-    for line in text.splitlines():
-        if line.startswith("oid sha256:"):
-            oid = line.split(":", 1)[1]
-        elif line.startswith("size "):
-            size = int(line.split(" ", 1)[1])
-    return (oid, size) if oid else None
-
-
-def _lfs_download_url(oid: str, size: int) -> str:
-    """Call the GitHub LFS batch API to get a direct download URL."""
-    payload = json.dumps(
-        {
-            "operation": "download",
-            "transfers": ["basic"],
-            "objects": [{"oid": oid, "size": size}],
-        }
-    ).encode()
-    req = urllib.request.Request(  # noqa: S310
-        _LFS_BATCH_URL,
-        data=payload,
-        headers={
-            "Content-Type": "application/vnd.git-lfs+json",
-            "Accept": "application/vnd.git-lfs+json",
-        },
-    )
-    with urllib.request.urlopen(req) as resp:  # noqa: S310
-        data = json.loads(resp.read())
-    obj = data["objects"][0]
-    if "error" in obj:
-        raise RuntimeError(f"LFS error: {obj['error']}")
-    return str(obj["actions"]["download"]["href"])
-
-
-_CHUNK = 256 * 1024  # 256 KB read chunks
-
-
-def _download_file(
-    url: str,
-    target: Path,
-    expected_size: int = 0,
-    on_bytes: Callable[[int], None] | None = None,
-    expected_sha256: str | None = None,
-) -> None:
-    """Download *url* to *target* atomically, reporting bytes via *on_bytes*.
-
-    Integrity: when *expected_size* is non-zero the byte count must match,
-    and when *expected_sha256* is given (the Git LFS OID) the digest must
-    match — otherwise the partial file is removed and RuntimeError raised.
-    """
-    tmp = target.with_suffix(target.suffix + ".part")
-    hasher = hashlib.sha256() if expected_sha256 else None
-    received = 0
-    try:
-        req = urllib.request.Request(url)  # noqa: S310
-        with urllib.request.urlopen(req) as resp, open(tmp, "wb") as fp:  # noqa: S310
-            while True:
-                chunk = resp.read(_CHUNK)
-                if not chunk:
-                    break
-                fp.write(chunk)
-                received += len(chunk)
-                if hasher is not None:
-                    hasher.update(chunk)
-                if on_bytes is not None:
-                    on_bytes(len(chunk))
-        if expected_size and received != expected_size:
-            raise RuntimeError(
-                f"size mismatch for {target.name}: expected {expected_size}, got {received}"
-            )
-        if hasher is not None and hasher.hexdigest() != expected_sha256:
-            raise RuntimeError(f"sha256 mismatch for {target.name}: download corrupted")
-        tmp.rename(target)
-    except Exception:
-        tmp.unlink(missing_ok=True)
-        raise
-
-
-def _download_model_sync(
-    model_id: str,
-    progress: ProgressCallback | None = None,
-) -> None:
-    """Download all files for *model_id* (blocking).
-
-    *progress(bytes_so_far, total_bytes)* is called periodically.
-    Files stored via Git LFS are resolved through the LFS batch API.
-    """
-    m = _MODELS_BY_ID.get(model_id)
-    if m is None:
-        raise ValueError(f"Unknown model: {model_id}")
-
-    dest = model_path(model_id)
-    dest.mkdir(parents=True, exist_ok=True)
-
-    # First pass: resolve LFS pointers to get total size
-    file_infos: list[tuple[str, str, int, str]] = []  # (fname, url, size, oid)
-    total_bytes = 0
-    for fname in m.files:
-        target = dest / fname
-        if target.is_file():
-            continue  # already downloaded
-        raw_url = f"{_RAW_URL}/{model_id}/v1/{fname}"
-        with urllib.request.urlopen(raw_url) as resp:  # noqa: S310
-            raw_bytes = resp.read()
-        lfs = _resolve_lfs_pointer(raw_bytes)
-        if lfs is not None:
-            oid, size = lfs
-            real_url = _lfs_download_url(oid, size)
-            file_infos.append((fname, real_url, size, oid))
-            total_bytes += size
-        else:
-            # Small file — write directly
-            target.write_bytes(raw_bytes)
-
-    if not file_infos:
-        return
-
-    # Second pass: download with byte-level progress
-    downloaded = 0
-    if progress is not None:
-        progress(0, total_bytes)
-
-    for fname, url, size, oid in file_infos:
-        target = dest / fname
-
-        def _on_bytes(n: int) -> None:
-            nonlocal downloaded
-            downloaded += n
-            if progress is not None:
-                progress(downloaded, total_bytes)
-
-        _download_file(url, target, expected_size=size, on_bytes=_on_bytes, expected_sha256=oid)
+# Names marked "noqa: F401" are re-exports: every symbol previously defined
+# here is still importable from this module by external callers.
+from roomkit_ui.model_catalog import (
+    _MODELS_BY_ID,
+    _SPEAKER_MODELS_BY_ID,
+    _TTS_MODELS_BY_ID,
+    _VAD_MODELS_BY_ID,
+    GTCRN_MODEL_ID,  # noqa: F401
+    GTCRN_SIZE,  # noqa: F401
+    GTCRN_URL,  # noqa: F401
+    SMART_TURN_MODEL_ID,  # noqa: F401
+    SMART_TURN_SIZE,  # noqa: F401
+    SMART_TURN_URL,  # noqa: F401
+    SPEAKER_MODELS,  # noqa: F401
+    STT_MODELS,  # noqa: F401
+    TTS_MODELS,  # noqa: F401
+    VAD_MODELS,  # noqa: F401
+    SpeakerModel,  # noqa: F401
+    STTModel,  # noqa: F401
+    TTSModel,  # noqa: F401
+    VADModel,  # noqa: F401
+    delete_espeak_ng_data,  # noqa: F401
+    delete_gtcrn,  # noqa: F401
+    delete_model,  # noqa: F401
+    delete_smart_turn,  # noqa: F401
+    delete_speaker_model,  # noqa: F401
+    delete_tts_model,  # noqa: F401
+    delete_vad_model,  # noqa: F401
+    espeak_ng_data_path,
+    get_models_dir,  # noqa: F401
+    gtcrn_model_path,  # noqa: F401
+    is_espeak_ng_downloaded,  # noqa: F401
+    is_gtcrn_downloaded,  # noqa: F401
+    is_model_downloaded,  # noqa: F401
+    is_smart_turn_downloaded,  # noqa: F401
+    is_speaker_model_downloaded,  # noqa: F401
+    is_tts_model_downloaded,  # noqa: F401
+    is_vad_model_downloaded,  # noqa: F401
+    model_path,
+    smart_turn_model_path,  # noqa: F401
+    speaker_model_path,
+    tts_model_path,
+    vad_model_path,
+)
+from roomkit_ui.model_download import (
+    ProgressCallback,
+    _download_espeak_ng_sync,
+    _download_file,  # noqa: F401
+    _download_gtcrn_sync,
+    _download_model_sync,
+    _download_smart_turn_sync,
+    _download_speaker_model_sync,
+    _download_tts_model_sync,
+    _download_vad_model_sync,
+    _generate_tokens_txt,  # noqa: F401
+    _resolve_lfs_pointer,  # noqa: F401
+)
 
 
 def is_streaming_model(model_id: str) -> bool:
@@ -323,170 +141,9 @@ async def download_model(
     await asyncio.to_thread(_download_model_sync, model_id, progress)
 
 
-# ---------------------------------------------------------------------------
-# GTCRN denoiser model (direct GitHub release asset, no LFS)
-# ---------------------------------------------------------------------------
-
-GTCRN_MODEL_ID = "gtcrn-denoiser"
-GTCRN_URL = "https://github.com/k2-fsa/sherpa-onnx/releases/download/speech-enhancement-models/gtcrn_simple.onnx"
-GTCRN_SIZE = "~2 MB"
-_GTCRN_FILENAME = "gtcrn_simple.onnx"
-
-
-def gtcrn_model_path() -> Path:
-    """Return the path to the GTCRN ONNX model file."""
-    return get_models_dir() / GTCRN_MODEL_ID / _GTCRN_FILENAME
-
-
-def is_gtcrn_downloaded() -> bool:
-    """Check whether the GTCRN model file exists."""
-    return gtcrn_model_path().is_file()
-
-
-def delete_gtcrn() -> None:
-    """Remove the GTCRN model directory."""
-    d = get_models_dir() / GTCRN_MODEL_ID
-    if d.exists():
-        shutil.rmtree(d)
-
-
-def _download_gtcrn_sync(progress: ProgressCallback | None = None) -> None:
-    """Download the GTCRN ONNX model (blocking)."""
-    dest = get_models_dir() / GTCRN_MODEL_ID
-    dest.mkdir(parents=True, exist_ok=True)
-    target = dest / _GTCRN_FILENAME
-    if target.is_file():
-        return
-
-    downloaded = 0
-
-    def _on_bytes(n: int) -> None:
-        nonlocal downloaded
-        downloaded += n
-        if progress is not None:
-            progress(downloaded, total)
-
-    # HEAD request to get total size for progress reporting
-    req = urllib.request.Request(GTCRN_URL, method="HEAD")  # noqa: S310
-    with urllib.request.urlopen(req) as resp:  # noqa: S310
-        total = int(resp.headers.get("Content-Length", 0))
-
-    if progress is not None:
-        progress(0, total)
-
-    _download_file(GTCRN_URL, target, expected_size=total, on_bytes=_on_bytes)
-
-
 async def download_gtcrn(progress: ProgressCallback | None = None) -> None:
     """Download the GTCRN model in a background thread."""
     await asyncio.to_thread(_download_gtcrn_sync, progress)
-
-
-# ---------------------------------------------------------------------------
-# VAD models (Silero / TEN via sherpa-onnx)
-# ---------------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class VADModel:
-    id: str
-    name: str
-    type: str  # "silero" or "ten" (maps to SherpaOnnxVADConfig.model_type)
-    size: str
-    onnx_file: str
-
-
-VAD_MODELS: list[VADModel] = [
-    VADModel(
-        "ten-vad",
-        "TEN VAD",
-        "ten",
-        "~126 KB",
-        "ten-vad.int8.onnx",
-    ),
-    VADModel(
-        "silero-vad",
-        "Silero VAD",
-        "silero",
-        "~2.2 MB",
-        "silero_vad.onnx",
-    ),
-]
-
-_VAD_MODELS_BY_ID: dict[str, VADModel] = {m.id: m for m in VAD_MODELS}
-
-# Map edge-ai-models repo paths for each VAD model
-_VAD_REPO_PATHS: dict[str, str] = {
-    "ten-vad": "vad/ten/v1/ten-vad.int8.onnx",
-    "silero-vad": "vad/silero/v1/silero_vad.onnx",
-}
-
-
-def vad_model_path(model_id: str) -> Path:
-    """Return the directory for a specific VAD model."""
-    return get_models_dir() / "vad" / model_id / "v1"
-
-
-def is_vad_model_downloaded(model_id: str) -> bool:
-    """Check whether the VAD model ONNX file exists."""
-    m = _VAD_MODELS_BY_ID.get(model_id)
-    if m is None:
-        return False
-    return (vad_model_path(model_id) / m.onnx_file).is_file()
-
-
-def delete_vad_model(model_id: str) -> None:
-    """Remove a downloaded VAD model's directory."""
-    d = get_models_dir() / "vad" / model_id
-    if d.exists():
-        shutil.rmtree(d)
-
-
-def _download_vad_model_sync(
-    model_id: str,
-    progress: ProgressCallback | None = None,
-) -> None:
-    """Download a VAD model (blocking), resolving LFS pointers."""
-    m = _VAD_MODELS_BY_ID.get(model_id)
-    if m is None:
-        raise ValueError(f"Unknown VAD model: {model_id}")
-
-    dest = vad_model_path(model_id)
-    dest.mkdir(parents=True, exist_ok=True)
-    target = dest / m.onnx_file
-    if target.is_file():
-        return
-
-    repo_path = _VAD_REPO_PATHS[model_id]
-    raw_url = f"{_RAW_URL}/{repo_path}"
-
-    with urllib.request.urlopen(raw_url) as resp:  # noqa: S310
-        raw_bytes = resp.read()
-
-    lfs = _resolve_lfs_pointer(raw_bytes)
-    if lfs is not None:
-        oid, size = lfs
-        real_url = _lfs_download_url(oid, size)
-        downloaded = 0
-        if progress is not None:
-            progress(0, size)
-
-        def _on_bytes(n: int) -> None:
-            nonlocal downloaded
-            downloaded += n
-            if progress is not None:
-                progress(downloaded, size)
-
-        _download_file(
-            real_url, target, expected_size=size, on_bytes=_on_bytes, expected_sha256=oid
-        )
-    else:
-        total = len(raw_bytes)
-        if progress is not None:
-            progress(0, total)
-        target.write_bytes(raw_bytes)
-        if progress is not None:
-            progress(total, total)
 
 
 async def download_vad_model(
@@ -540,226 +197,9 @@ def build_vad_config(
     return SherpaOnnxVADConfig(**kwargs)
 
 
-# ---------------------------------------------------------------------------
-# Smart Turn model (pipecat-ai/smart-turn ONNX)
-# ---------------------------------------------------------------------------
-
-SMART_TURN_MODEL_ID = "smart-turn-v3"
-SMART_TURN_URL = (
-    "https://huggingface.co/pipecat-ai/smart-turn-v3/resolve/main/smart-turn-v3.2-cpu.onnx"
-)
-SMART_TURN_SIZE = "~8 MB"
-_SMART_TURN_FILENAME = "smart-turn-v3.2-cpu.onnx"
-
-
-def smart_turn_model_path() -> Path:
-    """Return the path to the smart-turn ONNX model file."""
-    return get_models_dir() / SMART_TURN_MODEL_ID / _SMART_TURN_FILENAME
-
-
-def is_smart_turn_downloaded() -> bool:
-    """Check whether the smart-turn model file exists."""
-    return smart_turn_model_path().is_file()
-
-
-def delete_smart_turn() -> None:
-    """Remove the smart-turn model directory."""
-    d = get_models_dir() / SMART_TURN_MODEL_ID
-    if d.exists():
-        shutil.rmtree(d)
-
-
-def _download_smart_turn_sync(progress: ProgressCallback | None = None) -> None:
-    """Download the smart-turn ONNX model (blocking)."""
-    dest = get_models_dir() / SMART_TURN_MODEL_ID
-    dest.mkdir(parents=True, exist_ok=True)
-    target = dest / _SMART_TURN_FILENAME
-    if target.is_file():
-        return
-
-    downloaded = 0
-
-    def _on_bytes(n: int) -> None:
-        nonlocal downloaded
-        downloaded += n
-        if progress is not None:
-            progress(downloaded, total)
-
-    req = urllib.request.Request(SMART_TURN_URL, method="HEAD")  # noqa: S310
-    with urllib.request.urlopen(req) as resp:  # noqa: S310
-        total = int(resp.headers.get("Content-Length", 0))
-
-    if progress is not None:
-        progress(0, total)
-
-    _download_file(SMART_TURN_URL, target, expected_size=total, on_bytes=_on_bytes)
-
-
 async def download_smart_turn(progress: ProgressCallback | None = None) -> None:
     """Download the smart-turn model in a background thread."""
     await asyncio.to_thread(_download_smart_turn_sync, progress)
-
-
-# ---------------------------------------------------------------------------
-# TTS models (Piper via sherpa-onnx)
-# ---------------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class TTSModel:
-    id: str
-    name: str
-    size: str
-    sample_rate: int
-    num_speakers: int
-    onnx_file: str  # e.g. "fr_FR-siwis-medium.onnx"
-    config_file: str  # e.g. "fr_FR-siwis-medium.onnx.json"
-
-
-TTS_MODELS: list[TTSModel] = [
-    TTSModel(
-        "piper-siwis-medium",
-        "Siwis (French Female)",
-        "~61 MB",
-        22050,
-        1,
-        "fr_FR-siwis-medium.onnx",
-        "fr_FR-siwis-medium.onnx.json",
-    ),
-    TTSModel(
-        "piper-mls-medium",
-        "MLS (French Multi-speaker)",
-        "~74 MB",
-        22050,
-        125,
-        "fr_FR-mls-medium.onnx",
-        "fr_FR-mls-medium.onnx.json",
-    ),
-    TTSModel(
-        "piper-tom-medium",
-        "Tom (French Male)",
-        "~61 MB",
-        44100,
-        1,
-        "fr_FR-tom-medium.onnx",
-        "fr_FR-tom-medium.onnx.json",
-    ),
-]
-
-_TTS_MODELS_BY_ID: dict[str, TTSModel] = {m.id: m for m in TTS_MODELS}
-
-
-def tts_model_path(model_id: str) -> Path:
-    """Return the directory for a specific TTS model."""
-    return get_models_dir() / "tts" / model_id / "v1"
-
-
-def espeak_ng_data_path() -> Path:
-    """Return the shared espeak-ng-data directory."""
-    return get_models_dir() / "tts" / "espeak-ng-data"
-
-
-def is_tts_model_downloaded(model_id: str) -> bool:
-    """Check whether the TTS model ONNX + tokens.txt exist."""
-    m = _TTS_MODELS_BY_ID.get(model_id)
-    if m is None:
-        return False
-    d = tts_model_path(model_id)
-    return (d / m.onnx_file).is_file() and (d / "tokens.txt").is_file()
-
-
-def is_espeak_ng_downloaded() -> bool:
-    """Check whether espeak-ng-data directory exists and has content."""
-    d = espeak_ng_data_path()
-    return d.is_dir() and (d / "phontab").is_file()
-
-
-def delete_tts_model(model_id: str) -> None:
-    """Remove a downloaded TTS model's directory."""
-    d = get_models_dir() / "tts" / model_id
-    if d.exists():
-        shutil.rmtree(d)
-
-
-def delete_espeak_ng_data() -> None:
-    """Remove the shared espeak-ng-data directory."""
-    d = espeak_ng_data_path()
-    if d.exists():
-        shutil.rmtree(d)
-
-
-def _generate_tokens_txt(onnx_json_path: Path, tokens_path: Path) -> None:
-    """Generate tokens.txt from Piper .onnx.json phoneme_id_map.
-
-    sherpa-onnx expects ``symbol ID`` pairs, one per line (e.g. ``_ 0``).
-    """
-    config = json.loads(onnx_json_path.read_text())
-    phoneme_map: dict[str, list[int]] = config["phoneme_id_map"]
-    max_id = max(max(ids) for ids in phoneme_map.values())
-    tokens: list[str] = [""] * (max_id + 1)
-    for symbol, ids in phoneme_map.items():
-        tokens[ids[0]] = symbol
-    lines = [f"{tok} {i}" for i, tok in enumerate(tokens)]
-    tokens_path.write_text("\n".join(lines) + "\n")
-
-
-def _download_tts_model_sync(
-    model_id: str,
-    progress: ProgressCallback | None = None,
-) -> None:
-    """Download TTS model files (blocking)."""
-    m = _TTS_MODELS_BY_ID.get(model_id)
-    if m is None:
-        raise ValueError(f"Unknown TTS model: {model_id}")
-
-    dest = tts_model_path(model_id)
-    dest.mkdir(parents=True, exist_ok=True)
-
-    files_to_download: list[tuple[str, str, int, str]] = []
-    total_bytes = 0
-
-    for fname in (m.onnx_file, m.config_file, "tokens.txt"):
-        target = dest / fname
-        if target.is_file():
-            continue
-        raw_url = f"{_RAW_URL}/tts/{model_id}/v1/{fname}"
-        try:
-            with urllib.request.urlopen(raw_url) as resp:  # noqa: S310
-                raw_bytes = resp.read()
-        except urllib.error.HTTPError:
-            continue  # tokens.txt may not be in repo yet
-        lfs = _resolve_lfs_pointer(raw_bytes)
-        if lfs is not None:
-            oid, size = lfs
-            real_url = _lfs_download_url(oid, size)
-            files_to_download.append((fname, real_url, size, oid))
-            total_bytes += size
-        else:
-            target.write_bytes(raw_bytes)
-
-    if files_to_download:
-        downloaded = 0
-        if progress is not None:
-            progress(0, total_bytes)
-
-        for fname, url, size, oid in files_to_download:
-            target = dest / fname
-
-            def _on_bytes(n: int) -> None:
-                nonlocal downloaded
-                downloaded += n
-                if progress is not None:
-                    progress(downloaded, total_bytes)
-
-            _download_file(
-                url, target, expected_size=size, on_bytes=_on_bytes, expected_sha256=oid
-            )
-
-    # Fallback: generate tokens.txt from .onnx.json if not downloaded
-    json_path = dest / m.config_file
-    tokens_path = dest / "tokens.txt"
-    if json_path.is_file() and not tokens_path.is_file():
-        _generate_tokens_txt(json_path, tokens_path)
 
 
 async def download_tts_model(
@@ -770,170 +210,11 @@ async def download_tts_model(
     await asyncio.to_thread(_download_tts_model_sync, model_id, progress)
 
 
-def _list_gh_tree(path: str) -> list[dict]:
-    """Recursively list files under *path* via GitHub Contents API."""
-    url = f"{_GH_API_URL}/{path}"
-    req = urllib.request.Request(url)  # noqa: S310
-    req.add_header("Accept", "application/vnd.github.v3+json")
-    with urllib.request.urlopen(req) as resp:  # noqa: S310
-        entries = json.loads(resp.read())
-    files: list[dict] = []
-    for entry in entries:
-        if entry["type"] == "file":
-            files.append(entry)
-        elif entry["type"] == "dir":
-            files.extend(_list_gh_tree(entry["path"]))
-    return files
-
-
-def _download_espeak_ng_sync(
-    progress: ProgressCallback | None = None,
-) -> None:
-    """Download espeak-ng-data directory from edge-ai-models (blocking)."""
-    dest = espeak_ng_data_path()
-    if dest.is_dir() and (dest / "phontab").is_file():
-        return
-
-    # Enumerate all files via GitHub API
-    entries = _list_gh_tree("tts/espeak-ng-data")
-    total_bytes = sum(e.get("size", 0) for e in entries)
-    downloaded = 0
-
-    if progress is not None:
-        progress(0, total_bytes)
-
-    for entry in entries:
-        # entry["path"] is like "tts/espeak-ng-data/lang/roa/fr"
-        rel = entry["path"].removeprefix("tts/espeak-ng-data/")
-        target = dest / rel
-        target.parent.mkdir(parents=True, exist_ok=True)
-
-        if target.is_file():
-            downloaded += entry.get("size", 0)
-            if progress is not None:
-                progress(downloaded, total_bytes)
-            continue
-
-        raw_url = entry.get("download_url") or f"{_RAW_URL}/{entry['path']}"
-        with urllib.request.urlopen(raw_url) as resp:  # noqa: S310
-            data = resp.read()
-        target.write_bytes(data)
-
-        downloaded += entry.get("size", 0)
-        if progress is not None:
-            progress(downloaded, total_bytes)
-
-
 async def download_espeak_ng_data(
     progress: ProgressCallback | None = None,
 ) -> None:
     """Download espeak-ng-data in a background thread."""
     await asyncio.to_thread(_download_espeak_ng_sync, progress)
-
-
-# ---------------------------------------------------------------------------
-# Speaker embedding models (for diarization)
-# ---------------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class SpeakerModel:
-    id: str
-    name: str
-    size: str
-    onnx_file: str
-
-
-SPEAKER_MODELS: list[SpeakerModel] = [
-    SpeakerModel(
-        "nemo-titanet-large",
-        "NeMo TitaNet Large",
-        "~90 MB",
-        "nemo_en_titanet_large.onnx",
-    ),
-    SpeakerModel(
-        "wespeaker-resnet34-lm",
-        "WeSpeaker ResNet34-LM (VoxCeleb)",
-        "~26 MB",
-        "wespeaker_en_voxceleb_resnet34_LM.onnx",
-    ),
-    SpeakerModel(
-        "3dspeaker-campplus-voxceleb",
-        "3D-Speaker CAM++ (VoxCeleb)",
-        "~28 MB",
-        "3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx",
-    ),
-]
-
-_SPEAKER_MODELS_BY_ID: dict[str, SpeakerModel] = {m.id: m for m in SPEAKER_MODELS}
-
-_SPEAKER_BASE = (
-    "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models"
-)
-_SPEAKER_ASSET_URLS: dict[str, str] = {
-    "nemo-titanet-large": f"{_SPEAKER_BASE}/nemo_en_titanet_large.onnx",
-    "wespeaker-resnet34-lm": f"{_SPEAKER_BASE}/wespeaker_en_voxceleb_resnet34_LM.onnx",
-    "3dspeaker-campplus-voxceleb": (
-        f"{_SPEAKER_BASE}/3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx"
-    ),
-}
-
-
-def speaker_model_path(model_id: str) -> Path:
-    """Return the directory for a specific speaker embedding model."""
-    return get_models_dir() / "speaker" / model_id / "v1"
-
-
-def is_speaker_model_downloaded(model_id: str) -> bool:
-    """Check whether the speaker embedding model ONNX file exists."""
-    m = _SPEAKER_MODELS_BY_ID.get(model_id)
-    if m is None:
-        return False
-    return (speaker_model_path(model_id) / m.onnx_file).is_file()
-
-
-def delete_speaker_model(model_id: str) -> None:
-    """Remove a downloaded speaker embedding model's directory."""
-    d = get_models_dir() / "speaker" / model_id
-    if d.exists():
-        shutil.rmtree(d)
-
-
-def _download_speaker_model_sync(
-    model_id: str,
-    progress: ProgressCallback | None = None,
-) -> None:
-    """Download a speaker embedding model (blocking)."""
-    m = _SPEAKER_MODELS_BY_ID.get(model_id)
-    if m is None:
-        raise ValueError(f"Unknown speaker model: {model_id}")
-
-    dest = speaker_model_path(model_id)
-    dest.mkdir(parents=True, exist_ok=True)
-    target = dest / m.onnx_file
-    if target.is_file():
-        return
-
-    asset_url = _SPEAKER_ASSET_URLS.get(model_id)
-    if asset_url is None:
-        raise ValueError(f"No download URL for speaker model: {model_id}")
-
-    # HEAD request for content-length
-    req = urllib.request.Request(asset_url, method="HEAD")  # noqa: S310
-    with urllib.request.urlopen(req) as resp:  # noqa: S310
-        total = int(resp.headers.get("Content-Length", 0))
-
-    downloaded = 0
-    if progress is not None:
-        progress(0, total)
-
-    def _on_bytes(n: int) -> None:
-        nonlocal downloaded
-        downloaded += n
-        if progress is not None:
-            progress(downloaded, total)
-
-    _download_file(asset_url, target, expected_size=total, on_bytes=_on_bytes)
 
 
 async def download_speaker_model(

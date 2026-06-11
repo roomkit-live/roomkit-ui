@@ -21,6 +21,15 @@ from roomkit_ui.engine_audio import (
     setup_diarization,
 )
 from roomkit_ui.engine_state import EngineState
+from roomkit_ui.engine_vc_helpers import (
+    build_deepgram_stt,
+    build_gradium_stt,
+    build_interruption,
+    build_turn_detector,
+    log_vc_audio_pipeline,
+    mcp_servers_configured,
+    wrap_local_provider_tool_errors,
+)
 from roomkit_ui.hooks import register_vc_hooks
 from roomkit_ui.providers import create_ai_provider
 from roomkit_ui.tts import create_tts_provider
@@ -90,7 +99,7 @@ class VoiceChannelMixin:
             ai_provider = create_ai_provider(llm_provider_name, settings)
             model = ai_provider.model_name
             if llm_provider_name == "local":
-                _wrap_local_provider_tool_errors(ai_provider, self.error_occurred.emit)  # type: ignore[attr-defined]
+                wrap_local_provider_tool_errors(ai_provider, self.error_occurred.emit)  # type: ignore[attr-defined]
 
             # 4-5. Audio backend
             input_sample_rate = 16000
@@ -109,7 +118,7 @@ class VoiceChannelMixin:
                 mute_mic_during_playback=aec is None,
             )
             self._backend = backend  # type: ignore[attr-defined]
-            _log_vc_audio_pipeline(aec, denoiser, input_sample_rate, output_sample_rate)
+            log_vc_audio_pipeline(aec, denoiser, input_sample_rate, output_sample_rate)
 
             # 6. VAD (local STT only), diarization, interruption, turn detector
             vad = self._build_vc_vad(settings, stt_provider_name, inference_device)
@@ -119,8 +128,8 @@ class VoiceChannelMixin:
                 vad_available=vad is not None,
                 inference_device=inference_device,
             )
-            interruption = _build_interruption(settings)
-            turn_detector = _build_turn_detector(settings, inference_device)
+            interruption = build_interruption(settings)
+            turn_detector = build_turn_detector(settings, inference_device)
 
             # 6.5. AudioPipelineConfig
             debug_taps = build_debug_taps(settings)
@@ -159,7 +168,7 @@ class VoiceChannelMixin:
             if skip_tools:
                 logger.info("Local model tool support disabled — skipping MCP/tools")
             else:
-                if _mcp_servers_configured(settings):
+                if mcp_servers_configured(settings):
                     self.loading_status.emit("Connecting MCP servers…")  # type: ignore[attr-defined]
                 tools, _has_mcp = await self._setup_mcp_tools(settings)  # type: ignore[attr-defined]
 
@@ -218,9 +227,9 @@ class VoiceChannelMixin:
         stt_language = settings.get("stt_language", "") or "en"
 
         if stt_provider_name == "gradium":
-            stt = _build_gradium_stt(settings, stt_language, self.loading_status.emit)  # type: ignore[attr-defined]
+            stt = build_gradium_stt(settings, stt_language, self.loading_status.emit)  # type: ignore[attr-defined]
         elif stt_provider_name == "deepgram":
-            stt = _build_deepgram_stt(settings, stt_language, self.loading_status.emit)  # type: ignore[attr-defined]
+            stt = build_deepgram_stt(settings, stt_language, self.loading_status.emit)  # type: ignore[attr-defined]
         else:
             stt = await self._build_local_stt(settings, stt_language, inference_device)
 
@@ -356,157 +365,3 @@ class VoiceChannelMixin:
         self.session_info.emit(info)  # type: ignore[attr-defined]
         if self._attitude_name:  # type: ignore[attr-defined]
             self.attitude_changed.emit(self._attitude_name)  # type: ignore[attr-defined]
-
-
-# ---------------------------------------------------------------------------
-# Module-level builders (no engine state)
-# ---------------------------------------------------------------------------
-
-
-def _build_gradium_stt(settings: dict, stt_language: str, emit_status) -> Any:
-    from roomkit.voice.stt.gradium import GradiumSTTConfig, GradiumSTTProvider
-
-    emit_status("Connecting Gradium STT…")
-    api_key = settings.get("gradium_api_key", "")
-    if not api_key:
-        raise ValueError("Gradium API key is required for Gradium STT.")
-    region = settings.get("gradium_region", "us")
-    # Prefer Gradium-specific language, fall back to global
-    gradium_lang = settings.get("gradium_language", "")
-    if gradium_lang:
-        stt_language = gradium_lang
-
-    stt_kwargs: dict[str, Any] = {}
-    model_name = settings.get("gradium_stt_model", "")
-    if model_name:
-        stt_kwargs["model_name"] = model_name
-    _try_set_int(stt_kwargs, "delay_in_frames", settings.get("gradium_stt_delay", ""))
-    _try_set_float(stt_kwargs, "vad_threshold", settings.get("gradium_vad_threshold", ""))
-    _try_set_int(stt_kwargs, "vad_steps", settings.get("gradium_vad_steps", ""))
-
-    json_config: dict[str, Any] = {}
-    _try_set_float(json_config, "temperature", settings.get("gradium_stt_temperature", ""))
-    if json_config:
-        stt_kwargs["json_config"] = json_config
-
-    stt_config = GradiumSTTConfig(
-        api_key=api_key, region=region, language=stt_language, **stt_kwargs
-    )
-    logger.info("STT: gradium, region=%s, language=%s", region, stt_language)
-    return GradiumSTTProvider(stt_config)
-
-
-def _build_deepgram_stt(settings: dict, stt_language: str, emit_status) -> Any:
-    from roomkit.voice.stt.deepgram import DeepgramConfig, DeepgramSTTProvider
-
-    emit_status("Connecting Deepgram STT…")
-    api_key = settings.get("deepgram_api_key", "")
-    if not api_key:
-        raise ValueError("Deepgram API key is required for Deepgram STT.")
-    dg_model = settings.get("deepgram_model", "nova-3")
-    dg_config = DeepgramConfig(api_key=api_key, model=dg_model, language=stt_language)
-    logger.info("STT: deepgram, model=%s, language=%s", dg_model, stt_language)
-    return DeepgramSTTProvider(dg_config)
-
-
-def _wrap_local_provider_tool_errors(ai_provider: Any, emit_error) -> None:
-    """Wrap a local AI provider's ``generate`` so tool-not-supported errors surface."""
-    _orig_generate = ai_provider.generate
-    _tool_error_emitted = False
-
-    async def _generate_with_tool_hint(context: Any) -> Any:
-        nonlocal _tool_error_emitted
-        try:
-            return await _orig_generate(context)
-        except Exception as exc:
-            if not _tool_error_emitted and "does not support tools" in str(exc):
-                _tool_error_emitted = True
-                try:
-                    emit_error(
-                        "This model does not support tool use. "
-                        'Disable "Model supports tool use" in '
-                        "Settings → AI Provider."
-                    )
-                except Exception:
-                    pass
-            raise
-
-    ai_provider.generate = _generate_with_tool_hint  # type: ignore[method-assign]
-
-
-def _build_interruption(settings: dict) -> Any:
-    from roomkit.voice.interruption import InterruptionConfig, InterruptionStrategy
-
-    enabled = settings.get("vc_interruption", False)
-    strategy = InterruptionStrategy.IMMEDIATE if enabled else InterruptionStrategy.DISABLED
-    logger.info("Interruption: %s", strategy.value)
-    return InterruptionConfig(strategy=strategy)
-
-
-def _build_turn_detector(settings: dict, inference_device: str) -> Any:
-    td_name = settings.get("vc_turn_detector", "")
-    if td_name != "smart-turn":
-        return None
-
-    from roomkit_ui.model_manager import is_smart_turn_downloaded, smart_turn_model_path
-
-    if not is_smart_turn_downloaded():
-        logger.warning("Smart Turn model not downloaded — skipping")
-        return None
-
-    from roomkit.voice.pipeline.turn.smart_turn import SmartTurnConfig, SmartTurnDetector
-
-    threshold_str = settings.get("vc_turn_threshold", "")
-    threshold = 0.5
-    if threshold_str:
-        try:
-            threshold = float(threshold_str)
-        except (ValueError, TypeError):
-            pass
-    logger.info("Turn detector: smart-turn, threshold=%.2f", threshold)
-    return SmartTurnDetector(
-        SmartTurnConfig(
-            model_path=str(smart_turn_model_path()),
-            threshold=threshold,
-            provider=inference_device,
-        )
-    )
-
-
-def _log_vc_audio_pipeline(
-    aec: Any, denoiser: Any, input_sample_rate: int, output_sample_rate: int
-) -> None:
-    aec_label = type(aec).__name__ if aec else "none"
-    denoise_label = type(denoiser).__name__ if denoiser else "none"
-    logger.info(
-        "VC audio pipeline: aec=%s, denoiser=%s, in_rate=%dHz, out_rate=%dHz",
-        aec_label,
-        denoise_label,
-        input_sample_rate,
-        output_sample_rate,
-    )
-
-
-def _mcp_servers_configured(settings: dict) -> bool:
-    try:
-        return any(s.get("enabled", True) for s in json.loads(settings.get("mcp_servers", "[]")))
-    except (json.JSONDecodeError, TypeError):
-        return False
-
-
-def _try_set_int(target: dict[str, Any], key: str, raw: str) -> None:
-    if not raw:
-        return
-    try:
-        target[key] = int(raw)
-    except (ValueError, TypeError):
-        pass
-
-
-def _try_set_float(target: dict[str, Any], key: str, raw: str) -> None:
-    if not raw:
-        return
-    try:
-        target[key] = float(raw)
-    except (ValueError, TypeError):
-        pass
