@@ -13,9 +13,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from roomkit_ui.constants import STT_LANGUAGES, STT_PROVIDERS
 from roomkit_ui.theme import colors
 from roomkit_ui.widgets.hotkey_button import HotkeyButton
-from roomkit_ui.widgets.settings.constants import STT_LANGUAGES, STT_PROVIDERS
 
 
 class _DictationPage(QWidget):

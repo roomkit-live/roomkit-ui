@@ -110,8 +110,8 @@ def handle_builtin_tool(name: str) -> str | None:
             }
         )
     if name == "list_attitudes":
+        from roomkit_ui.constants import ATTITUDE_PRESETS
         from roomkit_ui.settings import load_settings
-        from roomkit_ui.widgets.settings.constants import ATTITUDE_PRESETS
 
         settings = load_settings()
         attitudes = [{"name": n, "description": t, "type": "preset"} for n, t in ATTITUDE_PRESETS]

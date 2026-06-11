@@ -19,8 +19,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from roomkit_ui.constants import ATTITUDE_PRESETS
 from roomkit_ui.theme import colors
-from roomkit_ui.widgets.settings.constants import ATTITUDE_PRESETS
 
 
 class _AttitudesPage(QWidget):

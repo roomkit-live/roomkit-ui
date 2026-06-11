@@ -1,4 +1,4 @@
-"""Shared constants used by multiple settings pages and engine.py."""
+"""UI-independent constants shared by the engine, tools, and settings pages."""
 
 from __future__ import annotations
 

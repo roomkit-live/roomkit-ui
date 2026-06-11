@@ -129,7 +129,7 @@ class ToolMixin:
             return json.dumps({"error": "Attitude name is required."})
 
         # Look up in presets
-        from roomkit_ui.widgets.settings.constants import ATTITUDE_PRESETS
+        from roomkit_ui.constants import ATTITUDE_PRESETS
 
         for pname, ptext in ATTITUDE_PRESETS:
             if pname.lower() == name.lower():

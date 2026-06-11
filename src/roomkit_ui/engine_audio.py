@@ -319,7 +319,7 @@ def resolve_attitude(settings: dict) -> str:
     name = settings.get("selected_attitude", "")
     if not name:
         return ""
-    from roomkit_ui.widgets.settings.constants import ATTITUDE_PRESETS
+    from roomkit_ui.constants import ATTITUDE_PRESETS
 
     for pname, ptext in ATTITUDE_PRESETS:
         if pname == name:
