@@ -106,46 +106,58 @@ uv pip install sherpa-onnx==1.12.23+cuda12.cudnn9 \
 2. Go to **Settings > Dictation**, set STT Provider to **Local** and select your model
 3. Press the global hotkey to record, release to transcribe and paste
 
+## Documentation
+
+- [Onboarding](docs/onboarding.md) — dev setup in under 30 minutes
+- [Architecture](docs/architecture.md) — components, data flow, security model
+- [Features](docs/features.md) — what the app does, workflows, limitations
+- [Technical reference](docs/technical.md) — stack, patterns, testing, tech debt
+
 ## Project Structure
 
 ```
 src/roomkit_ui/
-├── app.py              # QApplication + qasync event loop
-├── engine.py           # Async engine bridging roomkit ↔ Qt signals
-├── builtin_tools.py    # Built-in tools (always available)
-├── cleanup.py          # qasync timer/FD cleanup after MCP disconnect
-├── hooks.py            # RoomKit hook registration for UI events
-├── hotkey.py           # Global hotkey (NSEvent on macOS, pynput fallback)
-├── icons.py            # Heroicons SVG rendering
-├── mcp_auth.py         # OAuth2 authentication for MCP HTTP servers
-├── mcp_manager.py      # MCP client manager (stdio, SSE, HTTP)
-├── mcp_app_bridge.py   # MCP Apps JSON-RPC bridge (QWebChannel ↔ iframe)
-├── model_manager.py    # Local model download & management
-├── settings.py         # QSettings persistence
-├── sounds.py           # Notification sounds for session start/stop
-├── stt_engine.py       # STT dictation engine + text pasting
-├── theme.py            # Dark & Light theme stylesheets
-├── tray.py             # System tray icon for dictation
-├── providers/          # Voice channel LLM provider adapters
-│   ├── anthropic.py
-│   ├── gemini.py
-│   ├── openai.py
-│   └── local.py
-├── tts/                # Text-to-speech backends
-│   ├── piper.py        # Piper (sherpa-onnx)
-│   ├── qwen3.py        # Qwen3-TTS (voice clone)
-│   └── neutts.py       # NeuTTS (voice clone)
+├── app.py               # QApplication + qasync event loop
+├── engine.py            # Engine shell: lifecycle, state, cleanup
+├── engine_vc.py         # Voice Channel mode (STT → LLM → TTS)
+├── engine_realtime.py   # Realtime mode (Gemini Live / OpenAI Realtime)
+├── engine_audio.py      # AEC / denoise / VAD / diarization builders
+├── engine_callbacks.py  # roomkit callbacks → Qt signals
+├── engine_tools.py      # Tool dispatch (builtin → MCP), attitudes
+├── hooks.py             # RoomKit hook registration for UI events
+├── roomkit_compat.py    # All private-API reaches into roomkit
+├── watchdog.py          # Stalled-session detector + nudge
+├── cleanup.py           # qasync timer/FD cleanup after MCP disconnect
+├── builtin_tools.py     # Built-in tools (always available)
+├── stt_engine.py        # STT dictation engine + text pasting
+├── hotkey.py            # Global hotkey (NSEvent on macOS, pynput fallback)
+├── paste.py             # Clipboard + paste simulation per platform
+├── tray.py              # System tray icon for dictation
+├── sounds.py            # Notification sounds for session start/stop
+├── speaker_manager.py   # Speaker profile persistence
+├── enrollment.py        # Speaker embedding recording/extraction
+├── model_manager.py     # Local model download & management
+├── skill_manager.py     # Skill discovery (git / local / ClawHub)
+├── clawhub_client.py    # ClawHub skill marketplace client
+├── mcp_manager.py       # MCP client manager (stdio, SSE, HTTP)
+├── mcp_auth.py          # OAuth2 authentication for MCP HTTP servers
+├── mcp_app_bridge.py    # MCP Apps JSON-RPC bridge (QWebChannel ↔ iframe)
+├── settings.py          # QSettings persistence
+├── icons.py             # Heroicons SVG rendering
+├── theme.py             # Dark & Light theme stylesheets
+├── providers/           # LLM provider factories (anthropic, openai, gemini, local)
+├── tts/                 # TTS factories (piper, qwen3, neutts, gradium, elevenlabs)
 └── widgets/
     ├── main_window.py    # Main window layout
-    ├── settings_panel.py # Tabbed settings dialog
-    ├── session_info.py   # Collapsible session info bar
+    ├── control_bar.py    # Call button + mic mute + settings
     ├── chat_view.py      # Scrollable chat area
     ├── chat_bubble.py    # Chat bubble with markdown rendering
     ├── mcp_app_widget.py # QWebEngineView for MCP App HTML UIs
     ├── vu_meter.py       # Animated ambient glow VU meter
-    ├── control_bar.py    # Call button + mic mute + settings
+    ├── session_info.py   # Collapsible session info bar
     ├── hotkey_button.py  # Interactive hotkey capture widget
-    └── dictation_log.py  # Dictation event log window
+    ├── dictation_log.py  # Dictation event log window
+    └── settings/         # 11-tab settings dialog (incl. skills/ marketplace)
 ```
 
 ## Building
@@ -160,6 +172,14 @@ Or generate icons and build manually:
 pip install pyinstaller Pillow cairosvg
 python scripts/generate_icons.py
 pyinstaller --name "RoomKit UI" --windowed --icon=assets/icon.icns src/roomkit_ui/__main__.py
+```
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Run the quality checks before opening a PR:
+
+```bash
+uv run ruff check . && uv run ruff format --check . && uv run mypy src/
 ```
 
 ## License

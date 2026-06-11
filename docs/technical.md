@@ -1,0 +1,178 @@
+# Technical Reference
+
+> _Generated: 2026-06-11 — re-run /project-review to update_
+
+System context lives in [architecture.md](architecture.md); feature-to-code mapping in
+[features.md](features.md); setup steps in [onboarding.md](onboarding.md).
+
+## Technology stack
+
+| Layer | Technology | Version (locked) |
+|---|---|---|
+| Language | Python | 3.12+ |
+| GUI | PySide6 (Qt 6) | 6.11.1 |
+| Async/Qt bridge | qasync | 0.28.0 |
+| Voice/AI framework | roomkit (extras: realtime-gemini, realtime-openai, local-audio, webrtc-aec, sherpa-onnx) | 0.9.1 |
+| Tool protocol | mcp | 1.26.0 |
+| HTTP | httpx | 0.28.1 |
+| Markdown rendering | markdown-it-py | 4.0.0 |
+| Global hotkeys | pynput (fallback; NSEvent native on macOS) | 1.8.1 |
+| Local inference | sherpa-onnx (via roomkit extra) | 1.13.2 |
+| Packaging | hatchling (build), PyInstaller 6 (bundles), uv (env) | — |
+| Quality | ruff 0.15, mypy 1.19, bandit 1.9 | — |
+
+## Project structure
+
+```
+src/roomkit_ui/
+├── app.py               # QApplication + qasync bootstrap, rendering probes, logging
+├── engine.py            # Engine shell: lifecycle, state, cleanup, model cache
+├── engine_vc.py         # VoiceChannel mode: STT/LLM/TTS builders (mixin)
+├── engine_realtime.py   # Realtime mode: Gemini Live / OpenAI Realtime (mixin)
+├── engine_audio.py      # Pipeline builders: AEC, denoise, VAD, diarization, recording
+├── engine_callbacks.py  # Provider/transport callbacks → Qt signals (mixin)
+├── engine_tools.py      # Tool dispatch: builtin → MCP, attitudes, end_conversation (mixin)
+├── hooks.py             # RoomKit hook registration (transcription, levels, speakers)
+├── roomkit_compat.py    # ALL private-API reaches into roomkit live here
+├── watchdog.py          # Stalled-session detector + nudge
+├── cleanup.py           # qasync/anyio orphaned timer & FD purge
+├── settings.py          # QSettings persistence (~90 keys)
+├── builtin_tools.py     # Always-available tools (date/time, attitudes, clipboard)
+├── stt_engine.py        # Dictation: record → transcribe → paste
+├── hotkey.py            # Global hotkey (NSEvent / pynput)
+├── paste.py             # Clipboard + paste simulation per platform
+├── tray.py              # System tray icon (dictation status)
+├── sounds.py            # Synthesized notification sounds
+├── speaker_manager.py   # Speaker profile JSON persistence
+├── enrollment.py        # Speaker embedding recording/extraction
+├── model_manager.py     # Local model catalog + GitHub LFS downloads
+├── skill_manager.py     # Skill discovery (git/local/clawhub) + registry
+├── clawhub_client.py    # ClawHub marketplace API client
+├── mcp_manager.py       # MCP connections, tool routing
+├── mcp_auth.py          # OAuth2 provider + localhost callback server
+├── mcp_app_bridge.py    # QWebChannel JSON-RPC bridge for MCP Apps
+├── icons.py / theme.py  # Heroicons SVG renderer / dark-light QSS palettes
+├── providers/           # LLM factories: anthropic, openai, gemini, local (lazy registry)
+├── tts/                 # TTS factories: piper, qwen3, neutts, gradium, elevenlabs
+└── widgets/
+    ├── main_window.py   # Window layout + Engine↔UI signal wiring
+    ├── control_bar.py   # Sparkle call button, mute/reset, settings
+    ├── chat_view.py / chat_bubble.py
+    ├── mcp_app_widget.py # QWebEngineView host for MCP Apps
+    ├── vu_meter.py / session_info.py / hotkey_button.py / dictation_log.py
+    └── settings/        # 11-tab settings dialog (general, ai, attitudes, speakers,
+                         #  dictation, models, skills/, mcp, audio_debug, telemetry, about)
+```
+
+## Data models & persistence
+
+There is no database. State lives in three places:
+
+1. **QSettings** (`settings.py`) — ~90 flat keys: provider/API keys, model choices,
+   VAD/AEC/denoise tuning, hotkeys, theme, MCP server configs (JSON string),
+   skill sources, attitudes. OAuth tokens are stored under
+   `room/mcp_oauth/<server>/tokens` by `mcp_auth.QSettingsTokenStorage`.
+2. **Speaker profiles** — one JSON file per speaker in the platform data dir
+   (`speakers/<name>.json`): name, embeddings (list of float vectors), `is_primary`.
+3. **Model store** — `models/<model-id>/v1/` under the platform data dir; the `v1`
+   segment leaves room for format migrations.
+
+## Key patterns
+
+### Engine mixin composition
+
+`Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject)` — mixins
+contribute behavior only; every attribute lives on `Engine`. This keeps Qt signal
+definitions in one QObject while splitting the two session modes into separate files.
+
+### Lazy provider factories
+
+```python
+# providers/__init__.py — registry dispatch, no if-chains
+_FACTORIES = {"anthropic": "roomkit_ui.providers.anthropic", ...}
+
+def create_ai_provider(name: str, settings: dict) -> Any:
+    module = importlib.import_module(_FACTORIES[name])
+    return module.create(settings)
+```
+
+Heavy SDKs (anthropic, google-genai, openai) are only imported when the user actually
+selects that provider.
+
+### Private-API quarantine
+
+Every reach into roomkit internals goes through `roomkit_compat.py`, guarded by
+`hasattr` so an upstream refactor degrades gracefully. Four shims exist today
+(provider detach ×2, live system-prompt swap, diarization enrollment reset); each
+documents why no public API exists.
+
+### Qt-signal safety in async callbacks
+
+Callbacks invoked by roomkit may fire after the C++ side of a QObject is deleted, so
+emits are wrapped in `try/except` (`SIM105` is disabled for this reason). The cost:
+some real failures are swallowed silently — see Technical debt.
+
+## Configuration management
+
+- All user configuration is edited in the Settings dialog and persisted via QSettings —
+  no config files, no required env vars.
+- Env vars honored at startup: `DEBUG=1` (verbose logging for mcp/roomkit), plus
+  rendering overrides set *by* the app (`QT_QUICK_BACKEND`, `QSG_RHI_BACKEND`,
+  `QTWEBENGINE_CHROMIUM_FLAGS`, `LIBGL_ALWAYS_SOFTWARE`).
+- `QT_QUICK_BACKEND=software` must be set **before** PySide6 import (`app.py`).
+
+## Build & deployment
+
+```bash
+./scripts/build_app.sh            # icons + PyInstaller bundle
+```
+
+CI (`.github/workflows/`):
+
+- `ci.yml` — ruff check + format check, bandit, mypy on every push/PR.
+- `build.yml` — PyInstaller builds for macOS (codesign + notarize + DMG), Linux
+  (tar.gz), Windows (ZIP); uploads to GitHub Releases. Hidden imports for
+  dynamically-loaded SDKs are listed in the workflow and `RoomKit UI.spec`.
+
+## Testing strategy
+
+**There are no automated tests.** CI covers linting, formatting, typing, and static
+security analysis only. This is the project's single largest gap. What should be tested
+first, in order of value:
+
+1. `roomkit_compat.py` — the private-API shims; a roomkit upgrade silently no-ops them
+   (by design), and only a test would notice.
+2. `Engine._cleanup` ordering — the teardown sequence encodes hard-won fixes
+   (ElevenLabs double-close hang, qasync timer leaks); a regression is a 100 % CPU bug.
+3. `settings.py` round-trip — ~90 keys with type coercion.
+4. `skill_manager.discover_all_skills` / `model_manager` LFS pointer parsing — pure
+   logic, easy to unit-test with fixtures.
+5. Tool dispatch (`engine_tools.py`) — builtin-vs-MCP routing and the pending-call counter.
+
+Widget code is hard to test without `pytest-qt`; the five modules above need none of it.
+
+## Code quality tools
+
+```bash
+uv run ruff check .              # E,F,I,N,UP,B,SIM — line length 99
+uv run ruff format --check .
+uv run mypy src/                 # attr-defined disabled for PySide6 dynamic enums
+uv run bandit -r src/ -c pyproject.toml
+```
+
+## Known technical debt
+
+| # | Item | Where | Recommendation |
+|---|---|---|---|
+| 1 | **Zero test coverage** | everywhere | Start with the five targets above; add `pytest` + CI job |
+| 2 | ZIP path traversal on skill install | `clawhub_client.py` (`extractall`) | Validate member paths before extraction |
+| 3 | No checksum verification on model downloads | `model_manager.py` | Pin SHA-256 per model in the catalog (LFS pointers already carry the OID) |
+| 4 | OAuth tokens / API keys in plaintext QSettings | `mcp_auth.py`, `settings.py` | Optional keyring backend |
+| 5 | Oversized modules: `model_manager.py` (~965 l), `models_page.py` (~760 l), `speakers_page.py` (~675 l), `stt_engine.py` (~680 l), `engine_vc.py` (~515 l) | — | Split by responsibility (catalog data vs download logic; dialogs vs page) |
+| 6 | Silent `except Exception: pass` beyond Qt-emit guards | `engine_callbacks.py`, `builtin_tools.py:126`, `main_window.py:224` | Log at DEBUG instead of `pass` |
+| 7 | Engine state machine is string-based (`"idle"`, `"active"`, …) | `engine.py` | `enum.StrEnum` for typo safety |
+| 8 | Repeated stylesheet f-strings (~200 `setStyleSheet` calls) | `widgets/` | Shared style helpers per pattern |
+| 9 | `cleanup.py` depends on qasync name-mangled internals | `cleanup.py` | Re-verify on every qasync upgrade; upstream a fix |
+| 10 | MCP stdio `command` parsed with `.split()` | `mcp_manager.py` | `shlex.split()` to support quoted paths |
+| 11 | Unused mypy override sections (Quartz, sherpa_onnx, sounddevice, qasync now ship types) | `pyproject.toml` | Prune on next config pass |
+| 12 | No keyboard navigation / accessible names on custom-painted buttons | `control_bar.py` | `setFocusPolicy`, `setAccessibleName` |

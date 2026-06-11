@@ -21,43 +21,53 @@ Entry point: `src/roomkit_ui/app.py` → `roomkit_ui.app:main`
 
 ```
 src/roomkit_ui/
-├── app.py           # QApplication + qasync event loop bootstrap
-├── engine.py        # Async voice session engine (roomkit ↔ Qt signals)
-├── builtin_tools.py # Built-in tools (always available)
-├── cleanup.py       # qasync timer/FD cleanup after MCP disconnect
-├── hooks.py         # RoomKit hook registration for UI events
-├── hotkey.py        # Global hotkey (NSEvent on macOS, pynput fallback)
-├── icons.py         # Heroicons SVG rendering
-├── mcp_auth.py      # OAuth2 authentication for MCP HTTP servers
-├── mcp_manager.py   # MCP client manager (stdio, SSE, HTTP transports)
-├── mcp_app_bridge.py # MCP Apps JSON-RPC bridge (QWebChannel ↔ iframe)
-├── model_manager.py # Local model download & management
-├── settings.py      # QSettings persistence
-├── sounds.py        # Notification sounds for session start/stop
-├── stt_engine.py    # Local STT dictation + text pasting
-├── theme.py         # Dark/Light theme stylesheets
-├── tray.py          # System tray icon for dictation
-├── providers/       # Voice channel LLM provider adapters
-│   ├── anthropic.py
-│   ├── gemini.py
-│   ├── openai.py
-│   └── local.py
-├── tts/             # Text-to-speech backends
-│   ├── piper.py     # Piper (sherpa-onnx)
-│   ├── qwen3.py     # Qwen3-TTS (voice clone)
-│   └── neutts.py    # NeuTTS (voice clone)
+├── app.py               # QApplication + qasync event loop bootstrap
+├── engine.py            # Engine shell: lifecycle, state machine, cleanup, model cache
+├── engine_vc.py         # Voice Channel mode startup (STT → LLM → TTS) — mixin
+├── engine_realtime.py   # Realtime mode startup (Gemini Live / OpenAI Realtime) — mixin
+├── engine_audio.py      # Pipeline builders: AEC, denoiser, VAD, diarization, recording
+├── engine_callbacks.py  # roomkit provider/transport callbacks → Qt signals — mixin
+├── engine_tools.py      # Tool dispatch (builtin → MCP), attitudes, end_conversation — mixin
+├── hooks.py             # RoomKit hook registration for UI events
+├── roomkit_compat.py    # ALL reaches into roomkit private APIs live here (hasattr-guarded)
+├── watchdog.py          # Stalled-session detector (8s silence) + model nudge
+├── cleanup.py           # qasync timer/FD cleanup after MCP disconnect
+├── builtin_tools.py     # Built-in tools (always available)
+├── stt_engine.py        # Local STT dictation + text pasting
+├── hotkey.py            # Global hotkey (NSEvent on macOS, pynput fallback)
+├── paste.py             # Clipboard copy + paste simulation per platform
+├── tray.py              # System tray icon for dictation
+├── sounds.py            # Notification sounds for session start/stop
+├── speaker_manager.py   # Speaker profile JSON persistence (~/.local/share/roomkit-ui/speakers)
+├── enrollment.py        # Speaker embedding recording/extraction (sherpa-onnx)
+├── model_manager.py     # Local model catalog + downloads (GitHub LFS resolution)
+├── skill_manager.py     # Skill discovery (git / local / ClawHub) + SkillRegistry build
+├── clawhub_client.py    # ClawHub skill marketplace API client
+├── mcp_manager.py       # MCP client manager (stdio, SSE, HTTP transports)
+├── mcp_auth.py          # OAuth2 authentication for MCP HTTP servers
+├── mcp_app_bridge.py    # MCP Apps JSON-RPC bridge (QWebChannel ↔ iframe)
+├── settings.py          # QSettings persistence (~90 keys)
+├── icons.py             # Heroicons SVG rendering
+├── theme.py             # Dark/Light theme stylesheets
+├── providers/           # LLM provider factories (anthropic, gemini, openai, local) — lazy registry
+├── tts/                 # TTS factories (piper, qwen3, neutts, gradium, elevenlabs) — lazy registry
 └── widgets/
-    ├── main_window.py     # Main window layout
-    ├── settings_panel.py  # Tabbed settings dialog
-    ├── session_info.py    # Collapsible session info bar
+    ├── main_window.py     # Main window layout + Engine↔UI signal wiring
+    ├── control_bar.py     # Call button + mic mute + settings
     ├── chat_view.py       # Scrollable chat transcript
     ├── chat_bubble.py     # Markdown chat bubble
     ├── mcp_app_widget.py  # QWebEngineView for MCP App HTML UIs
     ├── vu_meter.py        # Animated ambient glow VU meter
-    ├── control_bar.py     # Call button + mic mute + settings
+    ├── session_info.py    # Collapsible session info bar
     ├── hotkey_button.py   # Interactive hotkey capture widget
-    └── dictation_log.py   # Dictation event log window
+    ├── dictation_log.py   # Dictation event log window
+    └── settings/          # 11-tab settings dialog (general, ai, attitudes, speakers,
+                           #  dictation, models, skills/, mcp, audio_debug, telemetry, about)
 ```
+
+Engine composition: `Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject)` —
+mixins hold no state; all attributes live on `Engine`. Docs: `docs/architecture.md`,
+`docs/technical.md`, `docs/features.md`, `docs/onboarding.md`.
 
 ## Code Style
 
