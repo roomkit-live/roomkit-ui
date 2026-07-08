@@ -33,7 +33,6 @@ src/roomkit_ui/
 ├── engine_callbacks.py  # Provider/transport callbacks → Qt signals (mixin)
 ├── engine_tools.py      # Tool dispatch: builtin → MCP, attitudes, end_conversation (mixin)
 ├── hooks.py             # RoomKit hook registration (transcription, levels, speakers)
-├── roomkit_compat.py    # ALL private-API reaches into roomkit live here
 ├── watchdog.py          # Stalled-session detector + nudge
 ├── cleanup.py           # qasync/anyio orphaned timer & FD purge
 ├── settings.py          # QSettings persistence (~90 keys)
@@ -99,12 +98,17 @@ def create_ai_provider(name: str, settings: dict) -> Any:
 Heavy SDKs (anthropic, google-genai, openai) are only imported when the user actually
 selects that provider.
 
-### Private-API quarantine
+### No private-API reaches
 
-Every reach into roomkit internals goes through `roomkit_compat.py`, guarded by
-`hasattr` so an upstream refactor degrades gracefully. Four shims exist today
-(provider detach ×2, live system-prompt swap, diarization enrollment reset); each
-documents why no public API exists.
+The app uses only public roomkit APIs. Operations that once poked roomkit
+internals now have public entry points (roomkit 0.24.0+):
+
+- **Provider lifecycle** — `VoiceChannel(close_providers=False)` (the engine owns
+  STT/TTS closing for model caching), instead of nulling `channel._stt`/`_tts`.
+- **Live system-prompt swap** — `AIChannel.set_system_prompt(...)`, instead of
+  writing `AIChannel._system_prompt`.
+- **Diarization enrollment reset** — `DiarizationProvider.clear_speakers()`,
+  instead of clearing `_manager` / `_enrolled_embeddings`.
 
 ### Qt-signal safety in async callbacks
 
@@ -140,9 +144,7 @@ CI (`.github/workflows/`):
 security analysis only. This is the project's single largest gap. What should be tested
 first, in order of value:
 
-1. `roomkit_compat.py` — the private-API shims; a roomkit upgrade silently no-ops them
-   (by design), and only a test would notice.
-2. `Engine._cleanup` ordering — the teardown sequence encodes hard-won fixes
+1. `Engine._cleanup` ordering — the teardown sequence encodes hard-won fixes
    (ElevenLabs double-close hang, qasync timer leaks); a regression is a 100 % CPU bug.
 3. `settings.py` round-trip — ~90 keys with type coercion.
 4. `skill_manager.discover_all_skills` / `model_manager` LFS pointer parsing — pure

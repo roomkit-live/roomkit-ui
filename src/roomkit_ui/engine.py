@@ -31,7 +31,6 @@ from roomkit_ui.engine_state import EngineState
 from roomkit_ui.engine_tools import ToolMixin
 from roomkit_ui.engine_vc import VoiceChannelMixin
 from roomkit_ui.mcp_manager import MCPManager
-from roomkit_ui.roomkit_compat import detach_channel_backend, detach_channel_providers
 from roomkit_ui.watchdog import SessionWatchdog
 
 logger = logging.getLogger(__name__)
@@ -316,13 +315,10 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
                 logger.info("cleanup: voice session ended")
             except Exception:
                 logger.exception("cleanup: end_session failed")
-        # Detach STT/TTS from the channel FIRST to prevent VoiceChannel.close()
-        # from double-closing them (e.g. ElevenLabs httpx client hang on
-        # second aclose).  Keep _backend attached so in-flight streaming
-        # tasks can reference it during kit.close() teardown.
-        detach_channel_providers(self._channel)
-        # Now safe to close TTS — channel won't try to close it again.
-        # Skip close for cached TTS (model survives for next session).
+        # Close TTS ourselves — the channel was built with close_providers=False
+        # so VoiceChannel.close() won't touch STT/TTS (avoids a double aclose,
+        # e.g. ElevenLabs's httpx client hang).  Skip close for cached TTS
+        # (model survives for the next session).
         if (
             self._tts is not None
             and hasattr(self._tts, "close")
@@ -332,9 +328,8 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
                 await self._tts.close()
             except Exception:
                 logger.exception("cleanup: tts.close() failed")
-        # Close roomkit — cancels in-flight streaming tasks and
-        # VoiceChannel.close() will close the backend via _backend ref
-        # (still attached above), avoiding double-close.
+        # Close roomkit — cancels in-flight streaming tasks; VoiceChannel.close()
+        # closes the backend (close_providers only gates STT/TTS).
         if self._kit:
             try:
                 logger.info("cleanup: closing roomkit …")
@@ -342,8 +337,6 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
                 logger.info("cleanup: roomkit closed")
             except Exception:
                 logger.exception("cleanup: kit.close() failed")
-        # Now safe to detach backend — streaming tasks are cancelled.
-        detach_channel_backend(self._channel)
         # Remove the voice error log handler to prevent handler accumulation.
         logging.getLogger("roomkit.voice").removeHandler(self._log_handler)
         if self._mcp:

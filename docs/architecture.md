@@ -79,7 +79,6 @@ graph TB
 | **Engine mixins** | `engine_vc.py`, `engine_realtime.py`, `engine_tools.py`, `engine_callbacks.py` | Mode-specific session builders, tool dispatch, provider→Qt callbacks. Mixins hold no state — all attributes live on `Engine` |
 | **Audio builders** | `engine_audio.py` | AEC/denoiser/VAD/diarization/recorder/telemetry pipeline construction shared by both modes |
 | **Hooks** | `hooks.py` | RoomKit hook registration (transcription, audio levels, speaker change, primary-speaker gating) |
-| **Compat layer** | `roomkit_compat.py` | Single point of contact for every reach into roomkit private APIs (provider detach, live prompt swap, diarization enrollment reset) |
 | **Watchdog** | `watchdog.py` | Detects stalled sessions (8 s silence, 90 s when tools are pending) and nudges the model |
 | **Cleanup** | `cleanup.py` | 4-layer purge of orphaned qasync/anyio timers and FD notifiers after MCP disconnect (prevents 100 % CPU) |
 | **Dictation** | `stt_engine.py`, `hotkey.py`, `paste.py`, `tray.py` | Global hotkey → STT recording (OpenAI/local/Deepgram) → clipboard paste into the focused app |

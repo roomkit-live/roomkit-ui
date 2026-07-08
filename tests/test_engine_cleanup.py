@@ -1,8 +1,10 @@
 """Tests for the ordered teardown in Engine._cleanup.
 
-The ordering encodes hard-won fixes: STT/TTS must be detached BEFORE
-kit.close() (ElevenLabs double-close hang) and the backend AFTER
-(in-flight streaming tasks still reference it during close).
+The ordering encodes hard-won fixes: the engine closes TTS itself BEFORE
+kit.close() (skipping cached models), and the VoiceChannel is built with
+close_providers=False so VoiceChannel.close() skips STT/TTS (ElevenLabs
+double-close hang) while still closing the backend.  The engine no longer
+mutates the channel's provider/backend slots.
 """
 
 import asyncio
@@ -113,11 +115,15 @@ async def test_voice_channel_teardown_order(engine):
     assert names.index("tts.close") < names.index("kit.close")
     # MCP closed after kit.
     assert names.index("kit.close") < names.index("mcp.close_all")
-    # At kit.close() time: STT/TTS already detached, backend still attached.
+    # Engine does not detach providers anymore — the channel is built with
+    # close_providers=False, so VoiceChannel.close() skips STT/TTS itself.
+    # At kit.close() time the slots are all still populated.
     kit_entry = next(c for c in rec.calls if c[0] == "kit.close")
-    assert kit_entry == ("kit.close", True, True, True)
-    # Backend detached only after kit.close().
-    assert ch._backend is None
+    assert kit_entry == ("kit.close", False, False, True)
+    # Engine leaves the channel's provider/backend slots untouched.
+    assert ch._stt is not None
+    assert ch._tts is not None
+    assert ch._backend is not None
 
 
 async def test_realtime_teardown_ends_session(engine):

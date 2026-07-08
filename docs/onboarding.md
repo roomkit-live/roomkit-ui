@@ -63,10 +63,12 @@ uv run bandit -r src/ -c pyproject.toml
    does this at the top; never import PySide6 from a module that loads earlier.
 2. **Qt signals in async callbacks**: always wrap `emit()` in `try/except` — the C++
    object may already be deleted (`SIM105` is disabled in ruff for this).
-3. **Never touch roomkit private attributes directly** — add a documented,
-   `hasattr`-guarded helper in `roomkit_compat.py` instead.
-4. **Teardown order in `Engine._cleanup` is load-bearing**: detach STT/TTS *before*
-   `kit.close()`, detach the backend *after*. Reordering re-introduces an ElevenLabs
+3. **Never touch roomkit private attributes directly** — use a public roomkit
+   API. If one is missing, add it upstream in roomkit rather than reaching in.
+4. **Teardown order in `Engine._cleanup` is load-bearing**: the engine closes TTS
+   itself (skipping cached models) *before* `kit.close()`, and the channel is built
+   with `close_providers=False` so `VoiceChannel.close()` skips STT/TTS (ElevenLabs
+   double-close hang) while still closing the backend. Reordering re-introduces the
    hang and cross-session leaks.
 5. **qasync timer leak**: after an MCP session closes, anyio leaves orphaned 0 ms
    timers → 100 % CPU. `cleanup.py` purges them; call it after any new disconnect path.
@@ -87,7 +89,7 @@ uv run bandit -r src/ -c pyproject.toml
 | Understand the system | [architecture.md](architecture.md) |
 | Change a session mode / provider | `engine_vc.py`, `engine_realtime.py`, `providers/`, `tts/` |
 | Add a tool | `builtin_tools.py` (builtin) or configure an MCP server |
-| Touch teardown/cleanup | `engine.py:_cleanup`, `cleanup.py`, `roomkit_compat.py` |
+| Touch teardown/cleanup | `engine.py:_cleanup`, `cleanup.py` |
 | Add a settings field | `widgets/settings/<page>.py` + key in `settings.py` |
 | Debug "model didn't call my tool" | `DEBUG=1`, and `ROOMKIT_GEMINI_DEBUG=1` (roomkit-side) |
 | Build a release bundle | `./scripts/build_app.sh`, `.github/workflows/build.yml` |

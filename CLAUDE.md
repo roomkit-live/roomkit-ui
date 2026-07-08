@@ -29,7 +29,6 @@ src/roomkit_ui/
 ├── engine_callbacks.py  # roomkit provider/transport callbacks → Qt signals — mixin
 ├── engine_tools.py      # Tool dispatch (builtin → MCP), attitudes, end_conversation — mixin
 ├── hooks.py             # RoomKit hook registration for UI events
-├── roomkit_compat.py    # ALL reaches into roomkit private APIs live here (hasattr-guarded)
 ├── watchdog.py          # Stalled-session detector (8s silence) + model nudge
 ├── cleanup.py           # qasync timer/FD cleanup after MCP disconnect
 ├── builtin_tools.py     # Built-in tools (always available)

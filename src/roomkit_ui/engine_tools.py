@@ -14,12 +14,28 @@ from typing import TYPE_CHECKING, Any
 
 from roomkit_ui.builtin_tools import handle_builtin_tool
 from roomkit_ui.cleanup import cleanup_stale_fds
-from roomkit_ui.roomkit_compat import compose_attitude_prompt, set_ai_system_prompt
 
 if TYPE_CHECKING:
     from roomkit_ui.mcp_manager import MCPManager
 
 logger = logging.getLogger(__name__)
+
+_ATTITUDE_MARKER = "\n\n# Attitude\n"
+
+
+def compose_attitude_prompt(base_prompt: str, attitude_description: str) -> str:
+    """Build a full system prompt by appending an ``# Attitude`` section.
+
+    * ``attitude_description`` non-empty → append the section to ``base_prompt``.
+    * ``attitude_description`` empty → return ``base_prompt`` verbatim.
+
+    Pure function; the VC path feeds the result to ``AIChannel.set_system_prompt``
+    and the realtime path to ``RealtimeVoiceChannel.reconfigure_session``.
+    """
+    base = base_prompt or ""
+    if attitude_description:
+        return f"{base}{_ATTITUDE_MARKER}{attitude_description}"
+    return base
 
 
 class ToolMixin:
@@ -169,10 +185,10 @@ class ToolMixin:
 
         Routing:
 
-        * **Voice-channel mode** (``_ai_channel`` is set) — writes the full
-          prompt to ``AIChannel._system_prompt`` via the compat helper.
-          ``AIChannel`` builds context fresh every turn, so the new prompt
-          takes effect on the next LLM turn.
+        * **Voice-channel mode** (``_ai_channel`` is set) — pushes the full
+          prompt via the public ``AIChannel.set_system_prompt``.  ``AIChannel``
+          builds context fresh every turn, so the new prompt takes effect on
+          the next LLM turn.
         * **Realtime mode** (``_channel`` is a ``RealtimeVoiceChannel``) —
           calls the public ``reconfigure_session(session, system_prompt=…)``.
           That pushes a ``session.update`` to Gemini Live / OpenAI Realtime
@@ -184,9 +200,9 @@ class ToolMixin:
         new_prompt = compose_attitude_prompt(self._base_system_prompt, description)
 
         if self._ai_channel is not None:
-            # Voice-channel mode: AIChannel is stateless per turn, so
-            # writing the slot is equivalent to a live prompt update.
-            set_ai_system_prompt(self._ai_channel, new_prompt)
+            # Voice-channel mode: AIChannel rebuilds context per turn, so this
+            # takes effect on the next turn without dropping memory/tool state.
+            self._ai_channel.set_system_prompt(new_prompt)
         elif self._channel is not None and hasattr(self._channel, "reconfigure_session"):
             # Realtime mode: push to the provider via the public API so the
             # agent switches tone mid-conversation without restarting.

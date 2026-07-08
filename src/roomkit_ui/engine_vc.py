@@ -74,8 +74,8 @@ class VoiceChannelMixin:
                 "You are a friendly voice assistant. Be concise and helpful.",
             )
             # Cache the user's base prompt (without attitude) so the
-            # set_attitude tool can rebuild the full prompt and update
-            # AIChannel._system_prompt without reaching in to strip it.
+            # set_attitude tool can rebuild the full prompt and push it via
+            # AIChannel.set_system_prompt without reaching in to strip it.
             self._base_system_prompt = base_prompt
             system_prompt = base_prompt
             attitude = self._attitude or resolve_attitude(settings)
@@ -146,8 +146,18 @@ class VoiceChannelMixin:
                 recording_config=recording_config,
             )
 
-            # 7. VoiceChannel
-            voice = VoiceChannel("voice", stt=stt, tts=tts, backend=backend, pipeline=pipeline)
+            # 7. VoiceChannel.  close_providers=False: the engine owns the
+            # STT/TTS lifecycle (it reuses cached models across sessions and
+            # closes TTS itself to avoid a double-aclose hang), so close()
+            # must not close them.  The backend is still closed by close().
+            voice = VoiceChannel(
+                "voice",
+                stt=stt,
+                tts=tts,
+                backend=backend,
+                pipeline=pipeline,
+                close_providers=False,
+            )
             self._channel = voice  # type: ignore[attr-defined]
 
             # 7.5. Skills + 8. AIChannel

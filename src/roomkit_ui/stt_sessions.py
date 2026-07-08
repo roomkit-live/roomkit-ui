@@ -331,7 +331,10 @@ class DictationSessionMixin:
                     logger.info("%s STT partial: %s", provider_label, result.text)
 
             @kit.hook(HookTrigger.ON_TRANSCRIPTION)
-            async def _on_transcription(text, ctx):
+            async def _on_transcription(event, ctx):
+                # roomkit 0.10.0 passes a TranscriptionEvent (with .text),
+                # not the raw string it used to hand ON_TRANSCRIPTION hooks.
+                text = event.text
                 if text and text.strip():
                     logger.info("%s STT final: %s", provider_label, text)
                     accumulated.append(text.strip())

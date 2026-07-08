@@ -192,15 +192,14 @@ def build_denoiser(denoise_mode: str, sample_rate: int) -> Any:
 
 
 def reset_diarization(diarization: Any) -> None:
-    """Reset a cached diarization provider, clearing all enrolled speakers.
+    """Reset a cached diarization provider and forget all enrolled speakers.
 
-    Thin wrapper over ``roomkit_compat.clear_diarization_enrollment`` — the
-    actual private-attribute access is consolidated there so future roomkit
-    refactors only break in one file.
+    ``reset()`` clears transient clustering state; ``clear_speakers()`` drops
+    the enrollment set so a provider reused across sessions doesn't carry
+    speakers between conversations.  Both are public roomkit APIs (0.24.0+).
     """
-    from roomkit_ui.roomkit_compat import clear_diarization_enrollment
-
-    clear_diarization_enrollment(diarization)
+    diarization.reset()
+    diarization.clear_speakers()
 
 
 def setup_diarization(

@@ -53,8 +53,12 @@ def register_vc_hooks(kit: Any, engine: Any) -> None:
             pass
 
     @kit.hook(HookTrigger.ON_TRANSCRIPTION, HookExecution.SYNC)
-    async def _on_user_transcription(text, context):
+    async def _on_user_transcription(event, context):
         from roomkit import HookResult
+
+        # roomkit passes a TranscriptionEvent (with .text) to VC-mode
+        # ON_TRANSCRIPTION hooks, not the raw string it used to hand them.
+        text = event.text
 
         # Sticky speaker: use the best ID seen during this utterance so that
         # a single low-score diarization segment doesn't flip to "unknown".
