@@ -138,10 +138,17 @@ class SessionWatchdog(QObject):
         except RuntimeError:
             logger.warning("Nudge skipped: no running event loop")
             return
-        task = loop.create_task(
-            channel.inject_text(session, _NUDGE_TEXT),
-            name="watchdog_nudge",
-        )
+        create_owned_task = getattr(engine, "_create_owned_task", None)
+        if callable(create_owned_task):
+            task = create_owned_task(
+                channel.inject_text(session, _NUDGE_TEXT),
+                name="watchdog_nudge",
+            )
+        else:
+            task = loop.create_task(
+                channel.inject_text(session, _NUDGE_TEXT),
+                name="watchdog_nudge",
+            )
         self._nudge_tasks.add(task)
         task.add_done_callback(self._on_nudge_done)
         logger.info("Nudged stalled session")

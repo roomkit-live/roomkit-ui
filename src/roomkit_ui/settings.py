@@ -2,11 +2,29 @@
 
 from __future__ import annotations
 
+import json
 import sys
+from typing import Any
 
 from PySide6.QtCore import QSettings
 
+from roomkit_ui.secret_store import SecretStore, get_secret_store
+
 _DEFAULT_HOTKEY = "<cmd_r>" if sys.platform == "darwin" else "<ctrl>+<shift>+h"
+
+_SECRET_KEYS = frozenset(
+    {
+        "api_key",
+        "openai_api_key",
+        "anthropic_api_key",
+        "elevenlabs_api_key",
+        "vc_local_api_key",
+        "deepgram_api_key",
+        "gradium_api_key",
+    }
+)
+
+_MCP_SERVER_SECRET_FIELDS = ("oauth_client_secret",)
 
 _DEFAULTS = {
     "provider": "gemini",
@@ -119,12 +137,131 @@ _DEFAULTS = {
 }
 
 
+def _settings_secret_name(key: str) -> str:
+    return f"settings:{key}"
+
+
+def _mcp_server_secret_name(server_name: str, field: str) -> str:
+    return f"mcp_server:{server_name}:{field}"
+
+
+def _load_secret_setting(qs: QSettings, store: SecretStore, key: str) -> str:
+    """Load a setting-backed secret and migrate any legacy plaintext value."""
+    legacy_key = f"room/{key}"
+    raw = qs.value(legacy_key, None)
+    secret_name = _settings_secret_name(key)
+    stored = store.get_secret(secret_name, "")
+
+    if raw is not None:
+        raw_value = str(raw)
+        if raw_value and not stored:
+            store.set_secret(secret_name, raw_value)
+            stored = raw_value
+        qs.remove(legacy_key)
+        qs.sync()
+    return stored
+
+
+def _save_secret_setting(qs: QSettings, store: SecretStore, key: str, value: Any) -> None:
+    """Persist a secret in SecretStore and remove any plaintext QSettings copy."""
+    secret_name = _settings_secret_name(key)
+    text = "" if value is None else str(value)
+    if text:
+        store.set_secret(secret_name, text)
+    else:
+        store.delete_secret(secret_name)
+    qs.remove(f"room/{key}")
+
+
+def _parse_mcp_servers(raw: Any) -> list[Any] | None:
+    if isinstance(raw, list):
+        return raw
+    if not isinstance(raw, str):
+        return None
+    try:
+        data = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    return data if isinstance(data, list) else None
+
+
+def _hydrate_mcp_server_secrets(raw: Any, qs: QSettings, store: SecretStore) -> Any:
+    """Return mcp_servers JSON with secrets filled from SecretStore.
+
+    Legacy plaintext secrets are migrated out of QSettings as a side effect.
+    The returned JSON still contains the secret values so existing UI and
+    connection code can keep consuming one settings dict.
+    """
+    servers = _parse_mcp_servers(raw)
+    if servers is None:
+        return raw
+
+    migrated = False
+    for server in servers:
+        if not isinstance(server, dict):
+            continue
+        server_name = str(server.get("name", "")).strip()
+        if not server_name:
+            continue
+        for field in _MCP_SERVER_SECRET_FIELDS:
+            secret_name = _mcp_server_secret_name(server_name, field)
+            legacy_value = str(server.get(field, "") or "")
+            stored = store.get_secret(secret_name, "")
+            if legacy_value:
+                if not stored:
+                    store.set_secret(secret_name, legacy_value)
+                    stored = legacy_value
+                server[field] = stored
+                migrated = True
+            elif stored:
+                server[field] = stored
+
+    if migrated:
+        sanitized = _sanitize_mcp_servers(json.dumps(servers), store, persist=False)
+        qs.setValue("room/mcp_servers", sanitized)
+        qs.sync()
+    return json.dumps(servers)
+
+
+def _sanitize_mcp_servers(raw: Any, store: SecretStore, *, persist: bool) -> Any:
+    """Move MCP server secrets into SecretStore and return sanitized JSON."""
+    servers = _parse_mcp_servers(raw)
+    if servers is None:
+        return raw
+
+    for server in servers:
+        if not isinstance(server, dict):
+            continue
+        server_name = str(server.get("name", "")).strip()
+        if not server_name:
+            continue
+        for field in _MCP_SERVER_SECRET_FIELDS:
+            if field not in server:
+                continue
+            secret_name = _mcp_server_secret_name(server_name, field)
+            value = str(server.get(field, "") or "")
+            if persist:
+                if value:
+                    store.set_secret(secret_name, value)
+                else:
+                    store.delete_secret(secret_name)
+            server[field] = ""
+    return json.dumps(servers)
+
+
 def load_settings() -> dict:
     """Load persisted settings, falling back to defaults."""
     qs = QSettings()
+    store = get_secret_store()
     out: dict = {}
     for key, default in _DEFAULTS.items():
+        if key in _SECRET_KEYS:
+            out[key] = _load_secret_setting(qs, store, key)
+            continue
+
         val = qs.value(f"room/{key}", default)
+        if key == "mcp_servers":
+            val = _hydrate_mcp_server_secrets(val, qs, store)
         # QSettings returns strings for bools
         if isinstance(default, bool) and isinstance(val, str):
             val = val.lower() in ("true", "1", "yes")
@@ -155,6 +292,12 @@ def load_settings() -> dict:
 def save_settings(settings: dict) -> None:
     """Persist settings to disk."""
     qs = QSettings()
+    store = get_secret_store()
     for key, val in settings.items():
+        if key in _SECRET_KEYS:
+            _save_secret_setting(qs, store, key, val)
+            continue
+        if key == "mcp_servers":
+            val = _sanitize_mcp_servers(val, store, persist=True)
         qs.setValue(f"room/{key}", val)
     qs.sync()

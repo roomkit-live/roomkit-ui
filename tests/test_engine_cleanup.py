@@ -91,8 +91,6 @@ def engine(qapp):
 
 
 async def _run_cleanup(eng):
-    # Protect the test runner's own tasks from the lingering-task sweep.
-    eng._pre_session_tasks = frozenset(asyncio.all_tasks())
     await eng._cleanup()
 
 
@@ -174,3 +172,24 @@ async def test_cleanup_nullifies_session_state(engine):
     assert engine._partial_buffers == {}
     assert engine._current_speaker_id == ""
     assert engine._base_system_prompt == ""
+
+
+async def test_cleanup_cancels_engine_owned_tasks(engine):
+    task = engine._create_owned_task(asyncio.sleep(60), name="test_owned_task")
+
+    await _run_cleanup(engine)
+
+    assert task.done()
+    assert task.cancelled()
+
+
+async def test_cleanup_does_not_cancel_unrelated_tasks(engine):
+    task = asyncio.create_task(asyncio.sleep(60), name="unrelated_ui_task")
+
+    try:
+        await _run_cleanup(engine)
+
+        assert not task.done()
+    finally:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)

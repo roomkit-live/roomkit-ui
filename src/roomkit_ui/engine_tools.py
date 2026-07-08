@@ -101,7 +101,10 @@ class ToolMixin:
                 self._end_conv_handle.cancel()  # type: ignore[attr-defined]
             self._end_conv_handle = loop.call_later(  # type: ignore[attr-defined]
                 3.0,
-                lambda: loop.create_task(self.stop()),  # type: ignore[attr-defined]
+                lambda: self._create_owned_task(  # type: ignore[attr-defined]
+                    self.stop(),  # type: ignore[attr-defined]
+                    name="engine_stop_from_tool",
+                ),
             )
             return '{"status": "ok", "message": "Ending conversation in a few seconds."}'
 

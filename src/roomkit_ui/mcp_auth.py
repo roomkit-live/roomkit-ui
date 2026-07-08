@@ -1,6 +1,6 @@
 """OAuth2 authentication support for MCP HTTP servers.
 
-Implements token storage (QSettings-backed), a local callback server for the
+Implements token storage (SecretStore-backed), a local callback server for the
 Authorization Code + PKCE flow, and a factory that wires everything together
 into an ``OAuthClientProvider`` (``httpx.Auth`` subclass) that the MCP SDK
 transports accept directly.
@@ -15,35 +15,62 @@ from urllib.parse import parse_qs, urlparse
 
 from PySide6.QtCore import QSettings
 
+from roomkit_ui.secret_store import SecretStore, get_secret_store
+
 logger = logging.getLogger(__name__)
 
 _SETTINGS_PREFIX = "room/mcp_oauth"
 
 
 # ---------------------------------------------------------------------------
-# Token storage (QSettings-backed)
+# Token storage (SecretStore-backed)
 # ---------------------------------------------------------------------------
 
 
-class QSettingsTokenStorage:
-    """Implements ``mcp.client.auth.TokenStorage`` backed by QSettings.
+class SecretTokenStorage:
+    """Implements ``mcp.client.auth.TokenStorage`` backed by SecretStore.
 
-    Each server gets its own key namespace under ``room/mcp_oauth/{name}/``.
+    Legacy QSettings entries under ``room/mcp_oauth/{name}/`` are migrated on
+    first read.
     """
 
-    def __init__(self, server_name: str) -> None:
+    def __init__(self, server_name: str, store: SecretStore | None = None) -> None:
         self._name = server_name
+        self._store = store or get_secret_store()
         self._qs = QSettings()
 
     def _key(self, suffix: str) -> str:
         return f"{_SETTINGS_PREFIX}/{self._name}/{suffix}"
+
+    def _secret_name(self, suffix: str) -> str:
+        return f"mcp_oauth:{self._name}:{suffix}"
+
+    def _get_json(self, suffix: str) -> str | None:
+        raw = self._store.get_secret(self._secret_name(suffix), "")
+        if raw:
+            return raw
+
+        legacy = self._qs.value(self._key(suffix), None)
+        if legacy is None:
+            return None
+        legacy_text = str(legacy)
+        if legacy_text:
+            self._store.set_secret(self._secret_name(suffix), legacy_text)
+        self._qs.remove(self._key(suffix))
+        self._qs.sync()
+        return legacy_text or None
+
+    def _set_json(self, suffix: str, value: str) -> None:
+        self._store.set_secret(self._secret_name(suffix), value)
+        self._qs.remove(self._key(suffix))
+        self._qs.sync()
 
     # -- TokenStorage protocol -----------------------------------------------
 
     async def get_tokens(self):  # noqa: ANN201
         from mcp.shared.auth import OAuthToken
 
-        raw = self._qs.value(self._key("tokens"), None)
+        raw = self._get_json("tokens")
         if raw is None:
             return None
         try:
@@ -53,13 +80,12 @@ class QSettingsTokenStorage:
             return None
 
     async def set_tokens(self, tokens) -> None:
-        self._qs.setValue(self._key("tokens"), tokens.model_dump_json())
-        self._qs.sync()
+        self._set_json("tokens", tokens.model_dump_json())
 
     async def get_client_info(self):  # noqa: ANN201
         from mcp.shared.auth import OAuthClientInformationFull
 
-        raw = self._qs.value(self._key("client_info"), None)
+        raw = self._get_json("client_info")
         if raw is None:
             return None
         try:
@@ -69,8 +95,11 @@ class QSettingsTokenStorage:
             return None
 
     async def set_client_info(self, client_info) -> None:
-        self._qs.setValue(self._key("client_info"), client_info.model_dump_json())
-        self._qs.sync()
+        self._set_json("client_info", client_info.model_dump_json())
+
+
+# Backward-compatible name for any tests or integrations importing it.
+QSettingsTokenStorage = SecretTokenStorage
 
 
 # ---------------------------------------------------------------------------
@@ -218,7 +247,7 @@ async def create_oauth_provider(
     callback_server = LocalOAuthCallbackServer()
     await callback_server.start()
 
-    storage = QSettingsTokenStorage(server_name)
+    storage = SecretTokenStorage(server_name)
 
     redirect_uri = callback_server.redirect_uri
     auth_method: Literal["none", "client_secret_post"] = (
@@ -273,6 +302,9 @@ async def create_oauth_provider(
 
 def clear_oauth_tokens(server_name: str) -> None:
     """Remove stored OAuth tokens for *server_name*."""
+    store = get_secret_store()
+    for suffix in ("tokens", "client_info"):
+        store.delete_secret(f"mcp_oauth:{server_name}:{suffix}")
     qs = QSettings()
     qs.remove(f"{_SETTINGS_PREFIX}/{server_name}")
     qs.sync()
@@ -280,5 +312,8 @@ def clear_oauth_tokens(server_name: str) -> None:
 
 def has_oauth_tokens(server_name: str) -> bool:
     """Return ``True`` if tokens are stored for *server_name*."""
+    store = get_secret_store()
+    if store.get_secret(f"mcp_oauth:{server_name}:tokens", ""):
+        return True
     qs = QSettings()
     return qs.value(f"{_SETTINGS_PREFIX}/{server_name}/tokens", None) is not None

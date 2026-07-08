@@ -3,6 +3,12 @@
 import pytest
 from PySide6.QtCore import QCoreApplication, QSettings
 
+from roomkit_ui.secret_store import (
+    SecretStore,
+    reset_secret_store_for_tests,
+    set_secret_store_for_tests,
+)
+
 
 @pytest.fixture(autouse=True)
 def isolated_qsettings(tmp_path):
@@ -11,4 +17,6 @@ def isolated_qsettings(tmp_path):
     QCoreApplication.setApplicationName("RoomKitUI-Tests")
     QSettings.setDefaultFormat(QSettings.Format.IniFormat)
     QSettings.setPath(QSettings.Format.IniFormat, QSettings.Scope.UserScope, str(tmp_path))
+    set_secret_store_for_tests(SecretStore(keyring_backend=None))
     yield
+    reset_secret_store_for_tests()

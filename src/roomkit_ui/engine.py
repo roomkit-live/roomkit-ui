@@ -148,12 +148,11 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         self._cached_models: dict[str, tuple[tuple, Any]] = {}
         self._cleanup_monitor_task: asyncio.Task | None = None
         self._end_conv_handle: asyncio.TimerHandle | None = None
-        # Snapshot of asyncio.all_tasks() taken at session start.  Any task
-        # still alive at _cleanup() time that is NOT in this set was spawned
-        # by the session (roomkit, provider, transport, pipeline, etc.) and
-        # should be cancelled.  Replaces a hard-coded name-prefix allowlist
-        # that went stale every time roomkit added or renamed a task.
-        self._pre_session_tasks: frozenset[asyncio.Task[Any]] = frozenset()
+        # Tasks explicitly spawned by the engine.  Avoid sweeping
+        # asyncio.all_tasks(): UI/settings/dictation tasks may legitimately
+        # start while a voice session is active and must not be cancelled by
+        # session cleanup.
+        self._owned_tasks: set[asyncio.Task[Any]] = set()
 
         self._pending_tool_calls: int = 0
         self._watchdog = SessionWatchdog(self)
@@ -187,6 +186,29 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         """Release all cached models (call on app quit)."""
         self._cached_models.clear()
 
+    def _create_owned_task(
+        self,
+        coro: Any,
+        *,
+        name: str | None = None,
+    ) -> asyncio.Task[Any]:
+        """Create an asyncio task owned by the engine lifecycle."""
+        task = asyncio.create_task(coro, name=name)
+        self._owned_tasks.add(task)
+        task.add_done_callback(self._owned_tasks.discard)
+        return task
+
+    async def _cancel_owned_tasks(self) -> None:
+        """Cancel engine-owned background tasks without touching unrelated tasks."""
+        current = asyncio.current_task()
+        tasks = [task for task in self._owned_tasks if task is not current and not task.done()]
+        if not tasks:
+            return
+        for task in tasks:
+            logger.info("cleanup: cancelling owned task: %s", task.get_name() or task)
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+
     @property
     def state(self) -> EngineState:
         return self._state
@@ -216,12 +238,6 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         if self._log_handler not in voice_logger.handlers:
             self._log_handler._engine_ref = weakref.ref(self)
             voice_logger.addHandler(self._log_handler)
-
-        # Snapshot currently-running tasks BEFORE starting the session so
-        # _cleanup() can tell which tasks the session spawned.  Captured
-        # here (not inside the mode-specific helpers) so an error during
-        # setup still gets the benefit of the diff.
-        self._pre_session_tasks = frozenset(asyncio.all_tasks())
 
         mode = settings.get("conversation_mode", "realtime")
         if mode == "voice_channel":
@@ -298,6 +314,7 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
             except (asyncio.CancelledError, Exception):
                 pass
             self._cleanup_monitor_task = None
+        await self._cancel_owned_tasks()
         # Voice channel mode: disconnect backend
         if self._backend and self._session:
             try:
@@ -378,24 +395,6 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         # handles those tasks need, leaving them stuck in "cancelling"
         # state forever and accumulating across sessions.
         await asyncio.sleep(0)
-
-        # Cancel any task that appeared during the session and didn't
-        # finalize.  The snapshot captured in start() pins the set of
-        # tasks that existed before the session, so anything new here
-        # belongs to roomkit / the provider / the transport / the pipeline.
-        # This is more durable than matching roomkit-specific task-name
-        # prefixes, which went stale every time roomkit added a task.
-        current = asyncio.current_task()
-        pre = self._pre_session_tasks
-        for task in list(asyncio.all_tasks()):
-            if task is current or task.done() or task in pre:
-                continue
-            logger.info("cleanup: cancelling lingering task: %s", task.get_name() or task)
-            task.cancel()
-        # Next session captures a fresh snapshot in start().
-        self._pre_session_tasks = frozenset()
-
-        # Second yield to let freshly-cancelled tasks finalize
         await asyncio.sleep(0)
 
         # Now safe to clean up stale event-loop state left by MCP/anyio.
@@ -406,4 +405,7 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         # without interfering with ongoing task finalization.
         asyncio.get_running_loop().call_later(0.1, cleanup_stale_fds)
         # Monitor CPU after cleanup to verify the fix worked
-        self._cleanup_monitor_task = asyncio.ensure_future(post_cleanup_monitor())
+        self._cleanup_monitor_task = self._create_owned_task(
+            post_cleanup_monitor(),
+            name="post_cleanup_monitor",
+        )
