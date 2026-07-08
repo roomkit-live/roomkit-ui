@@ -10,24 +10,16 @@ from __future__ import annotations
 
 import json
 import logging
-import urllib.parse
 import webbrowser
 from typing import Any
 
 from PySide6.QtCore import QObject, Signal, Slot
 
+from roomkit_ui.url_policy import is_public_http_url, safe_url_for_log
+
 logger = logging.getLogger(__name__)
 
 _PROTOCOL_VERSION = "2026-01-26"
-
-
-def _safe_url_for_log(url: str) -> str:
-    parsed = urllib.parse.urlparse(url)
-    if not parsed.scheme:
-        return "<missing-scheme>"
-    if parsed.scheme not in ("http", "https"):
-        return f"{parsed.scheme}:<redacted>"
-    return urllib.parse.urlunparse((parsed.scheme, parsed.netloc, parsed.path, "", "", ""))
 
 
 def _to_call_tool_result(result: Any) -> dict[str, Any]:
@@ -191,12 +183,10 @@ class MCPAppBridge(QObject):
         url = params.get("uri") or params.get("url", "")
         if not url:
             return
-        parsed = urllib.parse.urlparse(url)
-        if parsed.scheme not in ("http", "https"):
+        if not is_public_http_url(url):
             logger.warning(
-                "MCPAppBridge: blocked open_link scheme %r: %s",
-                parsed.scheme,
-                _safe_url_for_log(url),
+                "MCPAppBridge: blocked open_link URL: %s",
+                safe_url_for_log(url),
             )
             logger.debug("MCPAppBridge: blocked open_link URL: %s", url)
             return

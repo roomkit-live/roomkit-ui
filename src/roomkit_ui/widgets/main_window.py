@@ -204,11 +204,12 @@ class MainWindow(QMainWindow):
         mcp = self._engine._mcp  # noqa: SLF001
         if mcp is not None:
             html = await mcp.read_resource(name, resource_uri)
-        if html:
+        if html and os.environ.get("DEBUG"):
             # Cache for offline debugging
             import tempfile
 
-            path = os.path.join(tempfile.gettempdir(), f"mcp_app_{name}.html")
+            safe_name = "".join(c if c.isalnum() or c in "._-" else "_" for c in name)
+            path = os.path.join(tempfile.gettempdir(), f"mcp_app_{safe_name}.html")
             try:
                 with open(path, "w", encoding="utf-8") as f:
                     f.write(html)

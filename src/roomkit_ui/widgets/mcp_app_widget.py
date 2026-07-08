@@ -31,6 +31,7 @@ from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QDialog, QFrame, QLabel, QSizePolicy, QVBoxLayout, QWidget
 
 from roomkit_ui.theme import colors
+from roomkit_ui.url_policy import is_public_web_url, safe_url_for_log
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,7 @@ try:
         QWebEnginePage,
         QWebEngineProfile,
         QWebEngineSettings,
+        QWebEngineUrlRequestInterceptor,
     )
     from PySide6.QtWebEngineWidgets import QWebEngineView
 
@@ -53,6 +55,18 @@ except ImportError:
 # view uses this fixed height so the native QWebEngine surface stays
 # properly clipped inside the scroll area.
 _DEFAULT_VIEW_HEIGHT = 350
+
+_APP_CSP = (
+    "default-src 'self' http: https: data: blob:; "
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' http: https: qrc: data: blob:; "
+    "style-src 'self' 'unsafe-inline' http: https: data:; "
+    "img-src 'self' http: https: data: blob:; "
+    "font-src 'self' http: https: data:; "
+    "connect-src 'self' http: https: ws: wss:; "
+    "frame-src 'self' http: https: data: blob:; "
+    "worker-src 'self' blob:; "
+    "object-src 'none'; base-uri 'none'; form-action 'none'"
+)
 
 # ---------------------------------------------------------------------------
 # Lightweight HTTP server for MCP App content
@@ -74,6 +88,10 @@ class _AppHTTPHandler(BaseHTTPRequestHandler):
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(data)))
+        self.send_header("Content-Security-Policy", _APP_CSP)
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(data)
 
@@ -202,10 +220,88 @@ def has_webengine() -> bool:
 # ---------------------------------------------------------------------------
 if _HAS_WEBENGINE:
 
+    def _set_web_attribute(settings: QWebEngineSettings, name: str, enabled: bool) -> None:
+        attr = getattr(QWebEngineSettings.WebAttribute, name, None)
+        if attr is None:
+            attr = getattr(QWebEngineSettings, name, None)
+        if attr is not None:
+            settings.setAttribute(attr, enabled)
+
+    def _is_allowed_local_url(
+        url: QUrl,
+        allowed_host: str,
+        allowed_port: int,
+        allowed_paths: set[str] | None = None,
+    ) -> bool:
+        if url.scheme().lower() != "http":
+            return False
+        if url.host().lower() != allowed_host or url.port() != allowed_port:
+            return False
+        return allowed_paths is None or url.path() in allowed_paths
+
+    class _MCPAppRequestInterceptor(QWebEngineUrlRequestInterceptor):  # type: ignore[misc]
+        """Blocks embedded MCP Apps from reaching local/private browser targets."""
+
+        def __init__(self, parent: QWidget | None = None) -> None:
+            super().__init__(parent)
+            self._allowed_host = ""
+            self._allowed_port = -1
+
+        def set_allowed_local_server(self, host: str, port: int) -> None:
+            self._allowed_host = host.lower()
+            self._allowed_port = port
+
+        def interceptRequest(self, info: Any) -> None:  # noqa: N802
+            url = info.requestUrl()
+            scheme = url.scheme().lower()
+            url_str = url.toString()
+            allowed = (
+                scheme in {"about", "qrc", "data", "blob"}
+                or _is_allowed_local_url(url, self._allowed_host, self._allowed_port)
+                or is_public_web_url(url_str)
+            )
+            if allowed:
+                return
+            logger.warning("MCPAppWidget: blocked web request to %s", safe_url_for_log(url_str))
+            info.block(True)
+
     class _DebugPage(QWebEnginePage):  # type: ignore[misc]
         """QWebEnginePage that logs JS console messages to Python."""
 
         js_error = Signal(str)  # emits user-visible error text
+
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            super().__init__(*args, **kwargs)
+            self._allowed_host = ""
+            self._allowed_port = -1
+            self._allowed_paths: set[str] = set()
+
+        def set_allowed_app_paths(self, host: str, port: int, paths: set[str]) -> None:
+            self._allowed_host = host.lower()
+            self._allowed_port = port
+            self._allowed_paths = set(paths)
+
+        def acceptNavigationRequest(  # noqa: N802
+            self,
+            url: QUrl | str,
+            nav_type: Any,
+            is_main_frame: bool,
+        ) -> bool:
+            qurl = QUrl(url) if isinstance(url, str) else url
+            if qurl.scheme().lower() == "about":
+                return True
+            if _is_allowed_local_url(
+                qurl,
+                self._allowed_host,
+                self._allowed_port,
+                self._allowed_paths,
+            ):
+                return True
+            logger.warning(
+                "MCPAppWidget: blocked navigation to %s",
+                safe_url_for_log(qurl.toString()),
+            )
+            return False
 
         def javaScriptConsoleMessage(  # noqa: N802
             self,
@@ -248,6 +344,8 @@ class MCPAppWidget(QFrame):
         self._server_name = server_name
         self._bridge: Any = None  # MCPAppBridge (set up only when WebEngine is used)
         self._view: Any = None  # QWebEngineView | None
+        self._page: Any = None  # _DebugPage | None
+        self._request_interceptor: Any = None  # _MCPAppRequestInterceptor | None
         self._http_paths: list[str] = []  # HTTP paths to clean up
         self._fullscreen_dialog: QDialog | None = None
 
@@ -318,13 +416,22 @@ class MCPAppWidget(QFrame):
 
         # Off-the-record profile (no persistent storage)
         profile = QWebEngineProfile(self)
+        profile.setHttpCacheType(QWebEngineProfile.MemoryHttpCache)
+        profile.setPersistentCookiesPolicy(QWebEngineProfile.NoPersistentCookies)
+        self._request_interceptor = _MCPAppRequestInterceptor(self)
+        profile.setUrlRequestInterceptor(self._request_interceptor)
         page = _DebugPage(profile, self)
+        self._page = page
         page.js_error.connect(self._on_js_error)
 
         settings = page.settings()
-        settings.setAttribute(QWebEngineSettings.LocalContentCanAccessRemoteUrls, True)
-        settings.setAttribute(QWebEngineSettings.JavascriptEnabled, True)
-        settings.setAttribute(QWebEngineSettings.WebGLEnabled, True)
+        _set_web_attribute(settings, "JavascriptEnabled", True)
+        _set_web_attribute(settings, "WebGLEnabled", True)
+        _set_web_attribute(settings, "LocalContentCanAccessRemoteUrls", False)
+        _set_web_attribute(settings, "LocalContentCanAccessFileUrls", False)
+        _set_web_attribute(settings, "JavascriptCanOpenWindows", False)
+        _set_web_attribute(settings, "PluginsEnabled", False)
+        _set_web_attribute(settings, "WebRTCPublicInterfacesOnly", True)
 
         # Set page background to match the app theme so the view doesn't
         # flash black while the HTML loads.
@@ -386,6 +493,11 @@ class MCPAppWidget(QFrame):
             self._http_paths = [app_path, wrapper_path]
 
             url = f"http://{host!s}:{port}{wrapper_path}"
+            allowed_host = str(host).lower()
+            if self._request_interceptor is not None:
+                self._request_interceptor.set_allowed_local_server(allowed_host, int(port))
+            if self._page is not None:
+                self._page.set_allowed_app_paths(allowed_host, int(port), {app_path, wrapper_path})
             logger.debug("MCPAppWidget: loading %s (app=%d bytes)", url, len(html_content))
             self._view.load(QUrl(url))
 
