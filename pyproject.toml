@@ -36,13 +36,6 @@ dev = [
 [project.scripts]
 roomkit-ui = "roomkit_ui.app:main"
 
-# Dev-time override: consume the sibling roomkit checkout (0.24.0.dev) which
-# carries the public APIs this app now depends on (close_providers,
-# AIChannel.set_system_prompt, DiarizationProvider.clear_speakers). Remove once
-# roomkit 0.24.0 is published to PyPI and `uv sync` can resolve it directly.
-[tool.uv.sources]
-roomkit = { path = "../roomkit", editable = true }
-
 # ── Ruff ──────────────────────────────────────────────────────────────────
 [tool.ruff]
 target-version = "py312"
