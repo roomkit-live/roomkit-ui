@@ -278,7 +278,14 @@ async def create_oauth_provider(
         await storage.set_client_info(client_info)
 
     async def redirect_handler(auth_url: str) -> None:
-        logger.info("Opening browser for OAuth: %s", auth_url)
+        parsed = urlparse(auth_url)
+        logger.info(
+            "Opening browser for OAuth: %s://%s%s",
+            parsed.scheme,
+            parsed.netloc,
+            parsed.path,
+        )
+        logger.debug("OAuth authorization URL: %s", auth_url)
         webbrowser.open(auth_url)
 
     async def callback_handler() -> tuple[str, str | None]:

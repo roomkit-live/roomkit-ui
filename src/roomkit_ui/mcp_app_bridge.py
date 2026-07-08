@@ -21,6 +21,15 @@ logger = logging.getLogger(__name__)
 _PROTOCOL_VERSION = "2026-01-26"
 
 
+def _safe_url_for_log(url: str) -> str:
+    parsed = urllib.parse.urlparse(url)
+    if not parsed.scheme:
+        return "<missing-scheme>"
+    if parsed.scheme not in ("http", "https"):
+        return f"{parsed.scheme}:<redacted>"
+    return urllib.parse.urlunparse((parsed.scheme, parsed.netloc, parsed.path, "", "", ""))
+
+
 def _to_call_tool_result(result: Any) -> dict[str, Any]:
     """Normalise a tool result into the MCP ``CallToolResult`` shape.
 
@@ -89,7 +98,8 @@ class MCPAppBridge(QObject):
         try:
             msg = json.loads(json_str)
         except (json.JSONDecodeError, TypeError):
-            logger.warning("MCPAppBridge: invalid JSON from app: %s", json_str[:200])
+            logger.warning("MCPAppBridge: invalid JSON from app (%d chars)", len(json_str))
+            logger.debug("MCPAppBridge: invalid JSON payload: %s", json_str)
             return
 
         method = msg.get("method", "")
@@ -183,7 +193,12 @@ class MCPAppBridge(QObject):
             return
         parsed = urllib.parse.urlparse(url)
         if parsed.scheme not in ("http", "https"):
-            logger.warning("MCPAppBridge: blocked open_link scheme %r: %s", parsed.scheme, url)
+            logger.warning(
+                "MCPAppBridge: blocked open_link scheme %r: %s",
+                parsed.scheme,
+                _safe_url_for_log(url),
+            )
+            logger.debug("MCPAppBridge: blocked open_link URL: %s", url)
             return
         webbrowser.open(url)
 

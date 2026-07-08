@@ -111,7 +111,9 @@ if os.environ.get("DEBUG"):
     logging.getLogger("roomkit").setLevel(logging.DEBUG)
     logging.getLogger("roomkit.channels.realtime_voice").setLevel(logging.DEBUG)
 else:
-    logging.getLogger("roomkit.channels.realtime_voice").setLevel(logging.DEBUG)
+    logging.getLogger("mcp").setLevel(logging.INFO)
+    logging.getLogger("roomkit").setLevel(logging.INFO)
+    logging.getLogger("roomkit.channels.realtime_voice").setLevel(logging.INFO)
 
 # OpenTelemetry SDK is very chatty at INFO (batch exports, connection status,
 # retries).  Keep it at WARNING so only actual problems reach the console.

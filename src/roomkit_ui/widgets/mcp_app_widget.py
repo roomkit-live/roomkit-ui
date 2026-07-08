@@ -466,7 +466,8 @@ class MCPAppWidget(QFrame):
 
     def _on_load_finished(self, ok: bool) -> None:
         url = self._view.url().toString() if self._view else "?"
-        logger.info("MCPAppWidget: loadFinished ok=%s url=%s", ok, url)
+        logger.info("MCPAppWidget: loadFinished ok=%s", ok)
+        logger.debug("MCPAppWidget: loadFinished url=%s", url)
 
     def _on_size_changed(self, width: int, height: int) -> None:
         # Don't resize the inline view while in fullscreen mode

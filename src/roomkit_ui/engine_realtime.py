@@ -175,7 +175,7 @@ class RealtimeMixin:
 
             self.loading_status.emit("Connecting to provider…")  # type: ignore[attr-defined]
             if provider_config:
-                logger.info("provider_config: %s", provider_config)
+                logger.debug("provider_config: %s", provider_config)
             self._session = await self._start_session(  # type: ignore[attr-defined]
                 RoomKit,
                 RealtimeVoiceChannel,

@@ -185,13 +185,15 @@ class MainWindow(QMainWindow):
         self._chat.set_loading_status(message)
 
     def _on_tool_use(self, name: str, arguments: str) -> None:
-        logger.info("Tool call: %s(%s)", name, arguments[:200])
+        logger.info("Tool call: %s (%d arg chars)", name, len(arguments))
+        logger.debug("Tool call arguments for %s: %s", name, arguments)
         self._chat.add_tool_call(name, arguments)
 
     def _on_tool_use_app(
         self, name: str, args_json: str, resource_uri: str, server_name: str
     ) -> None:
-        logger.info("MCP App tool call: %s (uri=%s)", name, resource_uri)
+        logger.info("MCP App tool call: %s (server=%s)", name, server_name)
+        logger.debug("MCP App resource for %s: %s", name, resource_uri)
         asyncio.ensure_future(self._fetch_and_show_app(name, args_json, resource_uri, server_name))
 
     async def _fetch_and_show_app(

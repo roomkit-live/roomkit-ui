@@ -182,11 +182,18 @@ def register_realtime_hooks(kit: Any, engine: Any) -> None:
             speaker = ""
 
         _log.info(
-            "TRANSCRIPTION: role=%s final=%s speaker=%r text=%r",
+            "TRANSCRIPTION: role=%s final=%s speaker=%r chars=%d",
             role,
             is_final,
             speaker,
-            text[:80],
+            len(text),
+        )
+        _log.debug(
+            "TRANSCRIPTION text: role=%s final=%s speaker=%r text=%r",
+            role,
+            is_final,
+            speaker,
+            text,
         )
 
         # Primary speaker mode: only block when positively identified as

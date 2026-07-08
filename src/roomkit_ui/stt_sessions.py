@@ -328,7 +328,9 @@ class DictationSessionMixin:
                     execution=HookExecution.ASYNC,
                 )
                 async def _on_partial(result, ctx):
-                    logger.info("%s STT partial: %s", provider_label, result.text)
+                    text = result.text or ""
+                    logger.info("%s STT partial: %d chars", provider_label, len(text))
+                    logger.debug("%s STT partial text: %s", provider_label, text)
 
             @kit.hook(HookTrigger.ON_TRANSCRIPTION)
             async def _on_transcription(event, ctx):
@@ -336,7 +338,8 @@ class DictationSessionMixin:
                 # not the raw string it used to hand ON_TRANSCRIPTION hooks.
                 text = event.text
                 if text and text.strip():
-                    logger.info("%s STT final: %s", provider_label, text)
+                    logger.info("%s STT final: %d chars", provider_label, len(text))
+                    logger.debug("%s STT final text: %s", provider_label, text)
                     accumulated.append(text.strip())
                 flush_event.set()
                 return HookResult.block("dictation-only")

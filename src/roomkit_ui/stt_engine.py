@@ -83,7 +83,8 @@ class STTEngine(DictationSessionMixin, QObject):
 
     def _on_transcription(self, _session: Any, text: str, role: str, is_final: bool) -> None:
         if role == "user" and is_final and text.strip():
-            logger.info("STT transcription (final): %s", text)
+            logger.info("STT transcription final: %d chars", len(text))
+            logger.debug("STT transcription final text: %s", text)
             self._accumulated_text.append(text.strip())
             if self._transcription_event is not None:
                 self._transcription_event.set()
@@ -162,7 +163,8 @@ class STTEngine(DictationSessionMixin, QObject):
             # Emit / paste the text BEFORE cleanup (cleanup is slow).
             text = " ".join(self._accumulated_text).strip()
             if text:
-                logger.info("Emitting text_ready: %s", text[:80])
+                logger.info("Emitting text_ready: %d chars", len(text))
+                logger.debug("text_ready payload: %s", text)
                 # Restore focus to the app that was active before recording,
                 # then give it a moment to come forward before pasting.
                 if self._prev_app:
@@ -200,7 +202,8 @@ class STTEngine(DictationSessionMixin, QObject):
                         timeout=30.0,
                     )
                     if result and result.text and result.text.strip():
-                        logger.info("Batch STT result: %s", result.text)
+                        logger.info("Batch STT result: %d chars", len(result.text))
+                        logger.debug("Batch STT text: %s", result.text)
                         self._accumulated_text.append(result.text.strip())
                 except TimeoutError:
                     logger.warning("Batch STT timed out")
@@ -325,7 +328,8 @@ class STTEngine(DictationSessionMixin, QObject):
             try:
                 loop = asyncio.get_running_loop()
                 front = _get_frontmost_bundle()
-                logger.info("Pasting text to %s: %s", front or "(self)", text[:80])
+                logger.info("Pasting text to %s: %d chars", front or "(self)", len(text))
+                logger.debug("Paste text payload: %s", text)
                 await loop.run_in_executor(None, _copy_to_clipboard, text)
                 ok = await loop.run_in_executor(None, _simulate_paste)
                 if not ok:
