@@ -116,6 +116,7 @@ class MCPManager:
         self._configs = server_configs
         self._tools: list[dict[str, Any]] = []
         self._tool_to_session: dict[str, Any] = {}  # tool name → ClientSession
+        self._tool_to_server: dict[str, str] = {}  # tool name → server name
         self._app_tools: dict[str, dict[str, str]] = {}  # tool name → {uri, server}
         self._close_event: asyncio.Event | None = None
         self._tasks: list[asyncio.Task] = []  # one long-lived task per server
@@ -211,6 +212,7 @@ class MCPManager:
         """Record a server's tools in the shared lookup tables."""
         for tool in result.tools:
             self._tool_to_session[tool.name] = session
+            self._tool_to_server[tool.name] = name
             self._tools.append(
                 {
                     "type": "function",
@@ -352,9 +354,10 @@ class MCPManager:
                             pass
             except Exception:
                 logger.exception("Error during MCP shutdown")
-            self._tasks = []
+        self._tasks = []
         self._tools.clear()
         self._tool_to_session.clear()
+        self._tool_to_server.clear()
         self._app_tools.clear()
         if self._hook_installed:
             _uninstall_unraisable_hook()
@@ -370,6 +373,10 @@ class MCPManager:
     def get_app_tool_info(self, tool_name: str) -> dict[str, str] | None:
         """Return ``{uri, server}`` if *tool_name* is an MCP App tool."""
         return self._app_tools.get(tool_name)
+
+    def get_tool_server(self, tool_name: str) -> str | None:
+        """Return the configured server that owns *tool_name*, if discovered."""
+        return self._tool_to_server.get(tool_name)
 
     async def read_resource(self, tool_name: str, uri: str) -> str | None:
         """Fetch an MCP resource (e.g. ``ui://`` HTML) from the owning server."""
@@ -424,3 +431,28 @@ class MCPManager:
         except Exception as exc:
             logger.exception("MCP tool call %r failed", name)
             return json.dumps({"error": str(exc)})
+
+    async def handle_app_tool_call(
+        self,
+        origin_server: str,
+        name: str,
+        arguments: dict[str, Any],
+    ) -> str:
+        """Route an MCP App ``tools/call`` only to tools from the same server."""
+        owner = self.get_tool_server(name)
+        if owner is None:
+            logger.warning(
+                "Blocked MCP App tool call from %r to unknown tool %r",
+                origin_server,
+                name,
+            )
+            return json.dumps({"error": "Tool is not available to this MCP App"})
+        if owner != origin_server:
+            logger.warning(
+                "Blocked MCP App tool call from %r to tool %r owned by %r",
+                origin_server,
+                name,
+                owner,
+            )
+            return json.dumps({"error": "Tool is not available to this MCP App"})
+        return await self.handle_tool_call(name, arguments)

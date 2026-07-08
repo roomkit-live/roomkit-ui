@@ -248,18 +248,28 @@ class ToolMixin:
             logger.error("paste_text: %s", msg)
             return json.dumps({"error": msg})
 
-    async def handle_app_tool_call(self, tool_name: str, arguments: dict[str, Any]) -> str:
+    async def handle_app_tool_call(
+        self,
+        origin_server: str,
+        tool_name: str,
+        arguments: dict[str, Any],
+    ) -> str:
         """Proxy a tool call initiated by an MCP App back through MCP.
 
-        Delegates to :meth:`_handle_tool_call` so the UI signal surface
-        (``tool_use_app`` / ``tool_result_app``) stays consistent no matter
-        which side fired the call — the AI provider's tool loop or a user
-        clicking inside an MCP App HTML widget.
+        MCP App UIs are trusted only for their owning MCP server.  They cannot
+        call built-in tools or tools registered by other MCP servers.
         """
         if self._mcp is None:
             return json.dumps({"error": "MCP not connected"})
         try:
-            return await self._handle_tool_call(tool_name, arguments)
+            self._pending_tool_calls += 1
+            self._watchdog.tool_call_started()
+            try:
+                return await self._mcp.handle_app_tool_call(origin_server, tool_name, arguments)
+            finally:
+                self._pending_tool_calls -= 1
+                self._watchdog.tool_call_ended()
+                cleanup_stale_fds(timers_only=True)
         except Exception as exc:
             logger.exception("MCP App tool call %r failed", tool_name)
             return json.dumps({"error": str(exc)})

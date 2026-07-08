@@ -239,7 +239,13 @@ class MainWindow(QMainWindow):
 
         # Connect app-initiated tool calls
         widget.tool_call_requested.connect(
-            lambda rid, tname, targs: self._handle_app_tool_request(rid, tname, targs, name)
+            lambda rid, tname, targs: self._handle_app_tool_request(
+                rid,
+                tname,
+                targs,
+                name,
+                server_name,
+            )
         )
 
         # Check if a result arrived before the widget was ready
@@ -247,17 +253,27 @@ class MainWindow(QMainWindow):
             widget.send_tool_result(self._pending_app_results.pop(name))
 
     def _handle_app_tool_request(
-        self, request_id: str, tool_name: str, arguments: dict[str, Any], widget_key: str
+        self,
+        request_id: str,
+        tool_name: str,
+        arguments: dict[str, Any],
+        widget_key: str,
+        origin_server: str,
     ) -> None:
         """Proxy a tools/call from an MCP App through the engine."""
         asyncio.ensure_future(
-            self._proxy_app_tool_call(request_id, tool_name, arguments, widget_key)
+            self._proxy_app_tool_call(request_id, tool_name, arguments, widget_key, origin_server)
         )
 
     async def _proxy_app_tool_call(
-        self, request_id: str, tool_name: str, arguments: dict[str, Any], widget_key: str
+        self,
+        request_id: str,
+        tool_name: str,
+        arguments: dict[str, Any],
+        widget_key: str,
+        origin_server: str,
     ) -> None:
-        result = await self._engine.handle_app_tool_call(tool_name, arguments)
+        result = await self._engine.handle_app_tool_call(origin_server, tool_name, arguments)
         widget = self._active_app_widgets.get(widget_key)
         if widget is not None:
             widget.send_tool_call_response(request_id, result)
