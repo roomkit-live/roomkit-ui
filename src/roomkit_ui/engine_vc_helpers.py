@@ -7,9 +7,10 @@ settings dict (plus emit callbacks for UI status/errors).
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any
+
+from roomkit_ui.mcp_config import has_enabled_mcp_servers
 
 logger = logging.getLogger(__name__)
 
@@ -139,10 +140,7 @@ def log_vc_audio_pipeline(
 
 
 def mcp_servers_configured(settings: dict) -> bool:
-    try:
-        return any(s.get("enabled", True) for s in json.loads(settings.get("mcp_servers", "[]")))
-    except (json.JSONDecodeError, TypeError):
-        return False
+    return has_enabled_mcp_servers(settings.get("mcp_servers", "[]"))
 
 
 def try_set_int(target: dict[str, Any], key: str, raw: str) -> None:

@@ -1,7 +1,6 @@
 """Tests for MCP schema cleaning, stdio config parsing, and tool registration."""
 
 import json
-import os
 from types import SimpleNamespace
 
 import pytest
@@ -51,13 +50,16 @@ def test_parse_stdio_separate_args_field():
     assert args == ["-y", "some-server"]
 
 
-def test_parse_stdio_env_merges_with_process_env():
+def test_parse_stdio_env_only_includes_explicit_values(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "must-not-leak")
+    monkeypatch.setenv("PATH", "/sensitive/path")
     cfg = {"command": "server", "env": "FOO=bar\nBAZ = qux value "}
     _, _, env = _parse_stdio_config(cfg)
     assert env is not None
     assert env["FOO"] == "bar"
     assert env["BAZ"] == "qux value"
-    assert env["PATH"] == os.environ["PATH"]  # inherits process env
+    assert "OPENAI_API_KEY" not in env
+    assert "PATH" not in env
 
 
 def test_parse_stdio_empty_command():

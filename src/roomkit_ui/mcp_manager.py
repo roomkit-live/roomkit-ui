@@ -15,7 +15,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
 import shlex
 import sys
 from contextlib import AsyncExitStack
@@ -101,7 +100,7 @@ def _parse_stdio_config(cfg: dict[str, Any]) -> tuple[str, list[str], dict[str, 
     env: dict[str, str] | None = None
     env_str = cfg.get("env", "")
     if env_str and env_str.strip():
-        env = os.environ.copy()
+        env = {}
         for line in env_str.strip().splitlines():
             if "=" in line:
                 k, v = line.split("=", 1)

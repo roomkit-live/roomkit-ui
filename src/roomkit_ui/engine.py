@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import asyncio
 import collections
-import json
 import logging
 import weakref
 from typing import Any
@@ -30,6 +29,7 @@ from roomkit_ui.engine_realtime import RealtimeMixin
 from roomkit_ui.engine_state import EngineState
 from roomkit_ui.engine_tools import ToolMixin
 from roomkit_ui.engine_vc import VoiceChannelMixin
+from roomkit_ui.mcp_config import enabled_mcp_servers
 from roomkit_ui.mcp_manager import MCPManager
 from roomkit_ui.watchdog import SessionWatchdog
 
@@ -247,13 +247,7 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
 
     async def _setup_mcp_tools(self, settings: dict) -> tuple[list[dict], bool]:
         """Connect MCP servers and return (tools_list, has_mcp_tools)."""
-        mcp_servers: list[dict] = []
-        try:
-            mcp_servers = [
-                s for s in json.loads(settings.get("mcp_servers", "[]")) if s.get("enabled", True)
-            ]
-        except (json.JSONDecodeError, TypeError):
-            pass
+        mcp_servers = enabled_mcp_servers(settings.get("mcp_servers", "[]"))
 
         tools: list[dict] = list(BUILTIN_TOOLS)
 

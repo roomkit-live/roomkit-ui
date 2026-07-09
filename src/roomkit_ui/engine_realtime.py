@@ -10,7 +10,6 @@ that reject the MCP schema still deliver a working session.
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any
 
@@ -24,6 +23,7 @@ from roomkit_ui.engine_audio import (
 )
 from roomkit_ui.engine_state import EngineState
 from roomkit_ui.hooks import register_realtime_hooks
+from roomkit_ui.mcp_config import has_enabled_mcp_servers
 
 logger = logging.getLogger(__name__)
 
@@ -158,14 +158,7 @@ class RealtimeMixin:
             self._register_callbacks(provider, transport)  # type: ignore[attr-defined]
 
             # -- MCP tools -------------------------------------------------------
-            mcp_servers_configured = False
-            try:
-                mcp_servers_configured = any(
-                    s.get("enabled", True) for s in json.loads(settings.get("mcp_servers", "[]"))
-                )
-            except (json.JSONDecodeError, TypeError):
-                pass
-            if mcp_servers_configured:
+            if has_enabled_mcp_servers(settings.get("mcp_servers", "[]")):
                 self.loading_status.emit("Connecting MCP servers…")  # type: ignore[attr-defined]
             tools, has_mcp_tools = await self._setup_mcp_tools(settings)  # type: ignore[attr-defined]
             tool_handler = self._handle_tool_call  # type: ignore[attr-defined]

@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from roomkit_ui.mcp_config import parse_mcp_servers
 from roomkit_ui.theme import colors
 
 MCP_TRANSPORTS = [
@@ -40,11 +41,7 @@ class _MCPPage(QWidget):
 
     def __init__(self, settings: dict, parent=None) -> None:
         super().__init__(parent)
-        self._servers: list[dict] = []
-        try:
-            self._servers = json.loads(settings.get("mcp_servers", "[]"))
-        except (json.JSONDecodeError, TypeError):
-            self._servers = []
+        self._servers = parse_mcp_servers(settings.get("mcp_servers", "[]"))
 
         self._editing_row = -1
         c = colors()
