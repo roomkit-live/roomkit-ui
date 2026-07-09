@@ -121,10 +121,14 @@ def test_mcp_oauth_client_secret_is_sanitized_and_hydrated(secure_store):
 
     qs = QSettings()
     stored = json.loads(qs.value("room/mcp_servers"))
+    server_id = stored[0]["id"]
     assert stored[0]["oauth_client_secret"] == ""
-    assert secure_store.get_secret("mcp_server:srv:oauth_client_secret") == "client-secret"
+    assert secure_store.get_secret(f"mcp_server:{server_id}:oauth_client_secret") == (
+        "client-secret"
+    )
 
     hydrated = json.loads(load_settings()["mcp_servers"])
+    assert hydrated[0]["id"] == server_id
     assert hydrated[0]["oauth_client_secret"] == "client-secret"
 
 
@@ -146,4 +150,78 @@ def test_mcp_oauth_client_secret_legacy_plaintext_is_migrated(secure_store):
 
     assert hydrated[0]["oauth_client_secret"] == "legacy-client-secret"
     assert sanitized[0]["oauth_client_secret"] == ""
-    assert secure_store.get_secret("mcp_server:srv:oauth_client_secret") == "legacy-client-secret"
+    assert (
+        secure_store.get_secret(f"mcp_server:{sanitized[0]['id']}:oauth_client_secret")
+        == "legacy-client-secret"
+    )
+
+
+def test_mcp_env_secrets_are_sanitized_and_hydrated(secure_store):
+    servers = [
+        {
+            "name": "srv",
+            "transport": "stdio",
+            "command": "server",
+            "env": "OPENAI_API_KEY=sk-test\nPLAIN=value\nMONKEY=banana",
+        }
+    ]
+
+    save_settings({"mcp_servers": json.dumps(servers)})
+
+    qs = QSettings()
+    stored = json.loads(qs.value("room/mcp_servers"))
+    server_id = stored[0]["id"]
+    assert stored[0]["env"] == "OPENAI_API_KEY=\nPLAIN=value\nMONKEY=banana"
+    assert secure_store.get_secret(f"mcp_server:{server_id}:env:OPENAI_API_KEY") == "sk-test"
+
+    hydrated = json.loads(load_settings()["mcp_servers"])
+    assert hydrated[0]["env"] == "OPENAI_API_KEY=sk-test\nPLAIN=value\nMONKEY=banana"
+
+
+def test_mcp_env_legacy_plaintext_is_migrated(secure_store):
+    servers = [
+        {
+            "name": "srv",
+            "transport": "stdio",
+            "command": "server",
+            "env": "GITHUB_TOKEN=legacy-token\nDEBUG=true",
+        }
+    ]
+    qs = QSettings()
+    qs.setValue("room/mcp_servers", json.dumps(servers))
+
+    hydrated = json.loads(load_settings()["mcp_servers"])
+    sanitized = json.loads(qs.value("room/mcp_servers"))
+
+    assert hydrated[0]["env"] == "GITHUB_TOKEN=legacy-token\nDEBUG=true"
+    assert sanitized[0]["env"] == "GITHUB_TOKEN=\nDEBUG=true"
+    assert secure_store.get_secret(f"mcp_server:{sanitized[0]['id']}:env:GITHUB_TOKEN") == (
+        "legacy-token"
+    )
+
+
+def test_mcp_secret_store_entries_migrate_from_server_name_to_id(secure_store):
+    secure_store.set_secret("mcp_server:srv:oauth_client_secret", "old-secret")
+    secure_store.set_secret("mcp_oauth:srv:tokens", '{"access_token":"old-token"}')
+    servers = [
+        {
+            "name": "srv",
+            "transport": "streamable_http",
+            "auth": "oauth2",
+            "url": "https://example.test/mcp",
+            "oauth_client_secret": "",
+        }
+    ]
+    qs = QSettings()
+    qs.setValue("room/mcp_servers", json.dumps(servers))
+
+    hydrated = json.loads(load_settings()["mcp_servers"])
+    server_id = hydrated[0]["id"]
+
+    assert hydrated[0]["oauth_client_secret"] == "old-secret"
+    assert secure_store.get_secret(f"mcp_server:{server_id}:oauth_client_secret") == "old-secret"
+    assert secure_store.get_secret("mcp_server:srv:oauth_client_secret") == ""
+    assert secure_store.get_secret(f"mcp_oauth:{server_id}:tokens") == (
+        '{"access_token":"old-token"}'
+    )
+    assert secure_store.get_secret("mcp_oauth:srv:tokens") == ""

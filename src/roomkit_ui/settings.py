@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
+import uuid
 from typing import Any
 
 from PySide6.QtCore import QSettings
@@ -25,6 +27,19 @@ _SECRET_KEYS = frozenset(
 )
 
 _MCP_SERVER_SECRET_FIELDS = ("oauth_client_secret",)
+_MCP_ENV_SECRET_MARKERS = frozenset(
+    {
+        "AUTH",
+        "CREDENTIAL",
+        "CREDENTIALS",
+        "KEY",
+        "PASS",
+        "PASSWORD",
+        "SECRET",
+        "TOKEN",
+    }
+)
+_MCP_OAUTH_SECRET_SUFFIXES = ("tokens", "client_info")
 
 _DEFAULTS = {
     "provider": "gemini",
@@ -141,8 +156,118 @@ def _settings_secret_name(key: str) -> str:
     return f"settings:{key}"
 
 
-def _mcp_server_secret_name(server_name: str, field: str) -> str:
-    return f"mcp_server:{server_name}:{field}"
+def _mcp_server_secret_name(server_id: str, field: str) -> str:
+    return f"mcp_server:{server_id}:{field}"
+
+
+def _mcp_server_env_secret_name(server_id: str, key: str) -> str:
+    return f"mcp_server:{server_id}:env:{key}"
+
+
+def _mcp_oauth_secret_name(server_id: str, suffix: str) -> str:
+    return f"mcp_oauth:{server_id}:{suffix}"
+
+
+def _ensure_mcp_server_id(server: dict[str, Any]) -> tuple[str, bool]:
+    server_id = str(server.get("id", "") or "").strip()
+    if server_id:
+        return server_id, False
+    server_id = uuid.uuid4().hex
+    server["id"] = server_id
+    return server_id, True
+
+
+def _legacy_server_identities(server_id: str, server_name: str) -> list[str]:
+    legacy: list[str] = []
+    if server_name and server_name != server_id:
+        legacy.append(server_name)
+    return legacy
+
+
+def _is_mcp_env_secret_key(key: str) -> bool:
+    parts = [part for part in re.split(r"[^A-Z0-9]+", key.upper()) if part]
+    return any(part in _MCP_ENV_SECRET_MARKERS for part in parts)
+
+
+def _get_secret_with_legacy(
+    store: SecretStore,
+    secret_name: str,
+    legacy_names: list[str],
+) -> str:
+    stored = store.get_secret(secret_name, "")
+    if stored:
+        return stored
+    for legacy_name in legacy_names:
+        legacy_value = store.get_secret(legacy_name, "")
+        if legacy_value:
+            store.set_secret(secret_name, legacy_value)
+            store.delete_secret(legacy_name)
+            return legacy_value
+    return ""
+
+
+def _hydrate_mcp_env(
+    raw: Any,
+    store: SecretStore,
+    server_id: str,
+    server_name: str,
+) -> tuple[str, bool]:
+    if not isinstance(raw, str) or not raw.strip():
+        return "" if raw is None else str(raw or ""), False
+
+    migrated = False
+    out: list[str] = []
+    legacy_ids = _legacy_server_identities(server_id, server_name)
+    for line in raw.splitlines():
+        if "=" not in line:
+            out.append(line)
+            continue
+        key, value = line.split("=", 1)
+        env_key = key.strip()
+        if not env_key or not _is_mcp_env_secret_key(env_key):
+            out.append(line)
+            continue
+
+        secret_name = _mcp_server_env_secret_name(server_id, env_key)
+        legacy_names = [_mcp_server_env_secret_name(old_id, env_key) for old_id in legacy_ids]
+        stored = _get_secret_with_legacy(store, secret_name, legacy_names)
+        value_text = value.strip()
+        if value_text:
+            if not stored:
+                store.set_secret(secret_name, value_text)
+                stored = value_text
+            migrated = True
+        elif stored:
+            value_text = stored
+
+        out.append(f"{env_key}={value_text}")
+    return "\n".join(out), migrated
+
+
+def _sanitize_mcp_env(raw: Any, store: SecretStore, server_id: str, *, persist: bool) -> str:
+    if not isinstance(raw, str) or not raw.strip():
+        return "" if raw is None else str(raw or "")
+
+    out: list[str] = []
+    for line in raw.splitlines():
+        if "=" not in line:
+            out.append(line)
+            continue
+        key, value = line.split("=", 1)
+        env_key = key.strip()
+        if not env_key or not _is_mcp_env_secret_key(env_key):
+            out.append(line)
+            continue
+
+        if persist:
+            secret_name = _mcp_server_env_secret_name(server_id, env_key)
+            value_text = value.strip()
+            if value_text:
+                store.set_secret(secret_name, value_text)
+            else:
+                store.delete_secret(secret_name)
+        out.append(f"{env_key}=")
+    return "\n".join(out)
 
 
 def _load_secret_setting(qs: QSettings, store: SecretStore, key: str) -> str:
@@ -200,13 +325,15 @@ def _hydrate_mcp_server_secrets(raw: Any, qs: QSettings, store: SecretStore) -> 
     for server in servers:
         if not isinstance(server, dict):
             continue
+        server_id, created_id = _ensure_mcp_server_id(server)
+        migrated = migrated or created_id
         server_name = str(server.get("name", "")).strip()
-        if not server_name:
-            continue
+        legacy_ids = _legacy_server_identities(server_id, server_name)
         for field in _MCP_SERVER_SECRET_FIELDS:
-            secret_name = _mcp_server_secret_name(server_name, field)
+            secret_name = _mcp_server_secret_name(server_id, field)
+            legacy_names = [_mcp_server_secret_name(old_id, field) for old_id in legacy_ids]
             legacy_value = str(server.get(field, "") or "")
-            stored = store.get_secret(secret_name, "")
+            stored = _get_secret_with_legacy(store, secret_name, legacy_names)
             if legacy_value:
                 if not stored:
                     store.set_secret(secret_name, legacy_value)
@@ -215,6 +342,21 @@ def _hydrate_mcp_server_secrets(raw: Any, qs: QSettings, store: SecretStore) -> 
                 migrated = True
             elif stored:
                 server[field] = stored
+        hydrated_env, env_migrated = _hydrate_mcp_env(
+            server.get("env", ""),
+            store,
+            server_id,
+            server_name,
+        )
+        if hydrated_env != server.get("env", ""):
+            server["env"] = hydrated_env
+        migrated = migrated or env_migrated
+
+        for suffix in _MCP_OAUTH_SECRET_SUFFIXES:
+            secret_name = _mcp_oauth_secret_name(server_id, suffix)
+            legacy_names = [_mcp_oauth_secret_name(old_id, suffix) for old_id in legacy_ids]
+            if _get_secret_with_legacy(store, secret_name, legacy_names):
+                migrated = True
 
     if migrated:
         sanitized = _sanitize_mcp_servers(json.dumps(servers), store, persist=False)
@@ -232,13 +374,18 @@ def _sanitize_mcp_servers(raw: Any, store: SecretStore, *, persist: bool) -> Any
     for server in servers:
         if not isinstance(server, dict):
             continue
-        server_name = str(server.get("name", "")).strip()
-        if not server_name:
-            continue
+        server_id, _created_id = _ensure_mcp_server_id(server)
+        if "env" in server:
+            server["env"] = _sanitize_mcp_env(
+                server.get("env", ""),
+                store,
+                server_id,
+                persist=persist,
+            )
         for field in _MCP_SERVER_SECRET_FIELDS:
             if field not in server:
                 continue
-            secret_name = _mcp_server_secret_name(server_name, field)
+            secret_name = _mcp_server_secret_name(server_id, field)
             value = str(server.get(field, "") or "")
             if persist:
                 if value:

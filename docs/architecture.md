@@ -126,15 +126,15 @@ Windows (ZIP). CI (`ci.yml`) runs ruff, bandit, and mypy — **no test suite exi
 
 ## Security architecture
 
-- **API keys & OAuth tokens** are stored in `QSettings` (plaintext platform store: macOS plist, Linux ini, Windows registry). No OS keyring integration — an accepted trade-off for a local desktop app, but worth revisiting.
-- **MCP stdio servers** are launched as subprocesses from user-entered commands (list form, no shell). The user installing a server config is the trust boundary.
+- **API keys, OAuth tokens, MCP OAuth client secrets, and secret-looking MCP env values** are stored via `SecretStore`: OS keyring first, with a QSettings fallback when no keyring backend is usable.
+- **MCP stdio servers** are launched as subprocesses from user-entered commands (list form, no shell). The SDK inherits only a small default environment; RoomKit UI passes only explicitly configured env values, with secret-like values removed from plaintext settings.
 - **Skills are arbitrary code/instructions** loaded from git repos, local folders, or ClawHub. There is no signature or hash verification — installation is the trust decision.
-- **MCP App HTML** runs inside QWebEngineView with a JSON-RPC bridge; `webbrowser.open` calls from apps are restricted to http/https schemes.
+- **MCP App HTML** runs inside QWebEngineView with a JSON-RPC bridge; app-initiated tool calls are limited to the owning MCP server, and `webbrowser.open` calls from apps are restricted to public http/https URLs.
 - Input boundaries: tool arguments arrive as JSON and are passed to MCP servers verbatim; built-in tools validate their own inputs.
 
 Known gaps (documented honestly): ZIP extraction from ClawHub does not guard against
-path-traversal entries; model downloads have no checksum verification; OAuth tokens are
-unencrypted. See [technical.md — Technical debt](technical.md#known-technical-debt).
+path-traversal entries, and model downloads have no checksum verification. See
+[technical.md — Technical debt](technical.md#known-technical-debt).
 
 ## Scalability considerations & current limits
 

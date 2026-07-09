@@ -9,6 +9,7 @@ transports accept directly.
 from __future__ import annotations
 
 import asyncio
+import html
 import logging
 import socket
 from urllib.parse import parse_qs, urlparse
@@ -154,10 +155,11 @@ class LocalOAuthCallbackServer:
             error = params.get("error", [None])[0]
             if error:
                 desc = params.get("error_description", [error])[0]
+                safe_desc = html.escape(desc, quote=True)
                 body = (
                     "<html><body style='font-family:sans-serif;text-align:center;"
                     "padding:60px'>"
-                    f"<h2>Authorization Failed</h2><p>{desc}</p>"
+                    f"<h2>Authorization Failed</h2><p>{safe_desc}</p>"
                     "<p>You can close this tab.</p></body></html>"
                 )
                 await self._send_response(writer, 200, body)

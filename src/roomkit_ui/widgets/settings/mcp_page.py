@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -21,7 +22,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from roomkit_ui.mcp_config import parse_mcp_servers
+from roomkit_ui.mcp_config import parse_mcp_servers, validate_mcp_http_url
 from roomkit_ui.theme import colors
 
 MCP_TRANSPORTS = [
@@ -248,6 +249,8 @@ class _MCPPage(QWidget):
             return
         self._editing_row = row
         srv = self._servers[row]
+        if not str(srv.get("id", "") or "").strip():
+            srv["id"] = uuid.uuid4().hex
 
         self._edit_title.setText(srv.get("name") or "New Server")
 
@@ -306,7 +309,7 @@ class _MCPPage(QWidget):
             w.blockSignals(False)
 
         self._update_field_visibility(transport)
-        self._refresh_oauth_status(srv.get("name", ""))
+        self._refresh_oauth_status(str(srv.get("id", "") or srv.get("name", "")))
         self._stack.setCurrentIndex(1)
 
     def _on_item_activated(self, _item: QListWidgetItem) -> None:
@@ -317,6 +320,7 @@ class _MCPPage(QWidget):
 
     def _add_server(self) -> None:
         srv = {
+            "id": uuid.uuid4().hex,
             "enabled": True,
             "name": "",
             "transport": "stdio",
@@ -423,8 +427,16 @@ class _MCPPage(QWidget):
 
     def _on_authorize_clicked(self) -> None:
         server_name = self._name_edit.text().strip()
-        server_url = self._url_edit.text().strip()
-        if not server_name or not server_url:
+        server_id = self._current_server_id()
+        try:
+            server_url = validate_mcp_http_url(self._url_edit.text())
+        except ValueError as exc:
+            self._oauth_status.setText(str(exc))
+            self._oauth_status.setStyleSheet(
+                "font-size: 12px; color: #f44336; background: transparent;"
+            )
+            return
+        if not server_id or not server_name or not server_url:
             self._oauth_status.setText("Set server name and URL first")
             self._oauth_status.setStyleSheet(
                 "font-size: 12px; color: #f44336; background: transparent;"
@@ -437,7 +449,7 @@ class _MCPPage(QWidget):
         )
         import asyncio
 
-        asyncio.ensure_future(self._run_oauth_flow(server_name, server_url))
+        asyncio.ensure_future(self._run_oauth_flow(server_id, server_url))
 
     async def _run_oauth_flow(self, server_name: str, server_url: str) -> None:
         """Trigger the OAuth authorization flow in the background."""
@@ -482,13 +494,24 @@ class _MCPPage(QWidget):
                 pass
 
     def _on_clear_token_clicked(self) -> None:
-        server_name = self._name_edit.text().strip()
-        if not server_name:
+        server_id = self._current_server_id()
+        if not server_id:
             return
         from roomkit_ui.mcp_auth import clear_oauth_tokens
 
-        clear_oauth_tokens(server_name)
-        self._refresh_oauth_status(server_name)
+        clear_oauth_tokens(server_id)
+        self._refresh_oauth_status(server_id)
+
+    def _current_server_id(self) -> str:
+        row = self._editing_row
+        if row < 0 or row >= len(self._servers):
+            return ""
+        srv = self._servers[row]
+        server_id = str(srv.get("id", "") or "").strip()
+        if not server_id:
+            server_id = uuid.uuid4().hex
+            srv["id"] = server_id
+        return server_id
 
     @staticmethod
     def _display_name(srv: dict) -> str:

@@ -20,6 +20,8 @@ import sys
 from contextlib import AsyncExitStack
 from typing import Any
 
+from roomkit_ui.mcp_config import validate_mcp_http_url
+
 _CONNECT_TIMEOUT = 10  # seconds per connection step, per server
 _TOOL_CALL_TIMEOUT = 60  # seconds per tool call
 
@@ -210,6 +212,14 @@ class MCPManager:
     def _register_tools(self, session: Any, result: Any, name: str) -> None:
         """Record a server's tools in the shared lookup tables."""
         for tool in result.tools:
+            if tool.name in self._tool_to_session:
+                logger.warning(
+                    "MCP server %r tool %r ignored: name already registered by %r",
+                    name,
+                    tool.name,
+                    self._tool_to_server.get(tool.name, "<unknown>"),
+                )
+                continue
             self._tool_to_session[tool.name] = session
             self._tool_to_server[tool.name] = name
             self._tools.append(
@@ -256,7 +266,7 @@ class MCPManager:
 
         provider, callback_server = await create_oauth_provider(
             server_url=cfg.get("url", ""),
-            server_name=cfg.get("name", ""),
+            server_name=cfg.get("id") or cfg.get("name", ""),
             client_id=cfg.get("oauth_client_id") or None,
             client_secret=cfg.get("oauth_client_secret") or None,
             scopes=cfg.get("oauth_scopes") or None,
@@ -291,7 +301,7 @@ class MCPManager:
         elif transport == "sse":
             from mcp.client.sse import sse_client
 
-            url = cfg.get("url", "")
+            url = validate_mcp_http_url(cfg.get("url", ""))
             auth = await self._get_auth_provider(cfg, stack)
             streams = await stack.enter_async_context(sse_client(url, auth=auth))
             read_stream, write_stream = streams
@@ -299,7 +309,7 @@ class MCPManager:
         elif transport == "streamable_http":
             from mcp.client.streamable_http import streamable_http_client
 
-            url = cfg.get("url", "")
+            url = validate_mcp_http_url(cfg.get("url", ""))
             auth = await self._get_auth_provider(cfg, stack)
             http_client = None
             if auth is not None:

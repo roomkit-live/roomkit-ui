@@ -67,10 +67,10 @@ src/roomkit_ui/
 
 There is no database. State lives in three places:
 
-1. **QSettings** (`settings.py`) — ~90 flat keys: provider/API keys, model choices,
-   VAD/AEC/denoise tuning, hotkeys, theme, MCP server configs (JSON string),
-   skill sources, attitudes. OAuth tokens are stored under
-   `room/mcp_oauth/<server>/tokens` by `mcp_auth.QSettingsTokenStorage`.
+1. **QSettings** (`settings.py`) — ~90 flat keys: model choices, VAD/AEC/denoise
+   tuning, hotkeys, theme, sanitized MCP server configs (JSON string), skill
+   sources, attitudes. Secrets go through `SecretStore` (OS keyring first,
+   QSettings fallback).
 2. **Speaker profiles** — one JSON file per speaker in the platform data dir
    (`speakers/<name>.json`): name, embeddings (list of float vectors), `is_primary`.
 3. **Model store** — `models/<model-id>/v1/` under the platform data dir; the `v1`
@@ -169,12 +169,12 @@ uv run bandit -r src/ -c pyproject.toml
 | 1 | **Zero test coverage** | everywhere | Start with the five targets above; add `pytest` + CI job |
 | 2 | ZIP path traversal on skill install | `clawhub_client.py` (`extractall`) | Validate member paths before extraction |
 | 3 | No checksum verification on model downloads | `model_manager.py` | Pin SHA-256 per model in the catalog (LFS pointers already carry the OID) |
-| 4 | OAuth tokens / API keys in plaintext QSettings | `mcp_auth.py`, `settings.py` | Optional keyring backend |
+| 4 | SecretStore can fall back to QSettings when no OS keyring backend is available | `secret_store.py`, `settings.py`, `mcp_auth.py` | Surface backend status in Settings and docs |
 | 5 | Oversized modules: `model_manager.py` (~965 l), `models_page.py` (~760 l), `speakers_page.py` (~675 l), `stt_engine.py` (~680 l), `engine_vc.py` (~515 l) | — | Split by responsibility (catalog data vs download logic; dialogs vs page) |
 | 6 | Silent `except Exception: pass` beyond Qt-emit guards | `engine_callbacks.py`, `builtin_tools.py:126`, `main_window.py:224` | Log at DEBUG instead of `pass` |
 | 7 | Engine state machine is string-based (`"idle"`, `"active"`, …) | `engine.py` | `enum.StrEnum` for typo safety |
 | 8 | Repeated stylesheet f-strings (~200 `setStyleSheet` calls) | `widgets/` | Shared style helpers per pattern |
 | 9 | `cleanup.py` depends on qasync name-mangled internals | `cleanup.py` | Re-verify on every qasync upgrade; upstream a fix |
-| 10 | MCP stdio `command` parsed with `.split()` | `mcp_manager.py` | `shlex.split()` to support quoted paths |
+| 10 | MCP stdio execution trust is user-configured | `mcp_manager.py` | Consider per-server allow/deny prompts for sensitive tools |
 | 11 | Unused mypy override sections (Quartz, sherpa_onnx, sounddevice, qasync now ship types) | `pyproject.toml` | Prune on next config pass |
 | 12 | No keyboard navigation / accessible names on custom-painted buttons | `control_bar.py` | `setFocusPolicy`, `setAccessibleName` |

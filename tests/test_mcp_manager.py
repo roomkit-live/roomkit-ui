@@ -102,6 +102,41 @@ def test_register_tools_tracks_sessions_and_apps():
     assert mgr._app_tools == {"app_tool": {"uri": "ui://widget/main", "server": "srv"}}
 
 
+def test_register_tools_keeps_first_duplicate_tool():
+    mgr = MCPManager([])
+    first_session = object()
+    second_session = object()
+    first = SimpleNamespace(
+        tools=[
+            SimpleNamespace(
+                name="duplicate_tool",
+                description="first",
+                inputSchema={},
+                meta={"ui": {"resourceUri": "ui://first/main"}},
+            )
+        ]
+    )
+    second = SimpleNamespace(
+        tools=[
+            SimpleNamespace(
+                name="duplicate_tool",
+                description="second",
+                inputSchema={},
+                meta={"ui": {"resourceUri": "ui://second/main"}},
+            )
+        ]
+    )
+
+    mgr._register_tools(first_session, first, "srv-a")
+    mgr._register_tools(second_session, second, "srv-b")
+
+    assert mgr._tool_to_session["duplicate_tool"] is first_session
+    assert mgr.get_tool_server("duplicate_tool") == "srv-a"
+    assert len(mgr.get_tools()) == 1
+    assert mgr.get_tools()[0]["description"] == "first"
+    assert mgr._app_tools == {"duplicate_tool": {"uri": "ui://first/main", "server": "srv-a"}}
+
+
 @pytest.mark.asyncio
 async def test_app_tool_call_is_limited_to_origin_server(monkeypatch):
     mgr = MCPManager([])
