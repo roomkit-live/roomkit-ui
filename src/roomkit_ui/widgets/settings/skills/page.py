@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from roomkit_ui.skills_sh_client import SkillsShSkill
 from roomkit_ui.theme import colors
 from roomkit_ui.widgets.settings.skills.marketplace import MarketplaceTab
 from roomkit_ui.widgets.settings.skills.my_skills import MySkillsTab, source_display
@@ -92,7 +93,10 @@ class _SkillsPage(QWidget):
         self._tab_stack.addWidget(self._my_skills_tab)
 
         # -- Marketplace tab --
-        self._marketplace_tab = MarketplaceTab(on_installed=self._refresh_skills)
+        self._marketplace_tab = MarketplaceTab(
+            on_install_source=self._install_marketplace_source,
+            is_source_installed=self._is_marketplace_source_installed,
+        )
         self._tab_stack.addWidget(self._marketplace_tab)
 
         self._tab_stack.setCurrentIndex(0)
@@ -252,6 +256,49 @@ class _SkillsPage(QWidget):
             return
         self._sources.pop(row)
         self._my_skills_tab.source_list.takeItem(row)
+        self._refresh_skills()
+
+    def _matching_git_source_index(self, url: str) -> int:
+        from roomkit_ui.skill_manager import repo_dir_name
+
+        target = repo_dir_name(url)
+        for idx, src in enumerate(self._sources):
+            if src.get("type") != "git":
+                continue
+            src_url = src.get("url", "")
+            if src_url and repo_dir_name(src_url) == target:
+                return idx
+        return -1
+
+    def _is_marketplace_source_installed(self, url: str) -> bool:
+        return self._matching_git_source_index(url) >= 0
+
+    async def _install_marketplace_source(self, skill: SkillsShSkill) -> None:
+        github_url = skill.github_url
+        if not github_url:
+            raise ValueError("Only GitHub-backed skills can be installed")
+
+        row = self._matching_git_source_index(github_url)
+        if row < 0:
+            src: dict = {
+                "type": "git",
+                "url": github_url,
+                "path": "",
+                "label": f"skills.sh · {skill.source}",
+            }
+            self._sources.append(src)
+            self._my_skills_tab.source_list.addItem(source_display(src))
+
+        from roomkit_ui.skill_manager import clone_repo, get_repos_dir, pull_repo, repo_dir_name
+
+        dest = get_repos_dir() / repo_dir_name(github_url)
+        if dest.exists():
+            ok = await pull_repo(dest)
+            if not ok:
+                raise RuntimeError("Git update failed")
+        else:
+            await clone_repo(github_url)
+
         self._refresh_skills()
 
     # -- edit form -----------------------------------------------------------

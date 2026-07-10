@@ -138,6 +138,7 @@ src/roomkit_ui/
 ├── enrollment.py        # Speaker embedding recording/extraction
 ├── model_manager.py     # Local model download & management
 ├── skill_manager.py     # Skill discovery (git / local)
+├── skills_sh_client.py  # skills.sh public search client
 ├── mcp_manager.py       # MCP client manager (stdio, SSE, HTTP)
 ├── mcp_auth.py          # OAuth2 authentication for MCP HTTP servers
 ├── mcp_app_bridge.py    # MCP Apps JSON-RPC bridge (QWebChannel ↔ iframe)
