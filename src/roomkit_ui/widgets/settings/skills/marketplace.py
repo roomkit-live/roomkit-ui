@@ -25,7 +25,7 @@ from roomkit_ui.widgets.settings.skills.widgets import FlowLayout, SkillCard
 logger = logging.getLogger(__name__)
 
 InstallCallback = Callable[[SkillsShSkill], Awaitable[None]]
-InstalledCheck = Callable[[str], bool]
+InstalledCheck = Callable[[SkillsShSkill], bool]
 
 
 class MarketplaceTab(QWidget):
@@ -102,7 +102,7 @@ class MarketplaceTab(QWidget):
     def load(self) -> None:
         """Mark the marketplace tab as ready."""
         self._loaded = True
-        self._status.setText("Search skills.sh. GitHub sources can be installed as Git sources.")
+        self._status.setText("Search skills.sh. GitHub and well-known sources can be installed.")
 
     def _on_search_changed(self, text: str) -> None:
         if self._search_timer:
@@ -143,8 +143,7 @@ class MarketplaceTab(QWidget):
         self._clear_cards()
 
         for skill in items:
-            github_url = skill.github_url
-            installed = bool(github_url and self._is_source_installed(github_url))
+            installed = self._is_skill_installed(skill)
             card = SkillCard(
                 name=skill.name,
                 description=skill.source,
@@ -153,33 +152,25 @@ class MarketplaceTab(QWidget):
                 downloads=skill.installs,
                 slug=skill.skill_id,
             )
-            if card.action_btn:
-                if github_url:
-                    if not installed:
-                        card.action_btn.clicked.connect(
-                            lambda _checked, s=skill, c=card: self._install_skill_source(s, c)
-                        )
-                else:
-                    card.action_btn.setText("Open")
-                    card.action_btn.setEnabled(True)
-                    card.action_btn.clicked.connect(
-                        lambda _checked, url=skill.page_url: QDesktopServices.openUrl(QUrl(url))
-                    )
+            if card.action_btn and not installed:
+                card.action_btn.clicked.connect(
+                    lambda _checked, s=skill, c=card: self._install_skill_source(s, c)
+                )
             self._flow.addWidget(card)
 
         self._container.updateGeometry()
 
-    def _is_source_installed(self, url: str) -> bool:
+    def _is_skill_installed(self, skill: SkillsShSkill) -> bool:
         if self._cb_is_source_installed is None:
             return False
-        return self._cb_is_source_installed(url)
+        return self._cb_is_source_installed(skill)
 
     def _install_skill_source(self, skill: SkillsShSkill, card: SkillCard) -> None:
-        if self._installing_source or not skill.github_url or self._cb_install_source is None:
+        if self._installing_source or self._cb_install_source is None:
             return
-        self._installing_source = skill.source
+        self._installing_source = skill.id
         if card.action_btn:
-            card.action_btn.setText("Cloning...")
+            card.action_btn.setText("Installing...")
             card.action_btn.setEnabled(False)
         asyncio.ensure_future(self._do_install(skill, card))
 

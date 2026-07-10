@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from roomkit_ui.skills_sh_client import SkillsShSkill
+from roomkit_ui.skills_sh_client import SkillsShClient, SkillsShSkill
 from roomkit_ui.theme import colors
 from roomkit_ui.widgets.settings.skills.marketplace import MarketplaceTab
 from roomkit_ui.widgets.settings.skills.my_skills import MySkillsTab, source_display
@@ -270,14 +270,43 @@ class _SkillsPage(QWidget):
                 return idx
         return -1
 
-    def _is_marketplace_source_installed(self, url: str) -> bool:
-        return self._matching_git_source_index(url) >= 0
+    def _matching_local_source_index(self, path: str) -> int:
+        for idx, src in enumerate(self._sources):
+            if src.get("type") == "local" and src.get("path") == path:
+                return idx
+        return -1
+
+    def _is_marketplace_source_installed(self, skill: SkillsShSkill) -> bool:
+        github_url = skill.github_url
+        if github_url:
+            return self._matching_git_source_index(github_url) >= 0
+
+        if skill.is_well_known_source:
+            from roomkit_ui.skill_manager import well_known_skill_dir
+
+            return (
+                self._matching_local_source_index(
+                    str(well_known_skill_dir(skill.source, skill.skill_id))
+                )
+                >= 0
+            )
+        return False
 
     async def _install_marketplace_source(self, skill: SkillsShSkill) -> None:
         github_url = skill.github_url
-        if not github_url:
-            raise ValueError("Only GitHub-backed skills can be installed")
+        if github_url:
+            await self._install_git_marketplace_source(skill, github_url)
+        elif skill.is_well_known_source:
+            await self._install_well_known_marketplace_source(skill)
+        else:
+            raise ValueError("Unsupported skills.sh source type")
+        self._refresh_skills()
 
+    async def _install_git_marketplace_source(
+        self,
+        skill: SkillsShSkill,
+        github_url: str,
+    ) -> None:
         row = self._matching_git_source_index(github_url)
         if row < 0:
             src: dict = {
@@ -299,7 +328,29 @@ class _SkillsPage(QWidget):
         else:
             await clone_repo(github_url)
 
-        self._refresh_skills()
+    async def _install_well_known_marketplace_source(self, skill: SkillsShSkill) -> None:
+        resolved = await SkillsShClient().with_install_url(skill)
+        install_url = resolved.install_url
+        if not install_url:
+            raise ValueError("skills.sh page does not expose a well-known install URL")
+
+        from roomkit_ui.skill_manager import install_well_known_skill
+
+        dest = await install_well_known_skill(
+            install_url,
+            skill_name=skill.skill_id,
+            source=skill.source,
+        )
+        path = str(dest)
+        if self._matching_local_source_index(path) < 0:
+            src: dict = {
+                "type": "local",
+                "url": "",
+                "path": path,
+                "label": f"skills.sh · {skill.source}/{skill.skill_id}",
+            }
+            self._sources.append(src)
+            self._my_skills_tab.source_list.addItem(source_display(src))
 
     # -- edit form -----------------------------------------------------------
 

@@ -2,14 +2,26 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
+import re
 import shutil
 import subprocess
 import sys
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import quote, urljoin, urlparse
+
+import httpx
 
 logger = logging.getLogger(__name__)
+
+_DISCOVERY_SCHEMA_V2 = "https://schemas.agentskills.io/discovery/0.2.0/schema.json"
+_WELL_KNOWN_PATHS = (".well-known/agent-skills", ".well-known/skills")
+_WELL_KNOWN_TIMEOUT = 20.0
+_MAX_WELL_KNOWN_FILES = 500
+_MAX_WELL_KNOWN_FILE_BYTES = 5 * 1024 * 1024
+_MAX_WELL_KNOWN_TOTAL_BYTES = 50 * 1024 * 1024
+_WELL_KNOWN_NAME_RE = re.compile(r"^[a-z0-9-]{1,64}$")
 
 
 # ---------------------------------------------------------------------------
@@ -32,6 +44,22 @@ def get_repos_dir() -> Path:
     d = get_skills_dir() / "repos"
     d.mkdir(parents=True, exist_ok=True)
     return d
+
+
+def _safe_dir_segment(value: str) -> str:
+    """Return a deterministic filesystem segment for marketplace-owned folders."""
+    value = value.strip().lower()
+    sanitized = re.sub(r"[^a-z0-9._-]+", "-", value).strip(".-")
+    return sanitized[:96] or "unknown"
+
+
+def well_known_skill_dir(source: str, skill_name: str) -> Path:
+    """Return the local install directory for a skills.sh well-known skill."""
+    return (
+        get_skills_dir()
+        / "well-known"
+        / f"{_safe_dir_segment(source)}--{_safe_dir_segment(skill_name)}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -108,6 +136,315 @@ def remove_repo(repo_path: Path) -> None:
     if repo_path.exists():
         shutil.rmtree(repo_path)
         logger.info("Removed %s", repo_path)
+
+
+# ---------------------------------------------------------------------------
+# Well-known skills operations
+# ---------------------------------------------------------------------------
+
+
+def _is_valid_well_known_name(name: object) -> bool:
+    if not isinstance(name, str):
+        return False
+    if not _WELL_KNOWN_NAME_RE.fullmatch(name):
+        return False
+    return not (name.startswith("-") or name.endswith("-") or "--" in name)
+
+
+def _is_safe_well_known_file_path(file_path: object) -> bool:
+    if not isinstance(file_path, str) or not file_path:
+        return False
+    if file_path.startswith(("/", "\\")) or "\\" in file_path or "\0" in file_path:
+        return False
+    # Match the legacy CLI's strict behavior for path traversal prevention.
+    return ".." not in file_path
+
+
+def _is_subpath(base: Path, candidate: Path) -> bool:
+    try:
+        candidate.resolve().relative_to(base.resolve())
+    except ValueError:
+        return False
+    return True
+
+
+def _candidate_well_known_indexes(install_url: str) -> list[tuple[str, str, str]]:
+    parsed = urlparse(install_url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ValueError("well-known install URL must be http(s)")
+
+    root = f"{parsed.scheme}://{parsed.netloc}"
+    base_path = parsed.path.rstrip("/")
+    candidates: list[tuple[str, str, str]] = []
+    for well_known_path in _WELL_KNOWN_PATHS:
+        candidates.append(
+            (
+                f"{root}{base_path}/{well_known_path}/index.json",
+                f"{root}{base_path}",
+                well_known_path,
+            )
+        )
+        if base_path:
+            candidates.append((f"{root}/{well_known_path}/index.json", root, well_known_path))
+    return candidates
+
+
+def _normalize_well_known_index(
+    raw_index: object,
+    *,
+    index_url: str,
+    base_url: str,
+    well_known_path: str,
+) -> list[dict]:
+    if not isinstance(raw_index, dict):
+        return []
+    entries = raw_index.get("skills")
+    if not isinstance(entries, list):
+        return []
+
+    schema = raw_index.get("$schema")
+    if schema == _DISCOVERY_SCHEMA_V2:
+        normalized: list[dict] = []
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            if not _is_valid_well_known_name(entry.get("name")):
+                continue
+            entry_type = entry.get("type")
+            digest = entry.get("digest")
+            url = entry.get("url")
+            description = entry.get("description")
+            if entry_type not in {"skill-md", "archive"}:
+                continue
+            if not isinstance(description, str) or not description or len(description) > 1024:
+                continue
+            if not isinstance(url, str) or not url:
+                continue
+            if not isinstance(digest, str) or not re.fullmatch(r"sha256:[a-f0-9]{64}", digest):
+                continue
+            artifact_url = urljoin(index_url, url)
+            normalized.append(
+                {
+                    "version": "0.2.0",
+                    "name": entry["name"],
+                    "type": entry_type,
+                    "artifact_url": artifact_url,
+                    "digest": digest,
+                }
+            )
+        return normalized
+
+    if schema is not None:
+        return []
+
+    normalized = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            return []
+        files = entry.get("files")
+        if (
+            not _is_valid_well_known_name(entry.get("name"))
+            or not isinstance(entry.get("description"), str)
+            or not entry.get("description")
+            or not isinstance(files, list)
+            or not files
+            or len(files) > _MAX_WELL_KNOWN_FILES
+        ):
+            return []
+        if not all(_is_safe_well_known_file_path(file_path) for file_path in files):
+            return []
+        has_skill_md = any(
+            isinstance(file_path, str) and file_path.lower() == "skill.md" for file_path in files
+        )
+        if not has_skill_md:
+            return []
+        normalized.append(
+            {
+                "version": "0.1.0",
+                "name": entry["name"],
+                "files": files,
+                "base_url": base_url,
+                "well_known_path": well_known_path,
+            }
+        )
+    return normalized
+
+
+async def _fetch_well_known_entries(
+    client: httpx.AsyncClient,
+    install_url: str,
+) -> list[dict]:
+    for index_url, base_url, well_known_path in _candidate_well_known_indexes(install_url):
+        try:
+            resp = await client.get(index_url)
+            if not resp.is_success:
+                continue
+            entries = _normalize_well_known_index(
+                resp.json(),
+                index_url=index_url,
+                base_url=base_url,
+                well_known_path=well_known_path,
+            )
+            if entries:
+                return entries
+        except Exception:
+            logger.debug("Failed to read well-known index %s", index_url, exc_info=True)
+            continue
+    return []
+
+
+def _select_well_known_entry(
+    entries: list[dict],
+    *,
+    skill_name: str | None,
+    install_url: str,
+) -> dict:
+    if skill_name:
+        for entry in entries:
+            if entry.get("name") == skill_name:
+                return entry
+
+    parsed = urlparse(install_url)
+    path_match = re.search(r"/\.well-known/(?:agent-skills|skills)/([^/]+)/?$", parsed.path)
+    if path_match:
+        name = path_match.group(1)
+        for entry in entries:
+            if entry.get("name") == name:
+                return entry
+
+    if len(entries) == 1:
+        return entries[0]
+
+    if skill_name:
+        raise ValueError(f"Skill {skill_name!r} was not found in the well-known index")
+    raise ValueError("The well-known index contains multiple skills; a skill name is required")
+
+
+def _checked_response_bytes(resp: httpx.Response, *, path: str, total: dict[str, int]) -> bytes:
+    content_length = resp.headers.get("content-length")
+    if content_length:
+        try:
+            length = int(content_length)
+        except ValueError:
+            length = 0
+        if length > _MAX_WELL_KNOWN_FILE_BYTES:
+            raise ValueError(f"well-known file is too large: {path}")
+    content = resp.content
+    if len(content) > _MAX_WELL_KNOWN_FILE_BYTES:
+        raise ValueError(f"well-known file is too large: {path}")
+    total["bytes"] += len(content)
+    if total["bytes"] > _MAX_WELL_KNOWN_TOTAL_BYTES:
+        raise ValueError("well-known skill exceeds the maximum download size")
+    return content
+
+
+def _validate_skill_md(content: bytes) -> None:
+    from roomkit.skills.parser import parse_frontmatter
+
+    text = content.decode("utf-8")
+    data, _body = parse_frontmatter(text)
+    if not isinstance(data.get("name"), str) or not isinstance(data.get("description"), str):
+        raise ValueError("well-known SKILL.md is missing required frontmatter")
+
+
+async def _fetch_legacy_well_known_files(
+    client: httpx.AsyncClient,
+    entry: dict,
+) -> dict[str, bytes]:
+    skill_base_url = f"{entry['base_url'].rstrip('/')}/{entry['well_known_path']}/{entry['name']}"
+    files: dict[str, bytes] = {}
+    total = {"bytes": 0}
+    for file_path in entry["files"]:
+        file_url = f"{skill_base_url}/{quote(file_path, safe='/')}"
+        try:
+            resp = await client.get(file_url)
+            if not resp.is_success:
+                if file_path.lower() == "skill.md":
+                    raise ValueError("well-known SKILL.md could not be downloaded")
+                logger.debug("Skipping missing well-known file %s", file_url)
+                continue
+            files[file_path] = _checked_response_bytes(resp, path=file_path, total=total)
+        except Exception:
+            if file_path.lower() == "skill.md":
+                raise
+            logger.debug("Skipping failed well-known file %s", file_url, exc_info=True)
+    skill_md = files.get("SKILL.md")
+    if skill_md is None:
+        raise ValueError("well-known SKILL.md could not be downloaded")
+    _validate_skill_md(skill_md)
+    return files
+
+
+async def _fetch_v2_well_known_files(
+    client: httpx.AsyncClient,
+    entry: dict,
+) -> dict[str, bytes]:
+    if entry["type"] != "skill-md":
+        raise ValueError("well-known archive artifacts are not supported yet")
+
+    resp = await client.get(entry["artifact_url"])
+    if not resp.is_success:
+        raise ValueError("well-known skill artifact could not be downloaded")
+    total = {"bytes": 0}
+    content = _checked_response_bytes(resp, path="SKILL.md", total=total)
+    digest = f"sha256:{hashlib.sha256(content).hexdigest()}"
+    if digest != entry["digest"]:
+        raise ValueError("well-known skill artifact digest mismatch")
+    _validate_skill_md(content)
+    return {"SKILL.md": content}
+
+
+async def install_well_known_skill(
+    install_url: str,
+    *,
+    skill_name: str | None,
+    source: str,
+    transport: httpx.AsyncBaseTransport | None = None,
+) -> Path:
+    """Install a well-known skill into RoomKit's local skills directory.
+
+    The implementation mirrors the public skills CLI discovery contract without
+    executing external commands. It downloads only declared files and writes them
+    as a local source that RoomKit can discover normally.
+    """
+    async with httpx.AsyncClient(
+        timeout=_WELL_KNOWN_TIMEOUT,
+        follow_redirects=True,
+        transport=transport,
+    ) as client:
+        entries = await _fetch_well_known_entries(client, install_url)
+        if not entries:
+            raise ValueError("No valid well-known skills index was found")
+        entry = _select_well_known_entry(entries, skill_name=skill_name, install_url=install_url)
+        if entry["version"] == "0.1.0":
+            files = await _fetch_legacy_well_known_files(client, entry)
+        else:
+            files = await _fetch_v2_well_known_files(client, entry)
+
+    dest = well_known_skill_dir(source, entry["name"])
+    tmp = dest.with_name(f".{dest.name}.tmp")
+    if tmp.exists():
+        shutil.rmtree(tmp)
+    tmp.mkdir(parents=True, exist_ok=True)
+    try:
+        for rel_path, content in files.items():
+            if not _is_safe_well_known_file_path(rel_path):
+                raise ValueError(f"Unsafe well-known file path: {rel_path}")
+            target = tmp / rel_path
+            if not _is_subpath(tmp, target):
+                raise ValueError(f"Unsafe well-known file path: {rel_path}")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(content)
+        if dest.exists():
+            shutil.rmtree(dest)
+        tmp.rename(dest)
+    except Exception:
+        if tmp.exists():
+            shutil.rmtree(tmp)
+        raise
+
+    logger.info("Installed well-known skill %s from %s into %s", entry["name"], install_url, dest)
+    return dest
 
 
 # ---------------------------------------------------------------------------

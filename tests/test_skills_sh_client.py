@@ -32,6 +32,31 @@ def test_skills_sh_skill_well_known_url():
 
 
 @pytest.mark.asyncio
+async def test_skills_sh_client_resolves_well_known_install_url():
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/site/skills.example.com/example"
+        return httpx.Response(
+            200,
+            text=(
+                "<button><code><span>$</span> npx skills add "
+                "https://skills.example.com/catalog</code></button>"
+            ),
+        )
+
+    client = SkillsShClient(transport=httpx.MockTransport(handler))
+    skill = SkillsShSkill(
+        id="skills.example.com/example",
+        skill_id="example",
+        name="Example",
+        source="skills.example.com",
+    )
+
+    resolved = await client.with_install_url(skill)
+
+    assert resolved.install_url == "https://skills.example.com/catalog"
+
+
+@pytest.mark.asyncio
 async def test_skills_sh_client_search_parses_results():
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.path == "/api/search"

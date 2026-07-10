@@ -1,5 +1,8 @@
 """Tests for skill discovery across git/local sources."""
 
+import hashlib
+
+import httpx
 import pytest
 
 import roomkit_ui.skill_manager as sm
@@ -90,3 +93,110 @@ def test_build_registry_filters_by_enabled_names(skills_root):
         [{"type": "local", "path": str(local)}], enabled_names=["skill-a"]
     )
     assert registry.skill_names == ["skill-a"]
+
+
+@pytest.mark.asyncio
+async def test_install_well_known_legacy_skill(skills_root):
+    skill_md = _SKILL_MD.format(name="demo", desc="Downloaded skill.")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path == "/catalog/.well-known/agent-skills/index.json":
+            return httpx.Response(404)
+        if path == "/catalog/.well-known/skills/index.json":
+            return httpx.Response(
+                200,
+                json={
+                    "skills": [
+                        {
+                            "name": "demo",
+                            "description": "Downloaded skill.",
+                            "files": ["SKILL.md", "scripts/run.py"],
+                        }
+                    ]
+                },
+            )
+        if path == "/catalog/.well-known/skills/demo/SKILL.md":
+            return httpx.Response(200, text=skill_md)
+        if path == "/catalog/.well-known/skills/demo/scripts/run.py":
+            return httpx.Response(200, content=b"print('ok')\n")
+        return httpx.Response(404)
+
+    dest = await sm.install_well_known_skill(
+        "https://skills.example.com/catalog",
+        skill_name="demo",
+        source="skills.example.com",
+        transport=httpx.MockTransport(handler),
+    )
+
+    assert dest == sm.well_known_skill_dir("skills.example.com", "demo")
+    assert (dest / "SKILL.md").read_text() == skill_md
+    assert (dest / "scripts" / "run.py").read_bytes() == b"print('ok')\n"
+    found = sm.discover_all_skills([{"type": "local", "path": str(dest)}])
+    assert [meta.name for meta, _path, _label in found] == ["demo"]
+
+
+@pytest.mark.asyncio
+async def test_install_well_known_v2_skill_md(skills_root):
+    skill_md = _SKILL_MD.format(name="v2-demo", desc="Downloaded v2 skill.")
+    digest = f"sha256:{hashlib.sha256(skill_md.encode()).hexdigest()}"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path == "/.well-known/agent-skills/index.json":
+            return httpx.Response(
+                200,
+                json={
+                    "$schema": "https://schemas.agentskills.io/discovery/0.2.0/schema.json",
+                    "skills": [
+                        {
+                            "name": "v2-demo",
+                            "description": "Downloaded v2 skill.",
+                            "type": "skill-md",
+                            "url": "v2-demo.md",
+                            "digest": digest,
+                        }
+                    ],
+                },
+            )
+        if path == "/.well-known/agent-skills/v2-demo.md":
+            return httpx.Response(200, text=skill_md)
+        return httpx.Response(404)
+
+    dest = await sm.install_well_known_skill(
+        "https://skills.example.com",
+        skill_name="v2-demo",
+        source="skills.example.com",
+        transport=httpx.MockTransport(handler),
+    )
+
+    assert (dest / "SKILL.md").read_text() == skill_md
+
+
+@pytest.mark.asyncio
+async def test_install_well_known_rejects_unsafe_legacy_paths(skills_root):
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/.well-known/agent-skills/index.json":
+            return httpx.Response(404)
+        if request.url.path == "/.well-known/skills/index.json":
+            return httpx.Response(
+                200,
+                json={
+                    "skills": [
+                        {
+                            "name": "demo",
+                            "description": "Downloaded skill.",
+                            "files": ["SKILL.md", "../escape.py"],
+                        }
+                    ]
+                },
+            )
+        return httpx.Response(404)
+
+    with pytest.raises(ValueError, match="No valid well-known skills index"):
+        await sm.install_well_known_skill(
+            "https://skills.example.com",
+            skill_name="demo",
+            source="skills.example.com",
+            transport=httpx.MockTransport(handler),
+        )

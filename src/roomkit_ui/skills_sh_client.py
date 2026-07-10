@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from html import unescape
+from urllib.parse import urlparse
 
 import httpx
 
 BASE_URL = "https://skills.sh"
 _TIMEOUT = 15.0
 _DOMAIN_RE = re.compile(r"^[a-z0-9]([a-z0-9.-]*[a-z0-9])?\.[a-z]{2,}$", re.IGNORECASE)
+_INSTALL_CMD_RE = re.compile(r"npx\s+skills\s+add\s+(https?://[^\s<\"']+)", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -22,6 +25,7 @@ class SkillsShSkill:
     source: str
     installs: int = 0
     is_duplicate: bool = False
+    install_url: str | None = None
 
     @property
     def is_github_source(self) -> bool:
@@ -33,6 +37,14 @@ class SkillsShSkill:
         if not self.is_github_source:
             return None
         return f"https://github.com/{self.source}"
+
+    @property
+    def is_well_known_source(self) -> bool:
+        return _DOMAIN_RE.match(self.source) is not None
+
+    @property
+    def resolved_install_url(self) -> str | None:
+        return self.github_url or self.install_url
 
     @property
     def page_url(self) -> str:
@@ -63,6 +75,7 @@ class SkillsShSkill:
             source=source,
             installs=installs,
             is_duplicate=bool(item.get("isDuplicate", False)),
+            install_url=_valid_http_url(item.get("installUrl") or item.get("install_url")),
         )
 
 
@@ -97,3 +110,42 @@ class SkillsShClient:
             return []
         parsed = [SkillsShSkill.from_json(item) for item in skills if isinstance(item, dict)]
         return [skill for skill in parsed if skill is not None]
+
+    async def with_install_url(self, skill: SkillsShSkill) -> SkillsShSkill:
+        """Return *skill* with the best install URL available from the public page."""
+        if skill.resolved_install_url:
+            return skill
+        if not skill.is_well_known_source:
+            return skill
+
+        async with httpx.AsyncClient(
+            timeout=_TIMEOUT,
+            follow_redirects=True,
+            transport=self._transport,
+        ) as client:
+            resp = await client.get(skill.page_url)
+            resp.raise_for_status()
+
+        install_url = _extract_install_url(resp.text)
+        return replace(skill, install_url=install_url)
+
+
+def _valid_http_url(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    value = value.strip()
+    if not value:
+        return None
+    parsed = urlparse(value)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return None
+    return value
+
+
+def _extract_install_url(page_html: str) -> str | None:
+    """Extract the public ``npx skills add`` URL rendered on a skills.sh page."""
+    html = unescape(page_html)
+    match = _INSTALL_CMD_RE.search(html)
+    if match:
+        return _valid_http_url(match.group(1))
+    return None
