@@ -35,12 +35,10 @@ class MySkillsTab(QWidget):
         on_source_activated,
         on_skill_toggled,
         on_refresh,
-        on_uninstall,
         parent=None,
     ) -> None:
         super().__init__(parent)
         self._cb_skill_toggled = on_skill_toggled
-        self._cb_uninstall = on_uninstall
 
         c = colors()
 
@@ -150,20 +148,14 @@ class MySkillsTab(QWidget):
             if item and item.widget():
                 item.widget().deleteLater()
 
-        # Auto-inject clawhub source if not present
-        sources_with_clawhub = list(sources)
-        has_clawhub = any(s.get("type") == "clawhub" for s in sources_with_clawhub)
-        if not has_clawhub:
-            sources_with_clawhub.append({"type": "clawhub", "label": "ClawHub"})
-
         try:
             from roomkit_ui.skill_manager import discover_all_skills
 
-            skills = discover_all_skills(sources_with_clawhub)
+            skills = discover_all_skills(sources)
         except Exception:
             skills = []
 
-        for meta, skill_path, source_label in skills:
+        for meta, _skill_path, source_label in skills:
             card = SkillCard(
                 name=meta.name,
                 description=meta.description,
@@ -174,11 +166,6 @@ class MySkillsTab(QWidget):
             if card.checkbox:
                 card.checkbox.toggled.connect(
                     lambda checked, n=meta.name: self._cb_skill_toggled(n, checked)
-                )
-            # Wire uninstall for ClawHub skills
-            if card.action_btn and source_label == "ClawHub":
-                card.action_btn.clicked.connect(
-                    lambda _checked, slug=skill_path.name: self._cb_uninstall(slug)
                 )
             self._flow.addWidget(card)
 

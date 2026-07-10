@@ -51,11 +51,12 @@ uv run ruff check .
 uv run ruff format --check .
 uv run mypy src/
 uv run bandit -r src/ -c pyproject.toml
+uv run pytest
 ```
 
-**There is no test suite yet** — CI runs exactly the four commands above
-(`.github/workflows/ci.yml`). If you add logic that is testable without Qt
-(see [technical.md — Testing](technical.md#testing-strategy)), add a pytest target with it.
+CI runs these checks in `.github/workflows/ci.yml`. If you add logic that is
+testable without Qt, add a pytest target with it (see
+[technical.md — Testing](technical.md#testing-strategy)).
 
 ## Common pitfalls
 

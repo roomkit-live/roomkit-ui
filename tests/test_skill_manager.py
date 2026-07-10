@@ -1,4 +1,4 @@
-"""Tests for skill discovery across git/local/clawhub sources."""
+"""Tests for skill discovery across git/local sources."""
 
 import pytest
 
@@ -46,14 +46,15 @@ def test_discover_git_source(skills_root):
     assert label.startswith("git")
 
 
-def test_discover_clawhub_lenient_slug_mismatch(skills_root):
-    # ClawHub installs under the marketplace slug, which may differ from
-    # the skill name — discovery must fall back to the lenient parser.
-    _write_skill(skills_root / "clawhub" / "some-slug-123", "real-name")
-    found = sm.discover_all_skills([{"type": "clawhub"}])
+def test_discover_local_lenient_slug_mismatch(tmp_path, skills_root):
+    # Imported marketplace skills can be stored under a slug that differs
+    # from the skill name; discovery must fall back to the lenient parser.
+    local = tmp_path / "imported-skills"
+    _write_skill(local / "some-slug-123", "real-name")
+    found = sm.discover_all_skills([{"type": "local", "path": str(local)}])
     assert len(found) == 1
     assert found[0][0].name == "real-name"
-    assert found[0][2] == "ClawHub"
+    assert found[0][2].startswith("local")
 
 
 def test_discover_local_source(tmp_path, skills_root):
@@ -75,14 +76,17 @@ def test_discover_skips_missing_and_unknown_sources(skills_root):
 
 
 def test_discover_skips_invalid_skill_md(skills_root):
-    bad = skills_root / "clawhub" / "broken"
+    bad = skills_root / "invalid" / "broken"
     bad.mkdir(parents=True)
     (bad / "SKILL.md").write_text("no frontmatter at all")
-    assert sm.discover_all_skills([{"type": "clawhub"}]) == []
+    assert sm.discover_all_skills([{"type": "local", "path": str(bad.parent)}]) == []
 
 
 def test_build_registry_filters_by_enabled_names(skills_root):
-    _write_skill(skills_root / "clawhub" / "skill-a", "skill-a")
-    _write_skill(skills_root / "clawhub" / "skill-b", "skill-b")
-    registry = sm.build_registry([{"type": "clawhub"}], enabled_names=["skill-a"])
+    local = skills_root / "local"
+    _write_skill(local / "skill-a", "skill-a")
+    _write_skill(local / "skill-b", "skill-b")
+    registry = sm.build_registry(
+        [{"type": "local", "path": str(local)}], enabled_names=["skill-a"]
+    )
     assert registry.skill_names == ["skill-a"]

@@ -53,7 +53,7 @@ graph TB
         ANT[Anthropic API]
         LOC[vLLM / Ollama]
         MCPS[MCP servers<br/>stdio / SSE / HTTP+OAuth2]
-        HUB[ClawHub skill marketplace]
+        HUB[skills.sh catalog]
         EDGE[edge-ai-models<br/>GitHub LFS model repo]
     end
 
@@ -84,7 +84,7 @@ graph TB
 | **Dictation** | `stt_engine.py`, `hotkey.py`, `paste.py`, `tray.py` | Global hotkey → STT recording (OpenAI/local/Deepgram) → clipboard paste into the focused app |
 | **Speakers** | `speaker_manager.py`, `enrollment.py` | Speaker profile persistence (JSON) and embedding extraction for diarization |
 | **MCP** | `mcp_manager.py`, `mcp_auth.py`, `mcp_app_bridge.py` | MCP server connections (stdio/SSE/HTTP), OAuth2 flow, JSON-RPC bridge for MCP App HTML UIs |
-| **Skills** | `skill_manager.py`, `clawhub_client.py` | Skill discovery from git/local/ClawHub sources, registry building via `roomkit.skills` |
+| **Skills** | `skill_manager.py` | Skill discovery from git/local sources, registry building via `roomkit.skills` |
 | **Models** | `model_manager.py` | Download/manage local STT/TTS/VAD/speaker/denoiser models (GitHub LFS resolution) |
 | **Providers** | `providers/`, `tts/` | Lazy factory registries for LLM providers and TTS backends |
 | **Widgets** | `widgets/` | Main window, chat, VU meter, control bar, 11-tab settings panel |
@@ -114,26 +114,26 @@ A tool result carrying a `ui://` resource URI triggers `MainWindow._fetch_and_sh
 
 - **AI providers**: Gemini Live + Gemini API, OpenAI Realtime + API, Anthropic API, vLLM/Ollama-compatible local endpoints, ElevenLabs/Gradium/Deepgram for voice.
 - **MCP servers**: user-configured, three transports (stdio subprocess, SSE, streamable HTTP), OAuth2 with a localhost callback server for HTTP servers.
-- **ClawHub**: skill marketplace (Convex API) for downloading skill packages.
+- **skills.sh**: external skill catalog linked from settings; RoomKit UI installs
+  skills through explicit git/local sources.
 - **edge-ai-models (GitHub)**: model distribution repo; downloads resolve Git LFS pointers to S3 URLs.
 
 ## Infrastructure & deployment
 
 There is no server component. Distribution is a PyInstaller bundle built by GitHub Actions
 (`.github/workflows/build.yml`) for macOS (DMG, signed + notarized), Linux (tar.gz), and
-Windows (ZIP). CI (`ci.yml`) runs ruff, bandit, and mypy — **no test suite exists** (see
+Windows (ZIP). CI (`ci.yml`) runs ruff, format checks, bandit, mypy, and pytest (see
 [technical.md — Testing](technical.md#testing-strategy)).
 
 ## Security architecture
 
 - **API keys, OAuth tokens, MCP OAuth client secrets, and secret-looking MCP env values** are stored via `SecretStore`: OS keyring first, with a QSettings fallback when no keyring backend is usable.
 - **MCP stdio servers** are launched as subprocesses from user-entered commands (list form, no shell). The SDK inherits only a small default environment; RoomKit UI passes only explicitly configured env values, with secret-like values removed from plaintext settings.
-- **Skills are arbitrary code/instructions** loaded from git repos, local folders, or ClawHub. There is no signature or hash verification — installation is the trust decision.
+- **Skills are arbitrary code/instructions** loaded from git repos or local folders. There is no signature or hash verification — installation is the trust decision.
 - **MCP App HTML** runs inside QWebEngineView with a JSON-RPC bridge; app-initiated tool calls are limited to the owning MCP server, and `webbrowser.open` calls from apps are restricted to public http/https URLs.
 - Input boundaries: tool arguments arrive as JSON and are passed to MCP servers verbatim; built-in tools validate their own inputs.
 
-Known gaps (documented honestly): ZIP extraction from ClawHub does not guard against
-path-traversal entries, and model downloads have no checksum verification. See
+Known gaps (documented honestly): model downloads have no checksum verification. See
 [technical.md — Technical debt](technical.md#known-technical-debt).
 
 ## Scalability considerations & current limits

@@ -34,29 +34,6 @@ def get_repos_dir() -> Path:
     return d
 
 
-def get_clawhub_dir() -> Path:
-    """Return the directory for ClawHub-installed skills."""
-    d = get_skills_dir() / "clawhub"
-    d.mkdir(parents=True, exist_ok=True)
-    return d
-
-
-def list_clawhub_installed() -> list[str]:
-    """Return slugs of installed ClawHub skills."""
-    d = get_clawhub_dir()
-    if not d.exists():
-        return []
-    return [p.name for p in d.iterdir() if p.is_dir() and (p / "SKILL.md").exists()]
-
-
-def remove_clawhub_skill(slug: str) -> None:
-    """Remove an installed ClawHub skill."""
-    target = get_clawhub_dir() / slug
-    if target.exists():
-        shutil.rmtree(target)
-        logger.info("Removed ClawHub skill %s", slug)
-
-
 # ---------------------------------------------------------------------------
 # Git operations
 # ---------------------------------------------------------------------------
@@ -150,9 +127,6 @@ def _resolve_source_path(source: dict) -> Path | None:
     if src_type == "local":
         p = Path(source.get("path", ""))
         return p if p.is_dir() else None
-    if src_type == "clawhub":
-        d = get_clawhub_dir()
-        return d if d.is_dir() else None
     return None
 
 
@@ -190,8 +164,8 @@ def discover_all_skills(
     def _lenient_parse(skill_dir: Path) -> SkillMetadata | None:
         """Parse frontmatter without enforcing name-vs-directory match.
 
-        Useful for ClawHub-installed skills where the directory name is
-        the marketplace slug rather than the skill name.
+        Useful for imported or marketplace-listed skills where the directory
+        name may be a slug rather than the skill name.
         """
         md_path = find_skill_md(skill_dir)
         if md_path is None:
@@ -217,9 +191,7 @@ def discover_all_skills(
     for source in sources:
         src_type = source.get("type", "")
         raw_label = source.get("label", source.get("url", source.get("path", "unknown")))
-        if src_type == "clawhub":
-            label = "ClawHub"
-        elif src_type == "git":
+        if src_type == "git":
             label = f"git \u00b7 {raw_label}"
         elif src_type == "local":
             label = f"local \u00b7 {raw_label}"
@@ -233,7 +205,7 @@ def discover_all_skills(
             try:
                 meta = parse_skill_metadata(skill_dir)
             except Exception:
-                # Strict parse failed — try lenient (e.g. ClawHub slug mismatch)
+                # Strict parse failed; try lenient parsing for slug/name mismatches.
                 try:
                     meta = _lenient_parse(skill_dir)
                 except Exception:

@@ -204,12 +204,9 @@ class SkillCard(QWidget):
             )
             footer.addWidget(self.action_btn)
         else:
-            # Source tag badge — color-coded by origin
+            # Source tag badge, color-coded by origin.
             if source_label:
-                if source_label == "ClawHub":
-                    tag_bg = c["ACCENT_BLUE"]
-                    tag_fg = "#FFFFFF"
-                elif source_label.startswith("git"):
+                if source_label.startswith("git"):
                     tag_bg = c["ACCENT_GREEN"]
                     tag_fg = "#000000"
                 else:
@@ -224,21 +221,7 @@ class SkillCard(QWidget):
                 footer.addWidget(tag)
             footer.addStretch()
 
-            # Uninstall button for ClawHub skills
-            if source_label == "ClawHub":
-                self.action_btn = QPushButton("Uninstall")
-                self.action_btn.setCursor(Qt.PointingHandCursor)
-                self.action_btn.setFixedHeight(24)
-                self.action_btn.setStyleSheet(
-                    f"QPushButton {{ font-size: 10px; font-weight: 600;"
-                    f" background: transparent; color: {c['ACCENT_RED']};"
-                    f" border: 1px solid {c['ACCENT_RED']}; border-radius: 6px;"
-                    f" padding: 0 8px; }}"
-                    f"QPushButton:hover {{ background: rgba(255, 69, 58, 0.15); }}"
-                )
-                footer.addWidget(self.action_btn)
-            else:
-                self.action_btn = None
+            self.action_btn = None
 
         layout.addLayout(footer)
 

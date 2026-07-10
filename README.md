@@ -137,8 +137,7 @@ src/roomkit_ui/
 ├── speaker_manager.py   # Speaker profile persistence
 ├── enrollment.py        # Speaker embedding recording/extraction
 ├── model_manager.py     # Local model download & management
-├── skill_manager.py     # Skill discovery (git / local / ClawHub)
-├── clawhub_client.py    # ClawHub skill marketplace client
+├── skill_manager.py     # Skill discovery (git / local)
 ├── mcp_manager.py       # MCP client manager (stdio, SSE, HTTP)
 ├── mcp_auth.py          # OAuth2 authentication for MCP HTTP servers
 ├── mcp_app_bridge.py    # MCP Apps JSON-RPC bridge (QWebChannel ↔ iframe)
@@ -157,7 +156,7 @@ src/roomkit_ui/
     ├── session_info.py   # Collapsible session info bar
     ├── hotkey_button.py  # Interactive hotkey capture widget
     ├── dictation_log.py  # Dictation event log window
-    └── settings/         # 11-tab settings dialog (incl. skills/ marketplace)
+    └── settings/         # 11-tab settings dialog (incl. skills)
 ```
 
 ## Building

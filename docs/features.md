@@ -48,9 +48,10 @@ speaker. (`enrollment.py`, `speaker_manager.py`, settings → Speakers)
 
 ### Skills & attitudes
 
-- **Skills**: instruction packages discovered from git repos, local folders, or the
-  ClawHub marketplace; enabled per-skill in settings and registered into roomkit's
-  `SkillRegistry`. (`skill_manager.py`, `clawhub_client.py`)
+- **Skills**: instruction packages discovered from git repos or local folders;
+  skills.sh is linked from settings as the external catalog. Skills are enabled
+  per-skill in settings and registered into roomkit's `SkillRegistry`.
+  (`skill_manager.py`)
 - **Attitudes**: persona presets (plus user-defined ones) appended to the system prompt;
   switchable mid-session by the user *or by the model itself* via the `set_attitude`
   tool. (`engine_tools.py`)
@@ -135,7 +136,7 @@ sequenceDiagram
 | Anthropic / OpenAI / Gemini / vLLM / Ollama APIs | outbound | voice-channel LLM turn |
 | ElevenLabs / Gradium / Deepgram | outbound | cloud TTS / STT |
 | MCP servers | bidirectional | user-configured, OAuth2 for HTTP |
-| ClawHub | outbound | skill search/download |
+| skills.sh | external browser | skill catalog discovery |
 | edge-ai-models GitHub repo | outbound | model downloads (LFS) |
 
 ## Current limitations
@@ -154,5 +155,5 @@ sequenceDiagram
 - Conversation transcript export / history persistence.
 - Keyboard accessibility on the custom-painted controls.
 - Keyring-backed secret storage.
-- A test suite (see [technical.md — Testing](technical.md#testing-strategy)).
+- Broader integration/UI test coverage (see [technical.md — Testing](technical.md#testing-strategy)).
 - Broader local TTS catalog (English Piper voices are upstream already).

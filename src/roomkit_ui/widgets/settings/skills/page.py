@@ -26,7 +26,7 @@ from roomkit_ui.widgets.settings.skills.widgets import make_tab_toggle
 
 
 class _SkillsPage(QWidget):
-    """Agent Skills configuration page with card-based UI and ClawHub marketplace."""
+    """Agent Skills configuration page with card-based UI and skills.sh marketplace."""
 
     def __init__(self, settings: dict, parent=None) -> None:
         super().__init__(parent)
@@ -35,6 +35,7 @@ class _SkillsPage(QWidget):
             self._sources = json.loads(settings.get("skill_sources", "[]"))
         except (json.JSONDecodeError, TypeError):
             self._sources = []
+        self._sources = [s for s in self._sources if s.get("type") in {"git", "local"}]
 
         self._enabled: set[str] = set()
         try:
@@ -63,7 +64,7 @@ class _SkillsPage(QWidget):
         title.setStyleSheet("font-size: 18px; font-weight: 600; background: transparent;")
         ov_layout.addWidget(title)
 
-        desc = QLabel("Manage local skills and browse the ClawHub marketplace.")
+        desc = QLabel("Manage local skills and browse skills.sh.")
         desc.setWordWrap(True)
         desc.setStyleSheet(
             f"font-size: 13px; color: {c['TEXT_SECONDARY']}; background: transparent;"
@@ -72,7 +73,7 @@ class _SkillsPage(QWidget):
 
         # Tab toggle
         self._tab_toggle, self._tab_buttons = make_tab_toggle(
-            ["My Skills", "Marketplace"], self._on_tab_switch
+            ["My Skills", "skills.sh"], self._on_tab_switch
         )
         ov_layout.addWidget(self._tab_toggle)
 
@@ -87,7 +88,6 @@ class _SkillsPage(QWidget):
             on_source_activated=self._on_source_activated,
             on_skill_toggled=self._on_skill_toggled,
             on_refresh=self._refresh_skills,
-            on_uninstall=self._uninstall_clawhub_skill,
         )
         self._tab_stack.addWidget(self._my_skills_tab)
 
@@ -366,13 +366,6 @@ class _SkillsPage(QWidget):
     def _refresh_skills(self) -> None:
         """Re-scan sources and rebuild the skill card grid."""
         self._my_skills_tab.refresh(self._sources, self._enabled)
-
-    def _uninstall_clawhub_skill(self, slug: str) -> None:
-        """Remove a ClawHub-installed skill and refresh."""
-        from roomkit_ui.skill_manager import remove_clawhub_skill
-
-        remove_clawhub_skill(slug)
-        self._refresh_skills()
 
     # -- serialization -------------------------------------------------------
 

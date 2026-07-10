@@ -45,8 +45,7 @@ src/roomkit_ui/
 ├── speaker_manager.py   # Speaker profile JSON persistence
 ├── enrollment.py        # Speaker embedding recording/extraction
 ├── model_manager.py     # Local model catalog + GitHub LFS downloads
-├── skill_manager.py     # Skill discovery (git/local/clawhub) + registry
-├── clawhub_client.py    # ClawHub marketplace API client
+├── skill_manager.py     # Skill discovery (git/local) + registry
 ├── mcp_manager.py       # MCP connections, tool routing
 ├── mcp_auth.py          # OAuth2 provider + localhost callback server
 ├── mcp_app_bridge.py    # QWebChannel JSON-RPC bridge for MCP Apps
@@ -140,16 +139,17 @@ CI (`.github/workflows/`):
 
 ## Testing strategy
 
-**There are no automated tests.** CI covers linting, formatting, typing, and static
-security analysis only. This is the project's single largest gap. What should be tested
-first, in order of value:
+Automated tests cover core pure-Python logic and several security-sensitive helpers.
+CI also covers linting, formatting, typing, and static security analysis. The main
+remaining test gap is broader integration/UI coverage. What should stay covered first,
+in order of value:
 
 1. `Engine._cleanup` ordering — the teardown sequence encodes hard-won fixes
    (ElevenLabs double-close hang, qasync timer leaks); a regression is a 100 % CPU bug.
-3. `settings.py` round-trip — ~90 keys with type coercion.
-4. `skill_manager.discover_all_skills` / `model_manager` LFS pointer parsing — pure
+2. `settings.py` round-trip — ~90 keys with type coercion.
+3. `skill_manager.discover_all_skills` / `model_manager` LFS pointer parsing — pure
    logic, easy to unit-test with fixtures.
-5. Tool dispatch (`engine_tools.py`) — builtin-vs-MCP routing and the pending-call counter.
+4. Tool dispatch (`engine_tools.py`) — builtin-vs-MCP routing and the pending-call counter.
 
 Widget code is hard to test without `pytest-qt`; the five modules above need none of it.
 
@@ -166,15 +166,14 @@ uv run bandit -r src/ -c pyproject.toml
 
 | # | Item | Where | Recommendation |
 |---|---|---|---|
-| 1 | **Zero test coverage** | everywhere | Start with the five targets above; add `pytest` + CI job |
-| 2 | ZIP path traversal on skill install | `clawhub_client.py` (`extractall`) | Validate member paths before extraction |
-| 3 | No checksum verification on model downloads | `model_manager.py` | Pin SHA-256 per model in the catalog (LFS pointers already carry the OID) |
-| 4 | SecretStore can fall back to QSettings when no OS keyring backend is available | `secret_store.py`, `settings.py`, `mcp_auth.py` | Surface backend status in Settings and docs |
-| 5 | Oversized modules: `model_manager.py` (~965 l), `models_page.py` (~760 l), `speakers_page.py` (~675 l), `stt_engine.py` (~680 l), `engine_vc.py` (~515 l) | — | Split by responsibility (catalog data vs download logic; dialogs vs page) |
-| 6 | Silent `except Exception: pass` beyond Qt-emit guards | `engine_callbacks.py`, `builtin_tools.py:126`, `main_window.py:224` | Log at DEBUG instead of `pass` |
-| 7 | Engine state machine is string-based (`"idle"`, `"active"`, …) | `engine.py` | `enum.StrEnum` for typo safety |
-| 8 | Repeated stylesheet f-strings (~200 `setStyleSheet` calls) | `widgets/` | Shared style helpers per pattern |
-| 9 | `cleanup.py` depends on qasync name-mangled internals | `cleanup.py` | Re-verify on every qasync upgrade; upstream a fix |
-| 10 | MCP stdio execution trust is user-configured | `mcp_manager.py` | Consider per-server allow/deny prompts for sensitive tools |
-| 11 | Unused mypy override sections (Quartz, sherpa_onnx, sounddevice, qasync now ship types) | `pyproject.toml` | Prune on next config pass |
-| 12 | No keyboard navigation / accessible names on custom-painted buttons | `control_bar.py` | `setFocusPolicy`, `setAccessibleName` |
+| 1 | Limited integration/UI coverage | engine workflows, widgets | Add higher-level tests around session setup, settings pages, and MCP App rendering |
+| 2 | No checksum verification on model downloads | `model_manager.py` | Pin SHA-256 per model in the catalog (LFS pointers already carry the OID) |
+| 3 | SecretStore can fall back to QSettings when no OS keyring backend is available | `secret_store.py`, `settings.py`, `mcp_auth.py` | Surface backend status in Settings and docs |
+| 4 | Oversized modules: `model_manager.py` (~965 l), `models_page.py` (~760 l), `speakers_page.py` (~675 l), `stt_engine.py` (~680 l), `engine_vc.py` (~515 l) | - | Split by responsibility (catalog data vs download logic; dialogs vs page) |
+| 5 | Silent `except Exception: pass` beyond Qt-emit guards | `engine_callbacks.py`, `builtin_tools.py:126`, `main_window.py:224` | Log at DEBUG instead of `pass` |
+| 6 | Engine state machine is string-based (`"idle"`, `"active"`, ...) | `engine.py` | `enum.StrEnum` for typo safety |
+| 7 | Repeated stylesheet f-strings (~200 `setStyleSheet` calls) | `widgets/` | Shared style helpers per pattern |
+| 8 | `cleanup.py` depends on qasync name-mangled internals | `cleanup.py` | Re-verify on every qasync upgrade; upstream a fix |
+| 9 | MCP stdio execution trust is user-configured | `mcp_manager.py` | Consider per-server allow/deny prompts for sensitive tools |
+| 10 | Unused mypy override sections (Quartz, sherpa_onnx, sounddevice, qasync now ship types) | `pyproject.toml` | Prune on next config pass |
+| 11 | No keyboard navigation / accessible names on custom-painted buttons | `control_bar.py` | `setFocusPolicy`, `setAccessibleName` |
