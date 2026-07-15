@@ -47,7 +47,7 @@ async def probe_help(
     timeout: float,
     byte_cap: int,
     registry: ProcessRegistry,
-    env: dict[str, str] | None = None,
+    env: dict[str, str],
 ) -> str:
     """Return concatenated ``--help`` output for *argv* down to *depth* levels.
 
@@ -62,7 +62,7 @@ async def probe_help(
     if depth < 1:
         return ""
 
-    probe_env = {**_PROBE_ENV, **(env or {})}
+    probe_env = {**_PROBE_ENV, **env}
     root = await _help_text(argv, timeout=timeout, registry=registry, env=probe_env)
     if not root:
         return ""
