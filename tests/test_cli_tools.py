@@ -4,6 +4,7 @@ import time
 from roomkit_ui.cli_exec import ProcessRegistry, resolve_command, run_sync, truncate
 from roomkit_ui.cli_help import parse_subcommands
 from roomkit_ui.cli_tools import OUTPUT_CAP, CliToolManager
+from roomkit_ui.env_config import parse_env_block
 
 RICH_HELP = """
  Usage: tool [OPTIONS] COMMAND [ARGS]...
@@ -163,6 +164,59 @@ def test_truncate_says_it_truncated_rather_than_silently_clipping():
     out = truncate("x" * 100, 10)
     assert out.startswith("x" * 10)
     assert "truncated, 100 chars total" in out
+
+
+# -- environment ---------------------------------------------------------
+
+
+def test_parse_env_block_reads_one_pair_per_line():
+    assert parse_env_block("LUGE_CLI_JSON=1\nTOKEN=abc") == {"LUGE_CLI_JSON": "1", "TOKEN": "abc"}
+
+
+def test_parse_env_block_keeps_an_equals_sign_inside_a_value():
+    # Base64 and connection strings both carry "=", so only the first splits.
+    assert parse_env_block("KEY=a=b==") == {"KEY": "a=b=="}
+
+
+def test_parse_env_block_drops_junk_instead_of_raising():
+    assert parse_env_block("no-equals-here\n=novalue\n\nOK=1") == {"OK": "1"}
+    assert parse_env_block("") == {}
+    assert parse_env_block(None) == {}
+
+
+async def test_declared_env_reaches_the_child_process():
+    # The whole point: "FOO=1 mycli" cannot go in the command field, so the
+    # variable has to arrive from the env field instead.
+    mgr = CliToolManager(
+        [{"name": "sh", "command": "sh", "seed_help": False, "env": "LUGE_CLI_JSON=1"}]
+    )
+    await mgr.probe_all()
+
+    out = json.loads(await mgr.handle_tool_call("sh", {"args": ["-c", "echo $LUGE_CLI_JSON"]}))
+
+    assert out["stdout"].strip() == "1"
+
+
+async def test_declared_env_does_not_replace_the_inherited_environment():
+    # extra_env merges into the child env; wiping PATH would break every CLI.
+    mgr = CliToolManager([{"name": "sh", "command": "sh", "seed_help": False, "env": "FOO=1"}])
+    await mgr.probe_all()
+
+    out = json.loads(await mgr.handle_tool_call("sh", {"args": ["-c", "echo $PATH"]}))
+
+    assert out["stdout"].strip()
+
+
+async def test_declared_env_reaches_the_help_probe():
+    # Help is seeded from the CLI as configured, so the probe must see the
+    # declared variables too. `sh -c printenv` dumps its environment whatever
+    # the probe appends, which is what makes it a usable witness here.
+    mgr = CliToolManager(
+        [{"name": "dump", "command": "sh -c printenv", "env": "LUGE_CLI_JSON=1", "help_depth": 1}]
+    )
+    await mgr.probe_all()
+
+    assert "LUGE_CLI_JSON=1" in mgr.get_tools()[0]["description"]
 
 
 # -- declaration validation ----------------------------------------------

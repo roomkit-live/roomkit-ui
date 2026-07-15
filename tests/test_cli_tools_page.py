@@ -21,6 +21,7 @@ def test_a_declared_tool_survives_a_save_and_reload(page):
     page._add_tool()
     page._name_edit.setText("gh")
     page._command_edit.setText("gh")
+    page._env_edit.setPlainText("GH_PAGER=cat")
     page._description_edit.setText("GitHub CLI")
 
     save_settings(page.get_settings())
@@ -31,6 +32,7 @@ def test_a_declared_tool_survives_a_save_and_reload(page):
             "enabled": True,
             "name": "gh",
             "command": "gh",
+            "env": "GH_PAGER=cat",
             "description": "GitHub CLI",
             "seed_help": True,
             "help_depth": 2,

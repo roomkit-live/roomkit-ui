@@ -47,17 +47,23 @@ async def probe_help(
     timeout: float,
     byte_cap: int,
     registry: ProcessRegistry,
+    env: dict[str, str] | None = None,
 ) -> str:
     """Return concatenated ``--help`` output for *argv* down to *depth* levels.
 
     Probes each level concurrently and stops once *byte_cap* is spent, which
     also bounds the spawn count. Returns "" if the CLI has no usable help —
     the tool stays callable on its description alone.
+
+    *env* is the tool's declared environment. It applies here too: a CLI run
+    with a variable set must be described by the help text it prints with that
+    variable set. An explicit declaration wins over our probe defaults.
     """
     if depth < 1:
         return ""
 
-    root = await _help_text(argv, timeout=timeout, registry=registry)
+    probe_env = {**_PROBE_ENV, **(env or {})}
+    root = await _help_text(argv, timeout=timeout, registry=registry, env=probe_env)
     if not root:
         return ""
 
@@ -72,7 +78,10 @@ async def probe_help(
             break
 
         texts = await asyncio.gather(
-            *(_help_text([*argv, *path], timeout=timeout, registry=registry) for path in targets)
+            *(
+                _help_text([*argv, *path], timeout=timeout, registry=registry, env=probe_env)
+                for path in targets
+            )
         )
         frontier = []
         for path, text in zip(targets, texts, strict=True):
@@ -118,13 +127,15 @@ def parse_subcommands(help_text: str) -> list[str]:
     return names
 
 
-async def _help_text(argv: list[str], *, timeout: float, registry: ProcessRegistry) -> str:
+async def _help_text(
+    argv: list[str], *, timeout: float, registry: ProcessRegistry, env: dict[str, str]
+) -> str:
     result = await asyncio.to_thread(
         run_sync,
         [*argv, "--help"],
         timeout=timeout,
         registry=registry,
-        extra_env=_PROBE_ENV,
+        extra_env=env,
     )
     if result.timed_out or result.exit_code != 0:
         return ""

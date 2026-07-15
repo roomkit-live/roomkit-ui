@@ -20,6 +20,7 @@ import sys
 from contextlib import AsyncExitStack
 from typing import Any
 
+from roomkit_ui.env_config import parse_env_block
 from roomkit_ui.mcp_config import validate_mcp_http_url
 
 _CONNECT_TIMEOUT = 10  # seconds per connection step, per server
@@ -99,14 +100,9 @@ def _parse_stdio_config(cfg: dict[str, Any]) -> tuple[str, list[str], dict[str, 
     args = cfg.get("args", "")
     arg_list = command_parts[1:] + (shlex.split(args) if args else [])
 
-    env: dict[str, str] | None = None
-    env_str = cfg.get("env", "")
-    if env_str and env_str.strip():
-        env = {}
-        for line in env_str.strip().splitlines():
-            if "=" in line:
-                k, v = line.split("=", 1)
-                env[k.strip()] = v.strip()
+    # None, not {}: an empty dict would hand the server a bare environment
+    # instead of letting the MCP client inherit the default one.
+    env = parse_env_block(cfg.get("env", "")) or None
     return command, arg_list, env
 
 

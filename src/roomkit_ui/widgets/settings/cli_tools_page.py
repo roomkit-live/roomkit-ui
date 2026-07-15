@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSpinBox,
     QStackedWidget,
+    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -157,6 +158,13 @@ class _CliToolsPage(QWidget):
         self._command_status.setStyleSheet("font-size: 12px; background: transparent;")
         form.addRow("", self._command_status)
 
+        # The command is not run through a shell, so "FOO=1 mycli" cannot work
+        # there — variables belong here, same as an MCP server's env.
+        self._env_edit = QTextEdit()
+        self._env_edit.setPlaceholderText("KEY=VALUE (one per line)")
+        self._env_edit.setFixedHeight(60)
+        form.addRow("Env", self._env_edit)
+
         self._description_edit = QLineEdit()
         self._description_edit.setPlaceholderText("What it does — the assistant reads this")
         form.addRow("Description", self._description_edit)
@@ -193,6 +201,7 @@ class _CliToolsPage(QWidget):
         self._enabled_check.toggled.connect(self._sync_to_model)
         self._name_edit.textChanged.connect(self._sync_to_model)
         self._command_edit.textChanged.connect(self._sync_to_model)
+        self._env_edit.textChanged.connect(self._sync_to_model)
         self._description_edit.textChanged.connect(self._sync_to_model)
         self._seed_help_check.toggled.connect(self._sync_to_model)
         self._help_depth_spin.valueChanged.connect(self._sync_to_model)
@@ -216,6 +225,7 @@ class _CliToolsPage(QWidget):
             self._enabled_check,
             self._name_edit,
             self._command_edit,
+            self._env_edit,
             self._description_edit,
             self._seed_help_check,
             self._help_depth_spin,
@@ -227,6 +237,7 @@ class _CliToolsPage(QWidget):
         self._enabled_check.setChecked(tool.get("enabled", True))
         self._name_edit.setText(tool.get("name", ""))
         self._command_edit.setText(tool.get("command", ""))
+        self._env_edit.setPlainText(tool.get("env", ""))
         self._description_edit.setText(tool.get("description", ""))
         self._seed_help_check.setChecked(tool.get("seed_help", True))
         self._help_depth_spin.setValue(int(tool.get("help_depth", DEFAULT_HELP_DEPTH) or 1))
@@ -250,6 +261,7 @@ class _CliToolsPage(QWidget):
             "enabled": True,
             "name": "",
             "command": "",
+            "env": "",
             "description": "",
             "seed_help": True,
             "help_depth": DEFAULT_HELP_DEPTH,
@@ -277,6 +289,7 @@ class _CliToolsPage(QWidget):
         tool["enabled"] = self._enabled_check.isChecked()
         tool["name"] = self._name_edit.text().strip()
         tool["command"] = self._command_edit.text().strip()
+        tool["env"] = self._env_edit.toPlainText().strip()
         tool["description"] = self._description_edit.text().strip()
         tool["seed_help"] = self._seed_help_check.isChecked()
         tool["help_depth"] = self._help_depth_spin.value()

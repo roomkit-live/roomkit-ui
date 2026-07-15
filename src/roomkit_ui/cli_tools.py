@@ -21,7 +21,7 @@ from typing import Any
 from roomkit_ui.builtin_tools import BUILTIN_TOOLS
 from roomkit_ui.cli_exec import ProcessRegistry, resolve_command, run_sync, truncate
 from roomkit_ui.cli_help import probe_help
-from roomkit_ui.cli_tools_config import help_depth, slugify_tool_name, tool_timeout
+from roomkit_ui.cli_tools_config import help_depth, slugify_tool_name, tool_env, tool_timeout
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +57,7 @@ class _Spec:
     name: str
     argv: list[str]
     description: str
+    env: dict[str, str]
     depth: int
     timeout: float
 
@@ -106,6 +107,7 @@ class CliToolManager:
             name=name,
             argv=argv,
             description=str(cfg.get("description", "")).strip(),
+            env=tool_env(cfg),
             depth=help_depth(cfg),
             timeout=tool_timeout(cfg),
         )
@@ -126,6 +128,7 @@ class CliToolManager:
                     timeout=spec.timeout,
                     byte_cap=HELP_BYTE_CAP,
                     registry=self._registry,
+                    env=spec.env,
                 )
                 for spec in specs
             )
@@ -190,6 +193,7 @@ class CliToolManager:
             [*spec.argv, *args],
             timeout=spec.timeout,
             registry=self._registry,
+            extra_env=spec.env,
         )
         if result.timed_out:
             logger.warning("CLI tool %r timed out after %ss", name, spec.timeout)

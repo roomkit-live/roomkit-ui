@@ -11,6 +11,8 @@ import json
 import re
 from typing import Any
 
+from roomkit_ui.env_config import parse_env_block
+
 DEFAULT_TIMEOUT = 10.0
 DEFAULT_HELP_DEPTH = 2
 
@@ -53,6 +55,15 @@ def slugify_tool_name(name: Any) -> str:
     """
     text = str(name or "").strip().lower()
     return _UNSAFE_NAME_CHARS.sub("_", text).strip("_-")[:64]
+
+
+def tool_env(cfg: dict[str, Any]) -> dict[str, str]:
+    """Return the environment variables declared for *cfg*.
+
+    The command field is not a shell, so ``FOO=1 mycli`` cannot work there —
+    the variables live here and are merged into the child's environment.
+    """
+    return parse_env_block(cfg.get("env", ""))
 
 
 def tool_timeout(cfg: dict[str, Any]) -> float:
