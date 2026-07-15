@@ -102,6 +102,22 @@ def test_the_command_field_reports_a_binary_it_cannot_find(page):
     assert "Not found" in page._command_status.text()
 
 
+def test_an_env_line_that_is_not_a_pair_is_called_out(page):
+    # A dropped line is a variable the CLI never receives, which looks exactly
+    # like one it received and ignored unless the page says otherwise.
+    page._add_tool()
+    page._env_edit.setPlainText("LUGE_CLI_JSON 1")
+
+    assert "Ignored, needs KEY=VALUE: LUGE_CLI_JSON 1" in page._env_status.text()
+
+
+def test_the_env_field_names_what_it_sets_without_showing_the_values(page):
+    page._add_tool()
+    page._env_edit.setPlainText("LUGE_CLI_JSON=1\nTOKEN=s3cret")
+
+    assert page._env_status.text() == "Sets: LUGE_CLI_JSON, TOKEN"
+
+
 def test_removing_a_tool_drops_it_from_both_model_and_list(page):
     page._add_tool()
     page._name_edit.setText("gh")

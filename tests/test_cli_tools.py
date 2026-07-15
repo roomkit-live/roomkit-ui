@@ -4,7 +4,7 @@ import time
 from roomkit_ui.cli_exec import ProcessRegistry, resolve_command, run_sync, truncate
 from roomkit_ui.cli_help import parse_subcommands
 from roomkit_ui.cli_tools import OUTPUT_CAP, CliToolManager
-from roomkit_ui.env_config import parse_env_block
+from roomkit_ui.env_config import invalid_env_lines, parse_env_block
 
 RICH_HELP = """
  Usage: tool [OPTIONS] COMMAND [ARGS]...
@@ -182,6 +182,14 @@ def test_parse_env_block_drops_junk_instead_of_raising():
     assert parse_env_block("no-equals-here\n=novalue\n\nOK=1") == {"OK": "1"}
     assert parse_env_block("") == {}
     assert parse_env_block(None) == {}
+
+
+def test_invalid_env_lines_names_exactly_what_the_parser_dropped():
+    # The two must agree line for line, or the page reports a variable as set
+    # that never arrives — blank lines are not a mistake and must not appear.
+    assert invalid_env_lines("OK=1\nno-equals-here\n\n=novalue") == ["no-equals-here", "=novalue"]
+    assert invalid_env_lines("OK=1\n\n") == []
+    assert invalid_env_lines(None) == []
 
 
 async def test_declared_env_reaches_the_child_process():

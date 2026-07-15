@@ -28,6 +28,7 @@ from roomkit_ui.cli_tools_config import (
     parse_cli_tools,
     slugify_tool_name,
 )
+from roomkit_ui.env_config import invalid_env_lines, parse_env_block
 from roomkit_ui.theme import colors
 
 _OK_COLOR = "#4caf50"
@@ -165,6 +166,13 @@ class _CliToolsPage(QWidget):
         self._env_edit.setFixedHeight(60)
         form.addRow("Env", self._env_edit)
 
+        # A line that is not KEY=VALUE is dropped, and a variable the CLI never
+        # receives looks exactly like one it ignored — so say which line went.
+        self._env_status = QLabel("")
+        self._env_status.setWordWrap(True)
+        self._env_status.setStyleSheet("font-size: 12px; background: transparent;")
+        form.addRow("", self._env_status)
+
         self._description_edit = QLineEdit()
         self._description_edit.setPlaceholderText("What it does — the assistant reads this")
         form.addRow("Description", self._description_edit)
@@ -248,6 +256,7 @@ class _CliToolsPage(QWidget):
 
         self._refresh_name_status()
         self._refresh_command_status()
+        self._refresh_env_status()
         self._update_field_visibility()
         self._stack.setCurrentIndex(1)
 
@@ -301,6 +310,7 @@ class _CliToolsPage(QWidget):
         self._edit_title.setText(tool["name"] or "New CLI Tool")
         self._refresh_name_status()
         self._refresh_command_status()
+        self._refresh_env_status()
         self._update_field_visibility()
 
     def _update_field_visibility(self) -> None:
@@ -318,6 +328,21 @@ class _CliToolsPage(QWidget):
             self._set_status(self._name_status, f"Unusable name: {typed}", ok=False)
             return
         self._set_status(self._name_status, f"The assistant calls this: {slug}", ok=True)
+
+    def _refresh_env_status(self) -> None:
+        raw = self._env_edit.toPlainText().strip()
+        if not raw:
+            self._env_status.setText("")
+            return
+        ignored = invalid_env_lines(raw)
+        if ignored:
+            self._set_status(
+                self._env_status, f"Ignored, needs KEY=VALUE: {', '.join(ignored)}", ok=False
+            )
+            return
+        # Names only: a value here is as likely to be an API token as a flag,
+        # and settings pages get screen-shared.
+        self._set_status(self._env_status, f"Sets: {', '.join(parse_env_block(raw))}", ok=True)
 
     def _refresh_command_status(self) -> None:
         command = self._command_edit.text().strip()
