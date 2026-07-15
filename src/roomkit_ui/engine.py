@@ -31,6 +31,7 @@ from roomkit_ui.engine_tools import ToolMixin
 from roomkit_ui.engine_vc import VoiceChannelMixin
 from roomkit_ui.mcp_config import enabled_mcp_servers
 from roomkit_ui.mcp_manager import MCPManager
+from roomkit_ui.toolset import ToolSet
 from roomkit_ui.watchdog import SessionWatchdog
 
 logger = logging.getLogger(__name__)
@@ -245,35 +246,37 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         else:
             await self._start_realtime(settings)
 
-    async def _setup_mcp_tools(self, settings: dict) -> tuple[list[dict], bool]:
-        """Connect MCP servers and return (tools_list, has_mcp_tools)."""
+    async def _setup_tools(self, settings: dict) -> ToolSet:
+        """Connect MCP servers and group what they expose with the built-ins."""
+        mcp_tools = await self._setup_mcp_tools(settings)
+        return ToolSet(builtin=list(BUILTIN_TOOLS), cli=[], mcp=mcp_tools)
+
+    async def _setup_mcp_tools(self, settings: dict) -> list[dict]:
+        """Connect MCP servers and return the tools they expose."""
         mcp_servers = enabled_mcp_servers(settings.get("mcp_servers", "[]"))
+        if not mcp_servers:
+            return []
 
-        tools: list[dict] = list(BUILTIN_TOOLS)
+        self._mcp = MCPManager(mcp_servers)
+        await self._mcp.connect_all()
+        discovered = self._mcp.get_tools()
 
-        if mcp_servers:
-            self._mcp = MCPManager(mcp_servers)
-            await self._mcp.connect_all()
-            discovered = self._mcp.get_tools()
+        if self._mcp.failed_servers:
+            failed = ", ".join(self._mcp.failed_servers)
+            self.mcp_status.emit(f"MCP failed: {failed}")
 
-            if self._mcp.failed_servers:
-                failed = ", ".join(self._mcp.failed_servers)
-                self.mcp_status.emit(f"MCP failed: {failed}")
+        if discovered:
+            names = ", ".join(t["name"] for t in discovered)
+            logger.info("MCP tools: %s", names)
 
-            if discovered:
-                tools.extend(discovered)
-                names = ", ".join(t["name"] for t in discovered)
-                logger.info("MCP tools: %s", names)
+        # MCP connection failures (especially aborts) leak anyio
+        # CancelScope timers that spin at 0ms → 100% CPU.
+        # Clean immediately + delayed pass for timers that re-create
+        # themselves via call_soon.
+        cleanup_stale_fds(timers_only=True)
+        asyncio.get_running_loop().call_later(0.5, lambda: cleanup_stale_fds(timers_only=True))
 
-            # MCP connection failures (especially aborts) leak anyio
-            # CancelScope timers that spin at 0ms → 100% CPU.
-            # Clean immediately + delayed pass for timers that re-create
-            # themselves via call_soon.
-            cleanup_stale_fds(timers_only=True)
-            asyncio.get_running_loop().call_later(0.5, lambda: cleanup_stale_fds(timers_only=True))
-
-        has_mcp_tools = len(tools) > len(BUILTIN_TOOLS)
-        return tools, has_mcp_tools
+        return discovered
 
     async def stop(self) -> None:
         if self._state not in (EngineState.ACTIVE, EngineState.CONNECTING, EngineState.ERROR):

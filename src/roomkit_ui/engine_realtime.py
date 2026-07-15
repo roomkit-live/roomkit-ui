@@ -13,7 +13,6 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from roomkit_ui.builtin_tools import BUILTIN_TOOLS
 from roomkit_ui.engine_audio import (
     build_audio_processing,
     build_debug_taps,
@@ -24,6 +23,7 @@ from roomkit_ui.engine_audio import (
 from roomkit_ui.engine_state import EngineState
 from roomkit_ui.hooks import register_realtime_hooks
 from roomkit_ui.mcp_config import has_enabled_mcp_servers
+from roomkit_ui.toolset import tool_summaries
 
 logger = logging.getLogger(__name__)
 
@@ -160,7 +160,8 @@ class RealtimeMixin:
             # -- MCP tools -------------------------------------------------------
             if has_enabled_mcp_servers(settings.get("mcp_servers", "[]")):
                 self.loading_status.emit("Connecting MCP servers…")  # type: ignore[attr-defined]
-            tools, has_mcp_tools = await self._setup_mcp_tools(settings)  # type: ignore[attr-defined]
+            toolset = await self._setup_tools(settings)  # type: ignore[attr-defined]
+            tools = toolset.all
             tool_handler = self._handle_tool_call  # type: ignore[attr-defined]
 
             all_names = ", ".join(t["name"] for t in tools)
@@ -183,8 +184,10 @@ class RealtimeMixin:
                 settings=settings,
                 pipeline=pipeline,
             )
-            if self._session is None and has_mcp_tools:  # type: ignore[attr-defined]
-                # MCP tools broke the session — retry without them
+            if self._session is None and toolset.has_mcp:  # type: ignore[attr-defined]
+                # MCP tools broke the session — retry without them. Only MCP is
+                # shed: its schemas are server-supplied and arbitrary, whereas
+                # built-in and CLI schemas are hand-authored and known-good.
                 logger.warning("Retrying session without MCP tools")
                 self._session = await self._start_session(  # type: ignore[attr-defined]
                     RoomKit,
@@ -194,7 +197,7 @@ class RealtimeMixin:
                     system_prompt,
                     voice,
                     sample_rate,
-                    list(BUILTIN_TOOLS),
+                    toolset.without_mcp,
                     tool_handler,
                     provider_config=provider_config or None,
                     settings=settings,
@@ -204,7 +207,7 @@ class RealtimeMixin:
                     self.mcp_status.emit(  # type: ignore[attr-defined]
                         "MCP tools disabled — incompatible with this provider"
                     )
-                    tools = list(BUILTIN_TOOLS)
+                    tools = toolset.without_mcp
 
             if self._session is None:  # type: ignore[attr-defined]
                 raise RuntimeError("Failed to start voice session")
@@ -219,13 +222,10 @@ class RealtimeMixin:
             self._set_state(EngineState.ACTIVE)  # type: ignore[attr-defined]
 
             # Emit structured session info for the UI info bar
-            tool_info = [
-                {"name": t.get("name", ""), "description": t.get("description", "")} for t in tools
-            ]
             info: dict = {
                 "provider": provider_name,
                 "model": model,
-                "tools": tool_info,
+                "tools": tool_summaries(tools),
             }
             if self._mcp and self._mcp.failed_servers:  # type: ignore[attr-defined]
                 info["failed_servers"] = list(self._mcp.failed_servers)  # type: ignore[attr-defined]

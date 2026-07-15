@@ -32,6 +32,7 @@ src/roomkit_ui/
 ├── watchdog.py          # Stalled-session detector (8s silence) + model nudge
 ├── cleanup.py           # qasync timer/FD cleanup after MCP disconnect
 ├── builtin_tools.py     # Built-in tools (always available)
+├── toolset.py           # Tool grouping (builtin/cli/mcp) + session_info summaries — leaf
 ├── stt_engine.py        # Local STT dictation + text pasting
 ├── hotkey.py            # Global hotkey (NSEvent on macOS, pynput fallback)
 ├── paste.py             # Clipboard copy + paste simulation per platform
@@ -81,7 +82,7 @@ mixins hold no state; all attributes live on `Engine`. Docs: `docs/architecture.
 - `QT_QUICK_BACKEND=software` must be set BEFORE importing PySide6 (see app.py line 16)
 - Qt signals in async callbacks: always wrap emit() in try/except — the C++ object may be deleted
 - MCP tool schemas: strip `$schema` and `additionalProperties` keys for Gemini compatibility (`_clean_schema()` in mcp_manager.py)
-- MCP session retry: if provider rejects MCP tools, retry with built-in tools only
+- MCP session retry: if provider rejects MCP tools, retry with `ToolSet.without_mcp`. Trigger on `ToolSet.has_mcp` — never infer "MCP tools exist" from a tool-count comparison, that breaks the moment another source contributes tools
 - qasync timer cleanup: after MCP session closes, anyio leaves orphaned 0ms timers → 100% CPU. See `cleanup.py`
 - AEC wiring (realtime): pass `aec` to `AudioPipelineConfig` ONLY — `LocalAudioBackend(aec=...)` flags NATIVE_AEC, the pipeline skips its AEC stage and loses the continuous playback reference (roomkit 0.9.0 barge-in fix). Same wiring as roomkit's `examples/realtime_voice_local_gemini.py`. VC mode still passes both.
 - No denoiser on the realtime mic path — speech enhancers keep the dominant voice and eat the user's barge-in during doubletalk. Denoisers are VC-mode only.

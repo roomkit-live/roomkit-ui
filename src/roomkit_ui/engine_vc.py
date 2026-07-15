@@ -32,6 +32,7 @@ from roomkit_ui.engine_vc_helpers import (
 )
 from roomkit_ui.hooks import register_vc_hooks
 from roomkit_ui.providers import create_ai_provider
+from roomkit_ui.toolset import tool_summaries
 from roomkit_ui.tts import create_tts_provider
 
 logger = logging.getLogger(__name__)
@@ -180,7 +181,7 @@ class VoiceChannelMixin:
             else:
                 if mcp_servers_configured(settings):
                     self.loading_status.emit("Connecting MCP servers…")  # type: ignore[attr-defined]
-                tools, _has_mcp = await self._setup_mcp_tools(settings)  # type: ignore[attr-defined]
+                tools = (await self._setup_tools(settings)).all  # type: ignore[attr-defined]
 
             # 10-11. Framework + hooks
             telemetry = build_telemetry(settings)
@@ -355,9 +356,6 @@ class VoiceChannelMixin:
         llm_provider_name: str,
         model: str,
     ) -> None:
-        tool_info = [
-            {"name": t.get("name", ""), "description": t.get("description", "")} for t in tools
-        ]
         skill_info: list[dict] = []
         if skills_registry and skills_registry.skill_count > 0:
             skill_info = [
@@ -367,7 +365,7 @@ class VoiceChannelMixin:
         info: dict = {
             "provider": llm_provider_name,
             "model": model,
-            "tools": tool_info,
+            "tools": tool_summaries(tools),
             "skills": skill_info,
         }
         if self._mcp and self._mcp.failed_servers:  # type: ignore[attr-defined]
