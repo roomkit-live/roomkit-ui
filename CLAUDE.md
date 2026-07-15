@@ -27,12 +27,16 @@ src/roomkit_ui/
 ├── engine_realtime.py   # Realtime mode startup (Gemini Live / OpenAI Realtime) — mixin
 ├── engine_audio.py      # Pipeline builders: AEC, denoiser, VAD, diarization, recording
 ├── engine_callbacks.py  # roomkit provider/transport callbacks → Qt signals — mixin
-├── engine_tools.py      # Tool dispatch (builtin → MCP), attitudes, end_conversation — mixin
+├── engine_tools.py      # Tool dispatch (builtin → CLI → MCP), attitudes, end_conversation — mixin
 ├── hooks.py             # RoomKit hook registration for UI events
 ├── watchdog.py          # Stalled-session detector (8s silence) + model nudge
 ├── cleanup.py           # qasync timer/FD cleanup after MCP disconnect
 ├── builtin_tools.py     # Built-in tools (always available)
 ├── toolset.py           # Tool grouping (builtin/cli/mcp) + session_info summaries — leaf
+├── cli_tools.py         # CLI tool manager: schema build + dispatch (mirrors MCPManager)
+├── cli_exec.py          # Child-process primitives: PATH/env, Popen registry, timeout
+├── cli_help.py          # Recursive `--help` probing (Click/Typer/Rich + Cobra) to seed CLI tools
+├── cli_tools_config.py  # CLI tool config parsing + validation (mirrors mcp_config.py)
 ├── stt_engine.py        # Local STT dictation + text pasting
 ├── hotkey.py            # Global hotkey (NSEvent on macOS, pynput fallback)
 ├── paste.py             # Clipboard copy + paste simulation per platform
@@ -61,8 +65,9 @@ src/roomkit_ui/
     ├── session_info.py    # Collapsible session info bar
     ├── hotkey_button.py   # Interactive hotkey capture widget
     ├── dictation_log.py   # Dictation event log window
-    └── settings/          # 11-tab settings dialog (general, ai, attitudes, speakers,
-                           #  dictation, models, skills/, mcp, audio_debug, telemetry, about)
+    └── settings/          # 12-tab settings dialog (general, ai, attitudes, speakers,
+                           #  dictation, models, skills/, mcp, cli_tools, audio_debug,
+                           #  telemetry, about)
 ```
 
 Engine composition: `Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject)` —
@@ -82,7 +87,12 @@ mixins hold no state; all attributes live on `Engine`. Docs: `docs/architecture.
 - `QT_QUICK_BACKEND=software` must be set BEFORE importing PySide6 (see app.py line 16)
 - Qt signals in async callbacks: always wrap emit() in try/except — the C++ object may be deleted
 - MCP tool schemas: strip `$schema` and `additionalProperties` keys for Gemini compatibility (`_clean_schema()` in mcp_manager.py)
-- MCP session retry: if provider rejects MCP tools, retry with `ToolSet.without_mcp`. Trigger on `ToolSet.has_mcp` — never infer "MCP tools exist" from a tool-count comparison, that breaks the moment another source contributes tools
+- MCP session retry: if provider rejects MCP tools, retry with `ToolSet.without_mcp` (builtin + CLI). Only MCP is shed — its schemas are server-supplied; builtin/CLI schemas are hand-authored. Trigger on `ToolSet.has_mcp`, never on a tool-count comparison
+- CLI tool schemas are hand-authored and never pass through `_clean_schema()` — so do NOT add `additionalProperties` to them, nothing would strip it and Gemini rejects it
+- Tool names reaching a provider must be `[A-Za-z0-9_-]{1,64}` — no spaces, no dots. Don't push that rule onto the user: `cli_tools_config.slugify_tool_name()` derives it ("GitHub CLI" → `github_cli`) and the settings page shows the result. A declaration the model never receives must surface in the chat, not only in a log
+- `cli_help.parse_subcommands()` covers Click/Typer, Rich boxes and Cobra (`gh` uses colon-suffixed names across several `* COMMANDS` sections). It is best-effort by design — a CLI with bespoke help (`git`, `brew`) seeds depth 1 and the model explores via `--help` through the tool. Test any parser change against `gh`, `kubectl`, `docker` AND a Rich/Typer CLI: the two ecosystems break each other
+- Nothing in a CLI tool's shared description text may name a real subcommand — it is injected into *every* declared tool, so an example from one CLI is nonsense in another's (`_ARGS_HINT` in `cli_tools.py`)
+- Child processes (CLI tools): never `shell=True`, always an argv list. A macOS `.app` launched from the Dock inherits only `/usr/bin:/bin:/usr/sbin:/sbin`, and PyInstaller repoints `DYLD_LIBRARY_PATH` at `_MEIPASS` — both are handled in `cli_exec.child_env()`/`search_path()`, so spawn through there, not bare `subprocess`
 - qasync timer cleanup: after MCP session closes, anyio leaves orphaned 0ms timers → 100% CPU. See `cleanup.py`
 - AEC wiring (realtime): pass `aec` to `AudioPipelineConfig` ONLY — `LocalAudioBackend(aec=...)` flags NATIVE_AEC, the pipeline skips its AEC stage and loses the continuous playback reference (roomkit 0.9.0 barge-in fix). Same wiring as roomkit's `examples/realtime_voice_local_gemini.py`. VC mode still passes both.
 - No denoiser on the realtime mic path — speech enhancers keep the dominant voice and eat the user's barge-in during doubletalk. Denoisers are VC-mode only.

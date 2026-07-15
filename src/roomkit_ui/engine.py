@@ -24,6 +24,8 @@ from PySide6.QtCore import QObject, QTimer, Signal
 
 from roomkit_ui.builtin_tools import BUILTIN_TOOLS
 from roomkit_ui.cleanup import cleanup_stale_fds, post_cleanup_monitor
+from roomkit_ui.cli_tools import CliToolManager
+from roomkit_ui.cli_tools_config import enabled_cli_tools
 from roomkit_ui.engine_callbacks import CallbackMixin
 from roomkit_ui.engine_realtime import RealtimeMixin
 from roomkit_ui.engine_state import EngineState
@@ -126,6 +128,7 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         self._backend: Any = None  # LocalAudioBackend for voice channel mode
         self._tts: Any = None
         self._mcp: MCPManager | None = None
+        self._cli: CliToolManager | None = None
         self._mic_muted = False
         self._state = EngineState.IDLE
         self._attitude: str = ""  # full description text (injected into prompt)
@@ -247,9 +250,26 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
             await self._start_realtime(settings)
 
     async def _setup_tools(self, settings: dict) -> ToolSet:
-        """Connect MCP servers and group what they expose with the built-ins."""
+        """Connect MCP servers, probe CLI tools, and group both with the built-ins."""
+        cli_tools = await self._setup_cli_tools(settings)
         mcp_tools = await self._setup_mcp_tools(settings)
-        return ToolSet(builtin=list(BUILTIN_TOOLS), cli=[], mcp=mcp_tools)
+        self._warn_shadowed_mcp_tools(cli_tools, mcp_tools)
+        return ToolSet(builtin=list(BUILTIN_TOOLS), cli=cli_tools, mcp=mcp_tools)
+
+    async def _setup_cli_tools(self, settings: dict) -> list[dict]:
+        """Build tools for each declared CLI binary."""
+        declared = enabled_cli_tools(settings.get("cli_tools", "[]"))
+        if not declared:
+            return []
+        self.loading_status.emit("Reading CLI tools…")
+        self._cli = CliToolManager(declared)
+        await self._cli.probe_all()
+        if self._cli.failed_tools:
+            # A declared tool that never reaches the model must say so — a log
+            # line alone reads as "it worked" from the chat.
+            failed = ", ".join(self._cli.failed_tools)
+            self.mcp_status.emit(f"CLI tools unavailable: {failed}")
+        return self._cli.get_tools()
 
     async def _setup_mcp_tools(self, settings: dict) -> list[dict]:
         """Connect MCP servers and return the tools they expose."""
@@ -277,6 +297,14 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         asyncio.get_running_loop().call_later(0.5, lambda: cleanup_stale_fds(timers_only=True))
 
         return discovered
+
+    @staticmethod
+    def _warn_shadowed_mcp_tools(cli_tools: list[dict], mcp_tools: list[dict]) -> None:
+        """Log MCP tools a CLI tool hides — dispatch tries CLI first."""
+        cli_names = {t["name"] for t in cli_tools}
+        shadowed = [t["name"] for t in mcp_tools if t["name"] in cli_names]
+        if shadowed:
+            logger.warning("CLI tools shadow same-named MCP tools: %s", ", ".join(shadowed))
 
     async def stop(self) -> None:
         if self._state not in (EngineState.ACTIVE, EngineState.CONNECTING, EngineState.ERROR):
@@ -360,6 +388,13 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
                 logger.info("cleanup: MCP closed")
             except Exception:
                 logger.exception("cleanup: mcp.close_all() failed")
+        if self._cli:
+            # closeEvent fires stop() without awaiting it, so a child mid-call
+            # would otherwise outlive the app.
+            try:
+                self._cli.terminate_all()
+            except Exception:
+                logger.exception("cleanup: cli.terminate_all() failed")
         # Skip close for cached diarization (extractor survives)
         if self._diarization is not None and "diarization" not in self._cached_models:
             try:
@@ -374,6 +409,7 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         self._backend = None
         self._tts = None
         self._mcp = None
+        self._cli = None
         self._diarization = None
         self._current_speaker_id = ""
         self._primary_speaker_mode = False

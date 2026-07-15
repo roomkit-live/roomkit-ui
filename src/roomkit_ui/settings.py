@@ -77,6 +77,8 @@ _DEFAULTS = {
     "recording_output_dir": "",  # empty = ~/.local/share/roomkit-ui/recordings/
     "theme": "dark",
     "mcp_servers": "[]",
+    # JSON array of {enabled, name, command, description, seed_help, help_depth, timeout}
+    "cli_tools": "[]",
     # Voice channel (STT → LLM → TTS) settings
     "conversation_mode": "realtime",  # "realtime" | "voice_channel"
     "vc_llm_provider": "anthropic",  # "anthropic" | "openai" | "gemini"

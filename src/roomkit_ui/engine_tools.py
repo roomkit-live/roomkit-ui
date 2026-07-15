@@ -16,6 +16,7 @@ from roomkit_ui.builtin_tools import handle_builtin_tool
 from roomkit_ui.cleanup import cleanup_stale_fds
 
 if TYPE_CHECKING:
+    from roomkit_ui.cli_tools import CliToolManager
     from roomkit_ui.mcp_manager import MCPManager
 
 logger = logging.getLogger(__name__)
@@ -50,6 +51,7 @@ class ToolMixin:
 
     # Type declarations (attributes are assigned on the concrete Engine)
     _mcp: MCPManager | None
+    _cli: CliToolManager | None
     _watchdog: Any
     _end_conv_handle: asyncio.TimerHandle | None
     _pending_tool_calls: int
@@ -116,6 +118,18 @@ class ToolMixin:
         builtin_result = handle_builtin_tool(name)
         if builtin_result is not None:
             return builtin_result
+
+        # CLI tools before MCP. Both can take seconds, so both bracket the
+        # watchdog — but CLI needs no cleanup_stale_fds, which exists for
+        # anyio timers that only the MCP path leaks.
+        if self._cli is not None and self._cli.has_tool(name):  # type: ignore[attr-defined]
+            self._pending_tool_calls += 1  # type: ignore[attr-defined]
+            self._watchdog.tool_call_started()  # type: ignore[attr-defined]
+            try:
+                return await self._cli.handle_tool_call(name, arguments)  # type: ignore[attr-defined]
+            finally:
+                self._pending_tool_calls -= 1  # type: ignore[attr-defined]
+                self._watchdog.tool_call_ended()  # type: ignore[attr-defined]
 
         if self._mcp is None:  # type: ignore[attr-defined]
             return '{"error": "Unknown tool"}'

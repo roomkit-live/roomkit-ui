@@ -20,6 +20,7 @@ from roomkit_ui.widgets.settings.about_page import _AboutPage
 from roomkit_ui.widgets.settings.ai_page import _AIPage
 from roomkit_ui.widgets.settings.attitudes_page import _AttitudesPage
 from roomkit_ui.widgets.settings.audio_debug_page import _AudioDebugPage
+from roomkit_ui.widgets.settings.cli_tools_page import _CliToolsPage
 from roomkit_ui.widgets.settings.dictation_page import _DictationPage
 from roomkit_ui.widgets.settings.general_page import _GeneralPage
 from roomkit_ui.widgets.settings.mcp_page import _MCPPage
@@ -68,6 +69,7 @@ class SettingsPanel(QDialog):
             "AI Models",
             "Skills",
             "MCP Servers",
+            "CLI Tools",
             "Audio Debug",
             "Telemetry",
             "About",
@@ -86,6 +88,7 @@ class SettingsPanel(QDialog):
         self._models = _ModelsPage(settings)
         self._skills = _SkillsPage(settings)
         self._mcp = _MCPPage(settings)
+        self._cli_tools = _CliToolsPage(settings)
         self._audio_debug = _AudioDebugPage(settings)
         self._telemetry = _TelemetryPage(settings)
         self._about = _AboutPage()
@@ -98,6 +101,7 @@ class SettingsPanel(QDialog):
             self._models,
             self._skills,
             self._mcp,
+            self._cli_tools,
             self._audio_debug,
             self._telemetry,
             self._about,
@@ -142,7 +146,7 @@ class SettingsPanel(QDialog):
     _SPEAKERS_TAB = 3
     _DICTATION_TAB = 4
     _SKILLS_TAB = 6
-    _AUDIO_DEBUG_TAB = 8
+    _AUDIO_DEBUG_TAB = 9
 
     def _on_tab_changed(self, index: int) -> None:
         self._stack.setCurrentIndex(index)
