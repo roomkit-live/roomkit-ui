@@ -40,7 +40,8 @@ def test_a_declared_tool_survives_a_save_and_reload(page):
 
 
 def test_a_human_name_shows_what_the_assistant_will_actually_call(page):
-    # A name with a space used to silently produce a tool the model never saw.
+    # The derived name is what the model receives, so it has to be on screen —
+    # deriving in silence leaves the user unable to explain a failing call.
     page._add_tool()
     page._name_edit.setText("GitHub CLI")
 

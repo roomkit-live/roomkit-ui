@@ -183,7 +183,8 @@ def test_manager_skips_declarations_it_cannot_honour():
 
 
 def test_manager_accepts_a_human_name_and_exposes_its_slug():
-    # "GitHub CLI" used to be rejected outright — it never reached the model.
+    # A space is legal in a declaration and illegal in a provider function
+    # name, so the manager must derive one rather than drop the tool.
     mgr = CliToolManager([{"name": "GitHub CLI", "command": "echo"}])
 
     assert mgr.has_tool("github_cli")

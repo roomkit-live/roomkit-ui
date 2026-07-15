@@ -1,8 +1,9 @@
 """Tests for tool grouping across the three sources the engine advertises.
 
-The retry in engine_realtime sheds MCP tools when a provider rejects them.
-It used to decide "MCP tools exist" from ``len(tools) > len(BUILTIN_TOOLS)``,
-which turns into a lie the moment a third source contributes tools.
+The retry in engine_realtime sheds MCP tools when a provider rejects them, so
+``has_mcp`` gates a session restart and ``without_mcp`` is what gets sent on
+the second attempt. Both must be exact: a false positive costs a wasted
+connect on every failure, and a wrong payload silently drops live tools.
 """
 
 from roomkit_ui.toolset import ToolSet, tool_summaries
@@ -23,9 +24,9 @@ def test_without_mcp_keeps_the_hand_authored_sources():
 
 
 def test_has_mcp_is_false_when_only_cli_tools_are_declared():
-    # The regression: this set is longer than the built-ins alone, which the
-    # old length comparison read as "MCP tools present" — firing a pointless
-    # retry that dropped the CLI tools and blamed MCP in the chat.
+    # This set outnumbers the built-ins without a single MCP tool in it, so
+    # has_mcp must read the mcp group and never the combined length: a false
+    # positive here fires a retry that sheds tools MCP never contributed.
     toolset = ToolSet(builtin=BUILTIN, cli=CLI, mcp=[])
 
     assert toolset.has_mcp is False

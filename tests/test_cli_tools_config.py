@@ -38,8 +38,8 @@ def test_slugify_leaves_an_already_safe_name_alone(name):
 
 
 def test_slugify_derives_a_callable_name_from_a_human_one():
-    # The reported bug: a name with a space was rejected outright, so the
-    # tool was never advertised and the user saw nothing.
+    # People name tools the way they speak; providers accept a much narrower
+    # alphabet. Deriving keeps that gap out of the user's way.
     assert slugify_tool_name("GitHub CLI") == "github_cli"
     assert slugify_tool_name("  GitHub CLI  ") == "github_cli"
     assert slugify_tool_name("dots.not.ok") == "dots_not_ok"

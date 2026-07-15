@@ -4,9 +4,9 @@ Lives in its own leaf module (not engine.py) so the engine mixins can import
 it without creating a circular import with Engine — same reason as
 ``engine_state.py``.
 
-Grouping the sources explicitly replaces the old
-``has_mcp_tools = len(tools) > len(BUILTIN_TOOLS)`` inference, which was only
-correct while built-ins and MCP were the only two sources.
+The sources are grouped explicitly rather than inferred from tool counts:
+callers need to know *which* source contributed a tool, and no arithmetic on
+the combined list can answer that.
 """
 
 from __future__ import annotations
