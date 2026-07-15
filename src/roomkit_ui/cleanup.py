@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-import resource
 
 logger = logging.getLogger(__name__)
 
@@ -156,7 +155,18 @@ def cleanup_stale_fds(*, timers_only: bool = False) -> None:
 
 
 async def post_cleanup_monitor() -> None:
-    """Log CPU usage after cleanup to verify the fix worked."""
+    """Log CPU usage after cleanup to verify the fix worked.
+
+    ``resource`` is imported here, not at module scope, because it is
+    Unix-only: at module scope it costs every importer of this module the
+    whole app on Windows, for a diagnostic none of them call.
+    """
+    try:
+        import resource
+    except ImportError:
+        logger.debug("cpu-monitor: skipped, resource is Unix-only")
+        return
+
     loop = asyncio.get_running_loop()
     t0 = resource.getrusage(resource.RUSAGE_SELF)
     for i in range(3):

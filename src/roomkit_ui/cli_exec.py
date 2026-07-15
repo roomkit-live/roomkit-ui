@@ -136,14 +136,23 @@ def truncate(text: str, limit: int) -> str:
 
 
 def _kill(proc: subprocess.Popen) -> None:
-    """Kill *proc* and any grandchildren it spawned."""
-    try:
-        os.killpg(os.getpgid(proc.pid), 9)
-    except (ProcessLookupError, PermissionError, OSError):
+    """Kill *proc*, and the process group around it where there is one.
+
+    ``os.killpg``/``os.getpgid`` are POSIX-only and ``start_new_session`` is
+    ignored on Windows, so there is no group to signal there: a wrapper like
+    ``uv run <cli>`` can leave its own child running. Killing the process we
+    spawned is the most that platform offers here.
+    """
+    if hasattr(os, "killpg"):
         try:
-            proc.kill()
-        except OSError:
-            logger.debug("Could not kill pid %s", proc.pid, exc_info=True)
+            os.killpg(os.getpgid(proc.pid), 9)
+            return
+        except (ProcessLookupError, PermissionError, OSError):
+            pass
+    try:
+        proc.kill()
+    except OSError:
+        logger.debug("Could not kill pid %s", proc.pid, exc_info=True)
 
 
 class ProcessRegistry:

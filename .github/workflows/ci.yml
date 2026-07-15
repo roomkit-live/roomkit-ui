@@ -79,3 +79,26 @@ jobs:
 
       - name: Pytest
         run: uv run pytest -v
+
+  # Every other job runs on Linux, where a Unix-only module imports fine and a
+  # release ships to Windows unexecuted. Importing the entry point is the first
+  # thing the packaged .exe does, and the cheapest place to catch that.
+  windows-import:
+    name: Windows import
+    runs-on: windows-latest
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Import the app
+        run: uv run python -c "import roomkit_ui.app"

@@ -11,6 +11,27 @@ Each released section is the source for that version's GitHub release notes.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-07-15
+
+### Fixed
+- **Windows: crash on startup** with `ModuleNotFoundError: No module named
+  'resource'`. `cleanup.py` imported the Unix-only `resource` module at module
+  scope, and `engine` imports `cleanup` on the way up, so a CPU-logging
+  diagnostic took the whole app down before a window opened. The import now
+  lives in the one function that uses it. Thanks @GeneraI44 for the report and
+  the diagnosis ([#2](https://github.com/roomkit-live/roomkit-ui/issues/2)).
+- **Windows: `AttributeError` when a CLI tool is killed.** `os.killpg` and
+  `os.getpgid` are POSIX-only, so the lookup raised `AttributeError`, which the
+  `OSError` catch around the call never covered. A CLI tool timing out, or a
+  session tearing down with a child still running, hit it. Windows has no
+  process group to signal — `start_new_session` is ignored there — so the
+  child is killed on its own.
+
+### Changed
+- CI runs an import smoke test on `windows-latest`. Every other job runs on
+  Linux, where both APIs above resolve, and the Windows artifact shipped
+  unexecuted.
+
 ## [0.2.0] - 2026-07-15
 
 ### Added
@@ -187,7 +208,8 @@ Each released section is the source for that version's GitHub release notes.
 - Initial release: RoomKit UI desktop voice assistant, with a cross-platform build
   script and a GitHub Actions workflow.
 
-[Unreleased]: https://github.com/roomkit-live/roomkit-ui/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/roomkit-live/roomkit-ui/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/roomkit-live/roomkit-ui/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/roomkit-live/roomkit-ui/compare/v0.1.6...v0.2.0
 [0.1.6]: https://github.com/roomkit-live/roomkit-ui/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/roomkit-live/roomkit-ui/compare/v0.1.4...v0.1.5
