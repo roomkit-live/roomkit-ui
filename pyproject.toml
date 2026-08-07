@@ -37,6 +37,15 @@ dev = [
 [project.scripts]
 roomkit-ui = "roomkit_ui.app:main"
 
+# ── Dev-time roomkit override ─────────────────────────────────────────────
+# TEMPORARY: run against the sibling checkout (0.44-dev) to field-test the
+# fixes made there for this app — xAI transcript streaming, AEC mute
+# pairing, off-loop pipeline callbacks, realtime model catalogs.  REMOVE
+# once roomkit 0.44.0 is on PyPI (a CI `uv sync` without ../roomkit fails
+# while this is present).
+[tool.uv.sources]
+roomkit = { path = "../roomkit", editable = true }
+
 # ── Ruff ──────────────────────────────────────────────────────────────────
 [tool.ruff]
 target-version = "py312"
