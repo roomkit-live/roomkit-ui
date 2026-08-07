@@ -13,6 +13,13 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+# Inbound DSP thread pool (roomkit 0.39+).  The stage chain (resampler →
+# AEC → denoiser → VAD → diarization) otherwise runs on the qasync event
+# loop, competing with Qt painting.  One session at a time here, so the
+# pool exists to get DSP off the UI loop, not to scale sessions; the
+# native stages release the GIL.
+DSP_THREADS = 2
+
 
 # ---------------------------------------------------------------------------
 # Telemetry

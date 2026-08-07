@@ -15,6 +15,7 @@ import logging
 from typing import Any
 
 from roomkit_ui.engine_audio import (
+    DSP_THREADS,
     build_audio_processing,
     build_debug_taps,
     build_recorder,
@@ -536,6 +537,7 @@ def _build_realtime_pipeline(
             debug_taps=debug_taps,
             recorder=recorder,
             recording_config=recording_config,
+            inbound_dsp_threads=DSP_THREADS,
         )
 
     if aec is not None or debug_taps is not None or recorder is not None:
@@ -544,5 +546,6 @@ def _build_realtime_pipeline(
             debug_taps=debug_taps,
             recorder=recorder,
             recording_config=recording_config,
+            inbound_dsp_threads=DSP_THREADS,
         )
     return None
