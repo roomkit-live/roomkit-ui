@@ -116,6 +116,7 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
     session_notice = Signal(str)  # non-fatal session info shown in the chat
     loading_status = Signal(str)  # loading progress message
     session_info = Signal(dict)  # {provider, model, tools, failed_servers}
+    session_cost = Signal(dict)  # {cost_usd: float|None, input_tokens, output_tokens}
     attitude_changed = Signal(str)  # attitude name (empty string = cleared)
 
     def __init__(self, parent: QObject | None = None) -> None:
@@ -160,6 +161,14 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
 
         self._pending_tool_calls: int = 0
         self._watchdog = SessionWatchdog(self)
+
+        # Session usage/cost accounting (VC mode — realtime APIs report no
+        # usage through roomkit).  _ai_pricing is the active LLM's
+        # ModelPricing, or None for models the offline catalog doesn't carry.
+        self._ai_pricing: Any = None
+        self._usage_cost: float = 0.0
+        self._usage_in: int = 0
+        self._usage_out: int = 0
 
         # Log handler to surface roomkit voice errors in the UI
         self._log_handler = _VoiceErrorLogHandler(self)
@@ -242,6 +251,11 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         if self._log_handler not in voice_logger.handlers:
             self._log_handler._engine_ref = weakref.ref(self)
             voice_logger.addHandler(self._log_handler)
+
+        self._ai_pricing = None
+        self._usage_cost = 0.0
+        self._usage_in = 0
+        self._usage_out = 0
 
         mode = settings.get("conversation_mode", "realtime")
         if mode == "voice_channel":

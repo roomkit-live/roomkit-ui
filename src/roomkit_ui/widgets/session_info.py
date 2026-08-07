@@ -32,6 +32,30 @@ _PROVIDER_NAMES = {
 }
 
 
+def _format_tokens(n: int) -> str:
+    if n >= 1_000_000:
+        return f"{n / 1_000_000:.1f}M"
+    if n >= 1_000:
+        return f"{n / 1_000:.1f}k"
+    return str(n)
+
+
+def _usage_summary(payload: dict) -> str:
+    """Header fragment like ``"$0.0123 · 4.2k tok"`` from a usage payload.
+
+    ``cost_usd`` is None when no catalog pricing exists for the model
+    (local/unknown) — then only the token count is shown.
+    """
+    tokens = int(payload.get("input_tokens") or 0) + int(payload.get("output_tokens") or 0)
+    parts = []
+    cost = payload.get("cost_usd")
+    if cost is not None:
+        parts.append(f"${cost:.2f}" if cost >= 1 else f"${cost:.4f}")
+    if tokens:
+        parts.append(f"{_format_tokens(tokens)} tok")
+    return " · ".join(parts)
+
+
 class SessionInfoBar(QWidget):
     """Compact summary bar that expands to show tool details."""
 
@@ -78,6 +102,7 @@ class SessionInfoBar(QWidget):
         self._tools_display = ""
         self._skills_display = ""
         self._attitude_display = ""
+        self._cost_display = ""
 
         self._chevron = QLabel()
         self._chevron.setFixedWidth(20)
@@ -142,6 +167,7 @@ class SessionInfoBar(QWidget):
 
         self._provider_display = _PROVIDER_NAMES.get(provider, provider.capitalize())
         self._model_display = display_model
+        self._cost_display = ""
         self._tools_display = f"{n_tools} {tool_word}"
         self._skills_display = ""
         if n_skills:
@@ -205,6 +231,11 @@ class SessionInfoBar(QWidget):
             self._attitude_display = ""
         self._rebuild_summary()
 
+    def update_cost(self, payload: dict) -> None:
+        """Update the running usage/cost figure in the header summary."""
+        self._cost_display = _usage_summary(payload)
+        self._rebuild_summary()
+
     def clear_session(self) -> None:
         """Hide the bar."""
         self._anim_timer.stop()
@@ -213,6 +244,7 @@ class SessionInfoBar(QWidget):
         self.hide()
         self._detail_area.hide()
         self._attitude_display = ""
+        self._cost_display = ""
         self._clear_details()
 
     # -- internal ------------------------------------------------------------
@@ -224,6 +256,8 @@ class SessionInfoBar(QWidget):
         parts = [self._provider_display, second, self._tools_display]
         if self._skills_display:
             parts.append(self._skills_display)
+        if self._cost_display:
+            parts.append(self._cost_display)
         self._summary_label.setText("  \u2013  ".join(parts))
 
     def _toggle(self) -> None:

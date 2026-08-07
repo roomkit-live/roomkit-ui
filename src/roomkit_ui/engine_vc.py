@@ -60,7 +60,39 @@ class VoiceChannelMixin:
     _diarization: Any
     _primary_speaker_mode: bool
     _primary_speaker_name: str
+    _ai_pricing: Any
+    _usage_cost: float
+    _usage_in: int
+    _usage_out: int
     _pending_tool_calls: int
+
+    def _accumulate_usage(self, usage: dict) -> None:
+        """Add one AI response's token usage to the session totals and emit.
+
+        Called from the ON_AI_RESPONSE hook.  Cost is priced with the active
+        model's catalog ``ModelPricing`` when roomkit carries one; without it
+        (local models, unknown ids) only token counts are reported.
+        """
+        self._usage_in += (
+            _usage_int(usage, "input_tokens")
+            + _usage_int(usage, "cache_read_input_tokens")
+            + _usage_int(usage, "cache_creation_input_tokens")
+        )
+        self._usage_out += _usage_int(usage, "output_tokens")
+        if self._ai_pricing is not None:
+            try:
+                self._usage_cost += self._ai_pricing.cost_for(usage)
+            except Exception:
+                logger.debug("cost_for() failed for usage=%s", usage, exc_info=True)
+        payload = {
+            "cost_usd": self._usage_cost if self._ai_pricing is not None else None,
+            "input_tokens": self._usage_in,
+            "output_tokens": self._usage_out,
+        }
+        try:
+            self.session_cost.emit(payload)  # type: ignore[attr-defined]
+        except Exception:
+            pass
 
     async def _start_voice_channel(self, settings: dict) -> None:
         self._set_state(EngineState.CONNECTING)  # type: ignore[attr-defined]
@@ -100,6 +132,7 @@ class VoiceChannelMixin:
             llm_provider_name = settings.get("vc_llm_provider", "anthropic")
             ai_provider = create_ai_provider(llm_provider_name, settings)
             model = ai_provider.model_name
+            self._ai_pricing = _model_pricing(ai_provider)  # type: ignore[attr-defined]
             if llm_provider_name == "local":
                 wrap_local_provider_tool_errors(ai_provider, self.error_occurred.emit)  # type: ignore[attr-defined]
 
@@ -375,3 +408,30 @@ class VoiceChannelMixin:
         self.session_info.emit(info)  # type: ignore[attr-defined]
         if self._attitude_name:  # type: ignore[attr-defined]
             self.attitude_changed.emit(self._attitude_name)  # type: ignore[attr-defined]
+
+
+# ---------------------------------------------------------------------------
+# Usage accounting helpers (module-level — no engine state)
+# ---------------------------------------------------------------------------
+
+
+def _usage_int(usage: dict, key: str) -> int:
+    """A usage counter as int, treating absent/None/garbage as zero."""
+    try:
+        return int(usage.get(key) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _model_pricing(provider: Any) -> Any:
+    """The active model's catalog ``ModelPricing``, or None when unknown.
+
+    ``catalog_entry()`` returns None for ids the offline catalog does not
+    carry (local/custom models); vLLM providers ship an empty catalog on
+    purpose.  Never raises — pricing is decoration, not session-critical.
+    """
+    try:
+        entry = provider.catalog_entry()
+    except Exception:
+        return None
+    return getattr(entry, "pricing", None) if entry is not None else None

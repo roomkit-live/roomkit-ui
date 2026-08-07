@@ -138,6 +138,17 @@ def register_vc_hooks(kit: Any, engine: Any) -> None:
         except Exception:
             pass
 
+    @kit.hook(HookTrigger.ON_AI_RESPONSE, HookExecution.ASYNC)
+    async def _on_ai_usage(event, context):
+        # AIResponseEvent.usage carries the provider's token counters
+        # (input/output + cache counters since roomkit 0.42).
+        try:
+            usage = dict(getattr(event, "usage", {}) or {})
+            if usage:
+                engine._accumulate_usage(usage)
+        except Exception:
+            pass
+
 
 def register_realtime_hooks(kit: Any, engine: Any) -> None:
     """Register framework hooks for RealtimeVoiceChannel.
