@@ -200,11 +200,27 @@ def register_realtime_hooks(kit: Any, engine: Any) -> None:
 
     @kit.hook(HookTrigger.ON_TRANSCRIPTION, HookExecution.SYNC)
     async def _on_transcription(event, context):
+        import time as _time
+
         from roomkit import HookResult
 
         text = str(event.text)
         role = str(event.role)
         is_final = event.is_final
+
+        # Duplicate-final guard: xAI's realtime server can emit the
+        # input-transcription-completed event twice for one utterance —
+        # blocking here keeps the duplicate out of the chat AND the room
+        # timeline the model reads.  The window is short on purpose: a
+        # human repeating the same words takes seconds, the wire duplicate
+        # arrives within milliseconds.
+        if is_final and role == "user":
+            prev = engine._last_finals.get(role)
+            now = _time.monotonic()
+            if prev is not None and prev[0] == text and now - prev[1] < 2.0:
+                _log.info("Duplicate final transcription suppressed (role=%s)", role)
+                return HookResult.block("duplicate transcription")
+            engine._last_finals[role] = (text, now)
 
         if role == "user":
             current = engine._current_speaker_id or ""
