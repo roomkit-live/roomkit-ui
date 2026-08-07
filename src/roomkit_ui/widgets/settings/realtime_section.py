@@ -8,6 +8,8 @@ shows exactly one group.
 
 from __future__ import annotations
 
+import importlib
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -34,6 +36,7 @@ GEMINI_MODELS = [
     "gemini-2.5-flash-native-audio-preview-12-2025",
     "gemini-2.0-flash-live-001",
 ]
+# Fallback ids, used only when roomkit's offline voice catalog fails to import.
 GEMINI_VOICES = ["Aoede", "Charon", "Fenrir", "Kore", "Puck"]
 
 GEMINI_LANGUAGES = [
@@ -61,8 +64,8 @@ OPENAI_MODELS = [
 ]
 OPENAI_VOICES = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
 
-# Curated Aura-2 speak models (roomkit's full offline catalog has 100+;
-# the combo stays editable so any "aura-2-{name}-{lang}" id can be typed).
+# Fallback Aura-2 ids (the catalog has ~90 live voices; the combo stays
+# editable so any "aura-2-{name}-{lang}" id can be typed either way).
 DEEPGRAM_VOICES = [
     "aura-2-thalia-en",
     "aura-2-andromeda-en",
@@ -84,6 +87,49 @@ DEEPGRAM_THINK_PROVIDERS = [
 
 XAI_MODELS = ["grok-2-audio"]
 XAI_VOICES = ["eve", "ara", "rex", "sal", "leo"]
+
+
+def _voice_options(module_name: str, fallback: list[str]) -> list[tuple[str, str]]:
+    """``(voice_id, traits)`` pairs from a roomkit offline voice catalog.
+
+    The catalogs are pure-data modules (no vendor SDK import), but the first
+    one still pays roomkit's package import (~0.5 s cold) — acceptable once
+    per process, at dialog-open time.  Deprecated voices (e.g. Deepgram's
+    Aura-1 line) are dropped.  Falls back to the bare id list on any import
+    problem so the dialog never breaks with the catalog.
+    """
+    try:
+        voices = importlib.import_module(module_name).VOICES
+    except Exception:
+        return [(vid, "") for vid in fallback]
+    options = [
+        (v.id, ", ".join(t for t in (v.gender, v.description) if t))
+        for v in voices
+        if not v.deprecated
+    ]
+    return options or [(vid, "") for vid in fallback]
+
+
+def _populate_voice_combo(combo: QComboBox, options: list[tuple[str, str]], current: str) -> None:
+    """Fill a voice combo with catalog entries and restore the selection.
+
+    Item data always carries the bare voice id.  Editable combos show the id
+    itself (the text doubles as free input); fixed combos show ``id — traits``.
+    """
+    editable = combo.isEditable()
+    for vid, traits in options:
+        if editable or not traits:
+            label = vid
+        else:
+            label = f"{vid} — {traits[:48]}"
+        combo.addItem(label, vid)
+        if traits:
+            combo.setItemData(combo.count() - 1, traits, Qt.ToolTipRole)
+    idx = combo.findData(current)
+    if idx >= 0:
+        combo.setCurrentIndex(idx)
+    elif editable:
+        combo.setCurrentText(current)
 
 
 class RealtimeSection(QWidget):
@@ -161,21 +207,21 @@ class RealtimeSection(QWidget):
 
         # Voice (Gemini)
         self.gemini_voice = QComboBox()
-        self.gemini_voice.addItems(GEMINI_VOICES)
-        current_voice = settings.get("voice", "Aoede")
-        vidx = self.gemini_voice.findText(current_voice)
-        if vidx >= 0:
-            self.gemini_voice.setCurrentIndex(vidx)
+        _populate_voice_combo(
+            self.gemini_voice,
+            _voice_options("roomkit.providers.gemini.voices", GEMINI_VOICES),
+            settings.get("voice", "Aoede"),
+        )
         self._gemini_voice_label = QLabel("Voice")
         rt_form.addRow(self._gemini_voice_label, self.gemini_voice)
 
         # Voice (OpenAI)
         self.openai_voice = QComboBox()
-        self.openai_voice.addItems(OPENAI_VOICES)
-        current_oai_voice = settings.get("openai_voice", "alloy")
-        ovidx = self.openai_voice.findText(current_oai_voice)
-        if ovidx >= 0:
-            self.openai_voice.setCurrentIndex(ovidx)
+        _populate_voice_combo(
+            self.openai_voice,
+            _voice_options("roomkit.providers.openai.voices", OPENAI_VOICES),
+            settings.get("openai_voice", "alloy"),
+        )
         self._openai_voice_label = QLabel("Voice")
         rt_form.addRow(self._openai_voice_label, self.openai_voice)
 
@@ -188,13 +234,11 @@ class RealtimeSection(QWidget):
 
         self.deepgram_voice = QComboBox()
         self.deepgram_voice.setEditable(True)
-        self.deepgram_voice.addItems(DEEPGRAM_VOICES)
-        current_dg_voice = settings.get("deepgram_agent_voice", DEEPGRAM_VOICES[0])
-        dgidx = self.deepgram_voice.findText(current_dg_voice)
-        if dgidx >= 0:
-            self.deepgram_voice.setCurrentIndex(dgidx)
-        else:
-            self.deepgram_voice.setCurrentText(current_dg_voice)
+        _populate_voice_combo(
+            self.deepgram_voice,
+            _voice_options("roomkit.providers.deepgram.voices", DEEPGRAM_VOICES),
+            settings.get("deepgram_agent_voice", DEEPGRAM_VOICES[0]),
+        )
         self._deepgram_voice_label = QLabel("Voice")
         rt_form.addRow(self._deepgram_voice_label, self.deepgram_voice)
 
@@ -240,11 +284,11 @@ class RealtimeSection(QWidget):
         rt_form.addRow(self._xai_model_label, self.xai_model)
 
         self.xai_voice = QComboBox()
-        self.xai_voice.addItems(XAI_VOICES)
-        current_xai_voice = settings.get("xai_voice", "eve")
-        xvidx = self.xai_voice.findText(current_xai_voice)
-        if xvidx >= 0:
-            self.xai_voice.setCurrentIndex(xvidx)
+        _populate_voice_combo(
+            self.xai_voice,
+            _voice_options("roomkit.providers.xai.voices", XAI_VOICES),
+            settings.get("xai_voice", "eve"),
+        )
         self._xai_voice_label = QLabel("Voice")
         rt_form.addRow(self._xai_voice_label, self.xai_voice)
 
@@ -631,14 +675,14 @@ class RealtimeSection(QWidget):
             "elevenlabs_agent_id": self.elevenlabs_agent_id.text().strip(),
             "xai_api_key": self.xai_api_key.text().strip(),
             "xai_model": self.xai_model.currentText().strip(),
-            "xai_voice": self.xai_voice.currentText(),
+            "xai_voice": self.xai_voice.currentData() or "",
             "xai_vad_threshold": self.xai_vad_threshold.text().strip(),
             "xai_silence_duration_ms": self.xai_silence_duration.text().strip(),
             "xai_prefix_padding_ms": self.xai_prefix_padding.text().strip(),
             "model": self.gemini_model.currentText().strip(),
             "openai_model": self.openai_model.currentText().strip(),
-            "voice": self.gemini_voice.currentText(),
-            "openai_voice": self.openai_voice.currentText(),
+            "voice": self.gemini_voice.currentData() or "",
+            "openai_voice": self.openai_voice.currentData() or "",
             "gemini_language": self.gemini_language.currentData() or "",
             "gemini_no_interruption": self.gemini_no_interruption.isChecked(),
             "gemini_affective_dialog": self.gemini_affective_dialog.isChecked(),
