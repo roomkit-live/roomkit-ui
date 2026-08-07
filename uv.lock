@@ -1555,14 +1555,14 @@ wheels = [
 
 [[package]]
 name = "roomkit"
-version = "0.44.0"
+version = "0.45.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c8/3c/495555e43971972e867de8eae361de6f5f986f0703db0f3295cd4e6e2686/roomkit-0.44.0.tar.gz", hash = "sha256:27f6b318e3fdfcd762cb97fc5f57157f85f98f3f0194c0a4a3d08f272f9aa749", size = 2360043, upload-time = "2026-08-07T17:34:23.334Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d5/98/0b8c8a24a22d4426c16ecaf19d86c137b7b855f525e714d6d04db7720866/roomkit-0.45.0.tar.gz", hash = "sha256:11bb2c942d621286dcbd9a5c8e903fb3a98ad719ad1f9b45990f5d48ef579ced", size = 2362412, upload-time = "2026-08-07T18:25:52.95Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/3a/67/b277330bdfe9237fe4e30d56777d0f62ec74b70148d201417a6719b14c52/roomkit-0.44.0-py3-none-any.whl", hash = "sha256:6247fc340270c82d635359727bad29df3acd6b05730150c79860f030720b25d7", size = 1740474, upload-time = "2026-08-07T17:34:26.348Z" },
+    { url = "https://files.pythonhosted.org/packages/54/22/7bc3af0378bb16c0bd5f17428b64a6b170a8143606b6707892d796d76013/roomkit-0.45.0-py3-none-any.whl", hash = "sha256:94b7281028743c9907917fd8a17c2aad8f384f2edf4aab8452a1be6206cc5314", size = 1741920, upload-time = "2026-08-07T18:25:54.888Z" },
 ]
 
 [package.optional-dependencies]
@@ -1632,7 +1632,7 @@ requires-dist = [
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24" },
     { name = "pytest-qt", marker = "extra == 'dev'", specifier = ">=4.4" },
     { name = "qasync", specifier = ">=0.27" },
-    { name = "roomkit", extras = ["realtime-gemini", "realtime-openai", "realtime-deepgram", "realtime-elevenlabs", "local-audio", "webrtc-aec", "sherpa-onnx"], specifier = ">=0.44.0" },
+    { name = "roomkit", extras = ["realtime-gemini", "realtime-openai", "realtime-deepgram", "realtime-elevenlabs", "local-audio", "webrtc-aec", "sherpa-onnx"], specifier = ">=0.45.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6" },
     { name = "sherpa-onnx-core", specifier = ">=1.13" },
 ]
