@@ -147,9 +147,6 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         # incremental fragments, but the UI expects full accumulated text.
         self._partial_buffers: dict[str, str] = {}  # role → accumulated text
         self._partial_speakers: dict[str, str] = {}  # role → best speaker ID this utterance
-        # Duplicate-final guard: xAI's realtime server can emit the
-        # input-transcription-completed event twice for one utterance.
-        self._last_finals: dict[str, tuple[str, float]] = {}  # role → (text, monotonic)
         # Model cache: persist heavy ONNX models across sessions to avoid
         # reloading STT / TTS / diarization on every conversation start.
         # Maps type → (cache_key_tuple, provider_instance).
