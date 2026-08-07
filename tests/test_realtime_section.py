@@ -57,6 +57,23 @@ def test_sts_model_combos_carry_the_documented_lineups(section):
     assert "gpt-realtime-2.1-mini" in openai_models
 
 
+def test_sts_model_combos_are_fixed_dropdowns(section):
+    assert not section.gemini_model.isEditable()
+    assert not section.openai_model.isEditable()
+    assert not section.xai_model.isEditable()
+
+
+def test_saved_model_outside_the_lineup_stays_selectable(qapp):
+    settings = dict(_DEFAULTS)
+    settings["openai_model"] = "gpt-realtime-pinned-snapshot"
+    s = RealtimeSection(settings)
+    try:
+        assert s.openai_model.currentText() == "gpt-realtime-pinned-snapshot"
+        assert s.get_settings()["openai_model"] == "gpt-realtime-pinned-snapshot"
+    finally:
+        s.deleteLater()
+
+
 def test_think_model_suggestions_come_from_the_roomkit_catalog(section):
     models = [
         section.deepgram_think_model.itemText(i)

@@ -34,7 +34,8 @@ PROVIDERS = [
 
 # Fallback STS model ids, used until the installed roomkit ships the
 # realtime_models catalogs (added upstream for 0.44; 0.43 has none — the chat
-# catalogs exclude realtime ids on purpose).  Every model combo stays editable.
+# catalogs exclude realtime ids on purpose).  The STS model combos are fixed
+# dropdowns: a saved id outside the lineup is inserted, not silently replaced.
 GEMINI_MODELS = [
     "gemini-2.5-flash-native-audio-preview-12-2025",
     "gemini-3.1-flash-live-preview",
@@ -153,6 +154,22 @@ def _voice_options(module_name: str, fallback: list[str]) -> list[tuple[str, str
     return options or [(vid, "") for vid in fallback]
 
 
+def _populate_model_combo(combo: QComboBox, options: list[str], current: str) -> None:
+    """Fill a fixed model dropdown and restore the selection.
+
+    A saved id the lineup does not carry (legacy default, hand-pinned model)
+    is inserted at the top and stays selectable — replacing it silently would
+    change what the next session runs.
+    """
+    combo.addItems(options)
+    if current:
+        idx = combo.findText(current)
+        if idx < 0:
+            combo.insertItem(0, current)
+            idx = 0
+        combo.setCurrentIndex(idx)
+
+
 def _populate_voice_combo(combo: QComboBox, options: list[tuple[str, str]], current: str) -> None:
     """Fill a voice combo with catalog entries and restore the selection.
 
@@ -221,31 +238,21 @@ class RealtimeSection(QWidget):
 
         # Model (Gemini)
         self.gemini_model = QComboBox()
-        self.gemini_model.setEditable(True)
-        self.gemini_model.addItems(
-            _sts_model_options("roomkit.providers.gemini.realtime_models", GEMINI_MODELS)
+        _populate_model_combo(
+            self.gemini_model,
+            _sts_model_options("roomkit.providers.gemini.realtime_models", GEMINI_MODELS),
+            settings.get("model", GEMINI_MODELS[0]),
         )
-        current_model = settings.get("model", GEMINI_MODELS[0])
-        idx = self.gemini_model.findText(current_model)
-        if idx >= 0:
-            self.gemini_model.setCurrentIndex(idx)
-        else:
-            self.gemini_model.setCurrentText(current_model)
         self._gemini_model_label = QLabel("Model")
         rt_form.addRow(self._gemini_model_label, self.gemini_model)
 
         # Model (OpenAI)
         self.openai_model = QComboBox()
-        self.openai_model.setEditable(True)
-        self.openai_model.addItems(
-            _sts_model_options("roomkit.providers.openai.realtime_models", OPENAI_MODELS)
+        _populate_model_combo(
+            self.openai_model,
+            _sts_model_options("roomkit.providers.openai.realtime_models", OPENAI_MODELS),
+            settings.get("openai_model", OPENAI_MODELS[0]),
         )
-        current_oai_model = settings.get("openai_model", OPENAI_MODELS[0])
-        oidx = self.openai_model.findText(current_oai_model)
-        if oidx >= 0:
-            self.openai_model.setCurrentIndex(oidx)
-        else:
-            self.openai_model.setCurrentText(current_oai_model)
         self._openai_model_label = QLabel("Model")
         rt_form.addRow(self._openai_model_label, self.openai_model)
 
@@ -316,16 +323,11 @@ class RealtimeSection(QWidget):
         rt_form.addRow(self._xai_key_label, self.xai_api_key)
 
         self.xai_model = QComboBox()
-        self.xai_model.setEditable(True)
-        self.xai_model.addItems(
-            _sts_model_options("roomkit.providers.xai.realtime_models", XAI_MODELS)
+        _populate_model_combo(
+            self.xai_model,
+            _sts_model_options("roomkit.providers.xai.realtime_models", XAI_MODELS),
+            settings.get("xai_model", XAI_MODELS[0]),
         )
-        current_xai_model = settings.get("xai_model", XAI_MODELS[0])
-        xmidx = self.xai_model.findText(current_xai_model)
-        if xmidx >= 0:
-            self.xai_model.setCurrentIndex(xmidx)
-        else:
-            self.xai_model.setCurrentText(current_xai_model)
         self._xai_model_label = QLabel("Model")
         rt_form.addRow(self._xai_model_label, self.xai_model)
 
