@@ -55,9 +55,6 @@ class RealtimeMixin:
 
         try:
             provider_name = settings.get("provider", "gemini")
-            # Gates provider-specific hook behavior (xAI streaming-final
-            # debounce in hooks.py).
-            self._realtime_provider_name = provider_name  # type: ignore[attr-defined]
             base_prompt = settings.get(
                 "system_prompt",
                 "You are a friendly voice assistant. Be concise and helpful.",
