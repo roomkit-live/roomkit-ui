@@ -268,7 +268,14 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         cli_tools = await self._setup_cli_tools(settings)
         mcp_tools = await self._setup_mcp_tools(settings)
         self._warn_shadowed_mcp_tools(cli_tools, mcp_tools)
-        return ToolSet(builtin=list(BUILTIN_TOOLS), cli=cli_tools, mcp=mcp_tools)
+        builtin = list(BUILTIN_TOOLS)
+        # Declared only when a persistent store will actually answer it — a
+        # dead tool in the declaration teaches the model to call into a void.
+        from roomkit_ui.memory import RECALL_TOOL, memory_active
+
+        if memory_active(settings):
+            builtin.append(dict(RECALL_TOOL))
+        return ToolSet(builtin=builtin, cli=cli_tools, mcp=mcp_tools)
 
     async def _setup_cli_tools(self, settings: dict) -> list[dict]:
         """Build tools for each declared CLI binary."""

@@ -21,9 +21,14 @@ class _FakeChannel:
         return object()
 
 
+class _FakeStore:
+    async def room_exists(self, room_id):
+        return False
+
+
 class _FakeKit:
-    def __init__(self, telemetry=None):
-        pass
+    def __init__(self, telemetry=None, store=None):
+        self.store = store or _FakeStore()
 
     def register_channel(self, channel):
         pass

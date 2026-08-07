@@ -219,18 +219,25 @@ class VoiceChannelMixin:
                 tools = (await self._setup_tools(settings)).all  # type: ignore[attr-defined]
 
             # 10-11. Framework + hooks
+            from roomkit_ui.memory import ROOM_ID, build_store, ensure_room
+
             telemetry = build_telemetry(settings)
-            kit = RoomKit(telemetry=telemetry)
+            store = build_store(settings)
+            kit = (
+                RoomKit(telemetry=telemetry, store=store)
+                if store
+                else RoomKit(telemetry=telemetry)
+            )
             self._kit = kit  # type: ignore[attr-defined]
             kit.register_channel(voice)
             kit.register_channel(ai_channel)
-            await kit.create_room(room_id="local-demo")
+            await ensure_room(kit)
 
             from roomkit.models.enums import ChannelCategory
 
-            voice_binding = await kit.attach_channel("local-demo", "voice")
+            voice_binding = await kit.attach_channel(ROOM_ID, "voice")
             await kit.attach_channel(
-                "local-demo",
+                ROOM_ID,
                 "ai",
                 category=ChannelCategory.INTELLIGENCE,
                 metadata={"tools": tools},
@@ -239,9 +246,9 @@ class VoiceChannelMixin:
 
             # 12. Connect and start
             self.loading_status.emit("Starting voice channel…")  # type: ignore[attr-defined]
-            session = await backend.connect("local-demo", "local-user", "voice")
+            session = await backend.connect(ROOM_ID, "local-user", "voice")
             self._session = session  # type: ignore[attr-defined]
-            voice.bind_session(session, "local-demo", voice_binding)
+            voice.bind_session(session, ROOM_ID, voice_binding)
             await backend.start_listening(session)
 
             self._spk_rms_queue.clear()  # type: ignore[attr-defined]

@@ -114,6 +114,12 @@ class ToolMixin:
         if name == "set_attitude":
             return await self._apply_attitude_by_name(arguments.get("name", ""))
 
+        # Past-conversation search (needs the session's kit/store)
+        if name == "recall_conversations":
+            from roomkit_ui.memory import recall_conversations
+
+            return await recall_conversations(getattr(self, "_kit", None), arguments)
+
         # Try built-in tools first
         builtin_result = handle_builtin_tool(name)
         if builtin_result is not None:

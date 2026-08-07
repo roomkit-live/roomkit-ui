@@ -313,10 +313,23 @@ class RealtimeMixin:
     ) -> Any:
         """Try to create a room and start a realtime session.  Returns None on failure."""
         from roomkit_ui.engine_audio import build_telemetry
+        from roomkit_ui.memory import ROOM_ID, build_store, ensure_room, memory_recap
 
         try:
             telemetry = build_telemetry(settings) if settings else None
-            self._kit = RoomKit(telemetry=telemetry)  # type: ignore[attr-defined]
+            store = build_store(settings) if settings else None
+            self._kit = (  # type: ignore[attr-defined]
+                RoomKit(telemetry=telemetry, store=store)
+                if store
+                else RoomKit(telemetry=telemetry)
+            )
+            await ensure_room(self._kit)  # type: ignore[attr-defined]
+            if store is not None and system_prompt is not None:
+                # Realtime context lives server-side and starts blank — the
+                # recap is the only way previous sessions reach the provider.
+                recap = await memory_recap(self._kit)  # type: ignore[attr-defined]
+                if recap:
+                    system_prompt = f"{system_prompt}\n\n{recap}"
             self._channel = RealtimeVoiceChannel(  # type: ignore[attr-defined]
                 "voice",
                 provider=provider,
@@ -333,11 +346,10 @@ class RealtimeMixin:
                 skills=skills,
             )
             self._kit.register_channel(self._channel)  # type: ignore[attr-defined]
-            await self._kit.create_room(room_id="local-demo")  # type: ignore[attr-defined]
-            await self._kit.attach_channel("local-demo", "voice")  # type: ignore[attr-defined]
+            await self._kit.attach_channel(ROOM_ID, "voice")  # type: ignore[attr-defined]
             metadata = {"provider_config": provider_config} if provider_config else None
             return await self._channel.start_session(  # type: ignore[attr-defined]
-                "local-demo",
+                ROOM_ID,
                 "local-user",
                 connection=None,
                 metadata=metadata,

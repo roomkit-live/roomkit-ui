@@ -122,6 +122,14 @@ class _GeneralPage(QWidget):
         )
         hotkey_form.addRow("", hotkey_hint)
 
+        self.conversation_memory = QCheckBox("Remember conversations across sessions")
+        self.conversation_memory.setChecked(bool(settings.get("conversation_memory", True)))
+        self.conversation_memory.setToolTip(
+            "Persist the conversation history locally (SQLite) so the assistant "
+            "remembers previous sessions and can search them."
+        )
+        hotkey_form.addRow("", self.conversation_memory)
+
         layout.addLayout(hotkey_form)
 
         # Audio devices
@@ -382,4 +390,5 @@ class _GeneralPage(QWidget):
             "output_device": self.output_combo.currentData(),
             "assistant_hotkey_enabled": self.assistant_hotkey_enabled.isChecked(),
             "assistant_hotkey": self.assistant_hotkey.value(),
+            "conversation_memory": self.conversation_memory.isChecked(),
         }

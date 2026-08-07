@@ -154,6 +154,7 @@ _DEFAULTS = {
     "openai_create_response": True,  # Auto-generate response on turn end
     "openai_reasoning_effort": "",  # ""|minimal|low|medium|high|xhigh (gpt-realtime-2+)
     "openai_voice_speed": "",  # 0.25–1.5 (empty = 1.0) — audio.output.speed
+    "conversation_memory": True,  # persist conversations (SQLite) across sessions
     # Deepgram Voice Agent (realtime speech-to-speech; distinct from VC STT keys)
     "deepgram_agent_voice": "aura-2-thalia-en",  # Aura speak model
     "deepgram_agent_think_provider": "open_ai",  # "open_ai" | "anthropic" | "google"
