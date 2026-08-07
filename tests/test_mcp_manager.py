@@ -70,20 +70,24 @@ def test_parse_stdio_empty_command():
 
 
 def test_register_tools_tracks_sessions_and_apps():
+    # Real mcp.types.Tool objects, not SDK look-alikes: the 1.x→2.0 bump
+    # renamed inputSchema→input_schema and stubs kept this suite green
+    # while the app broke on the first live server.
+    from mcp.types import Tool
+
     mgr = MCPManager([])
     session = object()
     result = SimpleNamespace(
         tools=[
-            SimpleNamespace(
+            Tool(
                 name="plain_tool",
                 description="does things",
-                inputSchema={"type": "object", "$schema": "x"},
-                meta=None,
+                input_schema={"type": "object", "$schema": "x"},
             ),
-            SimpleNamespace(
+            Tool(
                 name="app_tool",
                 description="",
-                inputSchema={},
+                input_schema={},
                 meta={"ui": {"resourceUri": "ui://widget/main"}},
             ),
         ]
@@ -106,22 +110,24 @@ def test_register_tools_keeps_first_duplicate_tool():
     mgr = MCPManager([])
     first_session = object()
     second_session = object()
+    from mcp.types import Tool
+
     first = SimpleNamespace(
         tools=[
-            SimpleNamespace(
+            Tool(
                 name="duplicate_tool",
                 description="first",
-                inputSchema={},
+                input_schema={},
                 meta={"ui": {"resourceUri": "ui://first/main"}},
             )
         ]
     )
     second = SimpleNamespace(
         tools=[
-            SimpleNamespace(
+            Tool(
                 name="duplicate_tool",
                 description="second",
-                inputSchema={},
+                input_schema={},
                 meta={"ui": {"resourceUri": "ui://second/main"}},
             )
         ]
@@ -161,3 +167,24 @@ async def test_app_tool_call_is_limited_to_origin_server(monkeypatch):
     assert json.loads(blocked) == {"error": "Tool is not available to this MCP App"}
     assert json.loads(unknown) == {"error": "Tool is not available to this MCP App"}
     assert calls == [("same_server_tool", {"x": 1})]
+
+
+@pytest.mark.asyncio
+async def test_tool_call_reads_the_20_result_shape():
+    from mcp.types import CallToolResult, TextContent
+
+    mgr = MCPManager([])
+
+    class _Session:
+        def __init__(self, result):
+            self._result = result
+
+        async def call_tool(self, name, arguments):
+            return self._result
+
+    ok = CallToolResult(content=[TextContent(type="text", text="fine")], is_error=False)
+    bad = CallToolResult(content=[TextContent(type="text", text="boom")], is_error=True)
+
+    mgr._tool_to_session = {"ok_tool": _Session(ok), "bad_tool": _Session(bad)}
+    assert json.loads(await mgr.handle_tool_call("ok_tool", {})) == {"result": "fine"}
+    assert json.loads(await mgr.handle_tool_call("bad_tool", {})) == {"error": "boom"}

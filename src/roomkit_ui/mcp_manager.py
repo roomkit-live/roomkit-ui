@@ -223,7 +223,8 @@ class MCPManager:
                     "type": "function",
                     "name": tool.name,
                     "description": tool.description or "",
-                    "parameters": _clean_schema(tool.inputSchema or {}),
+                    # mcp 2.0 renamed the SDK attribute inputSchema → input_schema
+                    "parameters": _clean_schema(tool.input_schema or {}),
                 }
             )
             # Track MCP App tools (tools with ui:// resourceUri)
@@ -427,7 +428,7 @@ class MCPManager:
                 if hasattr(content, "text"):
                     texts.append(content.text)
             output = "\n".join(texts) if texts else ""
-            if result.isError:
+            if result.is_error:  # mcp 2.0 renamed isError → is_error
                 return json.dumps({"error": output})
             return json.dumps({"result": output})
         except TimeoutError:
