@@ -13,12 +13,13 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# Inbound DSP thread pool (roomkit 0.39+).  The stage chain (resampler →
-# AEC → denoiser → VAD → diarization) otherwise runs on the qasync event
-# loop, competing with Qt painting.  One session at a time here, so the
-# pool exists to get DSP off the UI loop, not to scale sessions; the
-# native stages release the GIL.
-DSP_THREADS = 2
+# Inbound DSP thread pool (roomkit 0.39+): DO NOT enable on this roomkit.
+# On the pool's threads there is no running event loop, and the pipeline's
+# _maybe_schedule() DROPS any async callback result ("Async callback
+# returned outside event loop") — mic audio never reaches the realtime
+# provider and the audio-level hooks (VU meter) go silent.  Re-enable only
+# once roomkit's offload schedules coroutines back onto its home loop.
+DSP_THREADS: int | None = None
 
 
 # ---------------------------------------------------------------------------
