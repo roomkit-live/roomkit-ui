@@ -244,7 +244,11 @@ async def create_oauth_provider(
     from typing import Literal
 
     from mcp.client.auth import OAuthClientProvider
-    from mcp.shared.auth import OAuthClientInformationFull, OAuthClientMetadata
+    from mcp.shared.auth import (
+        AuthorizationCodeResult,
+        OAuthClientInformationFull,
+        OAuthClientMetadata,
+    )
 
     callback_server = LocalOAuthCallbackServer()
     await callback_server.start()
@@ -290,8 +294,10 @@ async def create_oauth_provider(
         logger.debug("OAuth authorization URL: %s", auth_url)
         webbrowser.open(auth_url)
 
-    async def callback_handler() -> tuple[str, str | None]:
-        return await callback_server.wait_for_callback()
+    async def callback_handler() -> AuthorizationCodeResult:
+        # mcp 2.0 takes a model here, not the (code, state) tuple of 1.x.
+        code, state = await callback_server.wait_for_callback()
+        return AuthorizationCodeResult(code=code, state=state)
 
     provider = OAuthClientProvider(
         server_url=server_url,
