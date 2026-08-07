@@ -3,6 +3,7 @@
 import pytest
 
 from roomkit_ui.engine_realtime import (
+    _build_provider_config,
     _build_realtime_provider,
     _realtime_sample_rate,
 )
@@ -93,3 +94,29 @@ def test_xai_custom_model_and_voice():
     )
     assert voice == "rex"
     assert model == "grok-3-audio"
+
+
+# -- provider_config (advanced settings) --------------------------------------
+
+
+def test_xai_defaults_produce_empty_config():
+    assert _build_provider_config("xai", {}) == {}
+
+
+def test_xai_server_vad_tuning_is_parsed():
+    config = _build_provider_config(
+        "xai",
+        {
+            "xai_vad_threshold": "0.7",
+            "xai_silence_duration_ms": "350",
+            "xai_prefix_padding_ms": "250",
+        },
+    )
+    assert config == {"threshold": 0.7, "silence_duration_ms": 350, "prefix_padding_ms": 250}
+
+
+def test_xai_garbage_tuning_values_are_skipped():
+    config = _build_provider_config(
+        "xai", {"xai_vad_threshold": "abc", "xai_silence_duration_ms": "12.5"}
+    )
+    assert config == {}

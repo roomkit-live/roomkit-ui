@@ -435,7 +435,7 @@ def _build_provider_config(provider_name: str, settings: dict) -> dict[str, Any]
             if td_type == "semantic_vad":
                 _apply_openai_semantic_vad(provider_config, settings)
             elif td_type == "server_vad":
-                _apply_openai_server_vad(provider_config, settings)
+                _apply_server_vad(provider_config, settings, "openai")
             if not settings.get("openai_interrupt_response", True):
                 provider_config["interrupt_response"] = False
             if not settings.get("openai_create_response", True):
@@ -443,6 +443,10 @@ def _build_provider_config(provider_name: str, settings: dict) -> dict[str, Any]
         else:
             # "none" — disable turn detection entirely
             provider_config["turn_detection_type"] = None
+    elif provider_name == "xai":
+        # Wire-compatible with OpenAI's server VAD; xAI honours the same
+        # three tuning keys (no semantic VAD, no disabling).
+        _apply_server_vad(provider_config, settings, "xai")
     return provider_config
 
 
@@ -455,20 +459,21 @@ def _apply_openai_semantic_vad(provider_config: dict[str, Any], settings: dict) 
             pass
 
 
-def _apply_openai_server_vad(provider_config: dict[str, Any], settings: dict) -> None:
-    threshold = settings.get("openai_vad_threshold", "")
+def _apply_server_vad(provider_config: dict[str, Any], settings: dict, prefix: str) -> None:
+    """Copy the ``{prefix}_*`` server-VAD tuning settings into provider_config."""
+    threshold = settings.get(f"{prefix}_vad_threshold", "")
     if threshold:
         try:
             provider_config["threshold"] = float(threshold)
         except (ValueError, TypeError):
             pass
-    silence_ms = settings.get("openai_silence_duration_ms", "")
+    silence_ms = settings.get(f"{prefix}_silence_duration_ms", "")
     if silence_ms:
         try:
             provider_config["silence_duration_ms"] = int(silence_ms)
         except (ValueError, TypeError):
             pass
-    prefix_ms = settings.get("openai_prefix_padding_ms", "")
+    prefix_ms = settings.get(f"{prefix}_prefix_padding_ms", "")
     if prefix_ms:
         try:
             provider_config["prefix_padding_ms"] = int(prefix_ms)

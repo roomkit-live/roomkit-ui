@@ -164,6 +164,10 @@ _DEFAULTS = {
     "xai_api_key": "",
     "xai_model": "grok-2-audio",
     "xai_voice": "eve",  # eve | ara | rex | sal | leo
+    # xAI advanced (server-VAD tuning, wire-compatible with OpenAI's)
+    "xai_vad_threshold": "",  # 0.0–1.0 (empty = default)
+    "xai_silence_duration_ms": "",  # empty = default
+    "xai_prefix_padding_ms": "",  # empty = default
 }
 
 

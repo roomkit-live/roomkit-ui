@@ -446,6 +446,41 @@ class RealtimeSection(QWidget):
         self._deepgram_adv_container.hide()
         rt_layout.addWidget(self._deepgram_adv_container)
 
+        # ── xAI Advanced (collapsible) ──
+        self._xai_adv_toggle = QPushButton("▸ Advanced")
+        self._xai_adv_toggle.setFlat(True)
+        self._xai_adv_toggle.setCursor(Qt.PointingHandCursor)
+        self._xai_adv_toggle.setStyleSheet(
+            "text-align: left; font-size: 12px; font-weight: 600;"
+            f" color: {c['TEXT_SECONDARY']}; background: transparent; border: none;"
+            " padding: 2px 0;"
+        )
+        self._xai_adv_toggle.clicked.connect(self._toggle_xai_advanced)
+        rt_layout.addWidget(self._xai_adv_toggle)
+
+        self._xai_adv_container = QWidget()
+        xai_form = QFormLayout(self._xai_adv_container)
+        xai_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        xai_form.setSpacing(10)
+        xai_form.setLabelAlignment(Qt.AlignRight)
+
+        self.xai_vad_threshold = QLineEdit(str(settings.get("xai_vad_threshold", "") or ""))
+        self.xai_vad_threshold.setPlaceholderText("0.5 (0 – 1)")
+        xai_form.addRow("VAD Threshold", self.xai_vad_threshold)
+
+        self.xai_silence_duration = QLineEdit(
+            str(settings.get("xai_silence_duration_ms", "") or "")
+        )
+        self.xai_silence_duration.setPlaceholderText("200 (ms)")
+        xai_form.addRow("Silence (ms)", self.xai_silence_duration)
+
+        self.xai_prefix_padding = QLineEdit(str(settings.get("xai_prefix_padding_ms", "") or ""))
+        self.xai_prefix_padding.setPlaceholderText("300 (ms)")
+        xai_form.addRow("Prefix Padding (ms)", self.xai_prefix_padding)
+
+        self._xai_adv_container.hide()
+        rt_layout.addWidget(self._xai_adv_container)
+
         # Provider → widgets that must be visible only for it.  Advanced
         # containers are handled separately (they stay collapsed on switch).
         self._provider_widgets: dict[str, list[QWidget]] = {
@@ -488,12 +523,14 @@ class RealtimeSection(QWidget):
                 self.xai_model,
                 self._xai_voice_label,
                 self.xai_voice,
+                self._xai_adv_toggle,
             ],
         }
         self._adv_containers = {
             "gemini": (self._gemini_adv_container, self._gemini_adv_toggle),
             "openai": (self._openai_adv_container, self._openai_adv_toggle),
             "deepgram": (self._deepgram_adv_container, self._deepgram_adv_toggle),
+            "xai": (self._xai_adv_container, self._xai_adv_toggle),
         }
 
         # Wire signals
@@ -536,6 +573,11 @@ class RealtimeSection(QWidget):
         self._deepgram_adv_container.setVisible(visible)
         self._deepgram_adv_toggle.setText("\u25be Advanced" if visible else "\u25b8 Advanced")
 
+    def _toggle_xai_advanced(self) -> None:
+        visible = not self._xai_adv_container.isVisible()
+        self._xai_adv_container.setVisible(visible)
+        self._xai_adv_toggle.setText("\u25be Advanced" if visible else "\u25b8 Advanced")
+
     def _on_openai_turn_detection_changed(self, _index: int) -> None:
         td = self.openai_turn_detection.currentData()
         is_semantic = td == "semantic_vad"
@@ -572,6 +614,9 @@ class RealtimeSection(QWidget):
             "xai_api_key": self.xai_api_key.text().strip(),
             "xai_model": self.xai_model.currentText().strip(),
             "xai_voice": self.xai_voice.currentText(),
+            "xai_vad_threshold": self.xai_vad_threshold.text().strip(),
+            "xai_silence_duration_ms": self.xai_silence_duration.text().strip(),
+            "xai_prefix_padding_ms": self.xai_prefix_padding.text().strip(),
             "model": self.gemini_model.currentText().strip(),
             "openai_model": self.openai_model.currentText().strip(),
             "voice": self.gemini_voice.currentText(),
