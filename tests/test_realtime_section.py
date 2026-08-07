@@ -92,3 +92,13 @@ def test_saved_think_model_survives_construction(qapp):
         assert s.get_settings()["deepgram_agent_think_provider"] == "google"
     finally:
         s.deleteLater()
+
+
+def test_sts_model_options_fall_back_until_the_catalog_ships():
+    from roomkit_ui.widgets.settings.realtime_section import _sts_model_options
+
+    # Unknown module (roomkit 0.43 has no realtime_models) → the local lineup.
+    assert _sts_model_options("roomkit.providers.gemini.realtime_models_nope", ["a", "b"]) == [
+        "a",
+        "b",
+    ]

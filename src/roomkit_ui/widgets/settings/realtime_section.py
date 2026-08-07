@@ -32,9 +32,9 @@ PROVIDERS = [
     ("xAI Grok", "xai"),
 ]
 
-# No roomkit catalog exists for speech-to-speech model ids (the chat
-# catalogs exclude them on purpose) — these lists mirror what roomkit 0.43
-# documents per provider, and every model combo stays editable.
+# Fallback STS model ids, used until the installed roomkit ships the
+# realtime_models catalogs (added upstream for 0.44; 0.43 has none — the chat
+# catalogs exclude realtime ids on purpose).  Every model combo stays editable.
 GEMINI_MODELS = [
     "gemini-2.5-flash-native-audio-preview-12-2025",
     "gemini-3.1-flash-live-preview",
@@ -114,6 +114,22 @@ def _chat_model_options(module_name: str) -> list[str]:
         return [m.id for m in models]
     except Exception:
         return []
+
+
+def _sts_model_options(module_name: str, fallback: list[str]) -> list[str]:
+    """STS model ids from a roomkit ``realtime_models`` catalog, or *fallback*.
+
+    The catalogs land in roomkit 0.44 (``providers/*/realtime_models.py``);
+    on 0.43 the import fails and the hardcoded lineup answers instead.
+    Deprecated ids (the retired gpt-4o previews) are dropped — anyone still
+    pinning one can type it, the combos being editable.
+    """
+    try:
+        models = importlib.import_module(module_name).MODELS
+        ids = [m.id for m in models if not m.deprecated]
+        return ids or fallback
+    except Exception:
+        return fallback
 
 
 def _voice_options(module_name: str, fallback: list[str]) -> list[tuple[str, str]]:
@@ -206,7 +222,9 @@ class RealtimeSection(QWidget):
         # Model (Gemini)
         self.gemini_model = QComboBox()
         self.gemini_model.setEditable(True)
-        self.gemini_model.addItems(GEMINI_MODELS)
+        self.gemini_model.addItems(
+            _sts_model_options("roomkit.providers.gemini.realtime_models", GEMINI_MODELS)
+        )
         current_model = settings.get("model", GEMINI_MODELS[0])
         idx = self.gemini_model.findText(current_model)
         if idx >= 0:
@@ -219,7 +237,9 @@ class RealtimeSection(QWidget):
         # Model (OpenAI)
         self.openai_model = QComboBox()
         self.openai_model.setEditable(True)
-        self.openai_model.addItems(OPENAI_MODELS)
+        self.openai_model.addItems(
+            _sts_model_options("roomkit.providers.openai.realtime_models", OPENAI_MODELS)
+        )
         current_oai_model = settings.get("openai_model", OPENAI_MODELS[0])
         oidx = self.openai_model.findText(current_oai_model)
         if oidx >= 0:
@@ -297,7 +317,9 @@ class RealtimeSection(QWidget):
 
         self.xai_model = QComboBox()
         self.xai_model.setEditable(True)
-        self.xai_model.addItems(XAI_MODELS)
+        self.xai_model.addItems(
+            _sts_model_options("roomkit.providers.xai.realtime_models", XAI_MODELS)
+        )
         current_xai_model = settings.get("xai_model", XAI_MODELS[0])
         xmidx = self.xai_model.findText(current_xai_model)
         if xmidx >= 0:
