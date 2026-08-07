@@ -166,6 +166,12 @@ class RealtimeMixin:
             tools = toolset.all
             tool_handler = self._handle_tool_call  # type: ignore[attr-defined]
 
+            # Agent Skills — same registry the VC path loads.  The channel
+            # resolves delivery per provider: reconfigurable sessions (Gemini,
+            # OpenAI) get the skill list in the prompt plus an activate_skill
+            # tool; fixed sessions get every body inlined at connect.
+            skills_registry = self._load_skills(settings)  # type: ignore[attr-defined]
+
             all_names = ", ".join(t["name"] for t in tools)
             logger.info("Tools: %s", all_names)
 
@@ -185,6 +191,7 @@ class RealtimeMixin:
                 provider_config=provider_config or None,
                 settings=settings,
                 pipeline=pipeline,
+                skills=skills_registry,
             )
             if self._session is None and toolset.has_mcp:  # type: ignore[attr-defined]
                 # MCP tools broke the session — retry without them. Only MCP is
@@ -204,6 +211,7 @@ class RealtimeMixin:
                     provider_config=provider_config or None,
                     settings=settings,
                     pipeline=pipeline,
+                    skills=skills_registry,
                 )
                 if self._session is not None:  # type: ignore[attr-defined]
                     self.mcp_status.emit(  # type: ignore[attr-defined]
@@ -224,10 +232,17 @@ class RealtimeMixin:
             self._set_state(EngineState.ACTIVE)  # type: ignore[attr-defined]
 
             # Emit structured session info for the UI info bar
+            skill_info: list[dict] = []
+            if skills_registry and skills_registry.skill_count > 0:
+                skill_info = [
+                    {"name": m.name, "description": m.description}
+                    for m in skills_registry.all_metadata()
+                ]
             info: dict = {
                 "provider": provider_name,
                 "model": model,
                 "tools": tool_summaries(tools),
+                "skills": skill_info,
             }
             if self._mcp and self._mcp.failed_servers:  # type: ignore[attr-defined]
                 info["failed_servers"] = list(self._mcp.failed_servers)  # type: ignore[attr-defined]
@@ -255,6 +270,7 @@ class RealtimeMixin:
         provider_config: dict[str, Any] | None = None,
         settings: dict | None = None,
         pipeline: Any = None,
+        skills: Any = None,
     ) -> Any:
         """Try to create a room and start a realtime session.  Returns None on failure."""
         from roomkit_ui.engine_audio import build_telemetry
@@ -275,6 +291,7 @@ class RealtimeMixin:
                 tools=tools,
                 tool_handler=tool_handler,
                 pipeline=pipeline,
+                skills=skills,
             )
             self._kit.register_channel(self._channel)  # type: ignore[attr-defined]
             await self._kit.create_room(room_id="local-demo")  # type: ignore[attr-defined]
