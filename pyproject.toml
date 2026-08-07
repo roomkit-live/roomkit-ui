@@ -10,7 +10,7 @@ requires-python = ">=3.12"
 dependencies = [
     "PySide6>=6.7",
     "qasync>=0.27",
-    "roomkit[realtime-gemini,realtime-openai,realtime-deepgram,realtime-elevenlabs,local-audio,webrtc-aec,sherpa-onnx]>=0.43.0",
+    "roomkit[realtime-gemini,realtime-openai,realtime-deepgram,realtime-elevenlabs,local-audio,webrtc-aec,sherpa-onnx]>=0.44.0",
     # sherpa-onnx >=1.13 splits its binaries (libonnxruntime, libsherpa-onnx)
     # into sherpa-onnx-core, but the sdist metadata omits that dependency, so
     # uv locks without it and every `uv sync` uninstalls the libraries.
