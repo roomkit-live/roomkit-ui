@@ -141,7 +141,11 @@ class LoadingOverlay(QWidget):
     def eventFilter(self, obj: QObject, event: QEvent) -> bool:  # noqa: N802
         # Track the parent's size so the curtain always covers the window.
         parent = self.parentWidget()
-        if parent is not None and obj is parent and event.type() == QEvent.Resize:
-            if not self.isHidden():
-                self.setGeometry(parent.rect())
+        if (
+            parent is not None
+            and obj is parent
+            and event.type() == QEvent.Resize
+            and not self.isHidden()
+        ):
+            self.setGeometry(parent.rect())
         return False
