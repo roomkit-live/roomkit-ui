@@ -45,3 +45,50 @@ def test_selected_voice_ids_round_trip(section):
 def test_typed_deepgram_voice_id_wins(section):
     section.deepgram_voice.setCurrentText("aura-2-luna-en")
     assert section.get_settings()["deepgram_agent_voice"] == "aura-2-luna-en"
+
+
+# -- model dropdowns ---------------------------------------------------------
+
+
+def test_sts_model_combos_carry_the_documented_lineups(section):
+    gemini_models = [section.gemini_model.itemText(i) for i in range(section.gemini_model.count())]
+    openai_models = [section.openai_model.itemText(i) for i in range(section.openai_model.count())]
+    assert "gemini-3.1-flash-live-preview" in gemini_models
+    assert "gpt-realtime-2.1-mini" in openai_models
+
+
+def test_think_model_suggestions_come_from_the_roomkit_catalog(section):
+    models = [
+        section.deepgram_think_model.itemText(i)
+        for i in range(section.deepgram_think_model.count())
+    ]
+    # Default think provider is open_ai → OpenAI chat catalog (~21 entries).
+    assert len(models) >= 15
+    assert any(m.startswith("gpt-") for m in models)
+    # Saved default is empty — the combo must not silently adopt an entry.
+    assert section.deepgram_think_model.currentText() == ""
+
+
+def test_switching_think_provider_swaps_the_catalog(section):
+    # index 1 = Anthropic (see DEEPGRAM_THINK_PROVIDERS)
+    section.deepgram_think_provider.setCurrentIndex(1)
+    models = [
+        section.deepgram_think_model.itemText(i)
+        for i in range(section.deepgram_think_model.count())
+    ]
+    assert any(m.startswith("claude-") for m in models)
+    assert not any(m.startswith("gpt-") for m in models)
+    # The old vendor's model id was cleared, not carried over.
+    assert section.deepgram_think_model.currentText() == ""
+
+
+def test_saved_think_model_survives_construction(qapp):
+    settings = dict(_DEFAULTS)
+    settings["deepgram_agent_think_provider"] = "google"
+    settings["deepgram_agent_think_model"] = "gemini-2.5-flash"
+    s = RealtimeSection(settings)
+    try:
+        assert s.get_settings()["deepgram_agent_think_model"] == "gemini-2.5-flash"
+        assert s.get_settings()["deepgram_agent_think_provider"] == "google"
+    finally:
+        s.deleteLater()

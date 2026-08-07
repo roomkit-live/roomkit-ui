@@ -70,6 +70,14 @@ def test_deepgram_settings_reach_the_config():
     assert config.greeting == "Bonjour!"
 
 
+def test_deepgram_non_openai_think_provider_requires_a_model():
+    with pytest.raises(ValueError, match="think model is required"):
+        _build_realtime_provider(
+            "deepgram",
+            {"deepgram_api_key": "k", "deepgram_agent_think_provider": "anthropic"},
+        )
+
+
 def test_elevenlabs_builds_with_agent_id():
     provider, voice, model = _build_realtime_provider(
         "elevenlabs", {"elevenlabs_api_key": "k", "elevenlabs_agent_id": "agent_123"}

@@ -32,8 +32,12 @@ PROVIDERS = [
     ("xAI Grok", "xai"),
 ]
 
+# No roomkit catalog exists for speech-to-speech model ids (the chat
+# catalogs exclude them on purpose) — these lists mirror what roomkit 0.43
+# documents per provider, and every model combo stays editable.
 GEMINI_MODELS = [
     "gemini-2.5-flash-native-audio-preview-12-2025",
+    "gemini-3.1-flash-live-preview",
     "gemini-2.0-flash-live-001",
 ]
 # Fallback ids, used only when roomkit's offline voice catalog fails to import.
@@ -60,6 +64,7 @@ GEMINI_LANGUAGES = [
 OPENAI_MODELS = [
     "gpt-realtime-2.1",
     "gpt-realtime-2.1-mini",
+    "gpt-realtime-1.5",
     "gpt-4o-realtime-preview",
 ]
 OPENAI_VOICES = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
@@ -85,8 +90,30 @@ DEEPGRAM_THINK_PROVIDERS = [
     ("Google", "google"),
 ]
 
+# Deepgram's think stage speaks each vendor's chat API, so roomkit's chat
+# model catalogs (pure-data modules) are the right suggestion source.
+DEEPGRAM_THINK_CATALOGS = {
+    "open_ai": "roomkit.providers.openai.models",
+    "anthropic": "roomkit.providers.anthropic.models",
+    "google": "roomkit.providers.gemini.models",
+}
+
 XAI_MODELS = ["grok-2-audio"]
 XAI_VOICES = ["eve", "ara", "rex", "sal", "leo"]
+
+
+def _chat_model_options(module_name: str) -> list[str]:
+    """Model ids from a roomkit chat catalog (``MODELS: list[ModelInfo]``).
+
+    Same import economics as the voice catalogs: pure data, no vendor SDK.
+    An unknown module or a shape change yields an empty list — the combo is
+    editable, so suggestions are decoration, never a gate.
+    """
+    try:
+        models = importlib.import_module(module_name).MODELS
+        return [m.id for m in models]
+    except Exception:
+        return []
 
 
 def _voice_options(module_name: str, fallback: list[str]) -> list[tuple[str, str]]:
@@ -488,8 +515,11 @@ class RealtimeSection(QWidget):
                 break
         dg_form.addRow("LLM Provider", self.deepgram_think_provider)
 
-        self.deepgram_think_model = QLineEdit(settings.get("deepgram_agent_think_model", "") or "")
-        self.deepgram_think_model.setPlaceholderText("gpt-4o-mini (default)")
+        self.deepgram_think_model = QComboBox()
+        self.deepgram_think_model.setEditable(True)
+        self._populate_think_models(
+            saved_think, settings.get("deepgram_agent_think_model", "") or ""
+        )
         dg_form.addRow("LLM Model", self.deepgram_think_model)
 
         self.deepgram_listen_language = QLineEdit(
@@ -597,6 +627,7 @@ class RealtimeSection(QWidget):
         self.openai_turn_detection.currentIndexChanged.connect(
             self._on_openai_turn_detection_changed
         )
+        self.deepgram_think_provider.currentIndexChanged.connect(self._on_think_provider_changed)
 
         # Initial state
         self._on_provider_changed(self.provider.currentIndex())
@@ -637,6 +668,24 @@ class RealtimeSection(QWidget):
         self._xai_adv_container.setVisible(visible)
         self._xai_adv_toggle.setText("\u25be Advanced" if visible else "\u25b8 Advanced")
 
+    def _on_think_provider_changed(self, _index: int) -> None:
+        # The old model id belongs to the previous vendor \u2014 start clean.
+        self._populate_think_models(self.deepgram_think_provider.currentData() or "open_ai", "")
+
+    def _populate_think_models(self, think_provider: str, current: str) -> None:
+        """Reload the think-model suggestions for *think_provider*."""
+        combo = self.deepgram_think_model
+        combo.clear()
+        combo.addItems(_chat_model_options(DEEPGRAM_THINK_CATALOGS.get(think_provider, "")))
+        combo.setCurrentText(current)
+        if think_provider == "open_ai":
+            placeholder = "gpt-4o-mini (default)"
+        else:
+            placeholder = "required \u2014 pick or type a model"
+        line_edit = combo.lineEdit()
+        if line_edit is not None:  # None only for non-editable combos
+            line_edit.setPlaceholderText(placeholder)
+
     def _on_openai_turn_detection_changed(self, _index: int) -> None:
         td = self.openai_turn_detection.currentData()
         is_semantic = td == "semantic_vad"
@@ -666,7 +715,7 @@ class RealtimeSection(QWidget):
             "deepgram_agent_think_provider": (
                 self.deepgram_think_provider.currentData() or "open_ai"
             ),
-            "deepgram_agent_think_model": self.deepgram_think_model.text().strip(),
+            "deepgram_agent_think_model": self.deepgram_think_model.currentText().strip(),
             "deepgram_agent_listen_language": self.deepgram_listen_language.text().strip(),
             "deepgram_agent_greeting": self.deepgram_greeting.text().strip(),
             "elevenlabs_agent_id": self.elevenlabs_agent_id.text().strip(),

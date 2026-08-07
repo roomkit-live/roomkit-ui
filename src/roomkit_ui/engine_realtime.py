@@ -353,7 +353,17 @@ def _build_deepgram_agent(settings: dict) -> tuple[Any, str, str]:
         raise ValueError("Deepgram API key is required. Open Settings to enter it.")
     voice = settings.get("deepgram_agent_voice", "") or "aura-2-thalia-en"
     think_provider = settings.get("deepgram_agent_think_provider", "") or "open_ai"
-    think_model = settings.get("deepgram_agent_think_model", "") or "gpt-4o-mini"
+    think_model = settings.get("deepgram_agent_think_model", "")
+    if not think_model:
+        if think_provider != "open_ai":
+            # gpt-4o-mini is Deepgram's default for open_ai only — sending it
+            # with another think provider is an invalid pairing Deepgram
+            # rejects mid-handshake, far less legibly than this.
+            raise ValueError(
+                f"Deepgram think model is required for the {think_provider} LLM "
+                "provider. Open Settings → Advanced to pick one."
+            )
+        think_model = "gpt-4o-mini"
 
     from roomkit.providers.deepgram.config import DeepgramAgentConfig
     from roomkit.providers.deepgram.realtime import DeepgramAgentProvider
