@@ -334,6 +334,23 @@ wheels = [
 ]
 
 [[package]]
+name = "elevenlabs"
+version = "2.62.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "pydantic-core" },
+    { name = "requests" },
+    { name = "typing-extensions" },
+    { name = "websockets" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/6e/a9/b9ac632c6fd7840c0a11c3f189959813ec89b77fb4221fa6665960ff0842/elevenlabs-2.62.0.tar.gz", hash = "sha256:37559ee5d6ad61028bbc7ae415756de2d7d57ecbdf3a2350fc79f7c4b63eb15f", size = 746089, upload-time = "2026-08-06T21:17:32.959Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4c/2b/372362ab0c361fda6865e3ed3564135f620f45ce2706bb3d5544ec65e30b/elevenlabs-2.62.0-py3-none-any.whl", hash = "sha256:d06a49e95fe002b7c2e6bfc5c03dd4ef10285bfe32be9aa14208cd3377d42f3a", size = 1971693, upload-time = "2026-08-06T21:17:30.87Z" },
+]
+
+[[package]]
 name = "evdev"
 version = "1.9.3"
 source = { registry = "https://pypi.org/simple" }
@@ -1450,20 +1467,26 @@ wheels = [
 
 [[package]]
 name = "roomkit"
-version = "0.24.0"
+version = "0.43.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/07/1d/4c7a51d7a29e89d98bbc841a99f563fc6681d673a3ea4e276e96b72306d5/roomkit-0.24.0.tar.gz", hash = "sha256:bc97d24d63aa8399e00c14d747f7468783cfd64845736fd715dd8f073d4edebf", size = 1442048, upload-time = "2026-07-08T04:41:26.929Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/9f/fa/811700312f676b933495eaa7159cbd74025b8c810e2486456d9b4a000334/roomkit-0.43.0.tar.gz", hash = "sha256:60af55b8388baa132a2eb05ac82499b32e57fa4c362a113fda61de79b5e90bd2", size = 2318308, upload-time = "2026-08-07T04:56:57.557Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/75/de/3be6ea4863b1f3131c35e425bc5770d674ca8d66f26fc0d2be2e96361d65/roomkit-0.24.0-py3-none-any.whl", hash = "sha256:8f3a84976d6e9197ca493eb7b978103e7d8f081d8d1420a4daf3af663496e6a3", size = 1155991, upload-time = "2026-07-08T04:41:29.093Z" },
+    { url = "https://files.pythonhosted.org/packages/29/f2/3f6e6bff845321104a3e59edd2fa7b983e24472b11623ce1b41c0b8b4c96/roomkit-0.43.0-py3-none-any.whl", hash = "sha256:95d17918fb03778e8c49e0a803edad93cab5781570e0bbf5a345b74e9fb3b266", size = 1709388, upload-time = "2026-08-07T04:57:00.501Z" },
 ]
 
 [package.optional-dependencies]
 local-audio = [
     { name = "numpy" },
     { name = "sounddevice" },
+]
+realtime-deepgram = [
+    { name = "websockets" },
+]
+realtime-elevenlabs = [
+    { name = "elevenlabs" },
 ]
 realtime-gemini = [
     { name = "google-genai" },
@@ -1481,7 +1504,7 @@ webrtc-aec = [
 
 [[package]]
 name = "roomkit-ui"
-version = "0.2.0"
+version = "0.2.1"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },
@@ -1491,7 +1514,7 @@ dependencies = [
     { name = "pynput" },
     { name = "pyside6" },
     { name = "qasync" },
-    { name = "roomkit", extra = ["local-audio", "realtime-gemini", "realtime-openai", "sherpa-onnx", "webrtc-aec"] },
+    { name = "roomkit", extra = ["local-audio", "realtime-deepgram", "realtime-elevenlabs", "realtime-gemini", "realtime-openai", "sherpa-onnx", "webrtc-aec"] },
     { name = "sherpa-onnx-core" },
 ]
 
@@ -1521,7 +1544,7 @@ requires-dist = [
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24" },
     { name = "pytest-qt", marker = "extra == 'dev'", specifier = ">=4.4" },
     { name = "qasync", specifier = ">=0.27" },
-    { name = "roomkit", extras = ["realtime-gemini", "realtime-openai", "local-audio", "webrtc-aec", "sherpa-onnx"], specifier = ">=0.24.0" },
+    { name = "roomkit", extras = ["realtime-gemini", "realtime-openai", "realtime-deepgram", "realtime-elevenlabs", "local-audio", "webrtc-aec", "sherpa-onnx"], specifier = ">=0.43.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6" },
     { name = "sherpa-onnx-core", specifier = ">=1.13" },
 ]

@@ -173,17 +173,24 @@ class SettingsPanel(QDialog):
             if hasattr(page, "get_settings"):
                 settings.update(page.get_settings())
 
-        # Merge API keys: prefer non-empty from any source
-        settings["openai_api_key"] = (
-            settings.pop("_rt_openai_key", "")
-            or settings.pop("_vc_openai_key", "")
-            or settings.pop("_dict_openai_key", "")
+        # Merge API keys: prefer non-empty from any source.  Pop every temp
+        # key BEFORE choosing — an `or` chain of pops short-circuits, and a
+        # leftover temp key would be persisted in plaintext by save_settings().
+        def merge_key(*temp_names: str) -> str:
+            values = [settings.pop(name, "") for name in temp_names]
+            return next((v for v in values if v), "")
+
+        settings["openai_api_key"] = merge_key(
+            "_rt_openai_key", "_vc_openai_key", "_dict_openai_key"
         )
-        settings["api_key"] = settings.pop("_rt_gemini_key", "") or settings.pop(
-            "_vc_gemini_key", ""
+        settings["api_key"] = merge_key("_rt_gemini_key", "_vc_gemini_key")
+        settings["deepgram_api_key"] = merge_key(
+            "_rt_deepgram_key", "_vc_deepgram_key", "_dict_deepgram_key"
         )
-        settings["deepgram_api_key"] = settings.pop("_vc_deepgram_key", "") or settings.pop(
-            "_dict_deepgram_key", ""
+        # The VC TTS page writes elevenlabs_api_key directly — merge rather
+        # than overwrite it with the realtime field.
+        settings["elevenlabs_api_key"] = merge_key("_rt_elevenlabs_key") or settings.get(
+            "elevenlabs_api_key", ""
         )
 
         save_settings(settings)

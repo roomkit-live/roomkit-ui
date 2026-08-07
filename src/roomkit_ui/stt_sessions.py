@@ -54,7 +54,7 @@ class DictationSessionMixin:
 
             self._provider = OpenAIRealtimeProvider(
                 api_key=api_key,
-                model=settings.get("openai_model", "gpt-4o-realtime-preview"),
+                model=settings.get("openai_model", "gpt-realtime-2.1"),
             )
             self._provider.on_transcription(self._on_transcription)
             provider = self._provider
@@ -113,7 +113,7 @@ class DictationSessionMixin:
 
             logger.info(
                 "Dictation started: provider=openai, model=%s, rate=%dHz",
-                settings.get("openai_model", "gpt-4o-realtime-preview"),
+                settings.get("openai_model", "gpt-realtime-2.1"),
                 sample_rate,
             )
 

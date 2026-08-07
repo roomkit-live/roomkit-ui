@@ -11,7 +11,7 @@ system context in [architecture.md](architecture.md).
 
 | | Realtime (speech-to-speech) | Voice Channel (STT → LLM → TTS) |
 |---|---|---|
-| Providers | Gemini Live, OpenAI Realtime | LLM: Anthropic, OpenAI, Gemini, local (vLLM/Ollama) |
+| Providers | Gemini Live, OpenAI Realtime, Deepgram Voice Agent, ElevenLabs ConvAI, xAI Grok | LLM: Anthropic, OpenAI, Gemini, local (vLLM/Ollama) |
 | STT | provider-native | sherpa-onnx (local), Gradium, Deepgram |
 | TTS | provider-native | Piper (local), Qwen3-TTS & NeuTTS (voice clone), Gradium, ElevenLabs |
 | Latency | lowest | depends on the three stages |
@@ -134,7 +134,7 @@ sequenceDiagram
 
 | Integration | Direction | Notes |
 |---|---|---|
-| Gemini Live / OpenAI Realtime | bidirectional WS | speech-to-speech |
+| Gemini Live / OpenAI Realtime / Deepgram Agent / ElevenLabs / Grok | bidirectional WS | speech-to-speech |
 | Anthropic / OpenAI / Gemini / vLLM / Ollama APIs | outbound | voice-channel LLM turn |
 | ElevenLabs / Gradium / Deepgram | outbound | cloud TTS / STT |
 | MCP servers | bidirectional | user-configured, OAuth2 for HTTP |

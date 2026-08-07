@@ -1,6 +1,7 @@
 """Realtime speech-to-speech session mixin for ``Engine``.
 
-Contains the Gemini-Live / OpenAI-Realtime startup path: build the
+Contains the realtime startup path (Gemini Live, OpenAI Realtime,
+Deepgram Voice Agent, ElevenLabs Conversational AI, xAI Grok): build the
 provider, wire audio pipeline + transport, connect MCP tools, register
 hooks, and hand off to the UI by populating ``engine._session``.
 
@@ -76,7 +77,7 @@ class RealtimeMixin:
             provider, voice, model = _build_realtime_provider(provider_name, settings)
             provider_config = _build_provider_config(provider_name, settings)
 
-            sample_rate = 24000
+            sample_rate = _realtime_sample_rate(provider_name)
             block_ms = 20
             frame_size = sample_rate * block_ms // 1000
 
@@ -265,8 +266,11 @@ class RealtimeMixin:
                 provider=provider,
                 transport=transport,
                 system_prompt=system_prompt,
-                voice=voice,
+                # ElevenLabs has no per-session voice override (agent-defined) —
+                # its builder returns "" and the channel must see None.
+                voice=voice or None,
                 input_sample_rate=sample_rate,
+                output_sample_rate=sample_rate,
                 tools=tools,
                 tool_handler=tool_handler,
                 pipeline=pipeline,
@@ -297,17 +301,39 @@ class RealtimeMixin:
 # ---------------------------------------------------------------------------
 
 
+def _realtime_sample_rate(provider_name: str) -> int:
+    """Transport sample rate for a realtime provider.
+
+    ElevenLabs ConvAI runs a fixed 16 kHz contract on both legs (roomkit
+    raises on anything else); every other provider streams 24 kHz PCM.
+    """
+    return 16000 if provider_name == "elevenlabs" else 24000
+
+
 def _build_realtime_provider(provider_name: str, settings: dict) -> tuple[Any, str, str]:
-    """Instantiate the realtime provider. Returns (provider, voice, model)."""
+    """Instantiate the realtime provider. Returns (provider, voice, model).
+
+    ``voice`` may be ``""`` (ElevenLabs — the agent defines it); callers must
+    map that to ``None`` before handing it to the channel.
+    """
     if provider_name == "openai":
         api_key = settings.get("openai_api_key", "")
         if not api_key:
             raise ValueError("OpenAI API key is required. Open Settings to enter it.")
-        model = settings.get("openai_model", "gpt-4o-realtime-preview")
+        model = settings.get("openai_model", "gpt-realtime-2.1")
         voice = settings.get("openai_voice", "alloy")
         from roomkit.providers.openai.realtime import OpenAIRealtimeProvider
 
         return OpenAIRealtimeProvider(api_key=api_key, model=model), voice, model
+
+    if provider_name == "deepgram":
+        return _build_deepgram_agent(settings)
+
+    if provider_name == "elevenlabs":
+        return _build_elevenlabs_realtime(settings)
+
+    if provider_name == "xai":
+        return _build_xai_realtime(settings)
 
     api_key = settings.get("api_key", "")
     if not api_key:
@@ -317,6 +343,60 @@ def _build_realtime_provider(provider_name: str, settings: dict) -> tuple[Any, s
     from roomkit.providers.gemini.realtime import GeminiLiveProvider
 
     return GeminiLiveProvider(api_key=api_key, model=model), voice, model
+
+
+def _build_deepgram_agent(settings: dict) -> tuple[Any, str, str]:
+    """Deepgram composes the agent from listen/think/speak stages."""
+    api_key = settings.get("deepgram_api_key", "")
+    if not api_key:
+        raise ValueError("Deepgram API key is required. Open Settings to enter it.")
+    voice = settings.get("deepgram_agent_voice", "") or "aura-2-thalia-en"
+    think_provider = settings.get("deepgram_agent_think_provider", "") or "open_ai"
+    think_model = settings.get("deepgram_agent_think_model", "") or "gpt-4o-mini"
+
+    from roomkit.providers.deepgram.config import DeepgramAgentConfig
+    from roomkit.providers.deepgram.realtime import DeepgramAgentProvider
+
+    config = DeepgramAgentConfig(
+        api_key=api_key,
+        think_provider=think_provider,
+        think_model=think_model,
+        speak_model=voice,
+        listen_language=settings.get("deepgram_agent_listen_language", "") or None,
+        greeting=settings.get("deepgram_agent_greeting", "") or None,
+    )
+    return DeepgramAgentProvider(config), voice, think_model
+
+
+def _build_elevenlabs_realtime(settings: dict) -> tuple[Any, str, str]:
+    """ElevenLabs ConvAI drives a pre-configured agent — no model/voice here."""
+    api_key = settings.get("elevenlabs_api_key", "")
+    if not api_key:
+        raise ValueError("ElevenLabs API key is required. Open Settings to enter it.")
+    agent_id = settings.get("elevenlabs_agent_id", "")
+    if not agent_id:
+        raise ValueError(
+            "ElevenLabs Agent ID is required (create an agent on the ElevenLabs "
+            "dashboard). Open Settings to enter it."
+        )
+
+    from roomkit.providers.elevenlabs.config import ElevenLabsRealtimeConfig
+    from roomkit.providers.elevenlabs.realtime import ElevenLabsRealtimeProvider
+
+    config = ElevenLabsRealtimeConfig(api_key=api_key, agent_id=agent_id)
+    return ElevenLabsRealtimeProvider(config), "", agent_id
+
+
+def _build_xai_realtime(settings: dict) -> tuple[Any, str, str]:
+    api_key = settings.get("xai_api_key", "")
+    if not api_key:
+        raise ValueError("xAI API key is required. Open Settings to enter it.")
+    model = settings.get("xai_model", "") or "grok-2-audio"
+    voice = settings.get("xai_voice", "") or "eve"
+
+    from roomkit.providers.xai.realtime import XAIRealtimeProvider
+
+    return XAIRealtimeProvider(api_key=api_key, model=model), voice, model
 
 
 def _build_provider_config(provider_name: str, settings: dict) -> dict[str, Any]:
@@ -432,11 +512,12 @@ def _build_realtime_pipeline(
 ) -> Any:
     """Assemble the realtime ``AudioPipelineConfig`` (or ``None`` if nothing to do).
 
-    Diarization + VAD get wired together with a 24 kHz→16 kHz contract because
-    realtime providers stream at 24 kHz but the VAD / diarization models are
-    16 kHz-only.  Other stages (AEC, debug taps, recorder) attach at the
-    transport's native sample rate.  No denoiser in realtime — see
-    ``_start_realtime``.
+    Diarization + VAD get wired together with a transport→16 kHz contract
+    because the VAD / diarization models are 16 kHz-only while most realtime
+    providers stream at 24 kHz (ElevenLabs already runs at 16 kHz — the
+    contract is then a no-op).  Other stages (AEC, debug taps, recorder)
+    attach at the transport's native sample rate.  No denoiser in realtime —
+    see ``_start_realtime``.
     """
     from roomkit.voice.pipeline.config import AudioPipelineConfig
 

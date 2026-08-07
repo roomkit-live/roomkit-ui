@@ -24,7 +24,7 @@ src/roomkit_ui/
 ├── app.py               # QApplication + qasync event loop bootstrap
 ├── engine.py            # Engine shell: lifecycle, state machine, cleanup, model cache
 ├── engine_vc.py         # Voice Channel mode startup (STT → LLM → TTS) — mixin
-├── engine_realtime.py   # Realtime mode startup (Gemini Live / OpenAI Realtime) — mixin
+├── engine_realtime.py   # Realtime mode startup (Gemini Live, OpenAI, Deepgram Agent, ElevenLabs, Grok) — mixin
 ├── engine_audio.py      # Pipeline builders: AEC, denoiser, VAD, diarization, recording
 ├── engine_callbacks.py  # roomkit provider/transport callbacks → Qt signals — mixin
 ├── engine_tools.py      # Tool dispatch (builtin → CLI → MCP), attitudes, end_conversation — mixin

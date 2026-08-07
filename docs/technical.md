@@ -12,7 +12,7 @@ System context lives in [architecture.md](architecture.md); feature-to-code mapp
 | Language | Python | 3.12+ |
 | GUI | PySide6 (Qt 6) | 6.11.1 |
 | Async/Qt bridge | qasync | 0.28.0 |
-| Voice/AI framework | roomkit (extras: realtime-gemini, realtime-openai, local-audio, webrtc-aec, sherpa-onnx) | 0.9.1 |
+| Voice/AI framework | roomkit (extras: realtime-gemini, realtime-openai, realtime-deepgram, realtime-elevenlabs, local-audio, webrtc-aec, sherpa-onnx) | 0.43.0 |
 | Tool protocol | mcp | 1.26.0 |
 | HTTP | httpx | 0.28.1 |
 | Markdown rendering | markdown-it-py | 4.0.0 |
@@ -28,7 +28,7 @@ src/roomkit_ui/
 ├── app.py               # QApplication + qasync bootstrap, rendering probes, logging
 ├── engine.py            # Engine shell: lifecycle, state, cleanup, model cache
 ├── engine_vc.py         # VoiceChannel mode: STT/LLM/TTS builders (mixin)
-├── engine_realtime.py   # Realtime mode: Gemini Live / OpenAI Realtime (mixin)
+├── engine_realtime.py   # Realtime mode: Gemini Live, OpenAI, Deepgram Agent, ElevenLabs, Grok (mixin)
 ├── engine_audio.py      # Pipeline builders: AEC, denoise, VAD, diarization, recording
 ├── engine_callbacks.py  # Provider/transport callbacks → Qt signals (mixin)
 ├── engine_tools.py      # Tool dispatch: builtin → MCP, attitudes, end_conversation (mixin)

@@ -21,6 +21,16 @@ _ANIM_INTERVAL = 16  # ms (~60 fps)
 _ANIM_DURATION = 200  # ms
 _ANIM_STEPS = _ANIM_DURATION // _ANIM_INTERVAL
 
+# Vendor-cased display names; .capitalize() fallback for anything unlisted.
+_PROVIDER_NAMES = {
+    "gemini": "Gemini",
+    "openai": "OpenAI",
+    "deepgram": "Deepgram",
+    "elevenlabs": "ElevenLabs",
+    "xai": "xAI Grok",
+    "anthropic": "Anthropic",
+}
+
 
 class SessionInfoBar(QWidget):
     """Compact summary bar that expands to show tool details."""
@@ -130,7 +140,7 @@ class SessionInfoBar(QWidget):
         n_skills = len(skills)
         tool_word = "tool" if n_tools == 1 else "tools"
 
-        self._provider_display = provider.capitalize()
+        self._provider_display = _PROVIDER_NAMES.get(provider, provider.capitalize())
         self._model_display = display_model
         self._tools_display = f"{n_tools} {tool_word}"
         self._skills_display = ""

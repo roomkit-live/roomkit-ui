@@ -96,7 +96,7 @@ graph TB
 1. `ControlBar` emits `start_requested` → `MainWindow` → `Engine.start(settings)`.
 2. The engine builds the session from settings:
    - **Voice Channel mode** (`engine_vc.py`): STT provider (sherpa-onnx / Gradium / Deepgram) + LLM provider (Anthropic / OpenAI / Gemini / local) + TTS provider (Piper / Qwen3 / NeuTTS / Gradium / ElevenLabs) composed into a `VoiceChannel`.
-   - **Realtime mode** (`engine_realtime.py`): `GeminiLiveProvider` or `OpenAIRealtimeProvider` in a `RealtimeVoiceChannel`.
+   - **Realtime mode** (`engine_realtime.py`): `GeminiLiveProvider`, `OpenAIRealtimeProvider`, `DeepgramAgentProvider`, `ElevenLabsRealtimeProvider` or `XAIRealtimeProvider` (Grok) in a `RealtimeVoiceChannel`. ElevenLabs runs a fixed 16 kHz contract; the others stream 24 kHz.
 3. Both modes share `LocalAudioBackend` (mic/speaker) and the audio pipeline built by `engine_audio.py` (AEC, denoiser, VAD, optional diarization with enrolled speakers).
 4. MCP tools are discovered via `MCPManager` and exposed to the model; built-in tools (`builtin_tools.py`) are checked first at dispatch time. If the provider rejects MCP tools, the realtime path retries with built-in tools only.
 5. RoomKit hooks (`hooks.py`) and provider callbacks (`engine_callbacks.py`) translate framework events into Qt signals: `transcription`, `mic_audio_level`, `speaker_audio_level`, `speaker_identified`, `tool_use`, `state_changed`, `error_occurred`.

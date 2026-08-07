@@ -23,6 +23,7 @@ _SECRET_KEYS = frozenset(
         "vc_local_api_key",
         "deepgram_api_key",
         "gradium_api_key",
+        "xai_api_key",
     }
 )
 
@@ -46,7 +47,7 @@ _DEFAULTS = {
     "api_key": "",
     "openai_api_key": "",
     "model": "gemini-2.5-flash-native-audio-preview-12-2025",
-    "openai_model": "gpt-4o-realtime-preview",
+    "openai_model": "gpt-realtime-2.1",
     "voice": "Aoede",
     "openai_voice": "alloy",
     "system_prompt": "You are a friendly voice assistant. Be concise and helpful.",
@@ -151,6 +152,18 @@ _DEFAULTS = {
     "openai_prefix_padding_ms": "",  # server_vad only (empty = default)
     "openai_interrupt_response": True,  # Allow interrupting AI response
     "openai_create_response": True,  # Auto-generate response on turn end
+    # Deepgram Voice Agent (realtime speech-to-speech; distinct from VC STT keys)
+    "deepgram_agent_voice": "aura-2-thalia-en",  # Aura speak model
+    "deepgram_agent_think_provider": "open_ai",  # "open_ai" | "anthropic" | "google"
+    "deepgram_agent_think_model": "",  # empty = Deepgram default (gpt-4o-mini)
+    "deepgram_agent_listen_language": "",  # e.g. "fr", "multi" (empty = default)
+    "deepgram_agent_greeting": "",  # optional line spoken at session open
+    # ElevenLabs Conversational AI (realtime)
+    "elevenlabs_agent_id": "",  # required — agent from the ElevenLabs dashboard
+    # xAI Grok realtime
+    "xai_api_key": "",
+    "xai_model": "grok-2-audio",
+    "xai_voice": "eve",  # eve | ara | rex | sal | leo
 }
 
 
