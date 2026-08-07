@@ -52,12 +52,12 @@ LIGHT: dict[str, str] = {
 
 _PALETTES = {"dark": DARK, "light": LIGHT}
 
-# One family for everything *said* in the conversation — user and assistant
-# alike (the meta layer — timestamps, status notes, chrome — stays on the
-# app's sans stack).  Splitting families between the two speakers is what
-# reads as incoherence.
-CHAT_FONT_FAMILY = "'Iowan Old Style', 'Palatino', Georgia, serif"
-CHAT_FONT_SIZE_PX = 15
+# One family and size for everything *said* in the conversation — user and
+# assistant alike.  Deliberately the app's own stack (see the global QSS):
+# a chat set in a different family than the window around it reads as a
+# foreign element, not as elegance.
+CHAT_FONT_FAMILY = '-apple-system, "SF Pro Text", "Helvetica Neue", "Segoe UI", sans-serif'
+CHAT_FONT_SIZE_PX = 14
 
 
 def get_colors(theme: str = "dark") -> dict[str, str]:
