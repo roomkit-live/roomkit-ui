@@ -70,6 +70,10 @@ class ChatView(QScrollArea):
         self.setWidget(self._container)
 
         self._current_bubble: ChatBubble | None = None
+        # The last assistant entry, tracked past its final: a graceful
+        # finalize keeps revealing after _current_bubble is released, and
+        # a barge-in must be able to snap that reveal short.
+        self._last_assistant_bubble: ChatBubble | None = None
         self._loading_label: QLabel | None = None
 
         c = colors()
@@ -167,6 +171,14 @@ class ChatView(QScrollArea):
         """
         self._hide_status()
 
+        # Barge-in: user speech landing while the previous assistant entry
+        # is still revealing.  The voice already stopped, so the rolling
+        # text would be theater — snap it complete, marked as cut short.
+        if role in ("user", "other"):
+            last = self._last_assistant_bubble
+            if last is not None and not last.finalized:
+                last.finalize(interrupted=True)
+
         if (
             self._current_bubble is not None
             and not self._current_bubble.finalized
@@ -194,7 +206,14 @@ class ChatView(QScrollArea):
                     self._current_bubble.deleteLater()
                     self._current_bubble = None
                 else:
-                    self._current_bubble.finalize()
+                    # User speech arriving over an unfinished assistant
+                    # reveal is a barge-in: the voice already stopped, so
+                    # the reveal would be theater — land the full text at
+                    # once, marked as cut short.
+                    self._current_bubble.finalize(
+                        interrupted=self._current_bubble.role == "assistant"
+                        and role in ("user", "other")
+                    )
             if role == "assistant":
                 # Always stream assistant text — a provider that hands the
                 # full transcript at once (Grok, OpenAI) still rolls out.
@@ -209,6 +228,7 @@ class ChatView(QScrollArea):
             _fade_in(bubble)
             self._current_bubble = bubble
             if role == "assistant":
+                self._last_assistant_bubble = bubble
                 bubble.start_streaming(text)
                 bubble.streaming_tick.connect(self._scroll_to_bottom)
 
@@ -329,12 +349,16 @@ class ChatView(QScrollArea):
             if w and w not in (self._empty_state, self._status_label):
                 # Finalize streaming bubbles to stop their timers before deletion
                 if isinstance(w, ChatBubble) and not w.finalized:
-                    w.finalize()
+                    # Interrupted-style: snaps any pending reveal so its
+                    # timer cannot outlive the widget (no marker shown on
+                    # a bubble that is being deleted anyway).
+                    w.finalize(interrupted=True)
                 w.deleteLater()
         # Rebuild base layout: stretch (pushes to bottom) + status_label
         self._layout.addStretch()
         self._layout.addWidget(self._status_label)
         self._current_bubble = None
+        self._last_assistant_bubble = None
 
     def reset(self) -> None:
         """Clear conversation and show empty state again."""

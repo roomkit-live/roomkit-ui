@@ -77,3 +77,34 @@ def test_user_bubbles_finalize_immediately(qapp):
         assert bubble.text() == "Salut, comment ça va ?"
     finally:
         view.deleteLater()
+
+
+def test_barge_in_lands_the_full_text_at_once_with_a_marker(qapp, monkeypatch):
+    """User speech over an unfinished reveal: no more theater, tag it."""
+    monkeypatch.setattr(bubble_mod, "_STREAM_WORD_MS", 10_000)  # reveal frozen mid-way
+    view = ChatView()
+    try:
+        view.add_transcription(LONG, "assistant", True)
+        assistant = view._layout.itemAt(view._layout.count() - 3).widget()
+        assert assistant.finalized is False  # still revealing
+
+        view.add_transcription("Attends, autre chose.", "user", True)
+
+        assert assistant.finalized is True  # snapped, not left rolling
+        assert assistant.text() == LONG
+        assert assistant._interrupted_label.isVisible() or not assistant.isVisible()
+        assert assistant._interrupted_label.isHidden() is False
+    finally:
+        view.deleteLater()
+
+
+def test_normal_completion_shows_no_interrupted_marker(qapp, monkeypatch):
+    _fast(monkeypatch)
+    view = ChatView()
+    try:
+        view.add_transcription(LONG, "assistant", True)
+        bubble = view._layout.itemAt(view._layout.count() - 3).widget()
+        assert _pump_until(lambda: bubble.finalized)
+        assert bubble._interrupted_label.isHidden() is True
+    finally:
+        view.deleteLater()

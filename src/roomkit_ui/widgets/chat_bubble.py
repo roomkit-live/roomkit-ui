@@ -189,6 +189,20 @@ class ChatBubble(QFrame):
             row.addWidget(self._bubble, 1)
             row.addStretch()
 
+        # ── Barge-in marker ── (assistant only; shown when cut short)
+        self._interrupted_label: QLabel | None = None
+        if not is_user:
+            self._interrupted_label = QLabel("— interrupted")
+            self._interrupted_label.setStyleSheet(
+                f"QLabel {{"
+                f"  color: {c['TEXT_SECONDARY']};"
+                f"  font-size: 11px;"
+                f"  background: transparent;"
+                f"  padding: 0px 14px 2px 14px;"
+                f"}}"
+            )
+            self._interrupted_label.setVisible(False)
+
         # ── Time row ──
         time_row = QHBoxLayout()
         time_row.setContentsMargins(14, 0, 14, 0)
@@ -223,6 +237,8 @@ class ChatBubble(QFrame):
             outer.addWidget(self._speaker_label)
 
         outer.addLayout(row)
+        if self._interrupted_label is not None:
+            outer.addWidget(self._interrupted_label)
         outer.addLayout(time_row)
         self.setStyleSheet("background: transparent;")
 
@@ -302,7 +318,7 @@ class ChatBubble(QFrame):
             _STREAM_CATCHUP_MS if backlog > _STREAM_BACKLOG_WORDS else _STREAM_WORD_MS
         )
 
-    def finalize(self) -> None:
+    def finalize(self, *, interrupted: bool = False) -> None:
         """Freeze the bubble — after the reveal finishes, if one is running.
 
         A provider that sends its full transcript before the audio ends
@@ -310,7 +326,16 @@ class ChatBubble(QFrame):
         text into place here is what killed the rolling-text feel.  The
         animation is left to finish and the real finalization (markdown
         render, timestamp) happens on its last tick.
+
+        *interrupted* is the exception: on a barge-in the voice already
+        stopped, so a reveal still pacing itself would be theater — the
+        full text lands at once, marked as cut short.
         """
+        if interrupted:
+            if self._interrupted_label is not None:
+                self._interrupted_label.setVisible(True)
+            self._complete_finalize()
+            return
         if self._role not in ("user", "other") and self._stream_index < len(self._stream_words):
             self._finalize_pending = True
             if not self._stream_timer.isActive():
