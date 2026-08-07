@@ -119,3 +119,25 @@ def test_sts_model_options_fall_back_until_the_catalog_ships():
         "a",
         "b",
     ]
+
+
+def test_deepgram_language_and_half_duplex_round_trip(qapp):
+    settings = dict(_DEFAULTS)
+    settings["deepgram_agent_listen_language"] = "fr"
+    settings["deepgram_agent_half_duplex"] = False
+    settings["deepgram_agent_listen_model"] = "flux-general-en"
+    s = RealtimeSection(settings)
+    try:
+        out = s.get_settings()
+        assert out["deepgram_agent_listen_language"] == "fr"
+        assert out["deepgram_agent_half_duplex"] is False
+        assert out["deepgram_agent_listen_model"] == "flux-general-en"
+    finally:
+        s.deleteLater()
+
+
+def test_deepgram_defaults_half_duplex_on_and_auto_model(section):
+    out = section.get_settings()
+    assert out["deepgram_agent_half_duplex"] is True
+    assert out["deepgram_agent_listen_model"] == ""  # auto
+    assert out["deepgram_agent_listen_language"] == ""  # English default

@@ -85,6 +85,13 @@ class RealtimeMixin:
             # Denoisers are voice-channel only: a speech enhancer on the mic
             # path keeps the *dominant* voice, so during doubletalk it eats
             # the user's barge-in speech before the provider's VAD sees it.
+            #
+            # Half-duplex (Deepgram default): the mic is muted while the
+            # agent speaks, so there is no echo to cancel — skip the AEC and
+            # let `mute_mic = aec is None` below arm the playback gate.
+            if _deepgram_half_duplex(provider_name, settings):
+                logger.info("Deepgram half-duplex: mic muted during playback, AEC skipped")
+                aec_mode = "none"
             aec, _ = build_audio_processing(aec_mode, "none", sample_rate, frame_size)
 
             # AEC bench capture (ROOMKIT_AEC_DUMP=<dir>): realtime-only —
@@ -377,6 +384,35 @@ def _build_realtime_provider(provider_name: str, settings: dict) -> tuple[Any, s
     return GeminiLiveProvider(api_key=api_key, model=model), voice, model
 
 
+def _deepgram_listen_stage(settings: dict) -> tuple[str, str | None, str | None]:
+    """Resolve (listen_model, listen_version, listen_language) from settings.
+
+    Derivations instead of rejections: nova-3 monolingual is English-only,
+    so a specific language with no explicit model selects nova-2; the Flux
+    models require the ``v2`` listen API version, so it is set whenever a
+    flux model is chosen.
+    """
+    model = (settings.get("deepgram_agent_listen_model", "") or "").strip()
+    language = (settings.get("deepgram_agent_listen_language", "") or "").strip() or None
+    if not model:
+        model = "nova-2" if language and language not in ("en", "multi") else "nova-3"
+        if model == "nova-2":
+            logger.info("Deepgram listen model derived: nova-2 (language=%s)", language)
+    version = "v2" if model.startswith("flux") else None
+    return model, version, language
+
+
+def _deepgram_half_duplex(provider_name: str, settings: dict) -> bool:
+    """Whether this session should mute the mic during agent playback.
+
+    Deepgram owns turn detection outright (``server_vad=False`` is ignored)
+    and exposes no sensitivity knob, so residual speaker echo trips
+    constant false barge-ins.  Half-duplex trades barge-in away entirely
+    for never being interrupted by your own speakers.
+    """
+    return provider_name == "deepgram" and bool(settings.get("deepgram_agent_half_duplex", True))
+
+
 def _build_deepgram_agent(settings: dict) -> tuple[Any, str, str]:
     """Deepgram composes the agent from listen/think/speak stages."""
     api_key = settings.get("deepgram_api_key", "")
@@ -395,16 +431,19 @@ def _build_deepgram_agent(settings: dict) -> tuple[Any, str, str]:
                 "provider. Open Settings → Advanced to pick one."
             )
         think_model = "gpt-4o-mini"
+    listen_model, listen_version, listen_language = _deepgram_listen_stage(settings)
 
     from roomkit.providers.deepgram.config import DeepgramAgentConfig
     from roomkit.providers.deepgram.realtime import DeepgramAgentProvider
 
     config = DeepgramAgentConfig(
         api_key=api_key,
+        listen_model=listen_model,
+        listen_version=listen_version,
+        listen_language=listen_language,
         think_provider=think_provider,
         think_model=think_model,
         speak_model=voice,
-        listen_language=settings.get("deepgram_agent_listen_language", "") or None,
         greeting=settings.get("deepgram_agent_greeting", "") or None,
     )
     return DeepgramAgentProvider(config), voice, think_model

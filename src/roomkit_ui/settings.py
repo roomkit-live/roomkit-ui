@@ -157,8 +157,13 @@ _DEFAULTS = {
     "deepgram_agent_voice": "aura-2-thalia-en",  # Aura speak model
     "deepgram_agent_think_provider": "open_ai",  # "open_ai" | "anthropic" | "google"
     "deepgram_agent_think_model": "",  # empty = Deepgram default (gpt-4o-mini)
-    "deepgram_agent_listen_language": "",  # e.g. "fr", "multi" (empty = default)
+    "deepgram_agent_listen_model": "",  # empty = auto (nova-3; nova-2 for languages)
+    "deepgram_agent_listen_language": "",  # e.g. "fr", "multi" (empty = English)
     "deepgram_agent_greeting": "",  # optional line spoken at session open
+    # Deepgram owns turn detection with no sensitivity knob; residual echo
+    # trips it constantly on speakers.  Half-duplex mutes the mic while the
+    # agent speaks — no barge-in at all, but no false ones either.
+    "deepgram_agent_half_duplex": True,
     # ElevenLabs Conversational AI (realtime)
     "elevenlabs_agent_id": "",  # required — agent from the ElevenLabs dashboard
     # xAI Grok realtime

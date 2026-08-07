@@ -5,6 +5,8 @@ import pytest
 from roomkit_ui.engine_realtime import (
     _build_provider_config,
     _build_realtime_provider,
+    _deepgram_half_duplex,
+    _deepgram_listen_stage,
     _realtime_sample_rate,
 )
 
@@ -68,6 +70,51 @@ def test_deepgram_settings_reach_the_config():
     assert config.think_provider == "anthropic"
     assert config.listen_language == "fr"
     assert config.greeting == "Bonjour!"
+
+
+def test_deepgram_listen_stage_defaults_to_nova3_english():
+    assert _deepgram_listen_stage({}) == ("nova-3", None, None)
+
+
+def test_deepgram_language_without_model_derives_nova2():
+    model, version, language = _deepgram_listen_stage({"deepgram_agent_listen_language": "fr"})
+    assert model == "nova-2"
+    assert version is None
+    assert language == "fr"
+
+
+def test_deepgram_multilingual_stays_on_nova3():
+    model, _, language = _deepgram_listen_stage({"deepgram_agent_listen_language": "multi"})
+    assert model == "nova-3"
+    assert language == "multi"
+
+
+def test_deepgram_explicit_model_wins_over_derivation():
+    model, _, _ = _deepgram_listen_stage(
+        {"deepgram_agent_listen_model": "nova-3", "deepgram_agent_listen_language": "fr"}
+    )
+    assert model == "nova-3"
+
+
+def test_deepgram_flux_gets_the_v2_listen_version():
+    model, version, _ = _deepgram_listen_stage({"deepgram_agent_listen_model": "flux-general-en"})
+    assert model == "flux-general-en"
+    assert version == "v2"
+
+
+def test_deepgram_listen_settings_reach_the_config():
+    provider, _, _ = _build_realtime_provider(
+        "deepgram",
+        {"deepgram_api_key": "k", "deepgram_agent_listen_language": "fr"},
+    )
+    assert provider._config.listen_model == "nova-2"
+    assert provider._config.listen_language == "fr"
+
+
+def test_half_duplex_is_deepgram_only_and_defaults_on():
+    assert _deepgram_half_duplex("deepgram", {}) is True
+    assert _deepgram_half_duplex("deepgram", {"deepgram_agent_half_duplex": False}) is False
+    assert _deepgram_half_duplex("gemini", {}) is False
 
 
 def test_deepgram_non_openai_think_provider_requires_a_model():

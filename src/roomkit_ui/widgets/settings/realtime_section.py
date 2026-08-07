@@ -91,6 +91,26 @@ DEEPGRAM_THINK_PROVIDERS = [
     ("Google", "google"),
 ]
 
+# Listen (STT) languages.  nova-3 monolingual is English-only: picking a
+# specific language with the model on Auto makes the engine select nova-2;
+# "Multilingual" rides nova-3's code-switching mode.
+DEEPGRAM_LANGUAGES = [
+    ("English (default)", ""),
+    ("Multilingual (nova-3)", "multi"),
+    ("French", "fr"),
+    ("Spanish", "es"),
+    ("German", "de"),
+    ("Portuguese", "pt"),
+    ("Italian", "it"),
+    ("Dutch", "nl"),
+    ("Japanese", "ja"),
+    ("Korean", "ko"),
+    ("Russian", "ru"),
+    ("Hindi", "hi"),
+]
+
+DEEPGRAM_LISTEN_MODELS = ["nova-3", "nova-2", "flux-general-en"]
+
 # Deepgram's think stage speaks each vendor's chat API, so roomkit's chat
 # model catalogs (pure-data modules) are the right suggestion source.
 DEEPGRAM_THINK_CATALOGS = {
@@ -292,6 +312,25 @@ class RealtimeSection(QWidget):
         )
         self._deepgram_voice_label = QLabel("Voice")
         rt_form.addRow(self._deepgram_voice_label, self.deepgram_voice)
+
+        self.deepgram_language = QComboBox()
+        for label, val in DEEPGRAM_LANGUAGES:
+            self.deepgram_language.addItem(label, val)
+        saved_dg_lang = settings.get("deepgram_agent_listen_language", "")
+        for i, (_, val) in enumerate(DEEPGRAM_LANGUAGES):
+            if val == saved_dg_lang:
+                self.deepgram_language.setCurrentIndex(i)
+                break
+        self._deepgram_language_label = QLabel("Language")
+        rt_form.addRow(self._deepgram_language_label, self.deepgram_language)
+
+        # Deepgram owns turn detection with no sensitivity knob — on
+        # speakers, residual echo trips it constantly.  Checked by default.
+        self.deepgram_half_duplex = QCheckBox("Prevent barge-in (mute mic while agent speaks)")
+        self.deepgram_half_duplex.setChecked(
+            bool(settings.get("deepgram_agent_half_duplex", True))
+        )
+        rt_form.addRow("", self.deepgram_half_duplex)
 
         # ── ElevenLabs Conversational AI ──
         self.elevenlabs_api_key = QLineEdit(settings.get("elevenlabs_api_key", ""))
@@ -546,11 +585,16 @@ class RealtimeSection(QWidget):
         )
         dg_form.addRow("LLM Model", self.deepgram_think_model)
 
-        self.deepgram_listen_language = QLineEdit(
-            settings.get("deepgram_agent_listen_language", "") or ""
+        self.deepgram_listen_model = QComboBox()
+        self.deepgram_listen_model.setEditable(True)
+        self.deepgram_listen_model.addItems(DEEPGRAM_LISTEN_MODELS)
+        self.deepgram_listen_model.setCurrentText(
+            settings.get("deepgram_agent_listen_model", "") or ""
         )
-        self.deepgram_listen_language.setPlaceholderText("e.g. fr, en, multi (empty = default)")
-        dg_form.addRow("Language", self.deepgram_listen_language)
+        listen_edit = self.deepgram_listen_model.lineEdit()
+        if listen_edit is not None:
+            listen_edit.setPlaceholderText("auto — nova-3, or nova-2 for a specific language")
+        dg_form.addRow("STT Model", self.deepgram_listen_model)
 
         self.deepgram_greeting = QLineEdit(settings.get("deepgram_agent_greeting", "") or "")
         self.deepgram_greeting.setPlaceholderText("Optional line spoken when the session opens")
@@ -620,6 +664,9 @@ class RealtimeSection(QWidget):
                 self.deepgram_api_key,
                 self._deepgram_voice_label,
                 self.deepgram_voice,
+                self._deepgram_language_label,
+                self.deepgram_language,
+                self.deepgram_half_duplex,
                 self._deepgram_adv_toggle,
             ],
             "elevenlabs": [
@@ -740,7 +787,9 @@ class RealtimeSection(QWidget):
                 self.deepgram_think_provider.currentData() or "open_ai"
             ),
             "deepgram_agent_think_model": self.deepgram_think_model.currentText().strip(),
-            "deepgram_agent_listen_language": self.deepgram_listen_language.text().strip(),
+            "deepgram_agent_listen_model": self.deepgram_listen_model.currentText().strip(),
+            "deepgram_agent_listen_language": self.deepgram_language.currentData() or "",
+            "deepgram_agent_half_duplex": self.deepgram_half_duplex.isChecked(),
             "deepgram_agent_greeting": self.deepgram_greeting.text().strip(),
             "elevenlabs_agent_id": self.elevenlabs_agent_id.text().strip(),
             "xai_api_key": self.xai_api_key.text().strip(),
