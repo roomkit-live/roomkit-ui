@@ -160,10 +160,12 @@ _DEFAULTS = {
     "deepgram_agent_listen_model": "",  # empty = auto (nova-3; nova-2 for languages)
     "deepgram_agent_listen_language": "",  # e.g. "fr", "multi" (empty = English)
     "deepgram_agent_greeting": "",  # optional line spoken at session open
-    # Deepgram owns turn detection with no sensitivity knob; residual echo
-    # trips it constantly on speakers.  Half-duplex mutes the mic while the
-    # agent speaks — no barge-in at all, but no false ones either.
-    "deepgram_agent_half_duplex": True,
+    # Deepgram owns turn detection with no sensitivity knob.  The default
+    # wiring mirrors roomkit's deepgram example (transport-level AEC +
+    # webrtc NS + larger prebuffer), which keeps the mic open; half-duplex
+    # (mic muted while the agent speaks) is the escape hatch for setups
+    # whose echo still trips it.
+    "deepgram_agent_half_duplex": False,
     # ElevenLabs Conversational AI (realtime)
     "elevenlabs_agent_id": "",  # required — agent from the ElevenLabs dashboard
     # xAI Grok realtime

@@ -111,10 +111,37 @@ def test_deepgram_listen_settings_reach_the_config():
     assert provider._config.listen_language == "fr"
 
 
-def test_half_duplex_is_deepgram_only_and_defaults_on():
-    assert _deepgram_half_duplex("deepgram", {}) is True
-    assert _deepgram_half_duplex("deepgram", {"deepgram_agent_half_duplex": False}) is False
-    assert _deepgram_half_duplex("gemini", {}) is False
+def test_half_duplex_is_deepgram_only_and_defaults_off():
+    # Default wiring mirrors roomkit's deepgram example (transport AEC, open
+    # mic); half-duplex is the opt-in escape hatch.
+    assert _deepgram_half_duplex("deepgram", {}) is False
+    assert _deepgram_half_duplex("deepgram", {"deepgram_agent_half_duplex": True}) is True
+    assert _deepgram_half_duplex("gemini", {"deepgram_agent_half_duplex": True}) is False
+
+
+def test_transport_profile_deepgram_mirrors_the_example():
+    from roomkit_ui.engine_realtime import _transport_audio_profile
+
+    aec = object()
+    transport_aec, denoiser, prebuffer = _transport_audio_profile("deepgram", aec, 24000)
+    assert transport_aec is aec
+    assert denoiser is not None  # webrtc noise suppressor
+    assert prebuffer == 240
+
+
+def test_transport_profile_gemini_keeps_pipeline_aec():
+    from roomkit_ui.engine_realtime import _transport_audio_profile
+
+    transport_aec, denoiser, prebuffer = _transport_audio_profile("gemini", object(), 24000)
+    assert transport_aec is None
+    assert denoiser is None
+    assert prebuffer == 120
+
+
+def test_transport_profile_deepgram_without_aec_stays_default():
+    from roomkit_ui.engine_realtime import _transport_audio_profile
+
+    assert _transport_audio_profile("deepgram", None, 24000) == (None, None, 120)
 
 
 def test_deepgram_non_openai_think_provider_requires_a_model():

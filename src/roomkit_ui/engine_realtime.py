@@ -82,13 +82,15 @@ class RealtimeMixin:
             block_ms = 20
             frame_size = sample_rate * block_ms // 1000
 
-            # Denoisers are voice-channel only: a speech enhancer on the mic
-            # path keeps the *dominant* voice, so during doubletalk it eats
-            # the user's barge-in speech before the provider's VAD sees it.
+            # User-selected denoisers are voice-channel only: a speech
+            # enhancer on the mic path keeps the *dominant* voice, so during
+            # doubletalk it eats the user's barge-in speech before the
+            # provider's VAD sees it.  (Deepgram gets the mild WebRTC noise
+            # suppressor below, mirroring roomkit's example.)
             #
-            # Half-duplex (Deepgram default): the mic is muted while the
-            # agent speaks, so there is no echo to cancel — skip the AEC and
-            # let `mute_mic = aec is None` below arm the playback gate.
+            # Half-duplex (Deepgram escape hatch): the mic is muted while
+            # the agent speaks, so there is no echo to cancel — skip the AEC
+            # and let `mute_mic = aec is None` below arm the playback gate.
             if _deepgram_half_duplex(provider_name, settings):
                 logger.info("Deepgram half-duplex: mic muted during playback, AEC skipped")
                 aec_mode = "none"
@@ -111,6 +113,17 @@ class RealtimeMixin:
             if denoise_mode != "none":
                 logger.info("Denoiser (%s) not applied in realtime mode", denoise_mode)
             mute_mic = aec is None
+
+            # Provider-specific transport wiring — see _transport_audio_profile.
+            transport_aec, rt_denoiser, prebuffer_ms = _transport_audio_profile(
+                provider_name, aec, sample_rate
+            )
+            if transport_aec is not None:
+                logger.info(
+                    "Transport-level AEC (%s) + webrtc NS, prebuffer=%dms",
+                    provider_name,
+                    prebuffer_ms,
+                )
 
             input_device = settings.get("input_device")
             output_device = settings.get("output_device")
@@ -138,6 +151,7 @@ class RealtimeMixin:
                 diarization=diarization,
                 vad=vad,
                 aec=aec,
+                denoiser=rt_denoiser,
                 debug_taps=debug_taps,
                 recorder=recorder,
                 recording_config=recording_config,
@@ -146,18 +160,22 @@ class RealtimeMixin:
 
             # -- Transport -------------------------------------------------------
             # Pipeline attaches to the RealtimeVoiceChannel (see _start_session),
-            # NOT the transport.  AEC deliberately does NOT go to the backend:
-            # LocalAudioBackend(aec=...) flags NATIVE_AEC, which makes the
-            # pipeline skip its AEC stage and lose the continuous playback
-            # reference (the 0.9.0 barge-in fix).  Same wiring as roomkit's
-            # examples/realtime_voice_local_gemini.py.
+            # NOT the transport.  AEC placement is per provider (see
+            # _transport_audio_profile): Gemini/OpenAI keep the pipeline-stage
+            # AEC (transport_aec is None — LocalAudioBackend(aec=...) would
+            # flag NATIVE_AEC and lose the continuous playback reference, the
+            # 0.9.0 barge-in fix), while Deepgram runs it at transport level
+            # like roomkit's examples/realtime_voice_local_deepgram.py, where
+            # NATIVE_AEC correctly makes the pipeline skip its own stage.
             transport = LocalAudioBackend(
                 input_sample_rate=sample_rate,
                 output_sample_rate=sample_rate,
                 block_duration_ms=block_ms,
                 mute_mic_during_playback=mute_mic,
+                rt_prebuffer_ms=prebuffer_ms,
                 input_device=input_device,
                 output_device=output_device,
+                aec=transport_aec,
             )
 
             self._transport = transport  # type: ignore[attr-defined]
@@ -406,11 +424,33 @@ def _deepgram_half_duplex(provider_name: str, settings: dict) -> bool:
     """Whether this session should mute the mic during agent playback.
 
     Deepgram owns turn detection outright (``server_vad=False`` is ignored)
-    and exposes no sensitivity knob, so residual speaker echo trips
-    constant false barge-ins.  Half-duplex trades barge-in away entirely
-    for never being interrupted by your own speakers.
+    and exposes no sensitivity knob.  With the example-mirroring transport
+    AEC the mic stays open by default; this remains the escape hatch for
+    setups whose echo still trips it (loud speakers, no AEC installed).
     """
-    return provider_name == "deepgram" and bool(settings.get("deepgram_agent_half_duplex", True))
+    return provider_name == "deepgram" and bool(settings.get("deepgram_agent_half_duplex", False))
+
+
+def _transport_audio_profile(
+    provider_name: str, aec: Any, sample_rate: int
+) -> tuple[Any, Any, int]:
+    """Per-provider transport wiring: (transport_aec, pipeline_denoiser, prebuffer_ms).
+
+    Deepgram mirrors roomkit's ``examples/realtime_voice_local_deepgram.py``:
+    the AEC runs at transport level — inline on the PortAudio thread, so
+    reference and capture stay sample-synchronous.  Deepgram's turn
+    detection cannot tell the agent's echo from the caller, and the example
+    documents the endless barge-in loop an open, poorly-aligned mic causes.
+    A WebRTC noise suppressor rides the pipeline and the playback prebuffer
+    grows to absorb Aura's bursty delivery (the mid-response underruns seen
+    in the field logs).  Gemini/OpenAI keep the pipeline-stage AEC,
+    mirroring ``examples/realtime_voice_local_gemini.py``.
+    """
+    if provider_name == "deepgram" and aec is not None:
+        from roomkit_ui.engine_audio import build_denoiser
+
+        return aec, build_denoiser("webrtc", sample_rate), 240
+    return None, None, 120
 
 
 def _build_deepgram_agent(settings: dict) -> tuple[Any, str, str]:
@@ -596,6 +636,7 @@ def _build_realtime_pipeline(
     diarization: Any,
     vad: Any,
     aec: Any,
+    denoiser: Any = None,
     debug_taps: Any,
     recorder: Any,
     recording_config: Any,
@@ -621,6 +662,7 @@ def _build_realtime_pipeline(
         )
         return AudioPipelineConfig(
             aec=aec,
+            denoiser=denoiser,
             vad=vad,
             diarization=diarization,
             contract=contract,
@@ -630,9 +672,10 @@ def _build_realtime_pipeline(
             inbound_dsp_threads=DSP_THREADS,
         )
 
-    if aec is not None or debug_taps is not None or recorder is not None:
+    if aec is not None or denoiser is not None or debug_taps is not None or recorder is not None:
         return AudioPipelineConfig(
             aec=aec,
+            denoiser=denoiser,
             debug_taps=debug_taps,
             recorder=recorder,
             recording_config=recording_config,

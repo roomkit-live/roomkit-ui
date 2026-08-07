@@ -136,8 +136,8 @@ def test_deepgram_language_and_half_duplex_round_trip(qapp):
         s.deleteLater()
 
 
-def test_deepgram_defaults_half_duplex_on_and_auto_model(section):
+def test_deepgram_defaults_half_duplex_off_and_auto_model(section):
     out = section.get_settings()
-    assert out["deepgram_agent_half_duplex"] is True
+    assert out["deepgram_agent_half_duplex"] is False
     assert out["deepgram_agent_listen_model"] == ""  # auto
     assert out["deepgram_agent_listen_language"] == ""  # English default

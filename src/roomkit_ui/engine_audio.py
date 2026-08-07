@@ -171,7 +171,14 @@ def build_audio_processing(
 
 def build_denoiser(denoise_mode: str, sample_rate: int) -> Any:
     """Build a denoiser provider for the given mode and sample rate."""
-    if denoise_mode == "rnnoise":
+    if denoise_mode == "webrtc":
+        try:
+            from roomkit.voice.pipeline.denoiser.webrtc import WebRTCNoiseSuppressorProvider
+
+            return WebRTCNoiseSuppressorProvider(sample_rate=sample_rate)
+        except ImportError:
+            logger.warning("WebRTC noise suppressor not available")
+    elif denoise_mode == "rnnoise":
         try:
             from roomkit.voice.pipeline.denoiser.rnnoise import RNNoiseDenoiserProvider
 

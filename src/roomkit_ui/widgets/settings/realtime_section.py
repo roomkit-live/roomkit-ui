@@ -324,11 +324,12 @@ class RealtimeSection(QWidget):
         self._deepgram_language_label = QLabel("Language")
         rt_form.addRow(self._deepgram_language_label, self.deepgram_language)
 
-        # Deepgram owns turn detection with no sensitivity knob — on
-        # speakers, residual echo trips it constantly.  Checked by default.
+        # Deepgram owns turn detection with no sensitivity knob.  The
+        # default wiring (transport AEC + NS, per roomkit's example) keeps
+        # the mic open; this is the escape hatch when echo still trips it.
         self.deepgram_half_duplex = QCheckBox("Prevent barge-in (mute mic while agent speaks)")
         self.deepgram_half_duplex.setChecked(
-            bool(settings.get("deepgram_agent_half_duplex", True))
+            bool(settings.get("deepgram_agent_half_duplex", False))
         )
         rt_form.addRow("", self.deepgram_half_duplex)
 
