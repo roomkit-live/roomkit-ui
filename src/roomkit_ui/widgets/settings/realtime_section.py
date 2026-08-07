@@ -118,10 +118,7 @@ def _populate_voice_combo(combo: QComboBox, options: list[tuple[str, str]], curr
     """
     editable = combo.isEditable()
     for vid, traits in options:
-        if editable or not traits:
-            label = vid
-        else:
-            label = f"{vid} — {traits[:48]}"
+        label = vid if editable or not traits else f"{vid} — {traits[:48]}"
         combo.addItem(label, vid)
         if traits:
             combo.setItemData(combo.count() - 1, traits, Qt.ToolTipRole)
