@@ -170,6 +170,51 @@ def register_vc_hooks(kit: Any, engine: Any) -> None:
             pass
 
 
+# Quiet time after the last cumulative update before the user final is
+# shown.  xAI's updates arrive well under this while speech continues; the
+# cost is a slightly later user bubble, cut short anyway the moment the
+# assistant starts answering.
+_XAI_FINAL_DEBOUNCE_S = 0.8
+
+
+def _debounce_user_final(engine: Any, text: str, speaker: str) -> None:
+    """(Re)arm the pending user final with the latest cumulative text."""
+    import asyncio
+
+    handle = engine._xai_final_handle
+    if handle is not None:
+        handle.cancel()
+    engine._xai_pending_final = (text, speaker)
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        # No loop (session tearing down) — flush synchronously.
+        engine._xai_final_handle = None
+        _flush_pending_user_final(engine)
+        return
+    engine._xai_final_handle = loop.call_later(
+        _XAI_FINAL_DEBOUNCE_S, _flush_pending_user_final, engine
+    )
+
+
+def _flush_pending_user_final(engine: Any) -> None:
+    """Emit the held user final, if any."""
+    handle = engine._xai_final_handle
+    if handle is not None:
+        handle.cancel()
+        engine._xai_final_handle = None
+    pending = engine._xai_pending_final
+    engine._xai_pending_final = None
+    if pending is None:
+        return
+    text, speaker = pending
+    engine._partial_buffers.pop("user", None)
+    try:
+        engine.transcription.emit(text, "user", True, speaker)
+    except Exception:
+        pass
+
+
 def _voice_error_notice(prefix: str, data: dict) -> str:
     """One chat-visible line for a tts_error / stt_error framework event."""
     provider = data.get("provider") or "unknown"
@@ -271,6 +316,19 @@ def register_realtime_hooks(kit: Any, engine: Any) -> None:
                 except Exception:
                     pass
             return HookResult.block("non-primary speaker")
+
+        # xAI streams the user transcription by re-emitting the *completed*
+        # event with cumulative text as the utterance grows — every update
+        # looks like a final and became its own chat bubble ("Quelle
+        # aventure ?" / "Quelle aventure ? De quelle aventure ?" / …).
+        # Debounce: hold the latest version, flush when the stream goes
+        # quiet.  An assistant transcription flushes immediately so the
+        # user bubble always lands before the reply it triggered.
+        if role == "assistant":
+            _flush_pending_user_final(engine)
+        elif is_final and engine._realtime_provider_name == "xai":
+            _debounce_user_final(engine, text, speaker)
+            return HookResult.block("debounced streaming final")
 
         # Accumulate partials (providers send deltas, UI needs full text)
         try:

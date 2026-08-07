@@ -150,6 +150,12 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         # Duplicate-final guard: xAI's realtime server can emit the
         # input-transcription-completed event twice for one utterance.
         self._last_finals: dict[str, tuple[str, float]] = {}  # role → (text, monotonic)
+        # xAI streaming-final debounce (see hooks._debounce_user_final):
+        # the active realtime provider name gates it, the handle/pending
+        # pair carries the held user final.
+        self._realtime_provider_name: str = ""
+        self._xai_final_handle: asyncio.TimerHandle | None = None
+        self._xai_pending_final: tuple[str, str] | None = None
         # Model cache: persist heavy ONNX models across sessions to avoid
         # reloading STT / TTS / diarization on every conversation start.
         # Maps type → (cache_key_tuple, provider_instance).
@@ -433,6 +439,12 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         self._primary_speaker_name = ""
         self._partial_buffers.clear()
         self._partial_speakers.clear()
+        self._last_finals.clear()
+        if self._xai_final_handle is not None:
+            self._xai_final_handle.cancel()
+            self._xai_final_handle = None
+        self._xai_pending_final = None
+        self._realtime_provider_name = ""
         self._base_system_prompt = ""
         # Note: self._attitude is preserved across reconnects and only
         # cleared in stop() when the user explicitly ends the session.

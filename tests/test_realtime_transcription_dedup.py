@@ -43,6 +43,9 @@ class _FakeEngine(QObject):
         self._partial_buffers = {}
         self._partial_speakers = {}
         self._last_finals = {}
+        self._realtime_provider_name = ""
+        self._xai_final_handle = None
+        self._xai_pending_final = None
         self._spk_rms_queue = []
         self.emitted = []
         self.transcription.connect(
@@ -53,9 +56,7 @@ class _FakeEngine(QObject):
 def _transcription_hook(engine):
     kit = _FakeKit()
     register_realtime_hooks(kit, engine)
-    keys = [
-        k for k in kit.hooks if "transcription" in k.lower() and "partial" not in k.lower()
-    ]
+    keys = [k for k in kit.hooks if "transcription" in k.lower() and "partial" not in k.lower()]
     assert keys, f"no transcription hook registered — got {list(kit.hooks)}"
     return kit.hooks[keys[0]]
 
@@ -107,3 +108,67 @@ async def test_assistant_finals_are_never_deduped(qapp):
     await hook(_event("Bien sûr !", role="assistant"), None)
 
     assert len(engine.emitted) == 2
+
+
+# -- xAI streaming finals (cumulative text, one bubble) -----------------------
+
+
+def _xai_engine():
+    engine = _FakeEngine()
+    engine._realtime_provider_name = "xai"
+    engine._xai_final_handle = None
+    engine._xai_pending_final = None
+    return engine
+
+
+async def test_growing_finals_collapse_into_one_bubble(qapp, monkeypatch):
+    import asyncio
+
+    import roomkit_ui.hooks as hooks_mod
+
+    monkeypatch.setattr(hooks_mod, "_XAI_FINAL_DEBOUNCE_S", 0.05)
+    engine = _xai_engine()
+    hook = _transcription_hook(engine)
+
+    r1 = await hook(_event("Quelle aventure ?"), None)
+    r2 = await hook(_event("Quelle aventure ? De quelle aventure ?"), None)
+    r3 = await hook(_event("Quelle aventure ? De quelle aventure tu veux qu'on parle ?"), None)
+
+    # Every streaming update is blocked (never reaches chat or room)…
+    assert {r.action for r in (r1, r2, r3)} == {"block"}
+    assert engine.emitted == []
+
+    # …and after the stream goes quiet, exactly one final with the full text.
+    await asyncio.sleep(0.15)
+    assert engine.emitted == [
+        ("Quelle aventure ? De quelle aventure tu veux qu'on parle ?", "user", True)
+    ]
+
+
+async def test_assistant_reply_flushes_the_pending_user_final_first(qapp, monkeypatch):
+    import roomkit_ui.hooks as hooks_mod
+
+    monkeypatch.setattr(hooks_mod, "_XAI_FINAL_DEBOUNCE_S", 30.0)  # never fires on its own
+    engine = _xai_engine()
+    hook = _transcription_hook(engine)
+
+    await hook(_event("Quelle aventure ?"), None)
+    await hook(_event("Réponse de l'assistant.", role="assistant"), None)
+
+    # User bubble lands before the assistant's, in order.
+    assert engine.emitted == [
+        ("Quelle aventure ?", "user", True),
+        ("Réponse de l'assistant.", "assistant", True),
+    ]
+    assert engine._xai_final_handle is None
+
+
+async def test_non_xai_providers_keep_immediate_finals(qapp):
+    engine = _FakeEngine()
+    engine._realtime_provider_name = "gemini"
+    engine._xai_final_handle = None
+    engine._xai_pending_final = None
+    hook = _transcription_hook(engine)
+
+    await hook(_event("Salut !"), None)
+    assert engine.emitted == [("Salut !", "user", True)]
