@@ -4,11 +4,19 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QByteArray, QRectF, Qt, QTimer
+from PySide6.QtCore import (
+    QByteArray,
+    QEasingCurve,
+    QPropertyAnimation,
+    QRectF,
+    Qt,
+    QTimer,
+)
 from PySide6.QtGui import QColor, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
     QFrame,
+    QGraphicsOpacityEffect,
     QLabel,
     QScrollArea,
     QVBoxLayout,
@@ -17,6 +25,31 @@ from PySide6.QtWidgets import (
 
 from roomkit_ui.theme import colors
 from roomkit_ui.widgets.chat_bubble import ChatBubble
+
+# Entrance fade for new rows (bubbles, tool/info pills).
+_FADE_IN_MS = 220
+
+
+def _fade_in(widget: QWidget) -> None:
+    """Fade a freshly inserted row from transparent to opaque.
+
+    The opacity effect is removed once the animation lands: leaving it in
+    place costs an offscreen render pass per paint — noticeable under the
+    software renderer this app often runs on — and can subtly change text
+    antialiasing.  The animation is parented to the widget so an early
+    row teardown (diarization re-classifying a bubble) tears it down too.
+    """
+    effect = QGraphicsOpacityEffect(widget)
+    effect.setOpacity(0.0)
+    widget.setGraphicsEffect(effect)
+    anim = QPropertyAnimation(effect, b"opacity", widget)
+    anim.setDuration(_FADE_IN_MS)
+    anim.setStartValue(0.0)
+    anim.setEndValue(1.0)
+    anim.setEasingCurve(QEasingCurve.OutCubic)
+    # None removes the effect — valid Qt, but the stubs disagree.
+    anim.finished.connect(lambda: widget.setGraphicsEffect(None))  # type: ignore[arg-type]
+    anim.start(QPropertyAnimation.DeleteWhenStopped)
 
 
 class ChatView(QScrollArea):
@@ -167,6 +200,7 @@ class ChatView(QScrollArea):
             if idx < 0:
                 idx = 0
             self._layout.insertWidget(idx, bubble)
+            _fade_in(bubble)
             self._current_bubble = bubble
             if not is_final and role == "assistant":
                 bubble.start_streaming(text)
@@ -212,6 +246,7 @@ class ChatView(QScrollArea):
         if idx < 0:
             idx = 0
         self._layout.insertWidget(idx, widget)
+        _fade_in(widget)
         self._scroll_to_bottom()
 
     def _finalize_current_bubble(self) -> None:
