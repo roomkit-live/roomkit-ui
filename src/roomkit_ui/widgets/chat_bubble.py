@@ -1,4 +1,4 @@
-"""Single iMessage-style chat bubble with timestamp."""
+"""One chat entry — a subtle bubble for the user, typeset text for the AI."""
 
 from __future__ import annotations
 
@@ -48,7 +48,9 @@ def _markdown_to_html(text: str, c: dict[str, str]) -> str:
     )
 
     text_color = c["BUBBLE_AI_TEXT"]
-    return f'<div style="color:{text_color}; font-size:13px;">{body}</div>'
+    # Match the live-reveal typography (15px; the serif comes from the
+    # QLabel stylesheet) so finalization doesn't visibly reflow the text.
+    return f'<div style="color:{text_color}; font-size:15px;">{body}</div>'
 
 
 # Assistant word-reveal pacing.  ~230 ms/word ≈ 260 WPM — deliberately a
@@ -62,7 +64,8 @@ _STREAM_BACKLOG_WORDS = 12
 
 
 class ChatBubble(QFrame):
-    """A rounded chat bubble — blue/right for user, gray/left for AI."""
+    """One chat entry: user/other in a right-hugging grey bubble with a
+    timestamp; assistant as a bubble-less, full-column serif paragraph."""
 
     streaming_tick = Signal()
 
@@ -93,45 +96,68 @@ class ChatBubble(QFrame):
         c = colors()
         is_user = role in ("user", "other")
 
-        # ── Bubble container ──
+        # ── Container ──
+        # User/other messages keep a subtle bubble; assistant text renders
+        # bubble-less, as a full-column typeset paragraph (the modern
+        # AI-chat look).  A fixed-width paragraph also keeps the word
+        # reveal calm: only the height grows, line by line — the old
+        # width-hugging bubble reflowed in both axes on every tick.
         self._bubble = QFrame()
         self._bubble.setObjectName("bubbleFrame")
-        if role == "other":
-            bg = c["BUBBLE_OTHER_BG"]
-        elif role == "user":
-            bg = c["BUBBLE_USER_BG"]
+        if is_user:
+            bg = c["BUBBLE_OTHER_BG"] if role == "other" else c["BUBBLE_USER_BG"]
+            self._bubble.setStyleSheet(
+                f"QFrame#bubbleFrame {{"
+                f"  background-color: {bg};"
+                f"  border-radius: 18px;"
+                f"  border-top-right-radius: 4px;"
+                f"}}"
+            )
         else:
-            bg = c["BUBBLE_AI_BG"]
-        self._bubble.setStyleSheet(
-            f"QFrame#bubbleFrame {{"
-            f"  background-color: {bg};"
-            f"  border-radius: 18px;"
-            f"  border-top-{'right' if is_user else 'left'}-radius: 4px;"
-            f"}}"
-        )
+            self._bubble.setStyleSheet("QFrame#bubbleFrame { background: transparent; }")
 
         # ── Message text ──
         text_color = c["BUBBLE_USER_TEXT"] if is_user else c["BUBBLE_AI_TEXT"]
         self._label = QLabel(text)
         self._label.setWordWrap(True)
         self._label.setTextFormat(Qt.PlainText)
-        self._label.setMaximumWidth(380)
-        self._label.setStyleSheet(
-            f"QLabel {{"
-            f"  color: {text_color};"
-            f"  font-size: 13px;"
-            f"  line-height: 1.4;"
-            f"  padding: 10px 14px 8px 14px;"
-            f"  background: transparent;"
-            f"}}"
-        )
+        if is_user:
+            self._label.setMaximumWidth(380)
+            self._label.setStyleSheet(
+                f"QLabel {{"
+                f"  color: {text_color};"
+                f"  font-size: 13px;"
+                f"  line-height: 1.4;"
+                f"  padding: 10px 14px 8px 14px;"
+                f"  background: transparent;"
+                f"}}"
+            )
+        else:
+            # Readable measure, generous leading, a serif for the voice of
+            # the assistant — text, not a speech balloon.  No width cap on
+            # the label itself: it fills the (capped) container, so the
+            # wrap measure is fixed by layout, not by content.
+            self._label.setStyleSheet(
+                f"QLabel {{"
+                f"  color: {text_color};"
+                f"  font-family: 'Iowan Old Style', 'Palatino', Georgia, serif;"
+                f"  font-size: 15px;"
+                f"  line-height: 1.55;"
+                f"  padding: 6px 14px 6px 14px;"
+                f"  background: transparent;"
+                f"}}"
+            )
 
         bubble_layout = QVBoxLayout(self._bubble)
         bubble_layout.setContentsMargins(0, 0, 0, 0)
         bubble_layout.setSpacing(0)
         bubble_layout.addWidget(self._label)
+        if not is_user:
+            # Cap the measure on the container; the trailing row stretch
+            # below pins it left when the window is wider than the measure.
+            self._bubble.setMaximumWidth(680)
 
-        # ── Timestamp ──
+        # ── Timestamp ── (user messages only; assistant text stays clean)
         self._time_label = QLabel(self._created.strftime("%H:%M"))
         align = Qt.AlignRight if is_user else Qt.AlignLeft
         self._time_label.setAlignment(align)
@@ -143,8 +169,13 @@ class ChatBubble(QFrame):
             f"  padding: 2px 4px 0px 4px;"
             f"}}"
         )
+        if not is_user:
+            self._time_label.setVisible(False)
 
-        # ── Row: bubble aligned left or right ──
+        # ── Row: user bubble hugs the right; assistant text owns the row ──
+        # Giving the assistant container the full row width (stretch 1, no
+        # trailing spacer) is what keeps the word reveal steady: the text
+        # wraps inside a fixed measure instead of resizing its own box.
         row = QHBoxLayout()
         row.setContentsMargins(10, 0, 10, 0)
         row.setSpacing(0)
@@ -152,7 +183,7 @@ class ChatBubble(QFrame):
             row.addStretch()
             row.addWidget(self._bubble)
         else:
-            row.addWidget(self._bubble)
+            row.addWidget(self._bubble, 1)
             row.addStretch()
 
         # ── Time row ──

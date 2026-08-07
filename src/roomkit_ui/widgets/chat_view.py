@@ -228,20 +228,21 @@ class ChatView(QScrollArea):
         self._hide_status()
 
     def _make_status_label(self, text: str, color: str) -> QLabel:
-        """Centered pill-style label shared by loading/info/tool/error rows."""
-        c = colors()
+        """Quiet inline note shared by loading/info/tool/error rows.
+
+        Left-aligned muted text in the flow of the conversation — the way
+        modern AI chats surface "tools loaded, web searched" — rather than
+        a centered pill that interrupts it.
+        """
         label = QLabel(text)
         label.setWordWrap(True)
-        label.setAlignment(Qt.AlignCenter)
+        label.setAlignment(Qt.AlignLeft)
         label.setStyleSheet(
             f"QLabel {{"
             f"  color: {color};"
             f"  font-size: 12px;"
-            f"  background: {c['BG_TERTIARY']};"
-            f"  border: 1px solid {c['SEPARATOR']};"
-            f"  border-radius: 8px;"
-            f"  padding: 8px 16px;"
-            f"  margin: 4px 20px;"
+            f"  background: transparent;"
+            f"  padding: 2px 24px;"
             f"}}"
         )
         return label
