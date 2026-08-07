@@ -7,7 +7,7 @@ from datetime import datetime
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout
 
-from roomkit_ui.theme import colors
+from roomkit_ui.theme import CHAT_FONT_FAMILY, CHAT_FONT_SIZE_PX, colors
 
 
 def _markdown_to_html(text: str, c: dict[str, str]) -> str:
@@ -48,9 +48,9 @@ def _markdown_to_html(text: str, c: dict[str, str]) -> str:
     )
 
     text_color = c["BUBBLE_AI_TEXT"]
-    # Match the live-reveal typography (15px; the serif comes from the
-    # QLabel stylesheet) so finalization doesn't visibly reflow the text.
-    return f'<div style="color:{text_color}; font-size:15px;">{body}</div>'
+    # Match the live-reveal typography (family via the QLabel stylesheet)
+    # so finalization doesn't visibly reflow the text.
+    return f'<div style="color:{text_color}; font-size:{CHAT_FONT_SIZE_PX}px;">{body}</div>'
 
 
 # Assistant word-reveal pacing.  ~230 ms/word ≈ 260 WPM — deliberately a
@@ -121,27 +121,30 @@ class ChatBubble(QFrame):
         self._label = QLabel(text)
         self._label.setWordWrap(True)
         self._label.setTextFormat(Qt.PlainText)
+        # One conversation typeface for both speakers — coherence lives in
+        # the shared family/size, the roles differ only in *framing* (the
+        # user's bubble vs the assistant's open column).
         if is_user:
-            self._label.setMaximumWidth(380)
+            self._label.setMaximumWidth(420)
             self._label.setStyleSheet(
                 f"QLabel {{"
                 f"  color: {text_color};"
-                f"  font-size: 13px;"
-                f"  line-height: 1.4;"
-                f"  padding: 10px 14px 8px 14px;"
+                f"  font-family: {CHAT_FONT_FAMILY};"
+                f"  font-size: {CHAT_FONT_SIZE_PX}px;"
+                f"  line-height: 1.5;"
+                f"  padding: 9px 14px 8px 14px;"
                 f"  background: transparent;"
                 f"}}"
             )
         else:
-            # Readable measure, generous leading, a serif for the voice of
-            # the assistant — text, not a speech balloon.  No width cap on
-            # the label itself: it fills the (capped) container, so the
-            # wrap measure is fixed by layout, not by content.
+            # No width cap on the label itself: it fills the (capped)
+            # container, so the wrap measure is fixed by layout, not by
+            # content — that is what keeps the word reveal steady.
             self._label.setStyleSheet(
                 f"QLabel {{"
                 f"  color: {text_color};"
-                f"  font-family: 'Iowan Old Style', 'Palatino', Georgia, serif;"
-                f"  font-size: 15px;"
+                f"  font-family: {CHAT_FONT_FAMILY};"
+                f"  font-size: {CHAT_FONT_SIZE_PX}px;"
                 f"  line-height: 1.55;"
                 f"  padding: 6px 14px 6px 14px;"
                 f"  background: transparent;"

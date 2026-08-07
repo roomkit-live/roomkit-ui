@@ -52,6 +52,13 @@ LIGHT: dict[str, str] = {
 
 _PALETTES = {"dark": DARK, "light": LIGHT}
 
+# One family for everything *said* in the conversation — user and assistant
+# alike (the meta layer — timestamps, status notes, chrome — stays on the
+# app's sans stack).  Splitting families between the two speakers is what
+# reads as incoherence.
+CHAT_FONT_FAMILY = "'Iowan Old Style', 'Palatino', Georgia, serif"
+CHAT_FONT_SIZE_PX = 15
+
 
 def get_colors(theme: str = "dark") -> dict[str, str]:
     """Return the palette dict for *theme* ('dark' or 'light')."""
