@@ -269,3 +269,26 @@ def register_realtime_hooks(kit: Any, engine: Any) -> None:
         except Exception:
             pass
         return HookResult.allow()
+
+    # Partial transcriptions travel their own trigger (the channel skips
+    # the full hook pipeline for them).  Nothing registered here until the
+    # providers started streaming deltas (xAI, Deepgram sentence-by-
+    # sentence) — without this hook the realtime chat showed nothing while
+    # the agent spoke and the whole reply appeared at the final.
+    @kit.hook(HookTrigger.ON_PARTIAL_TRANSCRIPTION, HookExecution.ASYNC)
+    async def _on_partial(event, context):
+        try:
+            if engine._state != EngineState.ACTIVE:
+                return
+            role = str(getattr(event, "role", "user") or "user")
+            speaker = ""
+            if role == "user":
+                current = engine._current_speaker_id or ""
+                if current and current != "unknown":
+                    engine._partial_speakers[role] = current
+                speaker = engine._partial_speakers.get(role, "") or current
+            buf = engine._partial_buffers.get(role, "") + str(event.text)
+            engine._partial_buffers[role] = buf
+            engine.transcription.emit(buf, role, False, speaker)
+        except Exception:
+            pass
