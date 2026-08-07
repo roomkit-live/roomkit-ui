@@ -70,7 +70,8 @@ class MarketplaceTab(QWidget):
             f"QPushButton {{ font-size: 11px; font-weight: 600;"
             f" background: {c['BG_SECONDARY']}; color: {c['ACCENT_BLUE']};"
             f" border: 1px solid {c['SEPARATOR']}; border-radius: 6px;"
-            " padding: 0 10px; }}"
+            # Plain string: "}}" would stay literal and break the whole sheet.
+            " padding: 0 10px; }"
             f"QPushButton:hover {{ background: {c['BG_TERTIARY']}; }}"
         )
         open_btn.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(BASE_URL)))
