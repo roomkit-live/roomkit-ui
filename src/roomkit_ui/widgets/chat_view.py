@@ -172,7 +172,12 @@ class ChatView(QScrollArea):
             and not self._current_bubble.finalized
             and self._current_bubble.role == role
         ):
-            self._current_bubble.set_text(text)
+            if role == "assistant":
+                # Keep the word reveal rolling — set_text would snap the
+                # whole update into place and kill the pacing.
+                self._current_bubble.update_stream(text)
+            else:
+                self._current_bubble.set_text(text)
             # Update speaker label when diarization catches up mid-utterance
             if speaker_name:
                 self._current_bubble.set_speaker_name(speaker_name)
@@ -190,8 +195,9 @@ class ChatView(QScrollArea):
                     self._current_bubble = None
                 else:
                     self._current_bubble.finalize()
-            if not is_final and role == "assistant":
-                # Create empty bubble then stream words in
+            if role == "assistant":
+                # Always stream assistant text — a provider that hands the
+                # full transcript at once (Grok, OpenAI) still rolls out.
                 bubble = ChatBubble("", role=role, speaker_name=speaker_name)
             else:
                 bubble = ChatBubble(text, role=role, speaker_name=speaker_name)
@@ -202,7 +208,7 @@ class ChatView(QScrollArea):
             self._layout.insertWidget(idx, bubble)
             _fade_in(bubble)
             self._current_bubble = bubble
-            if not is_final and role == "assistant":
+            if role == "assistant":
                 bubble.start_streaming(text)
                 bubble.streaming_tick.connect(self._scroll_to_bottom)
 

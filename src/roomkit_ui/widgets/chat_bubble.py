@@ -51,6 +51,16 @@ def _markdown_to_html(text: str, c: dict[str, str]) -> str:
     return f'<div style="color:{text_color}; font-size:13px;">{body}</div>'
 
 
+# Assistant word-reveal pacing.  ~230 ms/word ≈ 260 WPM — deliberately a
+# bit faster than speech (~150 WPM) so the text never lags far behind the
+# voice, while still *rolling out* rather than appearing at once.  When the
+# unrevealed backlog grows (a provider that delivers the transcript in big
+# chunks, e.g. Grok), the reveal accelerates to catch up.
+_STREAM_WORD_MS = 230
+_STREAM_CATCHUP_MS = 80
+_STREAM_BACKLOG_WORDS = 12
+
+
 class ChatBubble(QFrame):
     """A rounded chat bubble — blue/right for user, gray/left for AI."""
 
@@ -76,6 +86,9 @@ class ChatBubble(QFrame):
         self._stream_timer = QTimer(self)
         self._stream_timer.timeout.connect(self._stream_tick)
         self._streaming_connected = False
+        # finalize() arrived while words were still revealing — complete
+        # the animation first, then do the real finalization.
+        self._finalize_pending = False
 
         c = colors()
         is_user = role in ("user", "other")
@@ -205,47 +218,74 @@ class ChatBubble(QFrame):
         return self._raw_text
 
     def start_streaming(self, full_text: str) -> None:
-        """Start word-by-word reveal animation for assistant bubbles.
+        """Begin the word-by-word reveal for an assistant bubble.
 
-        Words appear progressively, paced to roughly match TTS speaking
-        speed (~150 WPM).  The timer is stopped when finalize() is called.
+        The reveal is paced (see the module constants) so the text *rolls
+        out* roughly alongside the voice instead of appearing at once, and
+        ``update_stream`` extends the target text without resetting the
+        words already shown.
         """
         self._stream_timer.stop()
         if not self._streaming_connected:
             self._stream_timer.timeout.connect(self.streaming_tick.emit)
             self._streaming_connected = True
+        self._stream_words = []
+        self._stream_index = 0
+        self.update_stream(full_text)
+
+    def update_stream(self, full_text: str) -> None:
+        """Update the reveal target with a newer (fuller) transcript.
+
+        Providers deliver the transcript on their own cadence — Gemini in a
+        trickle, Grok in a few large chunks — so the target text may jump
+        while the reveal keeps its own pace; a growing backlog accelerates
+        the timer instead of snapping the text into place.
+        """
         self._raw_text = full_text
         self._stream_words = full_text.split()
-        self._stream_index = 0
-
         if not self._stream_words:
             self._label.setText(full_text)
             return
-
-        # Pace: spread words across estimated speaking time.
-        # ~150 WPM = 400ms/word, but cap interval to keep it snappy.
-        n = len(self._stream_words)
-        interval = max(40, min(120, 400 // max(n, 1)))  # clamp 40-120ms
-        # For short responses, reveal faster
-        if n <= 5:
-            interval = 40
-        self._stream_timer.setInterval(interval)
-        # Show first word immediately
-        self._stream_index = 1
-        self._label.setText(self._stream_words[0])
-        if n > 1:
+        if self._stream_index == 0:
+            # First words show immediately — the bubble must not sit empty.
+            self._stream_index = 1
+            self._label.setText(self._stream_words[0])
+        if self._stream_index < len(self._stream_words) and not self._stream_timer.isActive():
+            self._stream_timer.setInterval(_STREAM_WORD_MS)
             self._stream_timer.start()
 
     def _stream_tick(self) -> None:
-        """Reveal the next word(s)."""
+        """Reveal the next word; complete a pending finalization at the end."""
         if self._stream_index >= len(self._stream_words):
             self._stream_timer.stop()
+            if self._finalize_pending:
+                self._complete_finalize()
             return
         self._stream_index += 1
-        visible = " ".join(self._stream_words[: self._stream_index])
-        self._label.setText(visible)
+        self._label.setText(" ".join(self._stream_words[: self._stream_index]))
+        backlog = len(self._stream_words) - self._stream_index
+        self._stream_timer.setInterval(
+            _STREAM_CATCHUP_MS if backlog > _STREAM_BACKLOG_WORDS else _STREAM_WORD_MS
+        )
 
     def finalize(self) -> None:
+        """Freeze the bubble — after the reveal finishes, if one is running.
+
+        A provider that sends its full transcript before the audio ends
+        (Grok, OpenAI) finalizes almost immediately; snapping the complete
+        text into place here is what killed the rolling-text feel.  The
+        animation is left to finish and the real finalization (markdown
+        render, timestamp) happens on its last tick.
+        """
+        if self._role not in ("user", "other") and self._stream_index < len(self._stream_words):
+            self._finalize_pending = True
+            if not self._stream_timer.isActive():
+                self._stream_timer.start()
+            return
+        self._complete_finalize()
+
+    def _complete_finalize(self) -> None:
+        self._finalize_pending = False
         self._stream_timer.stop()
         if self._streaming_connected:
             self._stream_timer.timeout.disconnect(self.streaming_tick.emit)
