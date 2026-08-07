@@ -17,6 +17,7 @@ from roomkit_ui.settings import load_settings
 from roomkit_ui.theme import colors
 from roomkit_ui.widgets.chat_view import ChatView
 from roomkit_ui.widgets.control_bar import ControlBar
+from roomkit_ui.widgets.loading_overlay import LoadingOverlay
 from roomkit_ui.widgets.session_info import SessionInfoBar
 from roomkit_ui.widgets.settings import SettingsPanel
 from roomkit_ui.widgets.vu_meter import VUMeter
@@ -67,6 +68,10 @@ class MainWindow(QMainWindow):
         # ── VU Meter ──
         self._vu = VUMeter()
         root.addWidget(self._vu)
+
+        # Full-window curtain while a session connects (child of the central
+        # widget so it covers everything, chat and controls included).
+        self._loading_overlay = LoadingOverlay(central)
 
         # ── Separator ──
         sep = QWidget()
@@ -145,11 +150,16 @@ class MainWindow(QMainWindow):
 
     def _on_state_changed(self, state: str) -> None:
         self._controls.set_state(state)
-        if state == EngineState.ACTIVE:
+        if state == EngineState.CONNECTING:
+            self._loading_overlay.set_status("Starting session…")
+            self._loading_overlay.show_loading()
+        elif state == EngineState.ACTIVE:
             self._chat.clear_loading_status()
+            self._loading_overlay.dismiss()
             self._vu.start()
             self.session_active_changed.emit(True)
         elif state in (EngineState.IDLE, EngineState.ERROR):
+            self._loading_overlay.dismiss()
             self._chat.reset()
             self._vu.stop()
             self._info_bar.clear_session()
@@ -183,7 +193,8 @@ class MainWindow(QMainWindow):
         self._chat.add_info(message)
 
     def _on_loading_status(self, message: str) -> None:
-        self._chat.set_loading_status(message)
+        # The full-window overlay narrates startup; the chat stays clean.
+        self._loading_overlay.set_status(message)
 
     def _on_tool_use(self, name: str, arguments: str) -> None:
         logger.info("Tool call: %s (%d arg chars)", name, len(arguments))
