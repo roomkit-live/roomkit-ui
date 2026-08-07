@@ -160,6 +160,10 @@ _DEFAULTS = {
     "deepgram_agent_think_model": "",  # empty = Deepgram default (gpt-4o-mini)
     "deepgram_agent_listen_model": "",  # empty = auto (nova-3; nova-2 for languages)
     "deepgram_agent_listen_language": "",  # e.g. "fr", "multi" (empty = English)
+    "deepgram_agent_speak_provider": "",  # "" (Aura) | "eleven_labs" | "open_ai"
+    "deepgram_agent_speak_model": "",  # vendor TTS model (empty = vendor default)
+    "deepgram_agent_speak_voice": "",  # ElevenLabs voice ID / OpenAI voice name
+    "deepgram_agent_speak_speed": "",  # 0.7–1.5, Aura voices (empty = 1.0)
     "deepgram_agent_greeting": "",  # optional line spoken at session open
     # Deepgram owns turn detection with no sensitivity knob.  The default
     # wiring mirrors roomkit's deepgram example (transport-level AEC +

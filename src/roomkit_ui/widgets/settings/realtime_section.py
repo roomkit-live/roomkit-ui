@@ -601,6 +601,36 @@ class RealtimeSection(QWidget):
             listen_edit.setPlaceholderText("auto — nova-3, or nova-2 for a specific language")
         dg_form.addRow("STT Model", self.deepgram_listen_model)
 
+        self.deepgram_speak_provider = QComboBox()
+        for label, val in [
+            ("Deepgram Aura", ""),
+            ("ElevenLabs", "eleven_labs"),
+            ("OpenAI", "open_ai"),
+        ]:
+            self.deepgram_speak_provider.addItem(label, val)
+        saved_speak = settings.get("deepgram_agent_speak_provider", "")
+        for i in range(self.deepgram_speak_provider.count()):
+            if self.deepgram_speak_provider.itemData(i) == saved_speak:
+                self.deepgram_speak_provider.setCurrentIndex(i)
+                break
+        self.deepgram_speak_provider.setToolTip(
+            "TTS vendor Deepgram hosts for the speak stage. ElevenLabs and OpenAI "
+            "use the API keys entered under their own provider sections."
+        )
+        dg_form.addRow("TTS Provider", self.deepgram_speak_provider)
+
+        self.deepgram_speak_model = QLineEdit(settings.get("deepgram_agent_speak_model", "") or "")
+        self.deepgram_speak_model.setPlaceholderText("vendor default — eleven_turbo_v2_5 / tts-1")
+        dg_form.addRow("TTS Model", self.deepgram_speak_model)
+
+        self.deepgram_speak_voice = QLineEdit(settings.get("deepgram_agent_speak_voice", "") or "")
+        self.deepgram_speak_voice.setPlaceholderText("ElevenLabs voice ID · OpenAI voice (alloy)")
+        dg_form.addRow("TTS Voice", self.deepgram_speak_voice)
+
+        self.deepgram_speak_speed = QLineEdit(settings.get("deepgram_agent_speak_speed", "") or "")
+        self.deepgram_speak_speed.setPlaceholderText("1.0 (0.7 slow – 1.5 fast, Aura voices)")
+        dg_form.addRow("Voice Speed", self.deepgram_speak_speed)
+
         self.deepgram_greeting = QLineEdit(settings.get("deepgram_agent_greeting", "") or "")
         self.deepgram_greeting.setPlaceholderText("Optional line spoken when the session opens")
         dg_form.addRow("Greeting", self.deepgram_greeting)
@@ -795,6 +825,10 @@ class RealtimeSection(QWidget):
             "deepgram_agent_listen_model": self.deepgram_listen_model.currentText().strip(),
             "deepgram_agent_listen_language": self.deepgram_language.currentData() or "",
             "deepgram_agent_half_duplex": self.deepgram_half_duplex.isChecked(),
+            "deepgram_agent_speak_provider": self.deepgram_speak_provider.currentData() or "",
+            "deepgram_agent_speak_model": self.deepgram_speak_model.text().strip(),
+            "deepgram_agent_speak_voice": self.deepgram_speak_voice.text().strip(),
+            "deepgram_agent_speak_speed": self.deepgram_speak_speed.text().strip(),
             "deepgram_agent_greeting": self.deepgram_greeting.text().strip(),
             "elevenlabs_agent_id": self.elevenlabs_agent_id.text().strip(),
             "xai_api_key": self.xai_api_key.text().strip(),

@@ -453,12 +453,77 @@ def _transport_audio_profile(
     return None, None, 120
 
 
+def _deepgram_speak_stage(settings: dict) -> tuple[str, dict | None, dict | None]:
+    """Compose ``agent.speak``: Aura by default, or a Deepgram-hosted vendor.
+
+    Deepgram's speak stage accepts third-party TTS with that vendor's own field
+    shape (roomkit passes ``speak_provider``/``speak_endpoint`` verbatim). BYO
+    vendors authenticate through the endpoint: the ElevenLabs voice id rides in
+    the endpoint URL — not the provider dict — with the ``xi-api-key`` header,
+    and OpenAI uses its speech endpoint with a bearer token. The keys come from
+    the vendor's own provider section, so nothing is entered twice.
+
+    Returns ``(voice_label, speak_provider, speak_endpoint)`` — the label feeds
+    the session-info display.
+    """
+    vendor = (settings.get("deepgram_agent_speak_provider", "") or "").strip()
+    model = (settings.get("deepgram_agent_speak_model", "") or "").strip()
+    tts_voice = (settings.get("deepgram_agent_speak_voice", "") or "").strip()
+
+    if vendor == "eleven_labs":
+        api_key = settings.get("elevenlabs_api_key", "")
+        if not api_key:
+            raise ValueError(
+                "ElevenLabs TTS through Deepgram uses your ElevenLabs API key. "
+                "Open Settings and enter it under the ElevenLabs provider."
+            )
+        if not tts_voice:
+            raise ValueError(
+                "An ElevenLabs voice ID is required for ElevenLabs TTS. "
+                "Open Settings → Advanced → TTS Voice."
+            )
+        model = model or "eleven_turbo_v2_5"
+        endpoint = {
+            "url": f"wss://api.elevenlabs.io/v1/text-to-speech/{tts_voice}/multi-stream-input",
+            "headers": {"xi-api-key": api_key},
+        }
+        return f"eleven_labs · {model}", {"type": "eleven_labs", "model_id": model}, endpoint
+
+    if vendor == "open_ai":
+        api_key = settings.get("openai_api_key", "")
+        if not api_key:
+            raise ValueError(
+                "OpenAI TTS through Deepgram uses your OpenAI API key. "
+                "Open Settings and enter it under the OpenAI provider."
+            )
+        provider = {"type": "open_ai", "model": model or "tts-1", "voice": tts_voice or "alloy"}
+        endpoint = {
+            "url": "https://api.openai.com/v1/audio/speech",
+            "headers": {"authorization": f"Bearer {api_key}"},
+        }
+        return f"open_ai · {provider['voice']}", provider, endpoint
+
+    aura_voice = settings.get("deepgram_agent_voice", "") or "aura-2-thalia-en"
+    speed_raw = settings.get("deepgram_agent_speak_speed", "")
+    if speed_raw:
+        try:
+            # Deepgram accepts 0.7-1.5 on Aura voices — clamp instead of
+            # letting the Settings handshake fail mid-connect.
+            speed = min(1.5, max(0.7, float(speed_raw)))
+        except (ValueError, TypeError):
+            speed = None
+        if speed is not None:
+            return aura_voice, {"type": "deepgram", "model": aura_voice, "speed": speed}, None
+    return aura_voice, None, None
+
+
 def _build_deepgram_agent(settings: dict) -> tuple[Any, str, str]:
     """Deepgram composes the agent from listen/think/speak stages."""
     api_key = settings.get("deepgram_api_key", "")
     if not api_key:
         raise ValueError("Deepgram API key is required. Open Settings to enter it.")
     voice = settings.get("deepgram_agent_voice", "") or "aura-2-thalia-en"
+    voice_label, speak_provider, speak_endpoint = _deepgram_speak_stage(settings)
     think_provider = settings.get("deepgram_agent_think_provider", "") or "open_ai"
     think_model = settings.get("deepgram_agent_think_model", "")
     if not think_model:
@@ -476,6 +541,19 @@ def _build_deepgram_agent(settings: dict) -> tuple[Any, str, str]:
     from roomkit.providers.deepgram.config import DeepgramAgentConfig
     from roomkit.providers.deepgram.realtime import DeepgramAgentProvider
 
+    # Vendor speak stages land after roomkit 0.44.0. Pydantic would silently
+    # drop the unknown kwargs on an older roomkit — the session would connect
+    # and speak with the wrong voice, so refuse legibly instead.
+    speak_kwargs: dict[str, Any] = {}
+    if speak_provider is not None:
+        if "speak_provider" not in DeepgramAgentConfig.model_fields:
+            raise ValueError(
+                "Third-party TTS and voice speed for Deepgram need a roomkit "
+                "newer than 0.44.0. Update the roomkit dependency, or set "
+                "TTS Provider back to Deepgram Aura."
+            )
+        speak_kwargs = {"speak_provider": speak_provider, "speak_endpoint": speak_endpoint}
+
     config = DeepgramAgentConfig(
         api_key=api_key,
         listen_model=listen_model,
@@ -485,8 +563,9 @@ def _build_deepgram_agent(settings: dict) -> tuple[Any, str, str]:
         think_model=think_model,
         speak_model=voice,
         greeting=settings.get("deepgram_agent_greeting", "") or None,
+        **speak_kwargs,
     )
-    return DeepgramAgentProvider(config), voice, think_model
+    return DeepgramAgentProvider(config), voice_label, think_model
 
 
 def _build_elevenlabs_realtime(settings: dict) -> tuple[Any, str, str]:

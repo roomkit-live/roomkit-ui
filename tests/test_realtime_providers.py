@@ -219,3 +219,102 @@ def test_openai_voice_speed_is_clamped_into_the_api_range():
     assert _build_provider_config("openai", {"openai_voice_speed": "0.1"})["speed"] == 0.25
     assert "speed" not in _build_provider_config("openai", {})
     assert "speed" not in _build_provider_config("openai", {"openai_voice_speed": "vite"})
+
+
+def _speak_vendors_supported() -> bool:
+    """Whether the installed roomkit carries vendor speak stages (>0.44.0)."""
+    from roomkit.providers.deepgram.config import DeepgramAgentConfig
+
+    return "speak_provider" in DeepgramAgentConfig.model_fields
+
+
+needs_speak_vendors = pytest.mark.skipif(
+    not _speak_vendors_supported(),
+    reason="installed roomkit predates Deepgram vendor speak stages",
+)
+
+
+def test_deepgram_speak_defaults_to_aura_with_no_override():
+    provider, _, _ = _build_realtime_provider("deepgram", {"deepgram_api_key": "k"})
+    assert getattr(provider._config, "speak_provider", None) is None
+    assert getattr(provider._config, "speak_endpoint", None) is None
+    assert provider._config.speak_model == "aura-2-thalia-en"
+
+
+@pytest.mark.skipif(
+    _speak_vendors_supported(), reason="installed roomkit accepts vendor speak stages"
+)
+def test_deepgram_vendor_tts_on_an_old_roomkit_refuses_legibly():
+    with pytest.raises(ValueError, match="newer than 0.44.0"):
+        _build_realtime_provider(
+            "deepgram",
+            {
+                "deepgram_api_key": "k",
+                "deepgram_agent_speak_provider": "eleven_labs",
+                "deepgram_agent_speak_voice": "v",
+                "elevenlabs_api_key": "xi",
+            },
+        )
+
+
+@needs_speak_vendors
+def test_deepgram_elevenlabs_tts_puts_the_voice_in_the_endpoint_url():
+    provider, voice_label, _ = _build_realtime_provider(
+        "deepgram",
+        {
+            "deepgram_api_key": "k",
+            "deepgram_agent_speak_provider": "eleven_labs",
+            "deepgram_agent_speak_voice": "cgSgspJ2msm6clMCkdW9",
+            "elevenlabs_api_key": "xi-key",
+        },
+    )
+    cfg = provider._config
+    assert cfg.speak_provider == {"type": "eleven_labs", "model_id": "eleven_turbo_v2_5"}
+    assert cfg.speak_endpoint == {
+        "url": "wss://api.elevenlabs.io/v1/text-to-speech/cgSgspJ2msm6clMCkdW9/multi-stream-input",
+        "headers": {"xi-api-key": "xi-key"},
+    }
+    assert voice_label == "eleven_labs · eleven_turbo_v2_5"
+
+
+def test_deepgram_elevenlabs_tts_requires_key_and_voice():
+    base = {"deepgram_api_key": "k", "deepgram_agent_speak_provider": "eleven_labs"}
+    with pytest.raises(ValueError, match="ElevenLabs API key"):
+        _build_realtime_provider("deepgram", {**base, "deepgram_agent_speak_voice": "v"})
+    with pytest.raises(ValueError, match="voice ID"):
+        _build_realtime_provider("deepgram", {**base, "elevenlabs_api_key": "xi"})
+
+
+@needs_speak_vendors
+def test_deepgram_openai_tts_rides_the_speech_endpoint():
+    provider, voice_label, _ = _build_realtime_provider(
+        "deepgram",
+        {
+            "deepgram_api_key": "k",
+            "deepgram_agent_speak_provider": "open_ai",
+            "openai_api_key": "oa-key",
+        },
+    )
+    cfg = provider._config
+    assert cfg.speak_provider == {"type": "open_ai", "model": "tts-1", "voice": "alloy"}
+    assert cfg.speak_endpoint == {
+        "url": "https://api.openai.com/v1/audio/speech",
+        "headers": {"authorization": "Bearer oa-key"},
+    }
+    assert voice_label == "open_ai · alloy"
+
+
+@needs_speak_vendors
+def test_deepgram_aura_speed_is_clamped_and_rides_a_custom_provider():
+    provider, _, _ = _build_realtime_provider(
+        "deepgram", {"deepgram_api_key": "k", "deepgram_agent_speak_speed": "2.0"}
+    )
+    assert provider._config.speak_provider == {
+        "type": "deepgram",
+        "model": "aura-2-thalia-en",
+        "speed": 1.5,
+    }
+    provider, _, _ = _build_realtime_provider(
+        "deepgram", {"deepgram_api_key": "k", "deepgram_agent_speak_speed": "vite"}
+    )
+    assert provider._config.speak_provider is None
