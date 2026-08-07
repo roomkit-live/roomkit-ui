@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtCore import QSettings
 
 # ---------------------------------------------------------------------------
@@ -65,6 +67,33 @@ def colors() -> dict[str, str]:
 # Stylesheet generator
 # ---------------------------------------------------------------------------
 
+# Heroicons chevron-down (MIT), the same family icons.py renders.  QSS takes
+# image files, not inline markup, so the glyph lives as a tiny cached SVG.
+_CHEVRON_SVG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" '
+    'stroke-width="2" stroke="{color}">'
+    '<path stroke-linecap="round" stroke-linejoin="round" '
+    'd="m19.5 8.25-7.5 7.5-7.5-7.5"/></svg>'
+)
+
+
+def _chevron_url(color: str) -> str:
+    """Path (as_posix, for QSS ``url()``) of a chevron-down SVG in *color*.
+
+    Written on demand, keyed by color so each theme keeps its own file.  An
+    unwritable data dir degrades to ``""`` — the caller then keeps the arrow
+    hidden rather than shipping a broken ``url()``.
+    """
+    safe = color.lstrip("#").lower()
+    path = Path.home() / ".local" / "share" / "roomkit-ui" / "cache" / f"chevron-{safe}.svg"
+    try:
+        if not path.exists():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(_CHEVRON_SVG.format(color=color), encoding="utf-8")
+    except OSError:
+        return ""
+    return path.as_posix()
+
 
 def get_stylesheet(theme: str = "dark") -> str:
     """Generate the full application QSS for *theme*."""
@@ -88,6 +117,15 @@ def get_stylesheet(theme: str = "dark") -> str:
 
     # Light mode needs visible borders on buttons
     btn_border = f"border: 1px solid {c['SEPARATOR']};" if theme == "light" else "border: none;"
+
+    # Editable combos read as plain line edits without a visible arrow — the
+    # text area takes the click for editing, so the arrow is the only popup
+    # affordance they have.
+    chevron = _chevron_url(c["TEXT_SECONDARY"])
+    if chevron:
+        down_arrow = f'image: url("{chevron}");\n    width: 14px;\n    height: 14px;'
+    else:
+        down_arrow = "image: none;"
 
     return f"""
 /* ── Global ── */
@@ -238,7 +276,7 @@ QComboBox::drop-down {{
     width: 24px;
 }}
 QComboBox::down-arrow {{
-    image: none;
+    {down_arrow}
 }}
 QComboBox QAbstractItemView {{
     background-color: {c["BG_SECONDARY"]};
