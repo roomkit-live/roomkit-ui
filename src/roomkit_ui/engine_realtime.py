@@ -86,6 +86,20 @@ class RealtimeMixin:
             # path keeps the *dominant* voice, so during doubletalk it eats
             # the user's barge-in speech before the provider's VAD sees it.
             aec, _ = build_audio_processing(aec_mode, "none", sample_rate, frame_size)
+
+            # AEC bench capture (ROOMKIT_AEC_DUMP=<dir>): realtime-only —
+            # the VC path hands the same AEC instance to the backend, whose
+            # transport-level integration the recorder does not mimic.
+            import os
+
+            dump_dir = os.environ.get("ROOMKIT_AEC_DUMP", "")
+            if aec is not None and dump_dir:
+                from pathlib import Path
+
+                from roomkit_ui.aec_dump import AECDumpRecorder
+
+                aec = AECDumpRecorder(aec, Path(dump_dir).expanduser())
+                logger.warning("AEC dump recording enabled → %s", dump_dir)
             denoise_mode = settings.get("denoise", "none")
             if denoise_mode != "none":
                 logger.info("Denoiser (%s) not applied in realtime mode", denoise_mode)
