@@ -30,6 +30,15 @@ def _focus_ring_color() -> QColor:
     return ring
 
 
+# The ring is a keyboard-navigation aid: showing it after a mouse click or
+# when a closing dialog hands focus back reads as a glitch, not an aid.
+_KEYBOARD_FOCUS_REASONS = (
+    Qt.TabFocusReason,
+    Qt.BacktabFocusReason,
+    Qt.ShortcutFocusReason,
+)
+
+
 class _PillButton(QPushButton):
     """Rounded-rectangle (pill) button with custom painted background."""
 
@@ -48,11 +57,22 @@ class _PillButton(QPushButton):
         self._bg = QColor("#30D158")
         self._bg_hover = QColor("#28c04e")
         self._hover = False
+        self._kb_focus = False
         self.setFixedSize(btn_width + 2 * padding, btn_height + 2 * padding)
         self.setFlat(True)
         self.setCursor(Qt.PointingHandCursor)
         self.setFocusPolicy(Qt.StrongFocus)
         self.setStyleSheet("QPushButton { background: transparent; border: none; }")
+
+    def focusInEvent(self, ev) -> None:  # noqa: N802
+        self._kb_focus = ev.reason() in _KEYBOARD_FOCUS_REASONS
+        self.update()
+        super().focusInEvent(ev)
+
+    def focusOutEvent(self, ev) -> None:  # noqa: N802
+        self._kb_focus = False
+        self.update()
+        super().focusOutEvent(ev)
 
     def set_bg(self, normal: str, hover: str) -> None:
         self._bg = QColor(normal)
@@ -82,7 +102,7 @@ class _PillButton(QPushButton):
             self._btn_h - 2,
         )
         p.drawRoundedRect(rect, self._radius, self._radius)
-        if self.hasFocus():
+        if self._kb_focus:
             p.setPen(QPen(_focus_ring_color(), 2))
             p.setBrush(Qt.NoBrush)
             p.drawRoundedRect(rect.adjusted(-3, -3, 3, 3), self._radius + 3, self._radius + 3)
@@ -232,11 +252,22 @@ class _SideButton(QPushButton):
         self._diameter = diameter
         self._hover = False
         self._muted = False  # used by context-button mute mode
+        self._kb_focus = False
         self.setFixedSize(diameter + 4, diameter + 4)  # extra room for shadow
         self.setFlat(True)
         self.setCursor(Qt.PointingHandCursor)
         self.setFocusPolicy(Qt.StrongFocus)
         self.setStyleSheet("QPushButton { background: transparent; border: none; }")
+
+    def focusInEvent(self, ev) -> None:  # noqa: N802
+        self._kb_focus = ev.reason() in _KEYBOARD_FOCUS_REASONS
+        self.update()
+        super().focusInEvent(ev)
+
+    def focusOutEvent(self, ev) -> None:  # noqa: N802
+        self._kb_focus = False
+        self.update()
+        super().focusOutEvent(ev)
 
     def enterEvent(self, ev) -> None:  # noqa: N802
         self._hover = True
@@ -275,10 +306,13 @@ class _SideButton(QPushButton):
         p.setPen(QPen(border, 1.5))
         p.setBrush(bg)
         p.drawEllipse(ox + 1, oy + 1, d - 2, d - 2)
-        if self.hasFocus():
+        if self._kb_focus:
+            # Inset by half the pen width — a stroke centered on the widget
+            # boundary gets its outer half clipped flat, which reads as a
+            # serrated ring instead of a round one.
             p.setPen(QPen(_focus_ring_color(), 2))
             p.setBrush(Qt.NoBrush)
-            p.drawEllipse(ox - 2, oy - 2, d + 4, d + 4)
+            p.drawEllipse(QRectF(ox - 1, oy - 1, d + 2, d + 2))
         p.end()
         super().paintEvent(_ev)
 
