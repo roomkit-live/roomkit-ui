@@ -120,3 +120,12 @@ def test_xai_garbage_tuning_values_are_skipped():
         "xai", {"xai_vad_threshold": "abc", "xai_silence_duration_ms": "12.5"}
     )
     assert config == {}
+
+
+def test_openai_reasoning_effort_passthrough():
+    config = _build_provider_config("openai", {"openai_reasoning_effort": "minimal"})
+    assert config["reasoning_effort"] == "minimal"
+
+
+def test_openai_reasoning_effort_omitted_by_default():
+    assert "reasoning_effort" not in _build_provider_config("openai", {})

@@ -152,6 +152,7 @@ _DEFAULTS = {
     "openai_prefix_padding_ms": "",  # server_vad only (empty = default)
     "openai_interrupt_response": True,  # Allow interrupting AI response
     "openai_create_response": True,  # Auto-generate response on turn end
+    "openai_reasoning_effort": "",  # ""|minimal|low|medium|high|xhigh (gpt-realtime-2+)
     # Deepgram Voice Agent (realtime speech-to-speech; distinct from VC STT keys)
     "deepgram_agent_voice": "aura-2-thalia-en",  # Aura speak model
     "deepgram_agent_think_provider": "open_ai",  # "open_ai" | "anthropic" | "google"

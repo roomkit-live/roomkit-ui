@@ -443,6 +443,11 @@ def _build_provider_config(provider_name: str, settings: dict) -> dict[str, Any]
         else:
             # "none" — disable turn detection entirely
             provider_config["turn_detection_type"] = None
+        # Independent of turn detection; omitted unless set so non-reasoning
+        # models (gpt-4o-realtime) keep working untouched.
+        effort = settings.get("openai_reasoning_effort", "")
+        if effort:
+            provider_config["reasoning_effort"] = effort
     elif provider_name == "xai":
         # Wire-compatible with OpenAI's server VAD; xAI honours the same
         # three tuning keys (no semantic VAD, no disabling).
