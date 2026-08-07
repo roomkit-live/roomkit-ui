@@ -122,3 +122,23 @@ def test_usage_summary_without_pricing_shows_tokens_only():
     assert (
         _usage_summary({"cost_usd": None, "input_tokens": 900, "output_tokens": 50}) == "950 tok"
     )
+
+
+# -- _voice_error_notice -------------------------------------------------------
+
+
+def test_voice_error_notice_includes_provider_and_error():
+    from roomkit_ui.hooks import _voice_error_notice
+
+    text = _voice_error_notice("Speech synthesis failed", {"provider": "piper", "error": "boom"})
+    assert text == "Speech synthesis failed (piper): boom"
+
+
+def test_voice_error_notice_truncates_and_tolerates_empty():
+    from roomkit_ui.hooks import _voice_error_notice
+
+    long = _voice_error_notice("Speech recognition failed", {"error": "x" * 500})
+    assert len(long) < 260 and long.endswith("…")
+    assert _voice_error_notice("Speech recognition failed", {}) == (
+        "Speech recognition failed (unknown)"
+    )

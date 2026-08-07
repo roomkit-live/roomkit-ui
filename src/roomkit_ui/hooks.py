@@ -149,6 +149,36 @@ def register_vc_hooks(kit: Any, engine: Any) -> None:
         except Exception:
             pass
 
+    # Voice failures became framework events in roomkit 0.35 — surface them
+    # in the chat instead of leaving the user with unexplained silence.
+
+    @kit.on("tts_error")
+    async def _on_tts_error(event):
+        try:
+            engine.session_notice.emit(_voice_error_notice("Speech synthesis failed", event.data))
+            engine.ai_speaking.emit(False)
+        except Exception:
+            pass
+
+    @kit.on("stt_error")
+    async def _on_stt_error(event):
+        try:
+            engine.session_notice.emit(
+                _voice_error_notice("Speech recognition failed", event.data)
+            )
+        except Exception:
+            pass
+
+
+def _voice_error_notice(prefix: str, data: dict) -> str:
+    """One chat-visible line for a tts_error / stt_error framework event."""
+    provider = data.get("provider") or "unknown"
+    error = str(data.get("error") or "").strip()
+    if len(error) > 200:
+        error = error[:197] + "…"
+    notice = f"{prefix} ({provider})"
+    return f"{notice}: {error}" if error else notice
+
 
 def register_realtime_hooks(kit: Any, engine: Any) -> None:
     """Register framework hooks for RealtimeVoiceChannel.
