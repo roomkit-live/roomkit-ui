@@ -568,6 +568,14 @@ def _build_provider_config(provider_name: str, settings: dict) -> dict[str, Any]
         effort = settings.get("openai_reasoning_effort", "")
         if effort:
             provider_config["reasoning_effort"] = effort
+        speed = settings.get("openai_voice_speed", "")
+        if speed:
+            try:
+                # audio.output.speed accepts 0.25–1.5 — clamp instead of
+                # letting the API reject the whole session.update.
+                provider_config["speed"] = min(1.5, max(0.25, float(speed)))
+            except (ValueError, TypeError):
+                pass
     elif provider_name == "xai":
         # Wire-compatible with OpenAI's server VAD; xAI honours the same
         # three tuning keys (no semantic VAD, no disabling).

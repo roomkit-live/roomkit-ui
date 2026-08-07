@@ -538,6 +538,10 @@ class RealtimeSection(QWidget):
                 break
         oai_form.addRow("Reasoning Effort", self.openai_reasoning)
 
+        self.openai_voice_speed = QLineEdit(str(settings.get("openai_voice_speed", "") or ""))
+        self.openai_voice_speed.setPlaceholderText("1.0 (0.25 slow – 1.5 fast)")
+        oai_form.addRow("Voice Speed", self.openai_voice_speed)
+
         self.openai_interrupt_response = QCheckBox("Allow interrupting AI response")
         self.openai_interrupt_response.setChecked(
             bool(settings.get("openai_interrupt_response", True))
@@ -818,4 +822,5 @@ class RealtimeSection(QWidget):
             "openai_interrupt_response": self.openai_interrupt_response.isChecked(),
             "openai_create_response": self.openai_create_response.isChecked(),
             "openai_reasoning_effort": self.openai_reasoning.currentData() or "",
+            "openai_voice_speed": self.openai_voice_speed.text().strip(),
         }

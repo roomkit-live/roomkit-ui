@@ -211,3 +211,11 @@ def test_openai_reasoning_effort_passthrough():
 
 def test_openai_reasoning_effort_omitted_by_default():
     assert "reasoning_effort" not in _build_provider_config("openai", {})
+
+
+def test_openai_voice_speed_is_clamped_into_the_api_range():
+    assert _build_provider_config("openai", {"openai_voice_speed": "1.2"})["speed"] == 1.2
+    assert _build_provider_config("openai", {"openai_voice_speed": "3"})["speed"] == 1.5
+    assert _build_provider_config("openai", {"openai_voice_speed": "0.1"})["speed"] == 0.25
+    assert "speed" not in _build_provider_config("openai", {})
+    assert "speed" not in _build_provider_config("openai", {"openai_voice_speed": "vite"})
