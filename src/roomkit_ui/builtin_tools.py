@@ -61,12 +61,15 @@ BUILTIN_TOOLS: list[dict] = [
         "type": "function",
         "name": "end_conversation",
         "description": (
-            "IMPORTANT: You MUST call this tool whenever the user signals the end "
-            "of the conversation. This includes any farewell or closing phrase such as "
-            "'bye', 'bye bye', 'goodbye', 'see you', 'see you later', 'that's all', "
-            "'thanks bye', 'I'm done', 'good night', 'take care', 'ciao', 'adios', "
-            "'au revoir', 'salut', or similar expressions in any language. "
-            "Say a brief goodbye FIRST, then ALWAYS call this tool to disconnect."
+            "End the voice session. Call this ONLY when the user explicitly "
+            "says goodbye or asks to stop — 'bye', 'goodbye', 'that's all, "
+            "thanks', 'good night', 'stop the conversation', 'au revoir', "
+            "'à plus', 'raccroche', 'ciao'. Do NOT infer an ending from "
+            "context: a user mentioning they are about to leave, eat, or do "
+            "something else is NOT asking to hang up, and greetings that "
+            "double as hellos (French 'salut' at the start of a conversation) "
+            "are not goodbyes. When unsure, keep the conversation open. "
+            "Say a brief goodbye first, then call this tool."
         ),
         "parameters": {"type": "object", "properties": {}},
     },
