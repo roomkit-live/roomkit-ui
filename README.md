@@ -19,13 +19,20 @@ Pre-built binaries are available for macOS, Linux, and Windows on the [Releases]
 
 ### macOS
 
-After downloading and extracting, macOS may block the app because it's not notarized. To fix this, open a terminal and run:
+```bash
+brew install --cask roomkit-live/tap/roomkit-ui
+```
+
+Apple Silicon, macOS 13 (Ventura) or later. Grant microphone permission when
+prompted on first launch.
+
+Downloading the DMG by hand works too. If that build was produced without
+signing credentials, macOS blocks it as unnotarized — clear the quarantine
+attribute before opening it:
 
 ```bash
 xattr -cr "RoomKit UI.app"
 ```
-
-Then double-click the app to open it. You'll also need to grant microphone permission when prompted.
 
 ## Features
 
