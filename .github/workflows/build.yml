@@ -118,6 +118,8 @@ jobs:
             $ICON_ARG \
             --collect-submodules=roomkit \
             --collect-submodules=roomkit_ui \
+            --copy-metadata=roomkit-ui \
+            --copy-metadata=roomkit \
             --hidden-import=google.genai \
             --hidden-import=google.genai.live \
             --hidden-import=openai \
@@ -196,6 +198,8 @@ jobs:
           $args += @(
             "--collect-submodules=roomkit",
             "--collect-submodules=roomkit_ui",
+            "--copy-metadata=roomkit-ui",
+            "--copy-metadata=roomkit",
             "--hidden-import=google.genai",
             "--hidden-import=google.genai.live",
             "--hidden-import=openai",

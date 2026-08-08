@@ -48,6 +48,8 @@ uv run pyinstaller \
     "${EXTRA_ARGS[@]}" \
     --collect-submodules=roomkit \
     --collect-submodules=roomkit_ui \
+    --copy-metadata=roomkit-ui \
+    --copy-metadata=roomkit \
     --hidden-import=google.genai \
     --hidden-import=google.genai.live \
     --hidden-import=openai \
