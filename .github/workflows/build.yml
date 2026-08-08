@@ -80,9 +80,13 @@ jobs:
         run: choco install cairo -y --no-progress
         continue-on-error: true
 
+      # `--extra all` is load-bearing: the base install is now core-only, and a
+      # bare `uv sync` would ship a bundle with no providers at all.  It leaves
+      # out qwen3-tts / neutts, which conflict with each other and would add
+      # several GB of torch — see [tool.uv].conflicts in pyproject.toml.
       - name: Install Python dependencies
         run: |
-          uv sync
+          uv sync --extra all
           uv pip install pyinstaller Pillow cairosvg
 
       # Generate app icons from SVG
@@ -112,18 +116,18 @@ jobs:
             --clean \
             $EXTRA_ARGS \
             $ICON_ARG \
+            --collect-submodules=roomkit \
+            --collect-submodules=roomkit_ui \
             --hidden-import=google.genai \
             --hidden-import=google.genai.live \
             --hidden-import=openai \
+            --hidden-import=anthropic \
+            --hidden-import=deepgram \
+            --hidden-import=elevenlabs \
+            --hidden-import=gradium \
             --hidden-import=websockets \
             --hidden-import=sounddevice \
             --hidden-import=_sounddevice_data \
-            --hidden-import=roomkit.providers.gemini.realtime \
-            --hidden-import=roomkit.providers.openai.realtime \
-            --hidden-import=roomkit.voice.realtime.local_transport \
-            --hidden-import=roomkit.voice.pipeline.aec.webrtc \
-            --hidden-import=roomkit.voice.pipeline.aec.speex \
-            --hidden-import=roomkit.voice.pipeline.denoiser.rnnoise \
             --hidden-import=certifi \
             --add-data "src/roomkit_ui${SEP}roomkit_ui" \
             src/roomkit_ui/__main__.py
@@ -190,18 +194,18 @@ jobs:
           )
           if ($iconArg) { $args += $iconArg }
           $args += @(
+            "--collect-submodules=roomkit",
+            "--collect-submodules=roomkit_ui",
             "--hidden-import=google.genai",
             "--hidden-import=google.genai.live",
             "--hidden-import=openai",
+            "--hidden-import=anthropic",
+            "--hidden-import=deepgram",
+            "--hidden-import=elevenlabs",
+            "--hidden-import=gradium",
             "--hidden-import=websockets",
             "--hidden-import=sounddevice",
             "--hidden-import=_sounddevice_data",
-            "--hidden-import=roomkit.providers.gemini.realtime",
-            "--hidden-import=roomkit.providers.openai.realtime",
-            "--hidden-import=roomkit.voice.realtime.local_transport",
-            "--hidden-import=roomkit.voice.pipeline.aec.webrtc",
-            "--hidden-import=roomkit.voice.pipeline.aec.speex",
-            "--hidden-import=roomkit.voice.pipeline.denoiser.rnnoise",
             "--hidden-import=certifi",
             "--add-data", "src/roomkit_ui;roomkit_ui",
             "src/roomkit_ui/__main__.py"

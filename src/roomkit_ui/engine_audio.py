@@ -64,7 +64,9 @@ def _build_otlp_telemetry(settings: dict):
 
             exporter = OTLPSpanExporter(endpoint=endpoint or "http://localhost:4318/v1/traces")
         else:
-            from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (  # type: ignore[import-not-found]
+            # Same name, different class than the http branch above — mypy sees
+            # the second import as a rebinding, not an alternative.
+            from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (  # type: ignore[import-not-found,assignment]
                 OTLPSpanExporter,
             )
 
@@ -76,10 +78,12 @@ def _build_otlp_telemetry(settings: dict):
 
         return OpenTelemetryProvider(tracer_provider=tracer_provider, service_name=service_name)
     except ImportError:
+        from roomkit_ui.features import install_command
+
         logger.warning(
-            "OpenTelemetry packages not installed — falling back to console telemetry. "
-            "Install with: pip install opentelemetry-api opentelemetry-sdk "
-            "opentelemetry-exporter-otlp"
+            "OpenTelemetry packages not installed — falling back to console "
+            "telemetry. Install with: %s",
+            install_command("telemetry"),
         )
         from roomkit.telemetry import ConsoleTelemetryProvider
 

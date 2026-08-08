@@ -15,9 +15,12 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# `--extra all` is load-bearing: the base install is core-only, and a bare
+# `uv sync` would bundle an app with no AI backend at all.  It leaves out
+# qwen3-tts / neutts, which conflict with each other and pull GBs of torch.
 echo "==> Installing dependencies..."
 if command -v uv &>/dev/null; then
-    uv sync
+    uv sync --extra all
     uv pip install pyinstaller
 else
     pip install -e ".[dev]"
@@ -43,18 +46,18 @@ uv run pyinstaller \
     --noconfirm \
     --clean \
     "${EXTRA_ARGS[@]}" \
+    --collect-submodules=roomkit \
+    --collect-submodules=roomkit_ui \
     --hidden-import=google.genai \
     --hidden-import=google.genai.live \
     --hidden-import=openai \
+    --hidden-import=anthropic \
+    --hidden-import=deepgram \
+    --hidden-import=elevenlabs \
+    --hidden-import=gradium \
     --hidden-import=websockets \
     --hidden-import=sounddevice \
     --hidden-import=_sounddevice_data \
-    --hidden-import=roomkit.providers.gemini.realtime \
-    --hidden-import=roomkit.providers.openai.realtime \
-    --hidden-import=roomkit.voice.realtime.local_transport \
-    --hidden-import=roomkit.voice.pipeline.aec.webrtc \
-    --hidden-import=roomkit.voice.pipeline.aec.speex \
-    --hidden-import=roomkit.voice.pipeline.denoiser.rnnoise \
     --hidden-import=certifi \
     --hidden-import=aec_audio_processing \
     --collect-binaries=aec_audio_processing \

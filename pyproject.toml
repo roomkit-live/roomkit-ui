@@ -7,16 +7,17 @@ name = "roomkit-ui"
 version = "0.2.1"
 description = "Voice Assistant — PySide6 desktop app wrapping roomkit"
 requires-python = ">=3.12"
+# The core is what it takes to open the window, capture the mic and talk to a
+# provider you have installed.  Every backend beyond that is an extra — see
+# `roomkit_ui/features.py`, which declares the same set and turns a missing one
+# into an install command in the UI instead of an ImportError.
+#
+# PySide6-Essentials rather than PySide6: the full metapackage is ~1.2 GB, most
+# of it QtWebEngine, which only MCP Apps need.  See the `mcp-apps` extra.
 dependencies = [
-    "PySide6>=6.7",
+    "PySide6-Essentials>=6.7",
     "qasync>=0.27",
-    "roomkit[realtime-gemini,realtime-openai,realtime-deepgram,realtime-elevenlabs,local-audio,webrtc-aec,sherpa-onnx]>=0.45.0",
-    # sherpa-onnx >=1.13 splits its binaries (libonnxruntime, libsherpa-onnx)
-    # into sherpa-onnx-core, but the sdist metadata omits that dependency, so
-    # uv locks without it and every `uv sync` uninstalls the libraries.
-    # Declare it explicitly until the upstream metadata is fixed.
-    "sherpa-onnx-core>=1.13",
-    "pynput>=1.7",
+    "roomkit[local-audio,webrtc-aec]>=0.45.0",
     "mcp>=2.0",
     "markdown-it-py>=3.0",
     "httpx>=0.27",
@@ -24,7 +25,66 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# ── Cloud backends ────────────────────────────────────────────────────────
+anthropic = ["roomkit[anthropic]>=0.45.0"]
+# Also covers the "Local (vLLM / Ollama)" LLM provider and xAI Grok realtime,
+# both of which speak the OpenAI wire protocol through the `openai` SDK.
+openai = ["roomkit[openai,realtime-openai]>=0.45.0"]
+gemini = ["roomkit[gemini,realtime-gemini]>=0.45.0"]
+# `deepgram` is the STT SDK (dictation + Voice Channel), `realtime-deepgram`
+# the websocket transport for the Voice Agent.  Both ship in this extra.
+deepgram = ["roomkit[deepgram,realtime-deepgram]>=0.45.0"]
+elevenlabs = ["roomkit[elevenlabs,realtime-elevenlabs]>=0.45.0"]
+gradium = ["roomkit[gradium]>=0.45.0"]
+
+# ── Local inference ───────────────────────────────────────────────────────
+# sherpa-onnx powers local STT, Piper TTS, VAD and speaker diarization.
+# sherpa-onnx >=1.13 splits its binaries (libonnxruntime, libsherpa-onnx) into
+# sherpa-onnx-core, but the sdist metadata omits that dependency, so uv locks
+# without it and every `uv sync` uninstalls the libraries.  Declare it
+# explicitly until the upstream metadata is fixed.
+local-voice = [
+    "roomkit[sherpa-onnx]>=0.45.0",
+    "sherpa-onnx-core>=1.13",
+]
+
+# Voice-cloning TTS, deliberately outside `all`: qwen-tts pulls torch and
+# neutts pulls perth, several GB between them for two optional voices.
+# Same reasoning roomkit applies to its own `buzz` / `livekit` extras.
+qwen3-tts = ["roomkit[qwen-tts]>=0.45.0"]
+neutts = ["roomkit[neutts]>=0.45.0"]
+
+# ── Desktop features ──────────────────────────────────────────────────────
+# Global hotkey + system-wide dictation. Needs a local STT model to transcribe.
+dictation = ["roomkit-ui[local-voice]", "pynput>=1.7"]
+# PySide6-Addons carries QtWebEngine (MCP App web UIs), QtWebChannel (the
+# JSON-RPC bridge) and QtMultimedia (notification sounds, audio-debug preview).
+mcp-apps = ["PySide6-Addons>=6.7"]
+telemetry = [
+    "opentelemetry-api>=1.20",
+    "opentelemetry-sdk>=1.20",
+    "opentelemetry-exporter-otlp>=1.20",
+]
+
+# ── Aggregates ────────────────────────────────────────────────────────────
+cloud = [
+    "roomkit-ui[anthropic]",
+    "roomkit-ui[openai]",
+    "roomkit-ui[gemini]",
+    "roomkit-ui[deepgram]",
+    "roomkit-ui[elevenlabs]",
+    "roomkit-ui[gradium]",
+]
+all = [
+    "roomkit-ui[cloud]",
+    "roomkit-ui[local-voice]",
+    "roomkit-ui[dictation]",
+    "roomkit-ui[mcp-apps]",
+    "roomkit-ui[telemetry]",
+]
+
 dev = [
+    "roomkit-ui[all]",
     "pyinstaller>=6.0",
     "ruff>=0.6",
     "mypy>=1.11",
@@ -36,6 +96,15 @@ dev = [
 
 [project.scripts]
 roomkit-ui = "roomkit_ui.app:main"
+
+[tool.uv]
+# qwen-tts pins transformers==4.57.3, neutts wants 5.1.0 (or <4.57) — the two
+# voice-cloning backends cannot share an environment.  Declaring the conflict
+# lets uv lock both extras separately instead of failing to resolve; pip would
+# hit the same wall at install time.
+conflicts = [
+    [{ extra = "qwen3-tts" }, { extra = "neutts" }],
+]
 
 # ── Ruff ──────────────────────────────────────────────────────────────────
 [tool.ruff]
@@ -66,7 +135,7 @@ warn_unused_configs = true
 disable_error_code = ["attr-defined"]
 
 [[tool.mypy.overrides]]
-module = ["PySide6", "PySide6.*"]
+module = ["PySide6.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

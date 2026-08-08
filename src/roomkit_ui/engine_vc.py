@@ -31,6 +31,7 @@ from roomkit_ui.engine_vc_helpers import (
     mcp_servers_configured,
     wrap_local_provider_tool_errors,
 )
+from roomkit_ui.features import STT_PROVIDER_FEATURES, require
 from roomkit_ui.hooks import register_vc_hooks
 from roomkit_ui.providers import create_ai_provider
 from roomkit_ui.toolset import tool_summaries
@@ -278,6 +279,9 @@ class VoiceChannelMixin:
         """Build the STT provider. Returns (stt, provider_name)."""
         stt_provider_name = settings.get("vc_stt_provider", "local")
         stt_language = settings.get("stt_language", "") or "en"
+        feature = STT_PROVIDER_FEATURES.get(stt_provider_name)
+        if feature is not None:
+            require(feature)
 
         if stt_provider_name == "gradium":
             stt = build_gradium_stt(settings, stt_language, self.loading_status.emit)  # type: ignore[attr-defined]

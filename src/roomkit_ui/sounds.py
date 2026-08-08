@@ -12,7 +12,16 @@ import wave
 from pathlib import Path
 
 from PySide6.QtCore import QUrl
-from PySide6.QtMultimedia import QSoundEffect
+
+# QtMultimedia lives in PySide6-Addons, which the core install does not pull —
+# see the `mcp-apps` extra.  Notification sounds are a nicety; without the
+# module the app runs silent rather than refusing to start.
+try:
+    from PySide6.QtMultimedia import QSoundEffect
+
+    _HAS_MULTIMEDIA = True
+except ImportError:
+    _HAS_MULTIMEDIA = False
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +121,8 @@ def _generate_dictation_stop_sound() -> Path:
 
 def play_dictation_start() -> None:
     """Play the dictation-start notification sound."""
+    if not _HAS_MULTIMEDIA:
+        return
     global _dictation_start_effect  # noqa: PLW0603
     try:
         if _dictation_start_effect is None:
@@ -127,6 +138,8 @@ def play_dictation_start() -> None:
 
 def play_dictation_stop() -> None:
     """Play the dictation-stop notification sound."""
+    if not _HAS_MULTIMEDIA:
+        return
     global _dictation_stop_effect  # noqa: PLW0603
     try:
         if _dictation_stop_effect is None:
@@ -142,6 +155,8 @@ def play_dictation_stop() -> None:
 
 def play_session_start() -> None:
     """Play the session-start notification sound."""
+    if not _HAS_MULTIMEDIA:
+        return
     global _start_effect  # noqa: PLW0603
     try:
         if _start_effect is None:
@@ -155,6 +170,8 @@ def play_session_start() -> None:
 
 def play_session_stop() -> None:
     """Play the session-stop notification sound."""
+    if not _HAS_MULTIMEDIA:
+        return
     global _stop_effect  # noqa: PLW0603
     try:
         if _stop_effect is None:

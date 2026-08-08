@@ -15,7 +15,13 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from roomkit_ui.features import (
+    AI_PROVIDER_FEATURES,
+    STT_PROVIDER_FEATURES,
+    TTS_PROVIDER_FEATURES,
+)
 from roomkit_ui.theme import colors
+from roomkit_ui.widgets.settings.feature_hints import populate_provider_combo
 from roomkit_ui.widgets.settings.realtime_section import RealtimeSection
 from roomkit_ui.widgets.settings.vc_cloud_fields import VCCloudFields
 from roomkit_ui.widgets.settings.vc_local_fields import VCLocalFields
@@ -132,8 +138,7 @@ class _AIPage(QWidget):
         stt_form.setLabelAlignment(Qt.AlignRight)
 
         self.vc_stt_provider = QComboBox()
-        for label, _value in VC_STT_PROVIDERS:
-            self.vc_stt_provider.addItem(label)
+        populate_provider_combo(self.vc_stt_provider, VC_STT_PROVIDERS, STT_PROVIDER_FEATURES)
         current_stt_prov = settings.get("vc_stt_provider", "local")
         for i, (_, val) in enumerate(VC_STT_PROVIDERS):
             if val == current_stt_prov:
@@ -153,8 +158,7 @@ class _AIPage(QWidget):
         llm_form.setLabelAlignment(Qt.AlignRight)
 
         self.vc_provider = QComboBox()
-        for label, _value in VC_LLM_PROVIDERS:
-            self.vc_provider.addItem(label)
+        populate_provider_combo(self.vc_provider, VC_LLM_PROVIDERS, AI_PROVIDER_FEATURES)
         current_vc_provider = settings.get("vc_llm_provider", "anthropic")
         for i, (_, val) in enumerate(VC_LLM_PROVIDERS):
             if val == current_vc_provider:
@@ -174,8 +178,7 @@ class _AIPage(QWidget):
         tts_form.setLabelAlignment(Qt.AlignRight)
 
         self.vc_tts_provider = QComboBox()
-        for label, _value in VC_TTS_PROVIDERS:
-            self.vc_tts_provider.addItem(label)
+        populate_provider_combo(self.vc_tts_provider, VC_TTS_PROVIDERS, TTS_PROVIDER_FEATURES)
         current_tts_prov = settings.get("vc_tts_provider", "piper")
         for i, (_, val) in enumerate(VC_TTS_PROVIDERS):
             if val == current_tts_prov:

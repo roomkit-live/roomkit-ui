@@ -97,8 +97,15 @@ jobs:
       - name: Set up Python
         run: uv python install 3.12
 
+      # Deliberately bare: this installs the core only, so the job doubles as
+      # the check that the app still starts with every backend extra absent.
       - name: Install dependencies
         run: uv sync
 
       - name: Import the app
         run: uv run python -c "import roomkit_ui.app"
+
+      # Exercises every feature probe. A typo in features.py that raises on a
+      # missing module would take the whole app down on a core install.
+      - name: Report available features
+        run: uv run roomkit-ui --doctor

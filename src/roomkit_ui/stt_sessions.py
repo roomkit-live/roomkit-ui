@@ -12,6 +12,7 @@ import asyncio
 import logging
 from typing import Any
 
+from roomkit_ui.features import unavailable_reason
 from roomkit_ui.model_manager import build_stt_config, is_model_downloaded, is_streaming_model
 
 logger = logging.getLogger(__name__)
@@ -36,10 +37,11 @@ class DictationSessionMixin:
 
     async def _start_openai_recording(self, settings: dict) -> None:
         api_key = settings.get("openai_api_key", "")
-        if not api_key:
-            self.error_occurred.emit(  # type: ignore[attr-defined]
-                "OpenAI API key is required for dictation. Open Settings to enter it."
-            )
+        blocker = unavailable_reason("openai-realtime")
+        if not blocker and not api_key:
+            blocker = "OpenAI API key is required for dictation. Open Settings to enter it."
+        if blocker:
+            self.error_occurred.emit(blocker)  # type: ignore[attr-defined]
             self._recording = False
             self._busy = False
             self.recording_changed.emit(False)  # type: ignore[attr-defined]
@@ -162,6 +164,10 @@ class DictationSessionMixin:
         """Build a Sherpa-Onnx STT provider. Returns ``(stt, batch_mode, log_extra)``
         or ``None`` after emitting a user-facing error."""
         model_id = settings.get("stt_model", "")
+        unavailable = unavailable_reason("local-voice")
+        if unavailable:
+            self._fail_start(unavailable)
+            return None
         if not model_id:
             self._fail_start(
                 "No local STT model selected. Go to Settings → AI Models to choose one."
@@ -202,6 +208,10 @@ class DictationSessionMixin:
     def _build_deepgram_stt(self, settings: dict) -> tuple[Any, bool, dict[str, str]] | None:
         """Build a Deepgram streaming STT provider. Returns ``(stt, False,
         log_extra)`` or ``None`` after emitting a user-facing error."""
+        unavailable = unavailable_reason("deepgram")
+        if unavailable:
+            self._fail_start(unavailable)
+            return None
         api_key = settings.get("deepgram_api_key", "")
         if not api_key:
             self._fail_start(

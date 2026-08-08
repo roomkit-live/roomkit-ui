@@ -5,9 +5,11 @@ PySide6 + qasync desktop voice assistant wrapping the `roomkit` framework.
 ## Commands
 
 ```bash
-uv sync                          # Install dependencies
-uv sync --extra dev              # Install with dev tools
+uv sync                          # Core only — no AI backend at all
+uv sync --extra all              # Core + every backend (what a build ships)
+uv sync --extra dev              # ...plus dev tools (dev implies all)
 uv run python -m roomkit_ui         # Run the app
+uv run roomkit-ui --doctor       # Which backends this install carries
 uv run ruff check .              # Lint
 uv run ruff format --check .     # Format check
 uv run ruff format .             # Auto-format
@@ -28,6 +30,7 @@ src/roomkit_ui/
 ├── engine_audio.py      # Pipeline builders: AEC, denoiser, VAD, diarization, recording
 ├── engine_callbacks.py  # roomkit provider/transport callbacks → Qt signals — mixin
 ├── engine_tools.py      # Tool dispatch (builtin → CLI → MCP), attitudes, end_conversation — mixin
+├── features.py          # Optional-backend registry: extras ↔ import probes ↔ install commands
 ├── hooks.py             # RoomKit hook registration for UI events
 ├── watchdog.py          # Stalled-session detector (8s silence) + model nudge
 ├── cleanup.py           # qasync timer/FD cleanup after MCP disconnect
@@ -74,6 +77,10 @@ Engine composition: `Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChanne
 mixins hold no state; all attributes live on `Engine`. Docs: `docs/architecture.md`,
 `docs/technical.md`, `docs/features.md`, `docs/onboarding.md`.
 
+Packaging: the base install is core-only (window, mic pipeline, AEC, MCP/CLI tools).
+Every AI backend lives behind an extra declared in `pyproject.toml` AND mirrored in
+`features.py`; `tests/test_features.py` fails if the two drift.
+
 ## Code Style
 
 - Python 3.12+, target in pyproject.toml
@@ -94,6 +101,9 @@ mixins hold no state; all attributes live on `Engine`. Docs: `docs/architecture.
 - Nothing in a CLI tool's shared description text may name a real subcommand — it is injected into *every* declared tool, so an example from one CLI is nonsense in another's (`_ARGS_HINT` in `cli_tools.py`)
 - Child processes (CLI tools): never `shell=True`, always an argv list. A macOS `.app` launched from the Dock inherits only `/usr/bin:/bin:/usr/sbin:/sbin`, and PyInstaller repoints `DYLD_LIBRARY_PATH` at `_MEIPASS` — both are handled in `cli_exec.child_env()`/`search_path()`, so spawn through there, not bare `subprocess`
 - No shell means the Command field is not one: `FOO=1 mycli` makes `resolve_command()` look for a binary literally named `FOO=1` and the whole tool gets dropped. Env vars go in the tool's Env field (`KEY=VALUE` per line, parsed by `env_config.parse_env_block`), same as an MCP server. They reach the `--help` probe too, so seeded help describes the CLI as configured
+- Adding a backend means three edits, not one: the extra in `pyproject.toml`, the `Feature` in `features.py`, and the provider→feature entry in the matching `*_PROVIDER_FEATURES` map. Probe what the code path *imports*, not what the extra installs — the realtime providers ride a raw websocket and never touch the vendor SDK, so requiring it would block a session that works
+- `RoomKit UI.spec` is gitignored and *regenerated* by every build — it is PyInstaller's output, not its input. The real hidden-import lists live in `scripts/build_app.sh` and `.github/workflows/build.yml` (Unix + Windows blocks, three copies that drift). Both use `--collect-submodules=roomkit,roomkit_ui` because the backends load through string-keyed registries static analysis cannot follow
+- `uv sync` with no extra installs the core, which has no AI backend at all. Anything that builds or ships the app must use `--extra all`
 - qasync timer cleanup: after MCP session closes, anyio leaves orphaned 0ms timers → 100% CPU. See `cleanup.py`
 - AEC wiring (realtime) is PER PROVIDER — mirror roomkit's example for that provider (`_transport_audio_profile` in engine_realtime.py). Gemini/OpenAI: `aec` to `AudioPipelineConfig` ONLY (`LocalAudioBackend(aec=...)` flags NATIVE_AEC, the pipeline skips its AEC stage and loses the continuous playback reference — the 0.9.0 barge-in fix; `examples/realtime_voice_local_gemini.py`). Deepgram: `aec` to the TRANSPORT (inline on the PortAudio thread, sample-synchronous) + webrtc NS in the pipeline + `rt_prebuffer_ms=240` (`examples/realtime_voice_local_deepgram.py` — an open, poorly-aligned mic makes Deepgram transcribe its own voice and barge-in forever). VC mode still passes both.
 - No denoiser on the realtime mic path — speech enhancers keep the dominant voice and eat the user's barge-in during doubletalk. Denoisers are VC-mode only.

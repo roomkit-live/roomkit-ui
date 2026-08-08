@@ -22,7 +22,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from roomkit_ui.features import REALTIME_PROVIDER_FEATURES
 from roomkit_ui.theme import colors
+from roomkit_ui.widgets.settings.feature_hints import populate_provider_combo
 
 PROVIDERS = [
     ("Google Gemini", "gemini"),
@@ -234,8 +236,7 @@ class RealtimeSection(QWidget):
 
         # Provider selector
         self.provider = QComboBox()
-        for label, _value in PROVIDERS:
-            self.provider.addItem(label)
+        populate_provider_combo(self.provider, PROVIDERS, REALTIME_PROVIDER_FEATURES)
         current_provider = settings.get("provider", "gemini")
         for i, (_, val) in enumerate(PROVIDERS):
             if val == current_provider:

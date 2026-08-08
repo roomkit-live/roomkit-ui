@@ -7,7 +7,6 @@ import wave
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QUrl
-from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -23,8 +22,19 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from roomkit_ui.features import unavailable_reason
 from roomkit_ui.icons import svg_icon
 from roomkit_ui.theme import colors
+
+# QtMultimedia lives in PySide6-Addons — see the `mcp-apps` extra.  Without it
+# the page still lists, deletes and reveals recordings; only in-app playback
+# is unavailable, and the Play button says why.
+try:
+    from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
+
+    _HAS_MULTIMEDIA = True
+except ImportError:
+    _HAS_MULTIMEDIA = False
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +72,7 @@ class _AudioFileRow(QWidget):
     def __init__(
         self,
         path: Path,
-        player: QMediaPlayer,
+        player: QMediaPlayer | None,
         on_delete: object,
         parent: QWidget | None = None,
     ) -> None:
@@ -108,6 +118,9 @@ class _AudioFileRow(QWidget):
         self._play_btn.setFixedSize(28, 28)
         self._play_btn.setToolTip("Play")
         self._play_btn.clicked.connect(self._toggle_play)
+        if self._player is None:
+            self._play_btn.setEnabled(False)
+            self._play_btn.setToolTip(unavailable_reason("mcp-apps") or "Playback unavailable")
         row.addWidget(self._play_btn)
 
         del_btn = QPushButton()
@@ -130,6 +143,8 @@ class _AudioFileRow(QWidget):
         return 0.0
 
     def _toggle_play(self) -> None:
+        if self._player is None:
+            return
         if (
             self._player.playbackState() == QMediaPlayer.PlayingState
             and self._player.source() == QUrl.fromLocalFile(str(self._path))
@@ -153,6 +168,8 @@ class _AudioFileRow(QWidget):
 
     def update_play_state(self) -> None:
         """Update button icon based on current player state."""
+        if self._player is None:
+            return
         if (
             self._player.playbackState() == QMediaPlayer.PlayingState
             and self._player.source() == QUrl.fromLocalFile(str(self._path))
@@ -319,11 +336,14 @@ class _AudioDebugPage(QWidget):
         files_label.setStyleSheet(section_style)
         layout.addWidget(files_label)
 
-        # Shared media player
-        self._audio_output = QAudioOutput()
-        self._player = QMediaPlayer()
-        self._player.setAudioOutput(self._audio_output)
-        self._player.playbackStateChanged.connect(self._on_playback_changed)
+        # Shared media player — absent without PySide6-Addons.
+        self._audio_output: QAudioOutput | None = None
+        self._player: QMediaPlayer | None = None
+        if _HAS_MULTIMEDIA:
+            self._audio_output = QAudioOutput()
+            self._player = QMediaPlayer()
+            self._player.setAudioOutput(self._audio_output)
+            self._player.playbackStateChanged.connect(self._on_playback_changed)
 
         self._file_list_container = QWidget()
         self._file_list_layout = QVBoxLayout(self._file_list_container)
@@ -394,7 +414,8 @@ class _AudioDebugPage(QWidget):
 
     def refresh_files(self) -> None:
         """Rescan output directories and rebuild the file list."""
-        self._player.stop()
+        if self._player is not None:
+            self._player.stop()
         self._delete_confirm = False
         self._delete_all_btn.setText("Delete All")
 
@@ -451,7 +472,8 @@ class _AudioDebugPage(QWidget):
             self._delete_confirm = True
             self._delete_all_btn.setText("Confirm?")
             return
-        self._player.stop()
+        if self._player is not None:
+            self._player.stop()
         for d in self._output_dirs():
             dp = Path(d)
             if dp.is_dir():

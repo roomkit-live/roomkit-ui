@@ -61,15 +61,50 @@ Then double-click the app to open it. You'll also need to grant microphone permi
 ```bash
 git clone https://github.com/roomkit-live/roomkit-ui.git
 cd roomkit-ui
-uv sync
+uv sync --extra all
 uv run python -m roomkit_ui
 ```
 
-For WebRTC echo cancellation (recommended):
+A bare `uv sync` installs the core only — the window, the microphone pipeline
+with WebRTC echo cancellation, MCP and CLI tools. Every AI backend arrives
+through an extra, so you install what you use.
+
+## Optional features
+
+| Extra | What it adds |
+| --- | --- |
+| `anthropic` | Claude, as the Voice Channel LLM |
+| `openai` | OpenAI Realtime, xAI Grok, the OpenAI LLM, and local vLLM / Ollama |
+| `gemini` | Gemini Live and the Gemini LLM |
+| `deepgram` | Deepgram Voice Agent, transcription and dictation |
+| `elevenlabs` | ElevenLabs Conversational AI and TTS |
+| `gradium` | Gradium STT and TTS |
+| `local-voice` | Offline speech: sherpa-onnx STT, Piper TTS, VAD, speaker diarization |
+| `dictation` | Global-hotkey dictation (implies `local-voice`) |
+| `mcp-apps` | Embedded MCP App web UIs, notification sounds, audio preview |
+| `telemetry` | OpenTelemetry / OTLP trace export |
+| `qwen3-tts`, `neutts` | Voice cloning — see the note below |
+| `cloud` | All six cloud backends at once |
+| `all` | Everything above except the voice-cloning pair |
 
 ```bash
-uv pip install aec-audio-processing
+pip install 'roomkit-ui[gemini,local-voice]'   # pick what you need
+pip install 'roomkit-ui[all]'                  # or take the lot
 ```
+
+`qwen3-tts` and `neutts` **cannot be installed together** — qwen-tts pins
+`transformers==4.57.3` and neutts wants `5.1.0`. Both also pull torch, several
+GB, which is why neither is in `all`.
+
+To see what the current install carries and what completes it:
+
+```bash
+roomkit-ui --doctor
+```
+
+The app never fails silently on a missing backend: unavailable providers are
+marked in Settings, and starting a session with one names the install command
+in the chat.
 
 ### GPU acceleration (optional)
 

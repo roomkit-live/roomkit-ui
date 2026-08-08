@@ -23,6 +23,7 @@ from roomkit_ui.engine_audio import (
     setup_diarization,
 )
 from roomkit_ui.engine_state import EngineState
+from roomkit_ui.features import REALTIME_PROVIDER_FEATURES, require
 from roomkit_ui.hooks import register_realtime_hooks
 from roomkit_ui.mcp_config import has_enabled_mcp_servers
 from roomkit_ui.toolset import tool_summaries
@@ -385,6 +386,10 @@ def _build_realtime_provider(provider_name: str, settings: dict) -> tuple[Any, s
     ``voice`` may be ``""`` (ElevenLabs — the agent defines it); callers must
     map that to ``None`` before handing it to the channel.
     """
+    feature = REALTIME_PROVIDER_FEATURES.get(provider_name)
+    if feature is not None:
+        require(feature)
+
     if provider_name == "openai":
         api_key = settings.get("openai_api_key", "")
         if not api_key:

@@ -5,6 +5,8 @@ from __future__ import annotations
 import importlib
 from typing import Any
 
+from roomkit_ui.features import TTS_PROVIDER_FEATURES, require
+
 _REGISTRY: dict[str, str] = {
     "qwen3": "roomkit_ui.tts.qwen3",
     "neutts": "roomkit_ui.tts.neutts",
@@ -19,6 +21,9 @@ def create_tts_provider(name: str, settings: dict) -> tuple[Any, int]:
     module_path = _REGISTRY.get(name)
     if module_path is None:
         raise ValueError(f"Unknown TTS provider: {name!r}")
+    feature = TTS_PROVIDER_FEATURES.get(name)
+    if feature is not None:
+        require(feature)
     module = importlib.import_module(module_path)
     result: tuple[Any, int] = module.create(settings)
     return result
