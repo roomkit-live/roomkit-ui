@@ -17,7 +17,7 @@ requires-python = ">=3.12"
 dependencies = [
     "PySide6-Essentials>=6.7",
     "qasync>=0.27",
-    "roomkit[local-audio,webrtc-aec]>=0.45.0",
+    "roomkit[local-audio,webrtc-aec]>=0.46.0",
     "mcp>=2.0",
     "markdown-it-py>=3.0",
     "httpx>=0.27",
@@ -26,16 +26,16 @@ dependencies = [
 
 [project.optional-dependencies]
 # ── Cloud backends ────────────────────────────────────────────────────────
-anthropic = ["roomkit[anthropic]>=0.45.0"]
+anthropic = ["roomkit[anthropic]>=0.46.0"]
 # Also covers the "Local (vLLM / Ollama)" LLM provider and xAI Grok realtime,
 # both of which speak the OpenAI wire protocol through the `openai` SDK.
-openai = ["roomkit[openai,realtime-openai]>=0.45.0"]
-gemini = ["roomkit[gemini,realtime-gemini]>=0.45.0"]
+openai = ["roomkit[openai,realtime-openai]>=0.46.0"]
+gemini = ["roomkit[gemini,realtime-gemini]>=0.46.0"]
 # `deepgram` is the STT SDK (dictation + Voice Channel), `realtime-deepgram`
 # the websocket transport for the Voice Agent.  Both ship in this extra.
-deepgram = ["roomkit[deepgram,realtime-deepgram]>=0.45.0"]
-elevenlabs = ["roomkit[elevenlabs,realtime-elevenlabs]>=0.45.0"]
-gradium = ["roomkit[gradium]>=0.45.0"]
+deepgram = ["roomkit[deepgram,realtime-deepgram]>=0.46.0"]
+elevenlabs = ["roomkit[elevenlabs,realtime-elevenlabs]>=0.46.0"]
+gradium = ["roomkit[gradium]>=0.46.0"]
 
 # ── Local inference ───────────────────────────────────────────────────────
 # sherpa-onnx powers local STT, Piper TTS, VAD and speaker diarization.
@@ -44,15 +44,15 @@ gradium = ["roomkit[gradium]>=0.45.0"]
 # without it and every `uv sync` uninstalls the libraries.  Declare it
 # explicitly until the upstream metadata is fixed.
 local-voice = [
-    "roomkit[sherpa-onnx]>=0.45.0",
+    "roomkit[sherpa-onnx]>=0.46.0",
     "sherpa-onnx-core>=1.13",
 ]
 
 # Voice-cloning TTS, deliberately outside `all`: qwen-tts pulls torch and
 # neutts pulls perth, several GB between them for two optional voices.
 # Same reasoning roomkit applies to its own `buzz` / `livekit` extras.
-qwen3-tts = ["roomkit[qwen-tts]>=0.45.0"]
-neutts = ["roomkit[neutts]>=0.45.0"]
+qwen3-tts = ["roomkit[qwen-tts]>=0.46.0"]
+neutts = ["roomkit[neutts]>=0.46.0"]
 
 # ── Desktop features ──────────────────────────────────────────────────────
 # Global hotkey + system-wide dictation. Needs a local STT model to transcribe.

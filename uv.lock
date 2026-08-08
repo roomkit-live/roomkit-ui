@@ -3842,14 +3842,14 @@ wheels = [
 
 [[package]]
 name = "roomkit"
-version = "0.45.0"
+version = "0.46.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/d5/98/0b8c8a24a22d4426c16ecaf19d86c137b7b855f525e714d6d04db7720866/roomkit-0.45.0.tar.gz", hash = "sha256:11bb2c942d621286dcbd9a5c8e903fb3a98ad719ad1f9b45990f5d48ef579ced", size = 2362412, upload-time = "2026-08-07T18:25:52.95Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ee/81/899a269b177568bed1bc77355c015f0092a3cd218b477e5bfbd826bb343f/roomkit-0.46.0.tar.gz", hash = "sha256:f349b4e38b49dc2b26d0fb5c4947cf28a3ba40f8d945370d8912a2661e50b170", size = 2380989, upload-time = "2026-08-08T21:59:36.064Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/54/22/7bc3af0378bb16c0bd5f17428b64a6b170a8143606b6707892d796d76013/roomkit-0.45.0-py3-none-any.whl", hash = "sha256:94b7281028743c9907917fd8a17c2aad8f384f2edf4aab8452a1be6206cc5314", size = 1741920, upload-time = "2026-08-07T18:25:54.888Z" },
+    { url = "https://files.pythonhosted.org/packages/cb/75/bcbc1a7613d60a654cc60e7a64163738f56226120620eb2031aa07c96c71/roomkit-0.46.0-py3-none-any.whl", hash = "sha256:4ff1d3b85750b1780fdc5e4e93208690542b8e0407b0782dbce8bc4f73beb68c", size = 1755479, upload-time = "2026-08-08T21:59:38.272Z" },
 ]
 
 [package.optional-dependencies]
@@ -4005,16 +4005,16 @@ requires-dist = [
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24" },
     { name = "pytest-qt", marker = "extra == 'dev'", specifier = ">=4.4" },
     { name = "qasync", specifier = ">=0.27" },
-    { name = "roomkit", extras = ["anthropic"], marker = "extra == 'anthropic'", specifier = ">=0.45.0" },
-    { name = "roomkit", extras = ["deepgram", "realtime-deepgram"], marker = "extra == 'deepgram'", specifier = ">=0.45.0" },
-    { name = "roomkit", extras = ["elevenlabs", "realtime-elevenlabs"], marker = "extra == 'elevenlabs'", specifier = ">=0.45.0" },
-    { name = "roomkit", extras = ["gemini", "realtime-gemini"], marker = "extra == 'gemini'", specifier = ">=0.45.0" },
-    { name = "roomkit", extras = ["gradium"], marker = "extra == 'gradium'", specifier = ">=0.45.0" },
-    { name = "roomkit", extras = ["local-audio", "webrtc-aec"], specifier = ">=0.45.0" },
-    { name = "roomkit", extras = ["neutts"], marker = "extra == 'neutts'", specifier = ">=0.45.0" },
-    { name = "roomkit", extras = ["openai", "realtime-openai"], marker = "extra == 'openai'", specifier = ">=0.45.0" },
-    { name = "roomkit", extras = ["qwen-tts"], marker = "extra == 'qwen3-tts'", specifier = ">=0.45.0" },
-    { name = "roomkit", extras = ["sherpa-onnx"], marker = "extra == 'local-voice'", specifier = ">=0.45.0" },
+    { name = "roomkit", extras = ["anthropic"], marker = "extra == 'anthropic'", specifier = ">=0.46.0" },
+    { name = "roomkit", extras = ["deepgram", "realtime-deepgram"], marker = "extra == 'deepgram'", specifier = ">=0.46.0" },
+    { name = "roomkit", extras = ["elevenlabs", "realtime-elevenlabs"], marker = "extra == 'elevenlabs'", specifier = ">=0.46.0" },
+    { name = "roomkit", extras = ["gemini", "realtime-gemini"], marker = "extra == 'gemini'", specifier = ">=0.46.0" },
+    { name = "roomkit", extras = ["gradium"], marker = "extra == 'gradium'", specifier = ">=0.46.0" },
+    { name = "roomkit", extras = ["local-audio", "webrtc-aec"], specifier = ">=0.46.0" },
+    { name = "roomkit", extras = ["neutts"], marker = "extra == 'neutts'", specifier = ">=0.46.0" },
+    { name = "roomkit", extras = ["openai", "realtime-openai"], marker = "extra == 'openai'", specifier = ">=0.46.0" },
+    { name = "roomkit", extras = ["qwen-tts"], marker = "extra == 'qwen3-tts'", specifier = ">=0.46.0" },
+    { name = "roomkit", extras = ["sherpa-onnx"], marker = "extra == 'local-voice'", specifier = ">=0.46.0" },
     { name = "roomkit-ui", extras = ["all"], marker = "extra == 'dev'" },
     { name = "roomkit-ui", extras = ["anthropic"], marker = "extra == 'cloud'" },
     { name = "roomkit-ui", extras = ["cloud"], marker = "extra == 'all'" },
