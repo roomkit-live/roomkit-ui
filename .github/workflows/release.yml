@@ -1,0 +1,88 @@
+name: Release to PyPI
+
+# Shares the `v*` tag with the Build workflow: one tag ships both the desktop
+# bundles and the wheel. Uses PyPI Trusted Publishing (OIDC) — no API token
+# lives in this repository's secrets.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: "Where to publish"
+        type: choice
+        options: [testpypi, pypi]
+        default: testpypi
+
+jobs:
+  build:
+    name: Build distributions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      # A tag that disagrees with pyproject.toml publishes a version nobody
+      # can reproduce from the repository, and PyPI accepts it silently.
+      - name: Check the tag matches the project version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          project_version=$(uv version --short)
+          tag_version="${GITHUB_REF_NAME#v}"
+          if [ "$project_version" != "$tag_version" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match pyproject version $project_version"
+            exit 1
+          fi
+          echo "Publishing version $project_version"
+
+      # The wheel must resolve roomkit from PyPI. A local path source is a
+      # development convenience that would make the release unbuildable for
+      # anyone else, so refuse rather than ship it.
+      - name: Refuse a local dependency source
+        run: |
+          if grep -q '^\[tool\.uv\.sources\]' pyproject.toml; then
+            echo "::error::[tool.uv.sources] is present — remove it before releasing"
+            exit 1
+          fi
+
+      - name: Build sdist and wheel
+        run: uv build
+
+      # Catches a wheel whose declared extras do not resolve — the failure mode
+      # this package is most exposed to, since every backend rides an extra.
+      - name: Install the built wheel with every extra
+        run: |
+          uv venv /tmp/verify
+          VIRTUAL_ENV=/tmp/verify uv pip install "$(ls dist/*.whl)[all]"
+          VIRTUAL_ENV=/tmp/verify QT_QPA_PLATFORM=offscreen /tmp/verify/bin/roomkit-ui --doctor
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: distributions
+          path: dist/
+
+  publish:
+    name: Publish
+    needs: build
+    runs-on: ubuntu-latest
+    # Trusted Publishing mints a short-lived token from this job's OIDC
+    # identity. The environment name must match the publisher configured on
+    # PyPI, or the upload is rejected.
+    environment: ${{ github.event.inputs.repository || 'pypi' }}
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: distributions
+          path: dist/
+
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: >-
+            ${{ github.event.inputs.repository == 'testpypi'
+                && 'https://test.pypi.org/legacy/'
+                || 'https://upload.pypi.org/legacy/' }}
