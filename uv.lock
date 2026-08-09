@@ -3917,6 +3917,7 @@ dependencies = [
 
 [package.optional-dependencies]
 all = [
+    { name = "onnxruntime" },
     { name = "opentelemetry-api" },
     { name = "opentelemetry-exporter-otlp" },
     { name = "opentelemetry-sdk" },
@@ -3937,6 +3938,7 @@ deepgram = [
 dev = [
     { name = "bandit" },
     { name = "mypy" },
+    { name = "onnxruntime" },
     { name = "opentelemetry-api" },
     { name = "opentelemetry-exporter-otlp" },
     { name = "opentelemetry-sdk" },
@@ -3985,6 +3987,11 @@ telemetry = [
     { name = "opentelemetry-exporter-otlp" },
     { name = "opentelemetry-sdk" },
 ]
+wakeword = [
+    { name = "onnxruntime" },
+    { name = "roomkit", extra = ["sherpa-onnx"] },
+    { name = "sherpa-onnx-core" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -3994,6 +4001,7 @@ requires-dist = [
     { name = "markdown-it-py", specifier = ">=3.0" },
     { name = "mcp", specifier = ">=2.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.11" },
+    { name = "onnxruntime", marker = "extra == 'wakeword'", specifier = ">=1.17" },
     { name = "opentelemetry-api", marker = "extra == 'telemetry'", specifier = ">=1.20" },
     { name = "opentelemetry-exporter-otlp", marker = "extra == 'telemetry'", specifier = ">=1.20" },
     { name = "opentelemetry-sdk", marker = "extra == 'telemetry'", specifier = ">=1.20" },
@@ -4025,13 +4033,15 @@ requires-dist = [
     { name = "roomkit-ui", extras = ["gradium"], marker = "extra == 'cloud'" },
     { name = "roomkit-ui", extras = ["local-voice"], marker = "extra == 'all'" },
     { name = "roomkit-ui", extras = ["local-voice"], marker = "extra == 'dictation'" },
+    { name = "roomkit-ui", extras = ["local-voice"], marker = "extra == 'wakeword'" },
     { name = "roomkit-ui", extras = ["mcp-apps"], marker = "extra == 'all'" },
     { name = "roomkit-ui", extras = ["openai"], marker = "extra == 'cloud'" },
     { name = "roomkit-ui", extras = ["telemetry"], marker = "extra == 'all'" },
+    { name = "roomkit-ui", extras = ["wakeword"], marker = "extra == 'all'" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6" },
     { name = "sherpa-onnx-core", marker = "extra == 'local-voice'", specifier = ">=1.13" },
 ]
-provides-extras = ["anthropic", "openai", "gemini", "deepgram", "elevenlabs", "gradium", "local-voice", "qwen3-tts", "neutts", "dictation", "mcp-apps", "telemetry", "cloud", "all", "dev"]
+provides-extras = ["anthropic", "openai", "gemini", "deepgram", "elevenlabs", "gradium", "local-voice", "qwen3-tts", "neutts", "dictation", "mcp-apps", "wakeword", "telemetry", "cloud", "all", "dev"]
 
 [[package]]
 name = "rpds-py"

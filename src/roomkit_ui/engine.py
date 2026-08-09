@@ -162,6 +162,12 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         self._pending_tool_calls: int = 0
         self._watchdog = SessionWatchdog(self)
 
+        # Shared microphone, when one is available: the session subscribes to
+        # it instead of taking the device, so speech captured before the
+        # session existed can be replayed into it.
+        self._capture_source: Any = None
+        self._capture_since: Any = None
+
         # Session usage/cost accounting (VC mode — realtime APIs report no
         # usage through roomkit).  _ai_pricing is the active LLM's
         # ModelPricing, or None for models the offline catalog doesn't carry.
@@ -242,9 +248,26 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
 
     # -- lifecycle dispatcher ------------------------------------------------
 
-    async def start(self, settings: dict) -> None:
+    def set_capture_source(self, source: Any) -> None:
+        """Use a shared microphone rather than opening the device per session.
+
+        Its lifecycle stays with the caller — the engine only subscribes.
+        """
+        self._capture_source = source
+
+    async def start(self, settings: dict, capture_since: Any = None) -> None:
+        """Open a session.
+
+        Args:
+            settings: The configuration snapshot for this session.
+            capture_since: Replay mark from the shared source. Set when the
+                session was opened by a wake word, so the words already
+                spoken reach the provider instead of being lost to the
+                handshake.
+        """
         if self._state not in (EngineState.IDLE, EngineState.ERROR):
             return
+        self._capture_since = capture_since
         self._mic_muted = False
         # Re-attach the log handler (removed during cleanup)
         voice_logger = logging.getLogger("roomkit.voice")

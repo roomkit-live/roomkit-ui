@@ -74,6 +74,9 @@ FEATURES: dict[str, Feature] = {
     "qwen3-tts": Feature("qwen3-tts", "Qwen3-TTS voice cloning", ("qwen_tts",)),
     "neutts": Feature("neutts", "NeuTTS voice cloning", ("neutts",)),
     "dictation": Feature("dictation", "Global-hotkey dictation", ("pynput", "sherpa_onnx")),
+    # sherpa_onnx supplies the VAD that gates the detector; onnxruntime runs
+    # the whisper encoder that turns a segment into a comparable embedding.
+    "wakeword": Feature("wakeword", "Wake word detection", ("onnxruntime", "sherpa_onnx")),
     "mcp-apps": Feature(
         "mcp-apps",
         "MCP Apps, notification sounds and audio preview",

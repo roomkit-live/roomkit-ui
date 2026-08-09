@@ -168,16 +168,31 @@ class RealtimeMixin:
             # 0.9.0 barge-in fix), while Deepgram runs it at transport level
             # like roomkit's examples/realtime_voice_local_deepgram.py, where
             # NATIVE_AEC correctly makes the pipeline skip its own stage.
-            transport = LocalAudioBackend(
-                input_sample_rate=sample_rate,
-                output_sample_rate=sample_rate,
-                block_duration_ms=block_ms,
-                mute_mic_during_playback=mute_mic,
-                rt_prebuffer_ms=prebuffer_ms,
-                input_device=input_device,
-                output_device=output_device,
-                aec=transport_aec,
-            )
+            backend_kwargs: dict[str, Any] = {
+                "input_sample_rate": sample_rate,
+                "output_sample_rate": sample_rate,
+                "block_duration_ms": block_ms,
+                "mute_mic_during_playback": mute_mic,
+                "rt_prebuffer_ms": prebuffer_ms,
+                "input_device": input_device,
+                "output_device": output_device,
+                "aec": transport_aec,
+            }
+            # A shared source owns the input format, and refuses a conflicting
+            # one rather than resampling.  Only hand it over when the rates
+            # agree; otherwise this session opens its own device and loses the
+            # backlog — a worse wake-word experience, not a broken session.
+            source = getattr(self, "_capture_source", None)
+            if source is not None and source.sample_rate == sample_rate:
+                backend_kwargs["source"] = source
+            elif source is not None:
+                logger.warning(
+                    "Shared capture source is %d Hz but this provider needs %d Hz — "
+                    "opening a dedicated device, pre-session audio will be lost",
+                    source.sample_rate,
+                    sample_rate,
+                )
+            transport = LocalAudioBackend(**backend_kwargs)
 
             self._transport = transport  # type: ignore[attr-defined]
 
@@ -348,12 +363,19 @@ class RealtimeMixin:
             )
             self._kit.register_channel(self._channel)  # type: ignore[attr-defined]
             await self._kit.attach_channel(ROOM_ID, "voice")  # type: ignore[attr-defined]
-            metadata = {"provider_config": provider_config} if provider_config else None
+            metadata: dict[str, Any] = {}
+            if provider_config:
+                metadata["provider_config"] = provider_config
+            # The backend replays the shared source from here, so the phrase
+            # spoken before the session existed reaches the provider.
+            capture_since = getattr(self, "_capture_since", None)
+            if capture_since is not None:
+                metadata["capture_since"] = capture_since
             return await self._channel.start_session(  # type: ignore[attr-defined]
                 ROOM_ID,
                 "local-user",
                 connection=None,
-                metadata=metadata,
+                metadata=metadata or None,
             )
         except Exception:
             logger.exception("_start_session failed")

@@ -13,6 +13,7 @@ from PySide6.QtWidgets import QMainWindow, QVBoxLayout, QWidget
 
 from roomkit_ui.engine import Engine
 from roomkit_ui.engine_state import EngineState
+from roomkit_ui.idle_hangup import IdleHangup
 from roomkit_ui.settings import load_settings
 from roomkit_ui.theme import colors
 from roomkit_ui.widgets.chat_view import ChatView
@@ -108,6 +109,13 @@ class MainWindow(QMainWindow):
         self._engine.session_cost.connect(self._info_bar.update_cost)
         self._engine.attitude_changed.connect(self._info_bar.set_attitude)
 
+        # Closes a session nobody is using — armed from settings, and started
+        # only once the session is actually active.
+        self._idle_hangup = IdleHangup(self._engine, self)
+        self._idle_hangup.hangup.connect(self._on_idle_hangup)
+        self._apply_idle_hangup_settings()
+        self.settings_saved.connect(self._apply_idle_hangup_settings)
+
         # MCP App state
         self._active_app_widgets: dict[str, Any] = {}  # tool_name → MCPAppWidget
         self._pending_app_results: dict[str, str] = {}  # buffered results
@@ -133,13 +141,24 @@ class MainWindow(QMainWindow):
         self._active_app_widgets.clear()
         self._pending_app_results.clear()
 
-    def _on_start(self) -> None:
+    def _on_start(self, capture_since: Any = None) -> None:
         self._chat.clear()
         try:
-            asyncio.ensure_future(self._engine.start(load_settings()))
+            asyncio.ensure_future(self._engine.start(load_settings(), capture_since))
         except Exception as e:
             logger.exception("Failed to schedule engine start")
             self._chat.add_error(str(e))
+
+    def start_from_wake_word(self, capture_since: Any) -> None:
+        """Open a session because the wake phrase was heard.
+
+        *capture_since* marks where in the shared microphone's backlog the
+        utterance began, so what was said before the session existed is
+        replayed into it rather than lost to the handshake.
+        """
+        if self._engine.state not in (EngineState.IDLE, EngineState.ERROR):
+            return
+        self._on_start(capture_since)
 
     def _on_stop(self) -> None:
         try:
@@ -147,6 +166,19 @@ class MainWindow(QMainWindow):
         except Exception as e:
             logger.exception("Failed to schedule engine stop")
             self._chat.add_error(str(e))
+
+    def _apply_idle_hangup_settings(self) -> None:
+        settings = load_settings()
+        self._idle_hangup.configure(
+            enabled=bool(settings.get("idle_hangup_enabled", False)),
+            delay_seconds=float(settings.get("idle_hangup_seconds", 15) or 15),
+        )
+
+    def _on_idle_hangup(self, reason: str) -> None:
+        # Say why the session closed — a call that ends by itself with no
+        # explanation reads as a crash.
+        self._chat.add_info(reason)
+        self._on_stop()
 
     def _on_state_changed(self, state: str) -> None:
         self._controls.set_state(state)
@@ -157,8 +189,10 @@ class MainWindow(QMainWindow):
             self._chat.clear_loading_status()
             self._loading_overlay.dismiss()
             self._vu.start()
+            self._idle_hangup.start()
             self.session_active_changed.emit(True)
         elif state in (EngineState.IDLE, EngineState.ERROR):
+            self._idle_hangup.stop()
             self._loading_overlay.dismiss()
             self._chat.reset()
             self._vu.stop()

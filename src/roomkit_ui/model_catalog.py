@@ -121,6 +121,33 @@ def delete_gtcrn() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Wake word encoder (whisper-tiny's encoder alone)
+# ---------------------------------------------------------------------------
+# Only the encoder: it turns a speech segment into a comparable acoustic
+# sequence.  The decoder is 97 of whisper-tiny's 109 MB and would only give
+# us text, which is exactly what the wake word must not depend on.
+
+WAKEWORD_ENCODER_ID = "wakeword-encoder"
+WAKEWORD_ENCODER_SIZE = "~12 MB"
+_WAKEWORD_ENCODER_FILENAME = "tiny-encoder.int8.onnx"
+
+
+def wakeword_encoder_path() -> Path:
+    """Path to the wake-word encoder ONNX file."""
+    return get_models_dir() / WAKEWORD_ENCODER_ID / _WAKEWORD_ENCODER_FILENAME
+
+
+def is_wakeword_encoder_downloaded() -> bool:
+    return wakeword_encoder_path().is_file()
+
+
+def delete_wakeword_encoder() -> None:
+    d = get_models_dir() / WAKEWORD_ENCODER_ID
+    if d.exists():
+        shutil.rmtree(d)
+
+
+# ---------------------------------------------------------------------------
 # VAD models (Silero / TEN via sherpa-onnx)
 # ---------------------------------------------------------------------------
 

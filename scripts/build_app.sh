@@ -65,6 +65,9 @@ uv run pyinstaller \
     --collect-binaries=aec_audio_processing \
     --collect-binaries=sherpa_onnx \
     --hidden-import=sherpa_onnx \
+    --collect-binaries=onnxruntime \
+    --hidden-import=onnxruntime \
+    --hidden-import=onnxruntime.capi._pybind_state \
     --hidden-import=pynput \
     --hidden-import=pynput.keyboard \
     --hidden-import=pynput.keyboard._darwin \

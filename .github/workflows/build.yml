@@ -131,6 +131,9 @@ jobs:
             --hidden-import=sounddevice \
             --hidden-import=_sounddevice_data \
             --hidden-import=certifi \
+            --collect-binaries=onnxruntime \
+            --hidden-import=onnxruntime \
+            --hidden-import=onnxruntime.capi._pybind_state \
             --add-data "src/roomkit_ui${SEP}roomkit_ui" \
             src/roomkit_ui/__main__.py
 
@@ -227,6 +230,9 @@ jobs:
             "--hidden-import=sounddevice",
             "--hidden-import=_sounddevice_data",
             "--hidden-import=certifi",
+            "--collect-binaries=onnxruntime",
+            "--hidden-import=onnxruntime",
+            "--hidden-import=onnxruntime.capi._pybind_state",
             "--add-data", "src/roomkit_ui;roomkit_ui",
             "src/roomkit_ui/__main__.py"
           )

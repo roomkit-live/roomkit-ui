@@ -28,6 +28,7 @@ from roomkit_ui.widgets.settings.models_page import _ModelsPage
 from roomkit_ui.widgets.settings.skills import _SkillsPage
 from roomkit_ui.widgets.settings.speakers_page import _SpeakersPage
 from roomkit_ui.widgets.settings.telemetry_page import _TelemetryPage
+from roomkit_ui.widgets.settings.wakeword_page import _WakeWordPage
 
 
 class SettingsPanel(QDialog):
@@ -66,6 +67,7 @@ class SettingsPanel(QDialog):
             "Attitudes",
             "Speakers",
             "Dictation",
+            "Wake Word",
             "AI Models",
             "Skills",
             "MCP Servers",
@@ -85,6 +87,7 @@ class SettingsPanel(QDialog):
         self._attitudes = _AttitudesPage(settings)
         self._speakers = _SpeakersPage(settings)
         self._dictation = _DictationPage(settings)
+        self._wakeword = _WakeWordPage(settings)
         self._models = _ModelsPage(settings)
         self._skills = _SkillsPage(settings)
         self._mcp = _MCPPage(settings)
@@ -98,6 +101,7 @@ class SettingsPanel(QDialog):
             self._attitudes,
             self._speakers,
             self._dictation,
+            self._wakeword,
             self._models,
             self._skills,
             self._mcp,
@@ -145,8 +149,9 @@ class SettingsPanel(QDialog):
     _ATTITUDES_TAB = 2
     _SPEAKERS_TAB = 3
     _DICTATION_TAB = 4
-    _SKILLS_TAB = 6
-    _AUDIO_DEBUG_TAB = 9
+    _WAKEWORD_TAB = 5
+    _SKILLS_TAB = 7
+    _AUDIO_DEBUG_TAB = 10
 
     def _on_tab_changed(self, index: int) -> None:
         self._stack.setCurrentIndex(index)
@@ -155,6 +160,8 @@ class SettingsPanel(QDialog):
             self._ai.populate_attitude_combo(self._attitudes.all_attitude_names())
         elif index == self._DICTATION_TAB:
             self._dictation.refresh_model_combo()
+        elif index == self._WAKEWORD_TAB:
+            self._wakeword.refresh()
         elif index == self._SKILLS_TAB:
             self._skills._refresh_skills()
         elif index == self._AUDIO_DEBUG_TAB:

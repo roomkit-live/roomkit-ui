@@ -64,6 +64,15 @@ _DEFAULTS = {
     "inference_device": "cpu",
     "assistant_hotkey_enabled": True,
     "assistant_hotkey": "<ctrl>+<shift>+a",
+    # Auto-hangup: a session nobody is using keeps the provider billed and
+    # the mic live.  Off by default — a session started by hand shouldn't
+    # close on its own unless the user asked for it.
+    "idle_hangup_enabled": False,
+    "idle_hangup_seconds": 15,
+    # Wake word. The phrase itself is not here — it is a voice fingerprint on
+    # disk, not a string; this only records whether to listen and how eagerly.
+    "wakeword_enabled": False,
+    "wakeword_sensitivity": "balanced",  # cautious | balanced | responsive
     "telemetry_provider": "none",  # "none" | "console" | "otlp"
     "otlp_endpoint": "",  # OTLP gRPC endpoint (e.g. http://localhost:4317)
     "otlp_protocol": "grpc",  # "grpc" | "http"

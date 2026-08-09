@@ -60,6 +60,9 @@ dictation = ["roomkit-ui[local-voice]", "pynput>=1.7"]
 # PySide6-Addons carries QtWebEngine (MCP App web UIs), QtWebChannel (the
 # JSON-RPC bridge) and QtMultimedia (notification sounds, audio-debug preview).
 mcp-apps = ["PySide6-Addons>=6.7"]
+# Wake word: local-voice supplies the VAD that gates it, onnxruntime runs the
+# whisper encoder used as an acoustic embedder (the decoder is never loaded).
+wakeword = ["roomkit-ui[local-voice]", "onnxruntime>=1.17"]
 telemetry = [
     "opentelemetry-api>=1.20",
     "opentelemetry-sdk>=1.20",
@@ -80,6 +83,7 @@ all = [
     "roomkit-ui[local-voice]",
     "roomkit-ui[dictation]",
     "roomkit-ui[mcp-apps]",
+    "roomkit-ui[wakeword]",
     "roomkit-ui[telemetry]",
 ]
 
@@ -172,6 +176,10 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["sherpa_onnx"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["onnxruntime"]
 ignore_missing_imports = true
 
 # ── Pytest ────────────────────────────────────────────────────────────────
