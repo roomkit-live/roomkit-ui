@@ -52,8 +52,14 @@ jobs:
       - name: Set up Python
         run: uv python install 3.12
 
+      # mypy runs in the project environment. Outside it, roomkit and the
+      # backend SDKs resolve to Any (pyproject ignores their missing imports),
+      # so no call into them is checked, and numpy is not found at all.
+      - name: Install dependencies
+        run: uv sync --extra dev
+
       - name: Mypy
-        run: uvx --with pydantic --with httpx mypy src/
+        run: uv run mypy src/
 
   test:
     name: Tests
