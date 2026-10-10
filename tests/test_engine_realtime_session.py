@@ -84,3 +84,21 @@ async def test_start_session_empty_voice_reaches_channel_as_none(engine):
     )
     assert _FakeChannel.last_kwargs["voice"] is None
     assert _FakeChannel.last_kwargs["skills"] is None
+
+
+async def test_start_session_hands_the_tool_options_to_the_channel(engine):
+    options = {"tool_timeout_seconds": None, "tool_search_pinned": ["end_conversation"]}
+    await engine._start_session(
+        _FakeKit,
+        _FakeChannel,
+        provider=object(),
+        transport=object(),
+        system_prompt="hi",
+        voice="Aoede",
+        sample_rate=24000,
+        tools=[],
+        tool_handler=None,
+        tool_options=options,
+    )
+    assert _FakeChannel.last_kwargs["tool_timeout_seconds"] is None
+    assert _FakeChannel.last_kwargs["tool_search_pinned"] == ["end_conversation"]

@@ -247,6 +247,7 @@ class RealtimeMixin:
                 settings=settings,
                 pipeline=pipeline,
                 skills=skills_registry,
+                tool_options=toolset.channel_options(),
             )
             if self._session is None and toolset.has_mcp:  # type: ignore[attr-defined]
                 # MCP tools broke the session — retry without them. Only MCP is
@@ -267,6 +268,7 @@ class RealtimeMixin:
                     settings=settings,
                     pipeline=pipeline,
                     skills=skills_registry,
+                    tool_options=toolset.channel_options(),
                 )
                 if self._session is not None:  # type: ignore[attr-defined]
                     self.mcp_status.emit(  # type: ignore[attr-defined]
@@ -326,6 +328,7 @@ class RealtimeMixin:
         settings: dict | None = None,
         pipeline: Any = None,
         skills: Any = None,
+        tool_options: dict[str, Any] | None = None,
     ) -> Any:
         """Try to create a room and start a realtime session.  Returns None on failure."""
         from roomkit_ui.engine_audio import build_telemetry
@@ -360,6 +363,7 @@ class RealtimeMixin:
                 tool_handler=tool_handler,
                 pipeline=pipeline,
                 skills=skills,
+                **(tool_options or {}),
             )
             self._kit.register_channel(self._channel)  # type: ignore[attr-defined]
             await self._kit.attach_channel(ROOM_ID, "voice")  # type: ignore[attr-defined]

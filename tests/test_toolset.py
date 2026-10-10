@@ -6,6 +6,7 @@ the second attempt. Both must be exact: a false positive costs a wasted
 connect on every failure, and a wrong payload silently drops live tools.
 """
 
+from roomkit_ui.builtin_tools import BUILTIN_TOOLS
 from roomkit_ui.toolset import ToolSet, tool_summaries
 
 BUILTIN = [{"name": "get_current_time", "description": "Get the current local time."}]
@@ -54,3 +55,20 @@ def test_tool_summaries_cap_a_long_single_line_description():
 
 def test_tool_summaries_tolerate_missing_keys():
     assert tool_summaries([{}]) == [{"name": "", "description": ""}]
+
+
+# -- what reaches a roomkit channel ------------------------------------------
+
+
+def test_channel_options_pin_the_builtins_and_leave_timeouts_to_the_app():
+    options = ToolSet(builtin=BUILTIN, cli=CLI, mcp=MCP).channel_options()
+
+    assert options == {"tool_timeout_seconds": None, "tool_search_pinned": ["get_current_time"]}
+
+
+def test_an_ai_channel_accepts_the_channel_options():
+    from roomkit.channels.ai import AIChannel
+    from roomkit.providers.ai.mock import MockAIProvider
+
+    toolset = ToolSet(builtin=list(BUILTIN_TOOLS), cli=[], mcp=[])
+    AIChannel("ai", provider=MockAIProvider(responses=["ok"]), **toolset.channel_options())

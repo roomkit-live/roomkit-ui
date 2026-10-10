@@ -34,7 +34,7 @@ from roomkit_ui.engine_vc_helpers import (
 from roomkit_ui.features import STT_PROVIDER_FEATURES, require
 from roomkit_ui.hooks import register_vc_hooks
 from roomkit_ui.providers import create_ai_provider
-from roomkit_ui.toolset import tool_summaries
+from roomkit_ui.toolset import ToolSet, tool_summaries
 from roomkit_ui.tts import create_tts_provider
 
 logger = logging.getLogger(__name__)
@@ -197,27 +197,30 @@ class VoiceChannelMixin:
             )
             self._channel = voice  # type: ignore[attr-defined]
 
-            # 7.5. Skills + 8. AIChannel
+            # 7.5. Skills
             skip_tools = llm_provider_name == "local" and not settings.get("vc_local_tools", True)
             skills_registry = self._load_skills(settings) if not skip_tools else None
 
+            # 8. Tools — set up first: the AIChannel takes their options
+            toolset = ToolSet(builtin=[], cli=[], mcp=[])
+            if skip_tools:
+                logger.info("Local model tool support disabled — skipping MCP/tools")
+            else:
+                if mcp_servers_configured(settings):
+                    self.loading_status.emit("Connecting MCP servers…")  # type: ignore[attr-defined]
+                toolset = await self._setup_tools(settings)  # type: ignore[attr-defined]
+            tools = toolset.all
+
+            # 9. AIChannel
             ai_channel = AIChannel(
                 "ai",
                 provider=ai_provider,
                 system_prompt=system_prompt,
                 tool_handler=self._handle_tool_call,  # type: ignore[attr-defined]
                 skills=skills_registry,
+                **toolset.channel_options(),
             )
             self._ai_channel = ai_channel  # type: ignore[attr-defined]
-
-            # 9. MCP tools
-            tools: list[dict] = []
-            if skip_tools:
-                logger.info("Local model tool support disabled — skipping MCP/tools")
-            else:
-                if mcp_servers_configured(settings):
-                    self.loading_status.emit("Connecting MCP servers…")  # type: ignore[attr-defined]
-                tools = (await self._setup_tools(settings)).all  # type: ignore[attr-defined]
 
             # 10-11. Framework + hooks
             from roomkit_ui.memory import ROOM_ID, build_store, ensure_room

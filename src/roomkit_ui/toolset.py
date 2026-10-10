@@ -12,6 +12,7 @@ the combined list can answer that.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 # session_info truncates for display anyway; this just keeps a seeded --help
 # blob (tens of KB) from crossing the Qt signal once per tool.
@@ -38,6 +39,21 @@ class ToolSet:
     @property
     def has_mcp(self) -> bool:
         return bool(self.mcp)
+
+    def channel_options(self) -> dict[str, Any]:
+        """Tool settings for a roomkit channel, so it serves this app's limits.
+
+        roomkit bounds each tool call itself since 0.95 (10 s realtime, 30 s on
+        an AIChannel), which would cut an MCP call (60 s here) or a CLI tool's
+        own timeout first: the app keeps its bounds, roomkit adds none.  Tool
+        Search hides tools behind ``find_tools`` once the catalogue is large;
+        the built-ins are what the model calls unprompted (end_conversation,
+        set_attitude), so they always stay declared.
+        """
+        return {
+            "tool_timeout_seconds": None,
+            "tool_search_pinned": [t["name"] for t in self.builtin],
+        }
 
 
 def tool_summaries(tools: list[dict]) -> list[dict]:
