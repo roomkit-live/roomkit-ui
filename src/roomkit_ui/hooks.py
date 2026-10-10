@@ -81,6 +81,8 @@ def register_vc_hooks(kit: Any, engine: Any) -> None:
                 pass
             return HookResult.block("non-primary speaker")
 
+        # A new user turn: the next assistant sentence opens a new reply.
+        engine._partial_buffers.pop("assistant", None)
         try:
             engine.transcription.emit(str(text), "user", True, speaker)
         except Exception:
@@ -119,9 +121,17 @@ def register_vc_hooks(kit: Any, engine: Any) -> None:
 
         if engine._state != EngineState.ACTIVE:
             return HookResult.allow()
+        # A streamed reply runs this once per sentence, and the bubble wants
+        # the growing text: join the sentences as roomkit does for AFTER_TTS.
+        sentence = str(text).strip()
+        if not sentence:
+            return HookResult.allow()
+        so_far = engine._partial_buffers.get("assistant", "")
+        reply = f"{so_far} {sentence}" if so_far else sentence
+        engine._partial_buffers["assistant"] = reply
         try:
             # Emit as partial — the chat bubble will stream words progressively
-            engine.transcription.emit(str(text), "assistant", False, "")
+            engine.transcription.emit(reply, "assistant", False, "")
             engine.ai_speaking.emit(True)
         except Exception:
             pass
@@ -129,6 +139,7 @@ def register_vc_hooks(kit: Any, engine: Any) -> None:
 
     @kit.hook(HookTrigger.AFTER_TTS, HookExecution.ASYNC)
     async def _on_tts_done(text, context):
+        engine._partial_buffers.pop("assistant", None)
         if engine._state != EngineState.ACTIVE:
             return
         try:
@@ -154,6 +165,7 @@ def register_vc_hooks(kit: Any, engine: Any) -> None:
 
     @kit.on("tts_error")
     async def _on_tts_error(event):
+        engine._partial_buffers.pop("assistant", None)
         try:
             engine.session_notice.emit(_voice_error_notice("Speech synthesis failed", event.data))
             engine.ai_speaking.emit(False)
