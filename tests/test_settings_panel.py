@@ -1,12 +1,19 @@
-"""Guards the settings panel's index alignment.
+"""Guards the settings panel's index alignment and how it saves.
 
 The sidebar labels, the _pages tuple and the hardcoded *_TAB constants are
 three parallel structures kept in sync by hand. Inserting a tab shifts every
 index below it, and nothing but these assertions would notice.
+
+There is no Save button: closing the dialog, however it is closed, is what
+persists the user's changes.
 """
 
 import pytest
+from PySide6.QtCore import Qt
+from PySide6.QtTest import QTest
 
+import roomkit_ui.widgets.settings.panel as panel_mod
+from roomkit_ui.settings import load_settings
 from roomkit_ui.widgets.settings.cli_tools_page import _CliToolsPage
 from roomkit_ui.widgets.settings.panel import SettingsPanel
 
@@ -44,3 +51,27 @@ def test_the_cli_tools_page_is_registered_and_contributes_its_slice(panel):
     cli_page = next(p for p in panel._pages if isinstance(p, _CliToolsPage))
 
     assert "cli_tools" in cli_page.get_settings()
+
+
+# -- saving on close ---------------------------------------------------------
+
+
+def test_escape_keeps_the_changes(panel):
+    """Esc rejects the dialog without any QCloseEvent — it must still save."""
+    panel.show()
+    panel._ai.prompt.setPlainText("Answer like a pirate.")
+
+    QTest.keyClick(panel, Qt.Key_Escape)
+
+    assert load_settings()["system_prompt"] == "Answer like a pirate."
+
+
+@pytest.mark.parametrize("close", [SettingsPanel.reject, SettingsPanel.close])
+def test_every_way_out_saves_exactly_once(panel, monkeypatch, close):
+    saves: list[dict] = []
+    monkeypatch.setattr(panel_mod, "save_settings", saves.append)
+    panel.show()
+
+    close(panel)
+
+    assert len(saves) == 1

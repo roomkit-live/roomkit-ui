@@ -167,9 +167,13 @@ class SettingsPanel(QDialog):
         elif index == self._AUDIO_DEBUG_TAB:
             self._audio_debug.refresh_files()
 
-    def closeEvent(self, event) -> None:  # noqa: N802
+    def done(self, result: int) -> None:
+        # Every way out funnels through done(): Esc and reject() call it
+        # directly, and the title-bar close reaches it via reject().  A
+        # closeEvent hook would miss Esc — QDialog never sends a QCloseEvent
+        # for it — and the user's changes would be discarded.
         self._save()
-        super().closeEvent(event)
+        super().done(result)
 
     def _save(self) -> None:
         from roomkit_ui.theme import get_stylesheet
