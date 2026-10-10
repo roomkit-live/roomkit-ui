@@ -6,8 +6,10 @@ the second attempt. Both must be exact: a false positive costs a wasted
 connect on every failure, and a wrong payload silently drops live tools.
 """
 
+import pytest
+
 from roomkit_ui.builtin_tools import BUILTIN_TOOLS
-from roomkit_ui.toolset import ToolSet, tool_summaries
+from roomkit_ui.toolset import ToolSet, reachable_mcp_tools, tool_summaries
 
 BUILTIN = [{"name": "get_current_time", "description": "Get the current local time."}]
 CLI = [{"name": "gh", "description": "GitHub CLI"}]
@@ -60,10 +62,63 @@ def test_tool_summaries_tolerate_missing_keys():
 # -- what reaches a roomkit channel ------------------------------------------
 
 
+def _mcp(name):
+    return {
+        "type": "function",
+        "name": name,
+        "description": "",
+        "parameters": {"type": "object", "properties": {}},
+    }
+
+
+def test_mcp_tool_named_like_a_builtin_or_cli_tool_is_dropped():
+    # mcp-server-time ships get_current_time: dispatch answers it with the
+    # built-in, so the MCP one could never run anyway.
+    kept, dropped = reachable_mcp_tools(BUILTIN, CLI, [_mcp("get_current_time"), _mcp("gh")])
+
+    assert kept == []
+    assert dropped == ["get_current_time", "gh"]
+
+
+def test_mcp_tool_outside_the_provider_name_rule_is_dropped():
+    kept, dropped = reachable_mcp_tools([], [], [_mcp("fs.read"), _mcp("x" * 65), _mcp("ok_1")])
+
+    assert [t["name"] for t in kept] == ["ok_1"]
+    assert dropped == ["fs.read", "x" * 65]
+
+
 def test_channel_options_pin_the_builtins_and_leave_timeouts_to_the_app():
     options = ToolSet(builtin=BUILTIN, cli=CLI, mcp=MCP).channel_options()
 
     assert options == {"tool_timeout_seconds": None, "tool_search_pinned": ["get_current_time"]}
+
+
+def test_a_realtime_channel_accepts_the_tools_once_clashes_are_dropped():
+    # roomkit refuses a name declared twice when it builds the channel; the
+    # engine's retry would then shed every MCP tool, not just the clash.
+    from roomkit import RealtimeVoiceChannel
+    from roomkit.voice.backends.mock import MockVoiceBackend
+    from roomkit.voice.realtime.mock import MockRealtimeProvider
+
+    builtin = list(BUILTIN_TOOLS)
+    mcp = [_mcp("get_current_time"), _mcp("read_file")]
+
+    def build(tools, toolset):
+        return RealtimeVoiceChannel(
+            "voice",
+            provider=MockRealtimeProvider(),
+            transport=MockVoiceBackend(),
+            tools=tools,
+            **toolset.channel_options(),
+        )
+
+    with pytest.raises(ValueError):
+        raw = ToolSet(builtin=builtin, cli=[], mcp=mcp)
+        build(raw.all, raw)
+
+    kept, _ = reachable_mcp_tools(builtin, [], mcp)
+    toolset = ToolSet(builtin=builtin, cli=[], mcp=kept)
+    build(toolset.all, toolset)
 
 
 def test_an_ai_channel_accepts_the_channel_options():

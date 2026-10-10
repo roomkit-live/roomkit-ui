@@ -11,12 +11,16 @@ the combined list can answer that.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any
 
 # session_info truncates for display anyway; this just keeps a seeded --help
 # blob (tens of KB) from crossing the Qt signal once per tool.
 _SUMMARY_MAX = 200
+
+# The narrowest rule across the providers this app speaks to (CLAUDE.md).
+_PROVIDER_TOOL_NAME = re.compile(r"[A-Za-z0-9_-]{1,64}")
 
 
 @dataclass(frozen=True)
@@ -54,6 +58,28 @@ class ToolSet:
             "tool_timeout_seconds": None,
             "tool_search_pinned": [t["name"] for t in self.builtin],
         }
+
+
+def reachable_mcp_tools(
+    builtin: list[dict], cli: list[dict], mcp: list[dict]
+) -> tuple[list[dict], list[str]]:
+    """Split MCP tools into those a provider can be given and the names it cannot.
+
+    Dispatch tries built-ins, then CLI tools, then MCP, so an MCP tool named
+    like either never runs.  roomkit also refuses a name declared twice, or
+    one outside a provider's rule, when it builds a realtime channel — which
+    used to drop every MCP tool through the no-MCP retry.
+    """
+    taken = {t["name"] for t in (*builtin, *cli)}
+    kept: list[dict] = []
+    dropped: list[str] = []
+    for tool in mcp:
+        name = tool.get("name", "")
+        if name in taken or not _PROVIDER_TOOL_NAME.fullmatch(name):
+            dropped.append(name)
+        else:
+            kept.append(tool)
+    return kept, dropped
 
 
 def tool_summaries(tools: list[dict]) -> list[dict]:

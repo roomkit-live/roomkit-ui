@@ -33,7 +33,7 @@ from roomkit_ui.engine_tools import ToolMixin
 from roomkit_ui.engine_vc import VoiceChannelMixin
 from roomkit_ui.mcp_config import enabled_mcp_servers
 from roomkit_ui.mcp_manager import MCPManager
-from roomkit_ui.toolset import ToolSet
+from roomkit_ui.toolset import ToolSet, reachable_mcp_tools
 from roomkit_ui.watchdog import SessionWatchdog
 
 logger = logging.getLogger(__name__)
@@ -290,7 +290,6 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         """Connect MCP servers, probe CLI tools, and group both with the built-ins."""
         cli_tools = await self._setup_cli_tools(settings)
         mcp_tools = await self._setup_mcp_tools(settings)
-        self._warn_shadowed_mcp_tools(cli_tools, mcp_tools)
         builtin = list(BUILTIN_TOOLS)
         # Declared only when a persistent store will actually answer it — a
         # dead tool in the declaration teaches the model to call into a void.
@@ -298,6 +297,11 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
 
         if memory_active(settings):
             builtin.append(dict(RECALL_TOOL))
+        mcp_tools, dropped = reachable_mcp_tools(builtin, cli_tools, mcp_tools)
+        if dropped:
+            self.mcp_status.emit(
+                f"MCP tools not offered (name taken or invalid): {', '.join(dropped)}"
+            )
         return ToolSet(builtin=builtin, cli=cli_tools, mcp=mcp_tools)
 
     async def _setup_cli_tools(self, settings: dict) -> list[dict]:
@@ -341,14 +345,6 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         asyncio.get_running_loop().call_later(0.5, lambda: cleanup_stale_fds(timers_only=True))
 
         return discovered
-
-    @staticmethod
-    def _warn_shadowed_mcp_tools(cli_tools: list[dict], mcp_tools: list[dict]) -> None:
-        """Log MCP tools a CLI tool hides — dispatch tries CLI first."""
-        cli_names = {t["name"] for t in cli_tools}
-        shadowed = [t["name"] for t in mcp_tools if t["name"] in cli_names]
-        if shadowed:
-            logger.warning("CLI tools shadow same-named MCP tools: %s", ", ".join(shadowed))
 
     async def stop(self) -> None:
         if self._state not in (EngineState.ACTIVE, EngineState.CONNECTING, EngineState.ERROR):
