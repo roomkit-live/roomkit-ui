@@ -264,7 +264,7 @@ class _GeneralPage(QWidget):
         vad_form.addRow("Min Speech (ms)", self.vad_min_speech_ms)
 
         self.vad_speech_pad_ms = QLineEdit(str(settings.get("vad_speech_pad_ms", "") or ""))
-        self.vad_speech_pad_ms.setPlaceholderText("300")
+        self.vad_speech_pad_ms.setPlaceholderText("1000")
         vad_form.addRow("Speech Pad (ms)", self.vad_speech_pad_ms)
 
         self.vad_energy_silence_rms = QLineEdit(

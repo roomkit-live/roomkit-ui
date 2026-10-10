@@ -130,7 +130,7 @@ _DEFAULTS = {
     "vad_threshold": "",  # 0.0–1.0 (empty = 0.35)
     "vad_silence_ms": "",  # ms of silence before SPEECH_END (empty = 500)
     "vad_min_speech_ms": "",  # minimum utterance length in ms (empty = 250)
-    "vad_speech_pad_ms": "",  # pre-roll buffer in ms (empty = 300)
+    "vad_speech_pad_ms": "",  # pre-roll buffer in ms (empty = 1000, roomkit 0.90+)
     "vad_energy_silence_rms": "",  # energy fast-exit RMS threshold (empty = 20, 0 = off)
     "vc_turn_detector": "",  # "" (none) or "smart-turn"
     "vc_turn_threshold": "",  # 0.0–1.0 (empty = 0.5)
