@@ -215,21 +215,20 @@ wheels = [
 
 [[package]]
 name = "anthropic"
-version = "0.121.0"
+version = "1.13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
-    { name = "distro" },
     { name = "docstring-parser" },
-    { name = "httpx" },
+    { name = "httpx2" },
     { name = "jiter" },
     { name = "pydantic" },
     { name = "sniffio" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/0f/ca/3cb2c20ee729736fbd4546d5d8b67e818288529fe70cb7a80dbf80aef70b/anthropic-0.121.0.tar.gz", hash = "sha256:e79d6e08ab3376602fc9a70d4d5ea3540817c76cf7e16658bed790834e1833d6", size = 1013292, upload-time = "2026-08-07T17:11:07.241Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/0b/ed/e76e50601b7c476bcb9a2a7a4c4dab6f1a9b2c03e3922de8b3ec599ccbc5/anthropic-1.13.0.tar.gz", hash = "sha256:ad11d9bb9adafdfea26113943bcde9973e2a439ebeeda6c89ff3e3d85bb2f5c1", size = 1567362, upload-time = "2026-10-09T15:29:08.803Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/fa/91/b3d41643f1f639927e8c5fb02c3bd8bffe6f1f29e219b3bd4c61e267b15c/anthropic-0.121.0-py3-none-any.whl", hash = "sha256:6048713fa441e59e1cba8363171cd2a86273b25bd213e9c7ac70a523af88b011", size = 1035493, upload-time = "2026-08-07T17:11:08.508Z" },
+    { url = "https://files.pythonhosted.org/packages/ad/9a/a835340c91bc9a233bd54c05fc438fe07cbef71ca667f24f3892a268ae20/anthropic-1.13.0-py3-none-any.whl", hash = "sha256:157bd74dbf6a595cf9e5fcac557c791fd297924dc48261f57470c2ed6f4e6671", size = 1958595, upload-time = "2026-10-09T15:29:10.689Z" },
 ]
 
 [[package]]
@@ -1100,7 +1099,7 @@ requests = [
 
 [[package]]
 name = "google-genai"
-version = "2.17.0"
+version = "2.29.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
@@ -1114,9 +1113,9 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "websockets" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/58/2e/03a0486e192cde27f7ffbb20c63fa934a132396a667b1a0e1b7e5f606ad7/google_genai-2.17.0.tar.gz", hash = "sha256:6b640a2390c82b4a240873eddb9f518c6d2c33244b2de16ed3d14526a6da7f57", size = 648676, upload-time = "2026-08-06T05:10:41.382Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/21/2b/977616ef350e51d3d263eb43be23a91be793544cd937b51c0fac313be233/google_genai-2.29.0.tar.gz", hash = "sha256:124d3eef9ff6b9e4ea548f95ff5b7721683e7990c0a936b006d9e2ab61ea897d", size = 706902, upload-time = "2026-10-07T22:22:57.153Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b3/37/71e397a5b93d9a3c139e95acdcb00b4169ed59ae20e16616f2875170abb7/google_genai-2.17.0-py3-none-any.whl", hash = "sha256:a4835563c60aee646c9c4b261c507aa4a624710d25017012d20dc65abf3d9a54", size = 1044950, upload-time = "2026-08-06T05:10:39.308Z" },
+    { url = "https://files.pythonhosted.org/packages/b8/27/a3dede4a1deb21f7fde6a171daa039bf0ea149a5e7826a785e8f109a6e13/google_genai-2.29.0-py3-none-any.whl", hash = "sha256:7adda55cb6746fb46d38ad3202c3372840b96eede964b5fb3df1469cd4998570", size = 1167603, upload-time = "2026-10-07T22:22:55.215Z" },
 ]
 
 [[package]]
@@ -3842,14 +3841,14 @@ wheels = [
 
 [[package]]
 name = "roomkit"
-version = "0.47.0"
+version = "0.96.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/6c/c0/985a941ae24edc09de257bbd5a4481ffab6916b3a6650196b6d4decb7ab5/roomkit-0.47.0.tar.gz", hash = "sha256:d1ee036bc98bac951ff21890558c38740509c80e8de6f5f960b0d31486dc1dbe", size = 2452371, upload-time = "2026-08-10T22:58:44.146Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c7/a4/2ea8d431447a4c233474a8876e576096bf9b282b2e7e29b7f6900104ecbb/roomkit-0.96.1.tar.gz", hash = "sha256:38115adf9b698434a5afb20a502002c84661622eeff991cdf9580aec68373eba", size = 4194854, upload-time = "2026-10-09T16:49:45.522Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/fc/21/499f3d13f7a38ae5c2a380bf82a34e96394e90d9cb75d8111bea247b42f0/roomkit-0.47.0-py3-none-any.whl", hash = "sha256:15512bf92e9f435ba9251f00e12a8ba1151451b4780079e3c8e8317de0054dbd", size = 1797191, upload-time = "2026-08-10T22:58:46.2Z" },
+    { url = "https://files.pythonhosted.org/packages/ee/dc/623aec227ed7d85cc64f708f1cb697712002853f1e022c59e8902db0d406/roomkit-0.96.1-py3-none-any.whl", hash = "sha256:574684cdfb20d8b38f01e1d849e18305c5e058cb3f40e897f2ec5a044aa068b4", size = 2658706, upload-time = "2026-10-09T16:49:47.767Z" },
 ]
 
 [package.optional-dependencies]
@@ -3861,6 +3860,7 @@ deepgram = [
 ]
 elevenlabs = [
     { name = "elevenlabs" },
+    { name = "websockets" },
 ]
 gemini = [
     { name = "google-genai" },
@@ -3892,10 +3892,12 @@ realtime-gemini = [
 ]
 realtime-openai = [
     { name = "openai" },
+    { name = "tiktoken" },
     { name = "websockets" },
 ]
 sherpa-onnx = [
     { name = "sherpa-onnx" },
+    { name = "sherpa-onnx-core", marker = "platform_machine != 'armv7l' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
 ]
 webrtc-aec = [
     { name = "aec-audio-processing" },
@@ -4013,16 +4015,16 @@ requires-dist = [
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24" },
     { name = "pytest-qt", marker = "extra == 'dev'", specifier = ">=4.4" },
     { name = "qasync", specifier = ">=0.27" },
-    { name = "roomkit", extras = ["anthropic"], marker = "extra == 'anthropic'", specifier = ">=0.47.0" },
-    { name = "roomkit", extras = ["deepgram", "realtime-deepgram"], marker = "extra == 'deepgram'", specifier = ">=0.47.0" },
-    { name = "roomkit", extras = ["elevenlabs", "realtime-elevenlabs"], marker = "extra == 'elevenlabs'", specifier = ">=0.47.0" },
-    { name = "roomkit", extras = ["gemini", "realtime-gemini"], marker = "extra == 'gemini'", specifier = ">=0.47.0" },
-    { name = "roomkit", extras = ["gradium"], marker = "extra == 'gradium'", specifier = ">=0.47.0" },
-    { name = "roomkit", extras = ["local-audio", "webrtc-aec"], specifier = ">=0.47.0" },
-    { name = "roomkit", extras = ["neutts"], marker = "extra == 'neutts'", specifier = ">=0.47.0" },
-    { name = "roomkit", extras = ["openai", "realtime-openai"], marker = "extra == 'openai'", specifier = ">=0.47.0" },
-    { name = "roomkit", extras = ["qwen-tts"], marker = "extra == 'qwen3-tts'", specifier = ">=0.47.0" },
-    { name = "roomkit", extras = ["sherpa-onnx"], marker = "extra == 'local-voice'", specifier = ">=0.47.0" },
+    { name = "roomkit", extras = ["anthropic"], marker = "extra == 'anthropic'", specifier = ">=0.96.1" },
+    { name = "roomkit", extras = ["deepgram", "realtime-deepgram"], marker = "extra == 'deepgram'", specifier = ">=0.96.1" },
+    { name = "roomkit", extras = ["elevenlabs", "realtime-elevenlabs"], marker = "extra == 'elevenlabs'", specifier = ">=0.96.1" },
+    { name = "roomkit", extras = ["gemini", "realtime-gemini"], marker = "extra == 'gemini'", specifier = ">=0.96.1" },
+    { name = "roomkit", extras = ["gradium"], marker = "extra == 'gradium'", specifier = ">=0.96.1" },
+    { name = "roomkit", extras = ["local-audio", "webrtc-aec"], specifier = ">=0.96.1" },
+    { name = "roomkit", extras = ["neutts"], marker = "extra == 'neutts'", specifier = ">=0.96.1" },
+    { name = "roomkit", extras = ["openai", "realtime-openai"], marker = "extra == 'openai'", specifier = ">=0.96.1" },
+    { name = "roomkit", extras = ["qwen-tts"], marker = "extra == 'qwen3-tts'", specifier = ">=0.96.1" },
+    { name = "roomkit", extras = ["sherpa-onnx"], marker = "extra == 'local-voice'", specifier = ">=0.96.1" },
     { name = "roomkit-ui", extras = ["all"], marker = "extra == 'dev'" },
     { name = "roomkit-ui", extras = ["anthropic"], marker = "extra == 'cloud'" },
     { name = "roomkit-ui", extras = ["cloud"], marker = "extra == 'all'" },

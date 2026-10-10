@@ -50,11 +50,21 @@ def test_typed_deepgram_voice_id_wins(section):
 # -- model dropdowns ---------------------------------------------------------
 
 
-def test_sts_model_combos_carry_the_documented_lineups(section):
-    gemini_models = [section.gemini_model.itemText(i) for i in range(section.gemini_model.count())]
-    openai_models = [section.openai_model.itemText(i) for i in range(section.openai_model.count())]
-    assert "gemini-3.1-flash-live-preview" in gemini_models
-    assert "gpt-realtime-2.1-mini" in openai_models
+def test_sts_model_combos_offer_the_catalog_minus_deprecated(section):
+    # Asserted against the installed catalog, not a frozen id list: roomkit
+    # retires models between releases (0.96 deprecated gemini-3.1-flash-live).
+    from roomkit.providers.gemini import realtime_models as gemini_catalog
+    from roomkit.providers.openai import realtime_models as openai_catalog
+
+    for combo, catalog in (
+        (section.gemini_model, gemini_catalog),
+        (section.openai_model, openai_catalog),
+    ):
+        offered = {combo.itemText(i) for i in range(combo.count())}
+        live = {m.id for m in catalog.MODELS if not m.deprecated}
+        retired = {m.id for m in catalog.MODELS if m.deprecated}
+        assert live <= offered
+        assert not retired & offered
 
 
 def test_sts_model_combos_are_fixed_dropdowns(section):
