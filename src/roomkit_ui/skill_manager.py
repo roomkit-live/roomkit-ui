@@ -509,17 +509,25 @@ def discover_all_skills(
             return None
         content = md_path.read_text(encoding="utf-8")
         data, _ = parse_frontmatter(content)
-        name = data.get("name", "")
-        desc = data.get("description", "")
+
+        def _text(value: str | list[str] | None) -> str:
+            # A YAML list where text belongs is joined, as roomkit's strict
+            # parser does; only allowed_tools keeps its list form.
+            if isinstance(value, list):
+                return ", ".join(value)
+            return value or ""
+
+        name = _text(data.get("name"))
+        desc = _text(data.get("description"))
         if not name or not desc:
             return None
         _known = {"name", "description", "license", "compatibility", "allowed_tools"}
-        extra = {k: v for k, v in data.items() if k not in _known}
+        extra = {k: _text(v) for k, v in data.items() if k not in _known}
         return SkillMetadata(
             name=name,
             description=desc,
-            license=data.get("license"),
-            compatibility=data.get("compatibility"),
+            license=_text(data.get("license")) or None,
+            compatibility=_text(data.get("compatibility")) or None,
             allowed_tools=data.get("allowed_tools"),
             extra_metadata=extra,
         )

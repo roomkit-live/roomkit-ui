@@ -60,6 +60,30 @@ def test_discover_local_lenient_slug_mismatch(tmp_path, skills_root):
     assert found[0][2].startswith("local")
 
 
+def test_discover_lenient_coerces_list_values_to_text(tmp_path, skills_root):
+    # YAML lists where SkillMetadata expects text must arrive as text, the
+    # way roomkit's strict parser joins them; only allowed_tools keeps a list.
+    skill_dir = tmp_path / "imported-skills" / "some-slug-123"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\n"
+        "name: [real-name]\n"
+        "description: A test skill.\n"
+        "license:\n  - MIT\n  - Apache-2.0\n"
+        "allowed_tools:\n  - search_*\n"
+        "tags:\n  - audio\n  - voice\n"
+        "---\n\nDo the thing.\n"
+    )
+    found = sm.discover_all_skills([{"type": "local", "path": str(skill_dir.parent)}])
+    assert len(found) == 1
+    meta = found[0][0]
+    assert meta.name == "real-name"
+    assert meta.license == "MIT, Apache-2.0"
+    assert meta.compatibility is None
+    assert meta.allowed_tools == ["search_*"]
+    assert meta.extra_metadata == {"tags": "audio, voice"}
+
+
 def test_discover_local_source(tmp_path, skills_root):
     local = tmp_path / "my-local-skills"
     _write_skill(local / "helper", "helper")
