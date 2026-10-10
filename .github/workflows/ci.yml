@@ -19,11 +19,16 @@ jobs:
       - name: Set up Python
         run: uv python install 3.12
 
+      # The locked ruff, not whatever uvx resolves today: a new release adds
+      # rules and reformats code, and CI would disagree with "uv run ruff".
+      - name: Install dependencies
+        run: uv sync --extra dev
+
       - name: Ruff check
-        run: uvx ruff check .
+        run: uv run ruff check .
 
       - name: Ruff format check
-        run: uvx ruff format --check .
+        run: uv run ruff format --check .
 
   security:
     name: Security scan
@@ -37,8 +42,11 @@ jobs:
       - name: Set up Python
         run: uv python install 3.12
 
+      - name: Install dependencies
+        run: uv sync --extra dev
+
       - name: Bandit
-        run: uvx bandit -r src/ -c pyproject.toml
+        run: uv run bandit -r src/ -c pyproject.toml
 
   typecheck:
     name: Type check
