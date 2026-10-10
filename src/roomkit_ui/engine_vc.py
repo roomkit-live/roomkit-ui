@@ -101,6 +101,7 @@ class VoiceChannelMixin:
         try:
             from roomkit import RoomKit, VoiceChannel
             from roomkit.channels.ai import AIChannel
+            from roomkit.models import RetryPolicy
             from roomkit.voice.backends.local import LocalAudioBackend
             from roomkit.voice.pipeline.config import AudioPipelineConfig
 
@@ -218,6 +219,12 @@ class VoiceChannelMixin:
                 system_prompt=system_prompt,
                 tool_handler=self._handle_tool_call,  # type: ignore[attr-defined]
                 skills=skills_registry,
+                # Provider SDKs no longer retry (Anthropic stopped in roomkit
+                # 0.96); a 429/529 would fail the turn into silence.  Retries
+                # only run while nothing has been streamed, so none is heard.
+                retry_policy=RetryPolicy(
+                    max_retries=2, base_delay_seconds=0.5, max_delay_seconds=4.0
+                ),
                 **toolset.channel_options(),
             )
             self._ai_channel = ai_channel  # type: ignore[attr-defined]
