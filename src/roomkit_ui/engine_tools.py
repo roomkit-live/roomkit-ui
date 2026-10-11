@@ -98,51 +98,12 @@ class ToolMixin:
         """
         # Check if this is an MCP App tool (has ui:// resource)
         app_info = self._mcp.get_app_tool_info(name) if self._mcp else None  # type: ignore[attr-defined]
+        self._show_tool_use(name, arguments, app_info)
 
-        try:
-            if app_info is not None:
-                self.tool_use_app.emit(  # type: ignore[attr-defined]
-                    name,
-                    json.dumps(arguments),
-                    app_info["uri"],
-                    app_info["server"],
-                )
-            else:
-                self.tool_use.emit(name, json.dumps(arguments))  # type: ignore[attr-defined]
-        except Exception:
-            pass
+        engine_result = await self._handle_engine_tool(name, arguments)
+        if engine_result is not None:
+            return engine_result
 
-        # Handle paste_text — copy text to clipboard and simulate paste
-        if name == "paste_text":
-            return await self._paste_text(arguments.get("text", ""))
-
-        # Handle end_conversation — schedule stop after a delay so the
-        # agent's goodbye response can be spoken before disconnecting.
-        if name == "end_conversation":
-            loop = asyncio.get_running_loop()
-            # Cancel any previously scheduled end_conversation to avoid races
-            if self._end_conv_handle is not None:  # type: ignore[attr-defined]
-                self._end_conv_handle.cancel()  # type: ignore[attr-defined]
-            self._end_conv_handle = loop.call_later(  # type: ignore[attr-defined]
-                3.0,
-                lambda: self._create_owned_task(  # type: ignore[attr-defined]
-                    self.stop(),  # type: ignore[attr-defined]
-                    name="engine_stop_from_tool",
-                ),
-            )
-            return '{"status": "ok", "message": "Ending conversation in a few seconds."}'
-
-        # Handle attitude changes (needs engine state, not pure builtin)
-        if name == "set_attitude":
-            return await self._apply_attitude_by_name(arguments.get("name", ""))
-
-        # Past-conversation search (needs the session's kit/store)
-        if name == "recall_conversations":
-            from roomkit_ui.memory import recall_conversations
-
-            return await recall_conversations(getattr(self, "_kit", None), arguments)
-
-        # Try built-in tools first
         builtin_result = handle_builtin_tool(name)
         if builtin_result is not None:
             return builtin_result
@@ -164,6 +125,53 @@ class ToolMixin:
             return '{"error": "Unknown tool"}'
 
         return await self._call_mcp_tool(self._mcp, name, arguments, app_info)
+
+    def _show_tool_use(self, name: str, arguments: dict[str, Any], app_info: Any) -> None:
+        """Show the call in the chat — as an MCP App when it has one."""
+        try:
+            if app_info is not None:
+                self.tool_use_app.emit(  # type: ignore[attr-defined]
+                    name,
+                    json.dumps(arguments),
+                    app_info["uri"],
+                    app_info["server"],
+                )
+            else:
+                self.tool_use.emit(name, json.dumps(arguments))  # type: ignore[attr-defined]
+        except Exception:
+            pass
+
+    async def _handle_engine_tool(self, name: str, arguments: dict[str, Any]) -> str | None:
+        """The built-ins that need the engine's state; None for any other tool."""
+        if name == "paste_text":
+            return await self._paste_text(arguments.get("text", ""))
+        if name == "end_conversation":
+            return self._schedule_end_conversation()
+        if name == "set_attitude":
+            return await self._apply_attitude_by_name(arguments.get("name", ""))
+        if name == "recall_conversations":
+            # Past-conversation search needs the session's kit and store.
+            from roomkit_ui.memory import recall_conversations
+
+            return await recall_conversations(getattr(self, "_kit", None), arguments)
+        return None
+
+    def _schedule_end_conversation(self) -> str:
+        """Stop the session after a delay, so the goodbye is spoken first.
+
+        A second end_conversation replaces the first rather than racing it.
+        """
+        loop = asyncio.get_running_loop()
+        if self._end_conv_handle is not None:  # type: ignore[attr-defined]
+            self._end_conv_handle.cancel()  # type: ignore[attr-defined]
+        self._end_conv_handle = loop.call_later(  # type: ignore[attr-defined]
+            3.0,
+            lambda: self._create_owned_task(  # type: ignore[attr-defined]
+                self.stop(),  # type: ignore[attr-defined]
+                name="engine_stop_from_tool",
+            ),
+        )
+        return '{"status": "ok", "message": "Ending conversation in a few seconds."}'
 
     async def _call_mcp_tool(
         self,
