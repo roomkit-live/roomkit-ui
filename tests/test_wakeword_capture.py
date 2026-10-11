@@ -101,8 +101,9 @@ def test_blocks_are_resampled_to_the_detection_rate():
     """A 24 kHz shared source must reach the 16 kHz VAD as 16 kHz."""
     c = SegmentCapture("/nonexistent/vad.onnx", source=FakeSource24k())
     block_24k = b"\x00\x00" * 480  # 20 ms at 24 kHz
-    out = c._to_detection_rate(block_24k)
-    assert len(out) // 2 == 320  # 20 ms at 16 kHz
+    out = b"".join(c._to_detection_rate(block_24k) for _ in range(50))  # 1 s
+    # 20 ms per block at 16 kHz, less the resampler's ~1 ms look-ahead.
+    assert 16000 - 32 <= len(out) // 2 <= 16000
 
 
 def test_native_rate_blocks_pass_through_untouched():

@@ -18,6 +18,8 @@ from typing import Any
 
 from PySide6.QtCore import QObject, QTimer, Signal
 
+from roomkit_ui.wakeword.resample import StreamResampler
+
 logger = logging.getLogger(__name__)
 
 SAMPLE_RATE = 16000
@@ -45,6 +47,7 @@ class SegmentCapture(QObject):
         *,
         input_device: int | None = None,
         source: Any = None,
+        capture_rate: int | None = None,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
@@ -55,9 +58,16 @@ class SegmentCapture(QObject):
         # without the microphone ever changing hands.
         self._source = source
         self._subscription: Any = None
-        # A shared source dictates its own rate; without one we open the
-        # device ourselves and take it at 16 kHz directly.
-        self._source_rate = getattr(source, "sample_rate", SAMPLE_RATE)
+        # A shared source dictates its own rate.  Without one we open the
+        # device ourselves, at *capture_rate* when given: enrolment asks for
+        # the shared source's rate so its takes go through the same
+        # conversion as the audio detection will later compare them with.
+        self._capture_rate = int(
+            getattr(source, "sample_rate", None) or capture_rate or SAMPLE_RATE
+        )
+        self._resampler: StreamResampler | None = None
+        if self._capture_rate != SAMPLE_RATE:
+            self._resampler = StreamResampler(self._capture_rate, SAMPLE_RATE)
         self._vad: Any = None
         self._stream: Any = None
         self._queue: queue.Queue[bytes] = queue.Queue()
@@ -79,6 +89,8 @@ class SegmentCapture(QObject):
             return True
         try:
             self._vad = self._build_vad()
+            if self._resampler is not None:
+                self._resampler.reset()  # no history from a previous run
             if self._source is not None:
                 # Enqueue and return: the shared source fans out synchronously
                 # on its capture thread, and the VAD is far too slow for that.
@@ -176,8 +188,8 @@ class SegmentCapture(QObject):
             self._queue.put(bytes(indata))
 
         stream = sd.RawInputStream(
-            samplerate=SAMPLE_RATE,
-            blocksize=BLOCK_FRAMES,
+            samplerate=self._capture_rate,
+            blocksize=self._capture_rate * BLOCK_FRAMES // SAMPLE_RATE,
             dtype="int16",
             channels=1,
             callback=on_audio,
@@ -213,22 +225,9 @@ class SegmentCapture(QObject):
         16 kHz.  Enrolment and detection both go through this, so the
         fingerprints stay comparable to what detection later measures.
         """
-        if self._source_rate == SAMPLE_RATE:
+        if self._resampler is None:
             return pcm
-        import numpy as np
-
-        samples = np.frombuffer(pcm, dtype=np.int16)
-        if len(samples) == 0:
-            return pcm
-        target = int(len(samples) * SAMPLE_RATE / self._source_rate)
-        if target <= 0:
-            return b""
-        resampled = np.interp(
-            np.linspace(0, len(samples) - 1, target),
-            np.arange(len(samples)),
-            samples.astype(np.float32),
-        )
-        return resampled.astype(np.int16).tobytes()
+        return self._resampler.process(pcm)
 
     def feed(self, pcm: bytes) -> None:
         """Push one block through the VAD (public so it can be driven in tests)."""

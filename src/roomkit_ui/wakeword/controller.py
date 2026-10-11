@@ -23,6 +23,8 @@ from typing import Any
 
 from PySide6.QtCore import QObject, Signal
 
+from roomkit_ui.wakeword.capture import SAMPLE_RATE
+
 logger = logging.getLogger(__name__)
 
 SourceFactory = Callable[[dict], Any]
@@ -202,17 +204,30 @@ def build_capture_source(settings: dict) -> Any:
         )
         return None
 
-    from roomkit_ui.engine_realtime import _realtime_sample_rate
-
-    # The source owns the input format and refuses a conflicting one, so it
-    # must match the transport the configured provider will ask for.
-    rate = _realtime_sample_rate(str(settings.get("provider", "gemini")))
-    source = LocalMicSource(
+    return LocalMicSource(
         input_device=settings.get("input_device"),
-        sample_rate=rate,
+        sample_rate=capture_rate(settings),
         backlog_seconds=10,
     )
-    return source
+
+
+def capture_rate(settings: dict) -> int:
+    """The rate the wake word hears the microphone at.
+
+    The shared source owns the input format and refuses a conflicting one,
+    so it runs at the rate the configured provider's transport asks for.
+    Enrolment records at this rate too, so its takes are converted to
+    16 kHz exactly as detection's audio will be.  Without the shared
+    source the listener opens the device at 16 kHz itself.
+    """
+    try:
+        import roomkit.voice.capture  # noqa: F401
+    except ImportError:
+        return SAMPLE_RATE
+
+    from roomkit_ui.engine_realtime import _realtime_sample_rate
+
+    return _realtime_sample_rate(str(settings.get("provider", "gemini")))
 
 
 def build_listener(settings: dict, source: Any) -> Any:

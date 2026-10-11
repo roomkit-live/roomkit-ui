@@ -62,6 +62,7 @@ class WakeWordWizard(QDialog):
         vad_path: str,
         *,
         input_device: int | None = None,
+        capture_rate: int | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -74,7 +75,13 @@ class WakeWordWizard(QDialog):
         self._fingerprint: Fingerprint | None = None
         self._calibration: Calibration | None = None
 
-        self._enroller = Enroller(encoder_path, vad_path, input_device=input_device, parent=self)
+        self._enroller = Enroller(
+            encoder_path,
+            vad_path,
+            input_device=input_device,
+            capture_rate=capture_rate,
+            parent=self,
+        )
         self._enroller.step_changed.connect(self._on_step)
         self._enroller.take_accepted.connect(self._on_take_accepted)
         self._enroller.take_rejected.connect(self._on_take_rejected)

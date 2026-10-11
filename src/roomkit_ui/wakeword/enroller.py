@@ -107,11 +107,16 @@ class Enroller(QObject):
         vad_path: str,
         *,
         input_device: int | None = None,
+        capture_rate: int | None = None,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
         self._embedder = WhisperEmbedder(encoder_path)
-        self._capture = SegmentCapture(vad_path, input_device=input_device, parent=self)
+        # Recorded at the rate detection captures at (see controller.capture_rate),
+        # so takes and live audio reach the encoder through the same conversion.
+        self._capture = SegmentCapture(
+            vad_path, input_device=input_device, capture_rate=capture_rate, parent=self
+        )
         self._capture.segment.connect(self._on_segment)
         self._capture.level.connect(self.level)
         self._capture.error.connect(self.error)

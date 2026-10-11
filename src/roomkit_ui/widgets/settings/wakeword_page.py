@@ -182,12 +182,14 @@ class _WakeWordPage(QWidget):
     # -- actions -------------------------------------------------------------
 
     def _open_wizard(self) -> None:
+        from roomkit_ui.wakeword.controller import capture_rate
         from roomkit_ui.widgets.wakeword_wizard import WakeWordWizard
 
         dialog = WakeWordWizard(
             str(wakeword_encoder_path()),
             str(vad_model_path(_VAD_MODEL) / _VAD_FILE),
             input_device=self._settings.get("input_device"),
+            capture_rate=capture_rate(self._settings),
             parent=self,
         )
         if dialog.exec():
