@@ -316,17 +316,10 @@ class RealtimeMixin:
         tool_options: dict[str, Any] | None = None,
     ) -> Any:
         """Create the room and start a realtime session; raise what refused it."""
-        from roomkit_ui.engine_audio import build_telemetry
-        from roomkit_ui.memory import ROOM_ID, build_store, ensure_room, memory_recap
+        from roomkit_ui.memory import ROOM_ID, ensure_room, memory_recap
 
         try:
-            telemetry = build_telemetry(settings) if settings else None
-            store = build_store(settings) if settings else None
-            self._kit = (  # type: ignore[attr-defined]
-                RoomKit(telemetry=telemetry, store=store)
-                if store
-                else RoomKit(telemetry=telemetry)
-            )
+            self._kit, store = self._build_kit(RoomKit, settings)  # type: ignore[attr-defined]
             await ensure_room(self._kit)  # type: ignore[attr-defined]
             if store is not None and system_prompt is not None:
                 # Realtime context lives server-side and starts blank — the

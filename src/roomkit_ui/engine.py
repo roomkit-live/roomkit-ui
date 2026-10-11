@@ -383,6 +383,20 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         if self._attitude_name:
             self.attitude_changed.emit(self._attitude_name)
 
+    def _build_kit(self, kit_cls: type, settings: dict | None) -> tuple[Any, Any]:
+        """A RoomKit with the session's telemetry and, when memory is on, its store.
+
+        Returns ``(kit, store)``; ``store`` is None without persistent memory
+        (RoomKit then keeps its own in-memory store).
+        """
+        from roomkit_ui.engine_audio import build_telemetry
+        from roomkit_ui.memory import build_store
+
+        telemetry = build_telemetry(settings) if settings else None
+        store = build_store(settings) if settings else None
+        kit = kit_cls(telemetry=telemetry, store=store) if store else kit_cls(telemetry=telemetry)
+        return kit, store
+
     def _enter_active(self) -> None:
         """Hand the session to the UI — unless stop() took the start over.
 

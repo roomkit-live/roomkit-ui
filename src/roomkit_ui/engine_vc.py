@@ -20,7 +20,6 @@ from roomkit_ui.engine_audio import (
     build_audio_processing,
     build_debug_taps,
     build_recorder,
-    build_telemetry,
     notify_missing_aec,
     setup_diarization,
     usable_capture_source,
@@ -217,15 +216,9 @@ class VoiceChannelMixin:
             self._ai_channel = ai_channel  # type: ignore[attr-defined]
 
             # 10-11. Framework + hooks
-            from roomkit_ui.memory import ROOM_ID, build_store, ensure_room
+            from roomkit_ui.memory import ROOM_ID, ensure_room
 
-            telemetry = build_telemetry(settings)
-            store = build_store(settings)
-            kit = (
-                RoomKit(telemetry=telemetry, store=store)
-                if store
-                else RoomKit(telemetry=telemetry)
-            )
+            kit, _store = self._build_kit(RoomKit, settings)  # type: ignore[attr-defined]
             self._kit = kit  # type: ignore[attr-defined]
             kit.register_channel(voice)
             kit.register_channel(ai_channel)
