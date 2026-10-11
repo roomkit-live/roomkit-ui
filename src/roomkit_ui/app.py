@@ -359,8 +359,6 @@ def main() -> None:
     hotkey_str = settings.get("stt_hotkey", "<ctrl>+<shift>+h")
     hotkey = HotkeyListener(hotkey=hotkey_str)
     hotkey.hotkey_pressed.connect(stt.toggle_recording)
-    if settings.get("stt_enabled", True):
-        hotkey.start()
 
     # Global hotkey for assistant session start/stop
     assistant_hotkey_str = settings.get("assistant_hotkey", "<ctrl>+<shift>+a")
@@ -370,12 +368,18 @@ def main() -> None:
         hotkey_key="assistant_hotkey",
     )
     assistant_hotkey.hotkey_pressed.connect(window.toggle_session)
+
+    # Hotkey → tray notification when Accessibility permission is missing or
+    # the shortcut cannot be parsed.  Connected before start(), which is
+    # where both are first reported.
+    for listener in (hotkey, assistant_hotkey):
+        listener.permission_required.connect(tray.on_permission_required)
+        listener.hotkey_invalid.connect(tray.on_hotkey_invalid)
+
+    if settings.get("stt_enabled", True):
+        hotkey.start()
     if settings.get("assistant_hotkey_enabled", True):
         assistant_hotkey.start()
-
-    # Hotkey → tray notification when Accessibility permission is missing
-    hotkey.permission_required.connect(tray.on_permission_required)
-    assistant_hotkey.permission_required.connect(tray.on_permission_required)
 
     # Reload hotkeys when settings are saved
     window.settings_saved.connect(hotkey.reload)

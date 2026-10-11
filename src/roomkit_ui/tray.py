@@ -147,6 +147,15 @@ class TrayService(QObject):
             4000,
         )
 
+    @Slot(str)
+    def on_hotkey_invalid(self, message: str) -> None:
+        self._tray.showMessage(
+            "Shortcut Not Active",
+            message,
+            QSystemTrayIcon.MessageIcon.Warning,
+            6000,
+        )
+
     @Slot()
     def on_permission_required(self) -> None:
         self._tray.showMessage(

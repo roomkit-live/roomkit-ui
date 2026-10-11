@@ -68,6 +68,7 @@ class HotkeyListener(QObject):
 
     hotkey_pressed = Signal()
     permission_required = Signal()  # emitted when macOS Accessibility is missing
+    hotkey_invalid = Signal(str)  # the configured shortcut cannot be parsed
 
     def __init__(
         self,
@@ -96,7 +97,7 @@ class HotkeyListener(QObject):
     def _start_nsevent(self) -> None:
         """Use NSEvent global monitor for modifier key (macOS native)."""
         try:
-            from AppKit import NSEvent, NSFlagsChangedMask
+            from AppKit import NSEvent, NSFlagsChanged, NSFlagsChangedMask, NSKeyDownMask
         except ImportError:
             logger.error("PyObjC/AppKit not available — falling back to pynput")
             self._start_pynput()
@@ -126,23 +127,18 @@ class HotkeyListener(QObject):
             self._start_pynput()
             return
 
-        listener = self
-        kc_set = set(target_keycodes)
-
-        def handler(event):
-            try:
-                if event.keyCode() in kc_set:
-                    flags = event.modifierFlags()
-                    # Fire on release: modifier flag is no longer set
-                    if not (flags & mask_value):
-                        # Defer signal emission to the next Qt event loop tick
-                        # so the handler returns immediately.
-                        QTimer.singleShot(0, listener._on_activate)
-            except Exception:
-                pass
-
+        # Defer signal emission to the next Qt event loop tick so the
+        # handler returns immediately.
+        handler = _modifier_tap_handler(
+            set(target_keycodes),
+            mask_value,
+            NSFlagsChanged,
+            lambda: QTimer.singleShot(0, self._on_activate),
+        )
+        # Key-downs too: a key pressed while the modifier is held makes it a
+        # chord (Right-Cmd+C), which must not toggle anything.
         self._monitor = NSEvent.addGlobalMonitorForEventsMatchingMask_handler_(
-            NSFlagsChangedMask,
+            NSFlagsChangedMask | NSKeyDownMask,
             handler,
         )
 
@@ -194,13 +190,6 @@ class HotkeyListener(QObject):
             logger.error("pynput is not installed — global hotkey disabled")
             return
 
-        # Build the matcher for the current hotkey
-        self._matcher = _KeyMatcher(self._hotkey)
-        if not self._matcher.valid:
-            logger.error("Could not parse hotkey: %s", self._hotkey)
-            self._matcher = None
-            return
-
         # All pynput callbacks run in a background thread — use
         # QMetaObject.invokeMethod to safely call back into the Qt main thread.
         def _safe_activate():
@@ -211,8 +200,8 @@ class HotkeyListener(QObject):
         # Listener instead of GlobalHotKeys to avoid the HIServices crash.
         self._matcher = _KeyMatcher(self._hotkey, _safe_activate)
         if not self._matcher.valid:
-            logger.error("Could not parse hotkey: %s", self._hotkey)
             self._matcher = None
+            self._report_invalid()
             return
 
         matcher = self._matcher
@@ -301,10 +290,70 @@ class HotkeyListener(QObject):
         self.start()
         logger.info("Hotkey reloaded: %s", new_hotkey)
 
+    def _report_invalid(self) -> None:
+        """Say so where the user looks: a dead shortcut otherwise looks broken."""
+        message = (
+            f"The shortcut {self._hotkey!r} is not a valid key combination, so it "
+            "is not active. Choose another one in Settings."
+        )
+        logger.error("Could not parse hotkey: %s", self._hotkey)
+        self.hotkey_invalid.emit(message)
+
     @Slot()
     def _on_activate(self) -> None:
         logger.info("Hotkey activated: %s", self._hotkey)
         self.hotkey_pressed.emit()
+
+
+class _ModifierTap:
+    """A modifier pressed and released on its own — not used in a chord.
+
+    Firing on every release of the modifier made Right-Cmd+C toggle
+    dictation; a key pressed while the modifier is held now cancels it.
+    """
+
+    def __init__(self) -> None:
+        self._held = False
+        self._chorded = False
+
+    def press(self, is_target: bool) -> None:
+        if is_target:
+            if not self._held:  # ignore auto-repeat
+                self._held = True
+                self._chorded = False
+        elif self._held:
+            self._chorded = True
+
+    def release(self, is_target: bool) -> bool:
+        """Whether this release completes a lone tap."""
+        if not is_target:
+            return False
+        fired = self._held and not self._chorded
+        self._held = False
+        self._chorded = False
+        return fired
+
+
+def _modifier_tap_handler(
+    keycodes: set[int], mask: int, flags_changed_type: int, on_tap: Any
+) -> Any:
+    """An NSEvent handler that calls *on_tap* on a lone modifier tap."""
+    tap = _ModifierTap()
+
+    def handler(event: Any) -> None:
+        try:
+            if event.type() != flags_changed_type:
+                tap.press(False)  # a key went down
+            elif event.keyCode() not in keycodes:
+                tap.press(False)  # another modifier changed
+            elif event.modifierFlags() & mask:
+                tap.press(True)
+            elif tap.release(True):
+                on_tap()
+        except Exception:
+            pass
+
+    return handler
 
 
 class _KeyMatcher:
@@ -319,13 +368,17 @@ class _KeyMatcher:
     def __init__(self, hotkey: str, callback: Any = None) -> None:
         from pynput.keyboard import HotKey, Key, KeyCode
 
-        parsed = HotKey.parse(hotkey)
+        try:
+            parsed = HotKey.parse(hotkey)
+        except ValueError:
+            parsed = []
         self.valid = bool(parsed)
         if not self.valid:
             return
 
         self._callback = callback
         self._is_combo = "+" in hotkey
+        self._tap = _ModifierTap()
 
         if self._is_combo:
             self._hotkey = HotKey(parsed, self._on_activate)
@@ -351,18 +404,22 @@ class _KeyMatcher:
         self._hotkey = other._hotkey
         if hasattr(other, "_match_keys"):
             self._match_keys = other._match_keys
+        self._tap = _ModifierTap()
         # Re-point the swapped HotKey's callback to our own
         if self._hotkey is not None:
             self._hotkey._on_activate = self._on_activate
 
     def press(self, key) -> None:
         """Feed a canonicalized key press."""
-        if self._is_combo and self._hotkey is not None:
+        if not self._is_combo:
+            self._tap.press(key in self._match_keys)
+        elif self._hotkey is not None:
             self._hotkey.press(key)
 
     def release(self, key) -> None:
         """Feed a canonicalized key release."""
-        if self._is_combo and self._hotkey is not None:
+        if not self._is_combo:
+            if self._tap.release(key in self._match_keys):
+                self._on_activate()
+        elif self._hotkey is not None:
             self._hotkey.release(key)
-        elif not self._is_combo and key in self._match_keys:
-            self._on_activate()
