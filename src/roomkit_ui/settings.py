@@ -134,6 +134,9 @@ _DEFAULTS = {
     "diarization_model": "",
     "diarization_threshold": 0.4,
     "primary_speaker_mode": False,
+    # Voices Meta Muse tells apart: who the user is, and whether the first voice is them
+    "user_name": "",  # empty = the primary speaker profile's name, else "User"
+    "speaker_first_voice_is_user": True,
     # Agent Skills
     "skill_sources": "[]",  # JSON array of {type, url/path, label}
     "enabled_skills": "[]",  # JSON array of skill name strings

@@ -94,3 +94,26 @@ def test_the_dialog_returns_the_name_given_and_none_when_dismissed(qapp):
     assert ask_voice_name(None, "Speaker B", "Julie", ["Sylvain"]) == ""
     _answer(None)
     assert ask_voice_name(None, "Speaker B", "Julie", []) is None
+
+
+def test_the_speakers_tab_keeps_your_name_and_the_first_voice(qapp, monkeypatch):
+    from types import SimpleNamespace
+
+    from roomkit_ui import speaker_manager
+    from roomkit_ui.widgets.settings.speakers_muse import MuseSpeakersSection
+
+    monkeypatch.setattr(
+        speaker_manager, "get_primary_speaker", lambda: SimpleNamespace(name="Sylvain")
+    )
+    section = MuseSpeakersSection({"user_name": "", "speaker_first_voice_is_user": True})
+    try:
+        assert section.user_name.placeholderText() == "Sylvain"  # what an empty field means
+        section.user_name.setText("  Sly   B ")
+        section.first_voice.setChecked(False)
+
+        assert section.get_settings() == {
+            "user_name": "Sly B",
+            "speaker_first_voice_is_user": False,
+        }
+    finally:
+        shiboken6.delete(section)

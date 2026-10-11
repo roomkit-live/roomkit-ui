@@ -154,3 +154,16 @@ async def test_a_name_another_voice_carries_is_refused(engine):
     # The user can still join two voices Muse split.
     engine.name_speaker("Speaker C", "Sylvain")
     assert engine._speakers.display("Speaker C") == "Sylvain"
+
+
+async def test_the_users_own_name_is_the_users_to_give(qapp):
+    # Whoever carries the user's name is the user: saying so is not enough.
+    engine = Engine()
+    engine._speakers = SpeakerRoster(user_name="Sylvain", primary_only=True)
+    engine._speakers.observe("A", 0)
+    engine._speakers.observe("B", 0)
+
+    with pytest.raises(ToolRefusedError, match="Only the user says which voice is theirs"):
+        await _call(engine, speaker="Speaker B", name="sylvain")
+
+    assert not engine._speakers.may_reach_assistant("Speaker B")

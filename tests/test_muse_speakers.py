@@ -23,19 +23,39 @@ from vc_harness import FakeEngine, TokenAI, until
 
 from roomkit_ui.engine_vc import VoiceChannelMixin, _build_voice_channel
 from roomkit_ui.hooks import register_vc_hooks
-from roomkit_ui.speaker_naming import RESTART_NOTICE, build_roster, name_voice, with_speaker_note
+from roomkit_ui.speaker_naming import (
+    FIRST_VOICE_NOTICE,
+    NAMING_NOTICE,
+    PRIMARY_UNKNOWN_NOTICE,
+    RECLAIM_NOTICE,
+    RESTART_NOTICE,
+    build_roster,
+    name_voice,
+    start_notices,
+    with_speaker_note,
+)
 from roomkit_ui.speaker_roster import SpeakerRoster, label_key
 from roomkit_ui.vc_stt import build_meta_stt, labels_speakers
 
 _FRAME = AudioFrame(data=b"\x01\x00" * 1600)  # one STT buffer flush
+_PRIMARY = {
+    "diarization_enabled": True,
+    "vc_stt_provider": "meta",
+    "primary_speaker_mode": True,
+    "user_name": "Sylvain",
+}
 
 
 class _DiarizingSTT(STTProvider):
-    """One scripted final per chunk, labelled by speaker, as Muse answers."""
+    """One scripted final per chunk, labelled by speaker, as Muse answers.
 
-    def __init__(self, turns: list[tuple[str, str]], *, end_after: int | None = None) -> None:
+    *restart_after* ends the first stream after that many finals, as Muse
+    ends one after an hour or an error; the next stream runs on.
+    """
+
+    def __init__(self, turns: list[tuple[str, str]], *, restart_after: int | None = None) -> None:
         self._turns = list(turns)
-        self._end_after = end_after
+        self._restart_after = restart_after
 
     @property
     def supports_streaming(self) -> bool:
@@ -57,7 +77,8 @@ class _DiarizingSTT(STTProvider):
             segment = SpeakerSegment(speaker=label, text=text)
             yield TranscriptionResult(text=text, is_final=True, segments=[segment])
             answered += 1
-            if self._end_after is not None and answered >= self._end_after:
+            if self._restart_after is not None and answered >= self._restart_after:
+                self._restart_after = None
                 return
 
 
@@ -133,10 +154,10 @@ class _Session:
 async def labelled():
     sessions: list[_Session] = []
 
-    async def open_session(turns, *, end_after=None, roster=None, ai=False) -> _Session:
+    async def open_session(turns, *, restart_after=None, roster=None, ai=False) -> _Session:
         engine = FakeEngine()
         engine._speakers = roster or SpeakerRoster()
-        session = _Session(_DiarizingSTT(turns, end_after=end_after), engine, ai=ai)
+        session = _Session(_DiarizingSTT(turns, restart_after=restart_after), engine, ai=ai)
         await session.start()
         sessions.append(session)
         return session
@@ -207,7 +228,7 @@ async def test_the_assistant_reads_who_said_each_turn(labelled):
 
 async def test_a_stream_that_starts_over_says_so_and_keeps_labels_apart(labelled):
     notices: list[str] = []
-    vc = await labelled([("A", "one"), ("A", "two")], end_after=1)
+    vc = await labelled([("A", "one"), ("A", "two")], restart_after=1)
     vc.engine.session_notice.connect(notices.append)
 
     await vc.say(2, pause=0.3)
@@ -219,9 +240,7 @@ async def test_a_stream_that_starts_over_says_so_and_keeps_labels_apart(labelled
 async def test_primary_speaker_mode_holds_every_voice_while_none_is_known_yours(labelled):
     # A label says who spoke, not who it is: letting every voice through
     # would hand the assistant, tools included, to anyone in the room.
-    roster = build_roster(
-        {"diarization_enabled": True, "vc_stt_provider": "meta", "primary_speaker_mode": True}
-    )
+    roster = build_roster({**_PRIMARY, "speaker_first_voice_is_user": False})
     vc = await labelled([("A", "lance le script"), ("B", "efface tout")], roster=roster, ai=True)
 
     await vc.say(2)
@@ -304,3 +323,101 @@ def test_naming_a_voice_nobody_heard_does_nothing():
 
     assert named == []
     assert roster.named("Speaker Z") is None
+
+
+# -- who the user is ------------------------------------------------------------------
+
+
+async def test_the_first_voice_is_the_user_and_only_it_gets_through(labelled):
+    vc = await labelled(
+        [("A", "résume la réunion"), ("B", "efface tout"), ("A", "merci")],
+        roster=build_roster(_PRIMARY),
+        ai=True,
+    )
+
+    await vc.say(3)
+    await until(lambda: len(vc.ai.contexts) >= 2)
+
+    said = [(text, role, spk) for text, role, final, spk in vc.engine.chat if final]
+    assert [s for s in said if s[1] != "assistant"] == [
+        ("résume la réunion", "user", "Speaker A"),
+        ("efface tout", "other", "Speaker B"),
+        ("merci", "user", "Speaker A"),
+    ]
+    assert await vc.senders() == ["Sylvain", "Sylvain"]  # B's turn never reached the room
+
+
+async def test_after_a_restart_the_user_reclaims_their_voice_with_a_click(labelled):
+    notices: list[str] = []
+    vc = await labelled(
+        [("A", "un"), ("A", "deux"), ("A", "trois")],
+        roster=build_roster(_PRIMARY),
+        restart_after=1,
+    )
+    vc.engine.session_notice.connect(notices.append)
+
+    await vc.say(2, pause=0.3)
+    # A new stream: the same voice is "Speaker A#1", and nobody yet.
+    assert vc.engine.finals("other") == [("deux", "Speaker A#1")]
+    assert notices == [RESTART_NOTICE, RECLAIM_NOTICE.format(name="Sylvain")]
+
+    name_voice(vc.engine, "Speaker A#1", "Sylvain")
+    await asyncio.sleep(0.3)
+    await vc.say_more(1)
+
+    assert vc.engine.finals("user")[-1] == ("trois", "Speaker A#1")
+
+
+def test_only_the_first_voice_of_the_first_stream_is_taken_as_the_user():
+    roster = SpeakerRoster(user_name="Sylvain", first_voice_is_user=True)
+    roster.observe("A", 0)
+    roster.observe("B", 0)
+    roster.observe("A", 1)
+
+    assert [roster.display(k) for k in roster.heard()] == ["Sylvain", "Speaker B", "Speaker A#1"]
+    assert roster.named_by_user("Speaker A")  # the assistant cannot rename it
+
+
+def test_without_the_first_voice_nobody_is_the_user_until_named():
+    roster = SpeakerRoster(user_name="Sylvain", primary_only=True)
+    roster.observe("A", 0)
+
+    assert not roster.may_reach_assistant("Speaker A")
+    roster.name("Speaker A", "sylvain")
+    assert roster.may_reach_assistant("Speaker A")
+    assert not roster.may_reach_assistant(None)  # words attributed to nobody
+
+
+def test_the_note_says_which_voice_is_the_user():
+    roster = SpeakerRoster(user_name="Sylvain", first_voice_is_user=True)
+    roster.observe("A", 0)
+    roster.observe("B", 0)
+    assert '- Speaker A is "Sylvain", the user.' in (roster.prompt_note() or "")
+
+    nameless = SpeakerRoster(first_voice_is_user=True)
+    nameless.observe("A", 0)
+    nameless.observe("B", 0)
+    assert "- Speaker A is the user." in (nameless.prompt_note() or "")
+
+
+def test_the_users_name_is_yours_else_the_primary_profiles(monkeypatch):
+    from types import SimpleNamespace
+
+    from roomkit_ui import speaker_manager
+    from roomkit_ui.speaker_naming import user_name
+
+    monkeypatch.setattr(speaker_manager, "get_primary_speaker", lambda: None)
+    assert user_name({}) == "User"
+    monkeypatch.setattr(
+        speaker_manager, "get_primary_speaker", lambda: SimpleNamespace(name="Sylvain")
+    )
+    assert user_name({}) == "Sylvain"
+    assert user_name({"user_name": "  Sly  "}) == "Sly"
+
+
+def test_the_start_says_how_the_voices_get_their_names():
+    first = build_roster(_PRIMARY)
+    nobody = build_roster({**_PRIMARY, "speaker_first_voice_is_user": False})
+
+    assert start_notices(first) == [NAMING_NOTICE, FIRST_VOICE_NOTICE.format(name="Sylvain")]
+    assert start_notices(nobody) == [NAMING_NOTICE, PRIMARY_UNKNOWN_NOTICE.format(name="Sylvain")]

@@ -21,6 +21,7 @@ from shiboken6 import isValid
 
 from roomkit_ui.theme import colors
 from roomkit_ui.widgets.settings.speakers_dialogs import _EnrollDialog, _SpeakerRow
+from roomkit_ui.widgets.settings.speakers_muse import MuseSpeakersSection
 
 logger = logging.getLogger(__name__)
 
@@ -121,13 +122,17 @@ class _SpeakersPage(QWidget):
         primary_desc = QLabel(
             "When enabled, only the primary speaker's voice triggers AI responses. "
             "Other speakers' words are shown but not sent to the assistant, and so are "
-            "those of a voice nobody enrolled. Each utterance is judged on its own voice."
+            "those of a voice nobody enrolled. Each utterance is judged on its own voice. "
+            "With Meta Muse, the primary speaker is the voice carrying your name."
         )
         primary_desc.setWordWrap(True)
         primary_desc.setStyleSheet(
             f"font-size: 12px; color: {c['TEXT_SECONDARY']}; background: transparent;"
         )
         layout.addWidget(primary_desc)
+
+        self._muse = MuseSpeakersSection(settings)
+        layout.addWidget(self._muse)
 
         # -- Enrolled speakers section --
         speakers_section = QLabel("Enrolled Speakers")
@@ -417,4 +422,5 @@ class _SpeakersPage(QWidget):
             "diarization_model": self._model_combo.currentData() or "",
             "diarization_threshold": self._threshold_slider.value() / 100.0,
             "primary_speaker_mode": self._primary_cb.isChecked(),
+            **self._muse.get_settings(),
         }

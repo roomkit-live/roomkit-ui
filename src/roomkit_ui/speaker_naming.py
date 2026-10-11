@@ -13,9 +13,15 @@ names reach the assistant as a note at the end of each turn's system prompt
 
 The assistant names voices too (``name_speaker``) when someone says who
 they are.  It names from what it hears, which anyone in the room can say,
-so a name is a plain name, a voice the user named stays as named, and a
-name another voice carries stays that voice's: "I'm Sylvain" from a second
-voice would otherwise have the assistant read it as Sylvain.
+so a name is a plain name, a voice the user named stays as named, a name
+another voice carries stays that voice's ("I'm Sylvain" from a second voice
+would otherwise have the assistant read it as Sylvain), and the user's own
+name is the user's to give.
+
+The user is whoever carries their name ("Your name", else the primary
+speaker profile): the first voice when "The first voice is me" is on, as the
+user opens the session, else the voice the user names after themselves.
+"Listen only to primary speaker" lets only that voice reach the assistant.
 """
 
 from __future__ import annotations
@@ -25,21 +31,28 @@ import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from roomkit_ui.speaker_roster import NAME_MAX, SpeakerRoster
+from roomkit_ui.speaker_roster import NAME_MAX, USER_FALLBACK, SpeakerRoster
 from roomkit_ui.vc_stt import labels_speakers
 
 logger = logging.getLogger(__name__)
 
 NAMING_NOTICE = "Muse tells the voices apart: click a speaker's name to say who it is."
 
+FIRST_VOICE_NOTICE = "The first voice heard is taken as yours ({name})."
+
 PRIMARY_UNKNOWN_NOTICE = (
-    "Listen only to primary speaker is on, and no voice is known to be yours: "
-    "what is said is shown, but nothing reaches the assistant."
+    "Listen only to primary speaker is on: nothing reaches the assistant until "
+    "you click your voice's name and give yours ({name})."
 )
 
 RESTART_NOTICE = (
     "Speaker labels started over: the transcription stream reconnected, and the "
     "voices are told apart afresh."
+)
+
+RECLAIM_NOTICE = (
+    "Click your voice's name and give yours ({name}) again: until then, nothing "
+    "reaches the assistant."
 )
 
 _UNATTRIBUTED = "Unknown speaker"  # roomkit's name for words attributed to nobody
@@ -74,7 +87,33 @@ def build_roster(settings: dict) -> SpeakerRoster | None:
     """The session's roster when its STT tells the voices apart, else None."""
     if not labels_speakers(settings):
         return None
-    return SpeakerRoster(primary_only=bool(settings.get("primary_speaker_mode")))
+    return SpeakerRoster(
+        user_name=user_name(settings),
+        first_voice_is_user=bool(settings.get("speaker_first_voice_is_user", True)),
+        primary_only=bool(settings.get("primary_speaker_mode")),
+    )
+
+
+def user_name(settings: dict) -> str:
+    """The user's name: "Your name", else the primary speaker profile's."""
+    given = " ".join(str(settings.get("user_name") or "").split())[:NAME_MAX].strip()
+    if given:
+        return given
+    from roomkit_ui.speaker_manager import get_primary_speaker
+
+    primary = get_primary_speaker()
+    return primary.name if primary is not None else USER_FALLBACK
+
+
+def start_notices(roster: SpeakerRoster) -> list[str]:
+    """What the chat says as the session starts: how the voices get their
+    names, and what primary-speaker mode holds back."""
+    notices = [NAMING_NOTICE]
+    if roster.first_voice_is_user:
+        notices.append(FIRST_VOICE_NOTICE.format(name=roster.user_name))
+    elif roster.primary_only:
+        notices.append(PRIMARY_UNKNOWN_NOTICE.format(name=roster.user_name))
+    return notices
 
 
 def labelled_turn(engine: Any, event: Any) -> Any:
@@ -95,6 +134,8 @@ def labelled_turn(engine: Any, event: Any) -> Any:
         key = heard.key
         if heard.restarted:
             _notify(engine, RESTART_NOTICE)
+            if roster.primary_only:
+                _notify(engine, RECLAIM_NOTICE.format(name=roster.user_name))
         if heard.new:
             # The chat learns the voice, and that a click can name it.
             _announce(engine, key, roster.display(key))
@@ -150,6 +191,11 @@ def name_speaker_tool(engine: Any, arguments: dict[str, Any]) -> str:
         raise ToolRefusedError(
             f"The user named {key} {roster.display(key)}; only the user renames it."
         )
+    if roster.is_user_name(str(arguments.get("name") or "")):
+        # Whoever carries the user's name is the user (primary-speaker mode
+        # lets only that voice through): a voice saying it is the user does
+        # not make it so.
+        raise ToolRefusedError("Only the user says which voice is theirs.")
     given = str(arguments.get("name") or "").strip()
     if not _plain_name(given):
         raise ToolRefusedError(

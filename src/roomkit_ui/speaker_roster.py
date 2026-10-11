@@ -6,7 +6,9 @@ and numbers a stream that starts over ("Speaker A#1"), so the same letter
 from two streams never reads as one person.  A label is nobody in particular
 until someone names it: the user (a click on the speaker in the chat) or the
 assistant (``name_speaker``, when someone says who they are).  The assistant
-names from what it hears, so it never overrides a name the user gave.
+names from what it hears, so it never overrides a name the user gave, nor
+gives a voice the user's own name.  The first voice is usually whoever
+opened the session, so it can carry the user's name from the start.
 
 Pure logic: the hooks and the chat call in (``speaker_naming``).
 """
@@ -18,6 +20,9 @@ from typing import Literal
 
 NAME_MAX = 40
 """Longest name a voice takes: a name goes into every turn's system prompt."""
+
+USER_FALLBACK = "User"
+"""The user's name when neither "Your name" nor a primary speaker profile gives one."""
 
 
 def label_key(label: str | None, epoch: int | None) -> str | None:
@@ -43,6 +48,10 @@ class Heard:
 class SpeakerRoster:
     """The session's voices, keyed by their "Speaker A" name, and their names."""
 
+    # Who opened the session; the voice carrying this name is the user's.
+    user_name: str = USER_FALLBACK
+    # The session's first voice takes the user's name, as if the user named it.
+    first_voice_is_user: bool = False
     # "Listen only to primary speaker": only the user's turns reach the assistant.
     primary_only: bool = False
     # The assistant can name voices (name_speaker is declared to it).
@@ -53,13 +62,19 @@ class SpeakerRoster:
     _epoch: int = 0
 
     def observe(self, label: str, epoch: int | None) -> Heard:
-        """Note a labelled turn."""
+        """Note a labelled turn; the session's first voice may take the user's name.
+
+        Only the first voice of the first stream: after a restart, whoever
+        speaks first may be anyone in the room.
+        """
         epoch = epoch or 0
         key = _key(label, epoch)
         restarted = epoch > self._epoch
         self._epoch = max(self._epoch, epoch)
         new = key not in self._seen
         if new:
+            if self.first_voice_is_user and not self._seen and epoch == 0:
+                self.name(key, self.user_name)
             self._seen.append(key)
         return Heard(key, new, restarted)
 
@@ -92,6 +107,10 @@ class SpeakerRoster:
             for other, named in self._names.items()
         )
 
+    def is_user_name(self, name: str) -> bool:
+        """Whether *name* is the user's, which only the user gives a voice."""
+        return " ".join(name.split()).casefold() == self.user_name.casefold()
+
     def resolve(self, ref: str) -> str | None:
         """The voice *ref* means: its label ("Speaker B", or "B" in the current
         stream) or the name it carries ("Julie", the latest voice so named)."""
@@ -122,12 +141,14 @@ class SpeakerRoster:
     def may_reach_assistant(self, key: str | None) -> bool:
         """Whether a turn of this voice reaches the assistant.
 
-        With ``primary_only``, nothing does while no voice is known to be the
-        user's: a label says who spoke, not who it is, and letting every
-        voice through would hand the assistant (and its tools) to anyone in
-        the room.
+        With ``primary_only``, only the turns of a voice carrying the user's
+        name do, and nothing does while no voice carries it: a label says who
+        spoke, not who it is, and letting every voice through would hand the
+        assistant (and its tools) to anyone in the room.
         """
-        return not self.primary_only
+        if not self.primary_only:
+            return True
+        return key is not None and self.is_user_name(self._names.get(key, ""))
 
     def heard(self) -> list[str]:
         """Every voice of the session, in the order they first spoke."""
@@ -156,4 +177,10 @@ class SpeakerRoster:
 
     def _who(self, key: str) -> str:
         name = self._names.get(key)
-        return f'{key} is "{name}".' if name else f"{key} has not been named yet."
+        if name is None:
+            return f"{key} has not been named yet."
+        if not self.is_user_name(name):
+            return f'{key} is "{name}".'
+        if name == USER_FALLBACK:
+            return f"{key} is the user."
+        return f'{key} is "{name}", the user.'

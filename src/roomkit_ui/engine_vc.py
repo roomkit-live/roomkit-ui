@@ -43,9 +43,8 @@ from roomkit_ui.hooks import register_vc_hooks
 from roomkit_ui.providers import create_ai_provider
 from roomkit_ui.speaker_naming import (
     NAME_SPEAKER_TOOL,
-    NAMING_NOTICE,
-    PRIMARY_UNKNOWN_NOTICE,
     build_roster,
+    start_notices,
     with_speaker_note,
 )
 from roomkit_ui.toolset import ToolSet
@@ -285,9 +284,8 @@ class VoiceChannelMixin:
         primary-speaker mode holds back until one is known to be the user's."""
         if self._speakers is None:
             return
-        self.session_notice.emit(NAMING_NOTICE)  # type: ignore[attr-defined]
-        if self._speakers.primary_only:
-            self.session_notice.emit(PRIMARY_UNKNOWN_NOTICE)  # type: ignore[attr-defined]
+        for notice in start_notices(self._speakers):
+            self.session_notice.emit(notice)  # type: ignore[attr-defined]
 
     async def _load_vc_tools(self, settings: dict, llm_provider_name: str) -> tuple[ToolSet, Any]:
         """The session's tools and skills: none for a local model with
