@@ -1,5 +1,5 @@
-"""The Voice Channel agent's turn-taking: whether it speaks on a turn, and
-what it thinks while it listens.
+"""The Voice Channel agent's turn-taking: whether it speaks on a turn, what
+it thinks while it listens, and the work it runs in the background.
 
 roomkit 0.96 gives an AIChannel a speak policy: on each turn it would answer,
 the policy says speak, offer (one short sentence of what it could add) or
@@ -8,6 +8,9 @@ classifier answers in one call (has the speaker finished, put it off, asked
 for quiet, addressed the agent).  A thinker keeps the agent's thought on the
 turns it stays silent on; back with something worth saying, the policy
 decides again and the agent may offer.  A thinker needs a speak policy.
+roomkit 0.97's ``setup_background`` gives the agent ``work_in_background``:
+long work runs as a task, in a room of its own, while the conversation goes
+on, and its result comes back as a turn the agent speaks.
 
 Both are add-ons: one that cannot run (backend not installed, no key, a model
 that cannot answer under a schema) is left out of the session, and the chat
@@ -50,6 +53,8 @@ class VCAgent:
 
     speak_policy: Any = None
     thinker: Any = None
+    # Set up on the kit, not given to the channel (kit.setup_background).
+    background: bool = False
     summary: list[dict] = field(default_factory=list)
     _closables: list[Any] = field(default_factory=list)
 
@@ -73,12 +78,16 @@ def agent_name(settings: dict) -> str:
     return str(settings.get("vc_agent_name") or "").strip() or DEFAULT_AGENT_NAME
 
 
-def build_vc_agent(settings: dict, ai_provider: Any, notice: Callable[[str], None]) -> VCAgent:
+def build_vc_agent(
+    settings: dict, ai_provider: Any, notice: Callable[[str], None], *, tools: bool = True
+) -> VCAgent:
     """The session's agent parts from the settings; *notice* tells the chat
-    what was left out and why."""
+    what was left out and why.  *tools* is False when the model is given
+    none (a local model without tool use)."""
     agent = VCAgent()
     _add_speak_policy(agent, settings, ai_provider, notice)
     _add_thinker(agent, settings, ai_provider, notice)
+    _add_background(agent, settings, notice, tools=tools)
     return agent
 
 
@@ -130,6 +139,24 @@ def _add_thinker(
     agent._closables.append(agent.thinker)
     agent.summary.append(
         {"name": "Thinks while listening", "description": "the conversation model"}
+    )
+
+
+def _add_background(
+    agent: VCAgent, settings: dict, notice: Callable[[str], None], *, tools: bool
+) -> None:
+    """Background work is a tool call: a model given no tool cannot start it."""
+    if not settings.get("vc_background"):
+        return
+    if not tools:
+        notice(
+            "The assistant does not work in the background: the local model is set "
+            "without tool use (Settings → AI → Voice Channel → LLM)."
+        )
+        return
+    agent.background = True
+    agent.summary.append(
+        {"name": "Works in the background", "description": "long requests run as tasks"}
     )
 
 

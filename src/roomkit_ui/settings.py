@@ -225,6 +225,7 @@ _DEFAULTS = {
     "vc_speak_policy": "off",  # "off" | "openai" | "jev" | "llm" (vc_agent.py)
     "vc_agent_name": "",  # what people call the assistant (empty = "Assistant")
     "vc_thinker": False,  # think while listening (needs a speak policy)
+    "vc_background": False,  # long requests run as background tasks (roomkit 0.97)
     "typesafe_api_key": "",  # secret — keyring, never QSettings
 }
 

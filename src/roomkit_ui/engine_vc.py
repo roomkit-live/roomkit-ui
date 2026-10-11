@@ -233,24 +233,20 @@ class VoiceChannelMixin:
     async def _build_vc_ai_channel(
         self, settings: dict, ai_provider: Any, llm_provider_name: str, system_prompt: str
     ) -> tuple[Any, list[dict], Any]:
-        """The AIChannel, after the skills and tools it is built with.
+        """The AIChannel, after the skills, tools and agent parts it is built with.
 
-        Returns ``(ai_channel, tools, skills_registry)``.  A local model with
-        "supports tool use" off gets neither skills nor tools.
+        Returns ``(ai_channel, tools, skills_registry)``.
         """
         from roomkit.channels.ai import AIChannel
         from roomkit.models import RetryPolicy
 
-        skip_tools = llm_provider_name == "local" and not settings.get("vc_local_tools", True)
-        skills_registry = self._load_skills(settings) if not skip_tools else None
-        toolset = ToolSet(builtin=[], cli=[], mcp=[])
-        if skip_tools:
-            logger.info("Local model tool support disabled — skipping MCP/tools")
-        else:
-            if mcp_servers_configured(settings):
-                self.loading_status.emit("Connecting MCP servers…")  # type: ignore[attr-defined]
-            toolset = await self._setup_tools(settings)  # type: ignore[attr-defined]
-        self._vc_agent = build_vc_agent(settings, ai_provider, self.session_notice.emit)  # type: ignore[attr-defined]
+        toolset, skills_registry = await self._load_vc_tools(settings, llm_provider_name)
+        self._vc_agent = build_vc_agent(
+            settings,
+            ai_provider,
+            self.session_notice.emit,  # type: ignore[attr-defined]
+            tools=bool(toolset.all),
+        )
 
         ai_channel = AIChannel(
             "ai",
@@ -267,6 +263,18 @@ class VoiceChannelMixin:
             **self._vc_agent.channel_options(),
         )
         return ai_channel, toolset.all, skills_registry
+
+    async def _load_vc_tools(self, settings: dict, llm_provider_name: str) -> tuple[ToolSet, Any]:
+        """The session's tools and skills: none for a local model with
+        "supports tool use" off.  Returns ``(toolset, skills_registry)``."""
+        if llm_provider_name == "local" and not settings.get("vc_local_tools", True):
+            logger.info("Local model tool support disabled — skipping MCP/tools")
+            return ToolSet(builtin=[], cli=[], mcp=[]), None
+        skills_registry = self._load_skills(settings)
+        if mcp_servers_configured(settings):
+            self.loading_status.emit("Connecting MCP servers…")  # type: ignore[attr-defined]
+        toolset = await self._setup_tools(settings)  # type: ignore[attr-defined]
+        return toolset, skills_registry
 
     async def _open_vc_room(
         self,
@@ -287,6 +295,11 @@ class VoiceChannelMixin:
         self._kit = kit  # type: ignore[attr-defined]
         kit.register_channel(voice)
         kit.register_channel(ai_channel)
+        if self._vc_agent.background:
+            # The agent itself does the work, in a room of its own, with the
+            # session's tools (ToolSet.turn_config); its result comes back as
+            # a turn it speaks.
+            kit.setup_background(ai_channel)
         await ensure_room(kit)
 
         voice_binding = await kit.attach_channel(ROOM_ID, "voice")

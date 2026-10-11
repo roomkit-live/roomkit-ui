@@ -22,6 +22,7 @@ class FakeEngine(QObject):
         super().__init__()
         self._state = EngineState.ACTIVE
         self._pending_tool_calls = 0
+        self._background_tasks = 0
 
 
 @pytest.fixture
@@ -87,6 +88,15 @@ def test_tool_call_in_flight_also_resets_the_countdown(engine, hangup):
     hangup._check()
     engine._pending_tool_calls = 0
     assert hangup.idle_seconds < 1.0
+
+
+def test_never_hangs_up_while_a_background_task_runs(engine, hangup):
+    """The assistant said it would come back with the result; closing cancels it."""
+    engine._background_tasks = 1
+    _go_quiet_for(hangup, 120)
+    assert not _fired(hangup)
+    engine._background_tasks = 0
+    assert hangup.idle_seconds < 1.0  # the countdown starts again from the end
 
 
 def test_never_hangs_up_while_the_assistant_speaks(engine, hangup):

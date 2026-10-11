@@ -13,7 +13,9 @@ Two silences must not be confused with an abandoned session:
 
 * the assistant is speaking — audio is flowing, that is the session working;
 * a tool call is in flight — an MCP server can legitimately think for a
-  minute, and hanging up mid-call would discard its answer.
+  minute, and hanging up mid-call would discard its answer;
+* a background task runs — the assistant said it would come back with the
+  result, and closing the session cancels the task.
 """
 
 from __future__ import annotations
@@ -143,6 +145,10 @@ class IdleHangup(QObject):
         if getattr(self._engine, "_pending_tool_calls", 0) > 0:
             # A slow MCP server is the session working, not the session
             # being abandoned; hanging up now would throw away its result.
+            self.touch()
+            return
+        if getattr(self._engine, "_background_tasks", 0) > 0:
+            # The assistant promised a result; hanging up cancels the task.
             self.touch()
             return
 

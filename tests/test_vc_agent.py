@@ -191,6 +191,7 @@ def test_the_agent_tab_saves_its_choices(qapp):
         "vc_speak_policy": "jev",
         "vc_agent_name": "Nova",
         "vc_thinker": False,
+        "vc_background": False,
         "typesafe_api_key": "ts",
     }
     assert not page.typesafe_api_key.isHidden()
@@ -295,3 +296,94 @@ def test_thinking_waits_for_a_speaking_decision_in_the_tab(qapp):
     page.speak_policy.setCurrentIndex(3)  # the conversation model
     assert page.thinker.isEnabled()
     assert page.get_settings()["vc_thinker"] is True
+
+
+def test_background_work_needs_a_model_given_tools():
+    agent, notices = _build({"vc_background": True})
+    assert agent.background
+    assert agent.summary == [
+        {"name": "Works in the background", "description": "long requests run as tasks"}
+    ]
+    assert agent.channel_options() == {}  # set up on the kit, not the channel
+
+    notices: list[str] = []
+    agent = build_vc_agent({"vc_background": True}, MockAIProvider(), notices.append, tools=False)
+    assert not agent.background
+    assert "set without tool use" in notices[0]
+
+
+@pytest.mark.parametrize(
+    ("metadata", "line"),
+    [
+        ({"task_status": "completed", "duration_ms": 41_600}, "Background work done in 42 s."),
+        ({"task_status": "completed"}, "Background work done."),
+        ({"task_status": "failed", "error": "Traceback …"}, "Background work failed."),
+        ({"task_status": "cancelled"}, "Background work cancelled."),
+    ],
+)
+def test_the_chat_says_how_background_work_ended(metadata, line):
+    from roomkit_ui.agent_hooks import task_ended_notice
+
+    assert task_ended_notice(SimpleNamespace(metadata=metadata)) == line
+
+
+def test_a_long_task_is_shortened_in_the_chat():
+    from roomkit_ui.agent_hooks import task_started_notice
+
+    line = task_started_notice(SimpleNamespace(metadata={"task_input": "word " * 60}))
+
+    assert line.startswith("Working in the background: word word")
+    assert line.endswith("…")
+    assert len(line) < 160
+
+
+async def test_a_background_task_works_with_the_session_tools_and_comes_back():
+    # The agent itself is the worker, in a room of its own attached without
+    # the session room's metadata: the tools reach it through the turn config.
+    from roomkit import ChannelCategory, RoomKit, SMSChannel
+    from roomkit.channels.ai import AIChannel
+    from roomkit.providers.sms.mock import MockSMSProvider
+
+    from roomkit_ui.engine_state import EngineState
+    from roomkit_ui.toolset import ToolSet
+
+    tools = ToolSet(
+        builtin=[{"name": "get_current_time", "description": "Time.", "parameters": {}}],
+        cli=[],
+        mcp=[],
+    )
+    provider = MockAIProvider(responses=["Three mails need an answer.", "You have three."])
+    ai = AIChannel("ai", provider=provider, config_provider=tools.turn_config())
+    kit = RoomKit()
+    kit.register_channel(ai)
+    kit.register_channel(SMSChannel("sms", provider=MockSMSProvider()))
+    kit.setup_background(ai)
+    await kit.create_room(room_id="main")
+    await kit.attach_channel("main", "sms")
+    await kit.attach_channel("main", "ai", category=ChannelCategory.INTELLIGENCE)
+    said: list[str] = []
+    engine = SimpleNamespace(
+        _state=EngineState.ACTIVE,
+        _background_tasks=0,
+        session_notice=SimpleNamespace(emit=said.append),
+    )
+    register_agent_hooks(kit, engine)
+
+    await kit.start_task("main", "ai", "Summarize this week's mails")
+    await until(lambda: len(said) == 2 and len(provider.calls) == 2)
+    await kit.close()
+
+    worker, relay = provider.calls
+    assert "get_current_time" in {t.name for t in worker.tools}
+    assert "Three mails need an answer." in "\n".join(str(m.content) for m in relay.messages)
+    assert said[0] == "Working in the background: Summarize this week's mails"
+    assert said[1].startswith("Background work done")
+    assert engine._background_tasks == 0
+
+
+def test_the_agent_tab_saves_background_work(qapp):
+    from roomkit_ui.widgets.settings.vc_agent_fields import VCAgentPage
+
+    page = VCAgentPage({"vc_background": True})
+
+    assert page.get_settings()["vc_background"] is True

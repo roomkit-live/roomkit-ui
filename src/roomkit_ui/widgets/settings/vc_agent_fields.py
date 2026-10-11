@@ -1,5 +1,5 @@
-"""Voice Channel Agent tab: whether the assistant decides when to speak, and
-whether it thinks while it listens."""
+"""Voice Channel Agent tab: whether the assistant decides when to speak,
+thinks while it listens, and works in the background."""
 
 from __future__ import annotations
 
@@ -23,6 +23,13 @@ _THINKER_HINT = (
     "On the turns it stays quiet, the conversation model keeps a thought of what "
     "is being said and what the assistant could add; with something worth saying "
     "it may offer it. One more model call per quiet turn. Needs a speaking decision."
+)
+
+_BACKGROUND_HINT = (
+    "The assistant can hand a long request (a search, a report, several tool calls) "
+    "to a task that runs while you keep talking, then tells you the result. The "
+    "task uses the conversation model and the same tools; the session stays open "
+    "until it ends."
 )
 
 
@@ -81,6 +88,11 @@ class VCAgentPage(QWidget):
         form.addRow("", self.thinker)
         form.addRow("", _hint(_THINKER_HINT))
 
+        self.background = QCheckBox("Work in the background")
+        self.background.setChecked(bool(settings.get("vc_background", False)))
+        form.addRow("", self.background)
+        form.addRow("", _hint(_BACKGROUND_HINT))
+
         self.speak_policy.currentIndexChanged.connect(self._update_visibility)
         self._update_visibility()
 
@@ -104,5 +116,6 @@ class VCAgentPage(QWidget):
             "vc_speak_policy": self.current_policy(),
             "vc_agent_name": self.agent_name.text().strip(),
             "vc_thinker": self.thinker.isChecked(),
+            "vc_background": self.background.isChecked(),
             "typesafe_api_key": self.typesafe_api_key.text().strip(),
         }

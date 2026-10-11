@@ -39,6 +39,10 @@ Each released section is the source for that version's GitHub release notes.
   the turns it stays quiet, the conversation model keeps a thought of what is said and
   what the assistant could add; with something worth saying it offers it. Its thoughts
   go to the log.
+- **Background work** (Voice Channel, Settings → AI → Agent) — the assistant can hand a
+  long request to a task that runs with the same model and tools while the conversation
+  goes on, then speaks its result. The chat shows when a task starts and ends, and an
+  idle session is not hung up while one runs.
 - **Hang up when the conversation goes quiet** — optional, after a set delay (15 s by
   default), never during a tool call or while the assistant speaks; the chat says why
   the session closed.

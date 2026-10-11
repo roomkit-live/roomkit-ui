@@ -167,6 +167,9 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         self._owned_tasks: set[asyncio.Task[Any]] = set()
 
         self._pending_tool_calls: int = 0
+        # Background tasks the Voice Channel agent started and that have not
+        # ended (agent_hooks): the idle hang-up waits for them.
+        self._background_tasks: int = 0
         self._watchdog = SessionWatchdog(self)
 
         # Shared microphone, when one is available: the session subscribes to
@@ -542,6 +545,7 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         """Tear the session down, in the order the fixes below depend on."""
         self._watchdog.stop()
         self._pending_tool_calls = 0
+        self._background_tasks = 0
         self._spk_timer.stop()
         self._spk_rms_queue.clear()
         await self._cancel_cleanup_monitor()
