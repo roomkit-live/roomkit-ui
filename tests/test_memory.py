@@ -240,3 +240,19 @@ def test_an_existing_history_is_tightened_in_place(tmp_path, monkeypatch):
     assert _mode(db) == 0o600
     assert _mode(wal) == 0o600
     assert db.read_bytes() == b"history"  # tightened, not recreated
+
+
+def test_the_store_is_declared_this_apps_own(caplog, monkeypatch, tmp_path):
+    # roomkit warns at every session about a persistent store shared across
+    # processes; one desktop app owns this one.
+    from roomkit import RoomKit
+
+    from roomkit_ui import memory
+
+    monkeypatch.setattr(memory, "conversations_db_path", lambda: tmp_path / "c.db")
+    store = memory.build_store({"conversation_memory": True})
+    with caplog.at_level("WARNING", logger="roomkit.framework"):
+        RoomKit(store=store)
+
+    assert store.is_process_local
+    assert not [r for r in caplog.records if "InMemoryLockManager" in r.getMessage()]

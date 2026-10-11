@@ -72,7 +72,13 @@ def build_store(settings: dict) -> Any | None:
         return None
     path = conversations_db_path()
     _restrict_to_owner(path)
-    return SQLiteStore(path)
+    store = SQLiteStore(path)
+    # One desktop app owns this file.  roomkit warns, at every session, that
+    # a persistent store with its in-process lock manager is unsafe when
+    # several processes share the store (a server deployment); here the worst
+    # a second window of the app could do is rank two alike names oddly.
+    store.is_process_local = True
+    return store
 
 
 def _restrict_to_owner(path: Path) -> None:
