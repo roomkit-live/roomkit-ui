@@ -8,7 +8,25 @@ from typing import Any
 
 from PySide6.QtCore import QMetaObject, QObject, Qt, QTimer, Signal, Slot
 
+from roomkit_ui.features import unavailable_reason
+
 logger = logging.getLogger(__name__)
+
+# Said once per run: every listener, and every reload, would say it again.
+_unavailable_logged = False
+
+
+def _hotkeys_available() -> bool:
+    """Whether this install can listen for a global shortcut at all."""
+    global _unavailable_logged
+    reason = unavailable_reason("hotkey")
+    if reason is None:
+        return True
+    if not _unavailable_logged:
+        _unavailable_logged = True
+        logger.info("Global hotkeys off: %s", reason)
+    return False
+
 
 # pynput on macOS internally calls HIServices.AXIsProcessTrusted() in its
 # listener thread, which fails with newer pyobjc (KeyError on lazy import).
@@ -88,6 +106,8 @@ class HotkeyListener(QObject):
     def start(self) -> None:
         if self._listener is not None or self._monitor is not None:
             return
+        if not _hotkeys_available():
+            return
 
         if sys.platform == "darwin" and self._hotkey in _MAC_KEYCODES:
             self._start_nsevent()
@@ -99,7 +119,7 @@ class HotkeyListener(QObject):
         try:
             from AppKit import NSEvent, NSFlagsChanged, NSFlagsChangedMask, NSKeyDownMask
         except ImportError:
-            logger.error("PyObjC/AppKit not available — falling back to pynput")
+            logger.warning("PyObjC/AppKit not available — falling back to pynput")
             self._start_pynput()
             return
 

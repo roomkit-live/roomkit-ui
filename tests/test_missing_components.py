@@ -129,3 +129,21 @@ def test_a_turnless_stt_falls_back_to_the_energy_vad_without_sherpa_onnx(missing
     vad = build_turn_vad({"vc_vad_model": "silero-vad"}, "cpu")
 
     assert type(vad).__name__ == "EnergyVADProvider"
+
+
+def test_without_pynput_the_hotkeys_say_so_once_and_start_nothing(qapp, missing, caplog):
+    from roomkit_ui import hotkey
+
+    missing("hotkey")
+    hotkey._unavailable_logged = False
+    listeners = [hotkey.HotkeyListener("<cmd_r>"), hotkey.HotkeyListener("<ctrl>+<shift>+a")]
+
+    with caplog.at_level(logging.INFO, logger="roomkit_ui.hotkey"):
+        for listener in listeners * 2:  # both listeners, started, then reloaded
+            listener.start()
+
+    said = [r for r in caplog.records if r.name == "roomkit_ui.hotkey"]
+    assert len(said) == 1
+    assert said[0].levelno == logging.INFO
+    assert "pip install 'roomkit-ui[dictation]'" in said[0].getMessage()
+    assert all(lst._listener is None and lst._monitor is None for lst in listeners)
