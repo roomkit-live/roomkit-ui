@@ -9,6 +9,7 @@ persists the user's changes.
 """
 
 import pytest
+import shiboken6
 from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
 
@@ -19,10 +20,27 @@ from roomkit_ui.widgets.settings.panel import SettingsPanel
 
 
 @pytest.fixture
-def panel(qapp):
-    p = SettingsPanel()
-    yield p
-    p.deleteLater()
+def open_panel(qapp):
+    """Open panels on demand and destroy them when the test ends.
+
+    deleteLater() never runs here — no event loop turns between tests — and
+    every panel left alive slows the next ones down: each save restyles
+    every widget of the application.
+    """
+    opened: list[SettingsPanel] = []
+
+    def _open() -> SettingsPanel:
+        opened.append(SettingsPanel())
+        return opened[-1]
+
+    yield _open
+    for p in opened:
+        shiboken6.delete(p)
+
+
+@pytest.fixture
+def panel(open_panel):
+    return open_panel()
 
 
 def test_every_sidebar_label_has_a_page(panel):
@@ -81,7 +99,7 @@ def test_every_way_out_saves_exactly_once(panel, monkeypatch, close):
 
 
 @pytest.fixture
-def keyed_panel(qapp):
+def keyed_panel(open_panel):
     """A panel opened over saved keys, each shown on several tabs."""
     save_settings(
         {
@@ -91,10 +109,9 @@ def keyed_panel(qapp):
             "elevenlabs_api_key": "el-old",
         }
     )
-    p = SettingsPanel()
+    p = open_panel()
     p.show()
-    yield p
-    p.deleteLater()
+    return p
 
 
 def _retype(field, text: str) -> None:
@@ -157,14 +174,12 @@ def all_models_downloaded(monkeypatch):
     return model_manager
 
 
-def test_vc_models_survive_a_session_in_realtime_mode(qapp, all_models_downloaded):
+def test_vc_models_survive_a_session_in_realtime_mode(open_panel, all_models_downloaded):
     stt = all_models_downloaded.STT_MODELS[-1].id
     tts = all_models_downloaded.TTS_MODELS[-1].id
     save_settings({"conversation_mode": "realtime", "vc_stt_model": stt, "vc_tts_model": tts})
 
-    panel = SettingsPanel()  # opens on General: the AI tab is never shown
-    panel.reject()
-    panel.deleteLater()
+    open_panel().reject()  # opens on General: the AI tab is never shown
 
     saved = load_settings()
     assert saved["vc_stt_model"] == stt
