@@ -70,9 +70,9 @@ Each released section is the source for that version's GitHub release notes.
   the chat says so once).
 - **"Model thinking" for local LLMs** (vLLM / Ollama), off by default, so a reasoning
   model no longer thinks for seconds before a spoken reply.
-- **`smart-turn` extra** — the Smart Turn detector's dependencies, outside `all`. Without
-  it the setting reads "not installed" and a session runs without the detector and says
-  so. The detector stays loaded across sessions; "Unfinished Wait (ms)" sets how long an
+- **`smart-turn` extra** — the Smart Turn detector's dependencies, outside `all` and
+  shipped in the pre-built binaries. Without it the setting reads "not installed" and a
+  session runs without the detector and says so. The detector stays loaded across sessions; "Unfinished Wait (ms)" sets how long an
   unfinished turn waits for more speech.
 - **Voice failures in the chat** — a TTS or STT failure, and a turn the LLM could not
   answer (bad key, quota), say why in the chat instead of only in the log.

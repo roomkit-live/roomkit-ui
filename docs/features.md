@@ -273,7 +273,7 @@ sequenceDiagram
 - Realtime mode requires a cloud provider; no local speech-to-speech.
 - Realtime sessions run without speaker diarization (roomkit 0.96.1 forwards no speaker
   change from a realtime channel).
-- The pre-built binaries carry neither Smart Turn, Pocket TTS, Qwen3-TTS nor NeuTTS
+- The pre-built binaries carry Smart Turn but neither Pocket TTS, Qwen3-TTS nor NeuTTS
   (outside the `all` extra); install from source for those.
 - Azure MAI-Transcribe is not offered for dictation.
 - MCP Apps require QtWebEngine (graceful fallback to a plain tool pill without it).
