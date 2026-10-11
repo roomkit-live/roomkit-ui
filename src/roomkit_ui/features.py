@@ -101,6 +101,9 @@ FEATURES: dict[str, Feature] = {
     # over a websocket, Azure Speech TTS posts SSML with httpx (a core dep).
     "azure-stt": Feature("azure-speech", "Azure MAI-Transcribe", ("websockets",)),
     "azure-tts": Feature("azure-speech", "Azure Speech TTS (MAI-Voice)", ("httpx",)),
+    # The Voice Channel streams to Muse over a websocket; httpx (a core dep)
+    # serves only its one-clip REST endpoint, which the app does not use.
+    "meta-stt": Feature("meta-stt", "Meta Muse Voice Transcribe", ("websockets",)),
     # SmartTurnDetector imports numpy and onnxruntime when built, and
     # transformers (WhisperFeatureExtractor) when it loads the model.
     "smart-turn": Feature(
@@ -124,6 +127,7 @@ STT_PROVIDER_FEATURES: dict[str, str] = {
     "gradium": "gradium",
     "deepgram": "deepgram",
     "azure_mai": "azure-stt",
+    "meta": "meta-stt",
 }
 
 TTS_PROVIDER_FEATURES: dict[str, str] = {

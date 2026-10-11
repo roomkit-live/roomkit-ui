@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 
 from roomkit_ui.theme import colors
 from roomkit_ui.widgets.settings.vc_azure_fields import AzureSpeechFields
+from roomkit_ui.widgets.settings.vc_meta_fields import MetaSTTFields
 
 _ANTHROPIC_CATALOG = "roomkit.providers.anthropic.models"
 _OPENAI_CATALOG = "roomkit.providers.openai.models"
@@ -146,6 +147,7 @@ class VCCloudFields:
     def __init__(self, settings: dict) -> None:
         self._settings = settings
         self.azure = AzureSpeechFields(settings)
+        self.meta = MetaSTTFields(settings)
 
     # ── LLM ──
 
@@ -239,6 +241,7 @@ class VCCloudFields:
         form.addRow(self._deepgram_model_label, self.deepgram_model)
 
         self.azure.add_stt_rows(form)
+        self.meta.add_stt_rows(form)
 
     # ── TTS ──
 
@@ -417,6 +420,7 @@ class VCCloudFields:
 
     def update_stt_visibility(self, provider: str) -> None:
         self.azure.update_stt_visibility(provider)
+        self.meta.update_stt_visibility(provider)
         is_deepgram = provider == "deepgram"
         self._deepgram_key_label.setVisible(is_deepgram)
         self.deepgram_api_key.setVisible(is_deepgram)
@@ -487,4 +491,5 @@ class VCCloudFields:
             "gradium_cfg_coef": self.gradium_cfg_coef.text().strip(),
             "gradium_rewrite_rules": self.gradium_rewrite_rules.text().strip(),
             **self.azure.get_settings(),
+            **self.meta.get_settings(),
         }

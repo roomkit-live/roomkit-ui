@@ -45,6 +45,7 @@ VC_STT_PROVIDERS: list[tuple[str, str]] = [
     ("Gradium", "gradium"),
     ("Deepgram", "deepgram"),
     ("Azure MAI-Transcribe", "azure_mai"),
+    ("Meta Muse Voice Transcribe", "meta"),
 ]
 
 VC_TTS_PROVIDERS: list[tuple[str, str]] = [
@@ -67,9 +68,9 @@ VC_INTERRUPTION_MODES: list[tuple[str, str]] = [
 _INTERRUPTION_HINT = (
     "Words only lets acknowledgements (“ok”, “mm-hmm”, "
     "“d’accord”, “merci”) through and stops for anything else. "
-    "It needs an STT that hears words while you speak (Deepgram, Gradium, a streaming "
-    "local model): a Whisper-type local model only gives them once you stop, so with "
-    "one any speech that lasts stops the assistant."
+    "It needs an STT that hears words while you speak (Deepgram, Gradium, Meta Muse, "
+    "a streaming local model): a Whisper-type local model only gives them once you "
+    "stop, so with one any speech that lasts stops the assistant."
 )
 
 

@@ -97,11 +97,80 @@ def build_azure_mai_stt(settings: dict, emit_status: Callable[[str], None]) -> A
     return AzureMAISTTProvider(config)
 
 
+# The app's STT language codes → the names Muse takes as a language bias
+# (roomkit's meta.SUPPORTED_LANGUAGES: it ignores a code like "fr" silently).
+_META_LANGUAGES = {
+    "ar": "Arabic",
+    "bn": "Bengali",
+    "de": "German",
+    "en": "English",
+    "es": "Spanish",
+    "fr": "French",
+    "he": "Hebrew",
+    "hi": "Hindi",
+    "id": "Indonesian",
+    "it": "Italian",
+    "ja": "Japanese",
+    "kn": "Kannada",
+    "ko": "Korean",
+    "mr": "Marathi",
+    "ms": "Malay",
+    "nl": "Dutch",
+    "pl": "Polish",
+    "pt": "Portuguese",
+    "ta": "Tamil",
+    "te": "Telugu",
+    "th": "Thai",
+    "tl": "Tagalog",
+    "tr": "Turkish",
+    "vi": "Vietnamese",
+    "zh": "Mandarin Chinese",
+}
+
+
+def build_meta_stt(settings: dict, emit_status: Callable[[str], None]) -> Any:
+    """Meta's Muse Voice Transcribe, streaming over Meta's websocket.
+
+    The model ends each turn itself (``ENDPOINTING``): a cloud STT gets no
+    pipeline VAD, so the channel streams all the audio to it.  The app's STT
+    language becomes a bias, not a pin, and with none set the model takes
+    what it hears; a language Muse does not transcribe is refused here.
+    """
+    from roomkit.voice.stt.meta import MetaSTTConfig, MetaSTTProvider
+
+    from roomkit_ui.constants import STT_LANGUAGES
+
+    emit_status("Connecting Meta Muse STT…")
+    api_key = str(settings.get("meta_api_key", "") or "").strip()
+    if not api_key:
+        raise ValueError("Meta API key is required for Meta Muse STT.")
+    code = str(settings.get("stt_language", "") or "").strip()
+    bias = _META_LANGUAGES.get(code)
+    if code and bias is None:
+        name = dict((value, label) for label, value in STT_LANGUAGES).get(code, code)
+        raise ValueError(
+            f"Meta Muse does not transcribe {name}. Pick another language "
+            "(Settings → Dictation) or another STT."
+        )
+    keywords = [
+        word.strip() for word in str(settings.get("meta_stt_keywords", "") or "").split(",")
+    ]
+    config = MetaSTTConfig(
+        api_key=api_key,
+        mode="ENDPOINTING",
+        language_bias=[bias] if bias else [],
+        keywords=[word for word in keywords if word],
+    )
+    logger.info("STT: meta, language bias=%s, %d keywords", bias or "none", len(config.keywords))
+    return MetaSTTProvider(config)
+
+
 # vc_stt_provider → its builder.  A provider absent here is the local one.
 CLOUD_STT_BUILDERS: dict[str, Callable[[dict, Callable[[str], None]], Any]] = {
     "gradium": build_gradium_stt,
     "deepgram": build_deepgram_stt,
     "azure_mai": build_azure_mai_stt,
+    "meta": build_meta_stt,
 }
 
 
