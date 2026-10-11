@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 class MainWindow(QMainWindow):
     settings_saved = Signal()
+    settings_opened = Signal()  # paired with settings_saved, emitted on close
     session_active_changed = Signal(bool)
 
     def __init__(self) -> None:
@@ -130,6 +131,7 @@ class MainWindow(QMainWindow):
 
     def _open_settings(self) -> None:
         dlg = SettingsPanel(self)
+        self.settings_opened.emit()
         dlg.exec()
         # Built fresh on every open: without this each closed dialog stays
         # alive under the window, its pages, players and models included.

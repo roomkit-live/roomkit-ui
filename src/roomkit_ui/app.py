@@ -127,7 +127,7 @@ def _configure_logging() -> None:
 
 
 def build_wake_word(window):
-    """The wake word's controller; ``start()`` arms it from the settings."""
+    """The wake word's controller; ``apply()`` arms it from the settings."""
     from roomkit_ui.wakeword.controller import (
         WakeWordController,
         build_capture_source,
@@ -142,8 +142,9 @@ def build_wake_word(window):
 
 
 def _reload_wake_word(wake) -> None:
-    """Apply an enable/disable change made in settings."""
-    wake.set_enabled(bool(load_settings().get("wakeword_enabled", False)))
+    """Apply what was saved, then listen again now Settings has closed."""
+    wake.apply(load_settings())
+    wake.resume("settings")
 
 
 def main() -> None:
@@ -332,11 +333,14 @@ def main() -> None:
     )
     wake.detected.connect(window.start_from_wake_word)
     wake.error.connect(tray.on_error)
+    # Deaf while Settings is open: re-recording the phrase there would
+    # otherwise open a session behind the dialog.
+    window.settings_opened.connect(lambda: wake.suspend("settings"))
     window.settings_saved.connect(lambda: _reload_wake_word(wake))
     # Release the shared microphone on the way out, or the device stays held
     # until the process is torn down.
     app.aboutToQuit.connect(wake.close)
-    wake.start(settings)
+    wake.apply(settings)
 
     # Let Ctrl+C quit cleanly instead of being swallowed by the Qt loop.
     # The Qt event loop runs in C, so Python signal handlers never fire

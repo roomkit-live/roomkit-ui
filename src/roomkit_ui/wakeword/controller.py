@@ -6,6 +6,10 @@ word is enabled.  Sessions take their audio from it while it does, which is
 what lets them replay the words spoken before they existed; when it does
 not, they open the device themselves.
 
+Settings apply as soon as they are saved — enabling, sensitivity, a
+re-recorded phrase, another microphone — and the listener stands down
+while Settings is open, so recording the phrase again cannot wake it.
+
 Nothing here stops the device from inside the capture drain: every path
 that releases it is driven by a setting being saved, a session ending or
 the application quitting (see ``SegmentCapture.stop`` for why).
@@ -27,6 +31,9 @@ ListenerFactory = Callable[[dict, Any], Any]
 # A session subscribed to the shared source: stopping it would cut that
 # session's microphone mid-call.
 _SESSION = "session"
+# What build_capture_source opens the device with — the input device, and
+# the provider whose transport rate the source must match.
+_SOURCE_SETTINGS = ("input_device", "provider")
 
 
 class WakeWordController(QObject):
@@ -48,10 +55,11 @@ class WakeWordController(QObject):
         self._build_source = build_source
         self._build_listener = build_listener
         self._source: Any = None
+        self._source_key: tuple[Any, ...] | None = None
         self._source_running = False
         self._listener: Any = None
         self._suspended_by: set[str] = set()
-        self._release_pending = False
+        self._pending: dict | None = None
 
     @property
     def listening(self) -> bool:
@@ -64,29 +72,30 @@ class WakeWordController(QObject):
 
     # -- configuration -------------------------------------------------------
 
-    def start(self, settings: dict) -> None:
-        """Build what the settings ask for at launch."""
-        if not settings.get("wakeword_enabled", False):
+    def apply(self, settings: dict) -> None:
+        """Make the wake word match *settings*, at launch or once saved.
+
+        The listener is rebuilt every time — that is what picks up a new
+        sensitivity or a re-recorded phrase; the device is reopened only
+        when what it was opened with changed.
+        """
+        if _SESSION in self._suspended_by:
+            # The session is subscribed to the source: rebuilding now would
+            # cut its microphone mid-call.  Its end applies this.
+            self._pending = settings
             return
-        # Built stopped: the device opens only once the listener exists.
-        source = self._build_source(settings)
+        self._pending = None
+        self._drop_listener()
+        if not settings.get("wakeword_enabled", False):
+            self._release_source()
+            return
+        source = self._source_for(settings)
         listener = self._build_listener(settings, source)
         if listener is None:
+            self._release_source()
             return
-        self._source = source
         self._acquire_source()
         self._adopt(listener)
-
-    def set_enabled(self, enabled: bool) -> None:
-        """Arm or disarm, releasing the device while disarmed."""
-        if self._listener is None:
-            return
-        if enabled:
-            self._acquire_source()
-            self._listener.set_enabled(True)
-        else:
-            self._listener.set_enabled(False)
-            self._release_source()
 
     def _adopt(self, listener: Any) -> None:
         listener.detected.connect(lambda mark, _distance: self.detected.emit(mark))
@@ -95,6 +104,11 @@ class WakeWordController(QObject):
             listener.suspend(reason)
         listener.set_enabled(True)
         self._listener = listener
+
+    def _drop_listener(self) -> None:
+        if self._listener is not None:
+            self._listener.close()
+            self._listener = None
 
     # -- suspensions ---------------------------------------------------------
 
@@ -108,13 +122,22 @@ class WakeWordController(QObject):
         self._suspended_by.discard(reason)
         if self._listener is not None:
             self._listener.resume(reason)
-        if reason == _SESSION and self._release_pending:
-            self._release_source()
+        if reason == _SESSION and self._pending is not None:
+            self.apply(self._pending)
 
     # -- the shared device ---------------------------------------------------
 
+    def _source_for(self, settings: dict) -> Any:
+        """The source to listen on: the current one, unless its device changed."""
+        key = tuple(settings.get(name) for name in _SOURCE_SETTINGS)
+        if self._source is not None and key == self._source_key:
+            return self._source
+        self._close_source()
+        self._source = self._build_source(settings)  # built stopped
+        self._source_key = key
+        return self._source
+
     def _acquire_source(self) -> None:
-        self._release_pending = False
         if self._source is None:
             return
         if not self._source_running:
@@ -132,24 +155,25 @@ class WakeWordController(QObject):
         if self._source is None:
             return
         self._engine.set_capture_source(None)
-        if _SESSION in self._suspended_by:
-            self._release_pending = True
-            return
-        self._release_pending = False
         if self._source_running:
             self._source.stop()
             self._source_running = False
             logger.info("Wake word off — shared microphone released")
 
+    def _close_source(self) -> None:
+        if self._source is None:
+            return
+        self._engine.set_capture_source(None)
+        self._source.close()
+        self._source = None
+        self._source_key = None
+        self._source_running = False
+
     def close(self) -> None:
         """Release everything (application quit)."""
-        if self._listener is not None:
-            self._listener.close()
-        if self._source is not None:
-            self._engine.set_capture_source(None)
-            self._source.close()
-            self._source_running = False
-        self._release_pending = False
+        self._pending = None
+        self._drop_listener()
+        self._close_source()
 
 
 # ---------------------------------------------------------------------------

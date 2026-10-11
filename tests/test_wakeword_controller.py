@@ -92,6 +92,7 @@ class World:
 
 
 ENABLED = {"wakeword_enabled": True}
+DISABLED = {"wakeword_enabled": False}
 
 
 @pytest.fixture
@@ -101,14 +102,14 @@ def world(qapp):
 
 def test_disabled_at_launch_never_opens_the_device(world):
     wake = world.controller()
-    wake.start({"wakeword_enabled": False})
+    wake.apply(DISABLED)
     assert not any(s.running for s in world.sources)
     assert world.engine.capture_source is None
 
 
 def test_enabled_at_launch_captures_and_shares_the_device(world):
     wake = world.controller()
-    wake.start(ENABLED)
+    wake.apply(ENABLED)
     source = world.sources[0]
     assert source.running
     assert world.engine.capture_source is source
@@ -118,7 +119,7 @@ def test_enabled_at_launch_captures_and_shares_the_device(world):
 def test_missing_prerequisites_never_open_the_device(world):
     world.can_listen = False
     wake = world.controller()
-    wake.start(ENABLED)
+    wake.apply(ENABLED)
     assert not any(s.running for s in world.sources)
     assert world.engine.capture_source is None
 
@@ -126,8 +127,8 @@ def test_missing_prerequisites_never_open_the_device(world):
 def test_disabling_releases_the_device(world):
     """Before: the device kept capturing (and the mic indicator lit) until quit."""
     wake = world.controller()
-    wake.start(ENABLED)
-    wake.set_enabled(False)
+    wake.apply(ENABLED)
+    wake.apply(DISABLED)
 
     assert not world.sources[0].running
     assert world.engine.capture_source is None  # sessions open their own device
@@ -136,9 +137,9 @@ def test_disabling_releases_the_device(world):
 
 def test_re_enabling_captures_again(world):
     wake = world.controller()
-    wake.start(ENABLED)
-    wake.set_enabled(False)
-    wake.set_enabled(True)
+    wake.apply(ENABLED)
+    wake.apply(DISABLED)
+    wake.apply(ENABLED)
 
     source = world.sources[0]
     assert source.running and source.starts == 2
@@ -149,33 +150,107 @@ def test_re_enabling_captures_again(world):
 def test_disabling_mid_session_waits_for_the_session_to_end(world):
     """The running session is subscribed: stopping now would cut its mic."""
     wake = world.controller()
-    wake.start(ENABLED)
+    wake.apply(ENABLED)
     wake.suspend("session")
-    wake.set_enabled(False)
+    wake.apply(DISABLED)
 
     assert world.sources[0].running
-    assert world.engine.capture_source is None  # the next session opens its own
 
     wake.resume("session")
     assert not world.sources[0].running
+    assert world.engine.capture_source is None  # the next session opens its own
 
 
 def test_re_enabling_mid_session_cancels_the_pending_release(world):
     wake = world.controller()
-    wake.start(ENABLED)
+    wake.apply(ENABLED)
     wake.suspend("session")
-    wake.set_enabled(False)
-    wake.set_enabled(True)
+    wake.apply(DISABLED)
+    wake.apply(ENABLED)
     wake.resume("session")
 
     assert world.sources[0].running
     assert world.engine.capture_source is world.sources[0]
 
 
+# -- settings apply once saved ----------------------------------------------
+
+
+def test_enabling_after_a_disabled_launch_arms_it(world):
+    """Before: disabled at launch, nothing was built until a restart."""
+    wake = world.controller()
+    wake.apply(DISABLED)
+    wake.apply(ENABLED)
+
+    assert wake.listening
+    assert world.sources[-1].running
+
+
+def test_a_new_sensitivity_rebuilds_the_listener(world):
+    """Before: only enable/disable reached the listener; the rest waited."""
+    wake = world.controller()
+    wake.apply({**ENABLED, "wakeword_sensitivity": "balanced"})
+    wake.apply({**ENABLED, "wakeword_sensitivity": "cautious"})
+
+    old, new = world.listeners
+    assert old.closed
+    assert new.settings["wakeword_sensitivity"] == "cautious"
+    assert wake.listening
+
+
+def test_a_rebuild_keeps_the_device_when_it_did_not_change(world):
+    wake = world.controller()
+    wake.apply(ENABLED)
+    wake.apply({**ENABLED, "wakeword_sensitivity": "responsive"})
+
+    assert len(world.sources) == 1
+    assert world.sources[0].starts == 1
+    assert world.listeners[-1].source is world.sources[0]
+
+
+def test_another_microphone_reopens_the_device(world):
+    wake = world.controller()
+    wake.apply({**ENABLED, "input_device": 1})
+    wake.apply({**ENABLED, "input_device": 4})
+
+    old, new = world.sources
+    assert old.closed
+    assert new.running and new.settings["input_device"] == 4
+    assert world.engine.capture_source is new
+
+
+def test_settings_saved_mid_session_apply_when_it_ends(world):
+    wake = world.controller()
+    wake.apply(ENABLED)
+    wake.suspend("session")
+    wake.apply({**ENABLED, "wakeword_sensitivity": "cautious"})
+
+    assert len(world.listeners) == 1
+
+    wake.resume("session")
+    assert world.listeners[-1].settings["wakeword_sensitivity"] == "cautious"
+    assert wake.listening
+
+
+def test_deaf_while_settings_is_open(world):
+    """Before: re-recording the phrase in the wizard opened a session."""
+    wake = world.controller()
+    wake.apply(ENABLED)
+    wake.suspend("settings")
+    assert not wake.listening
+
+    # Saving rebuilds the listener; it must still be deaf until the resume.
+    wake.apply({**ENABLED, "wakeword_sensitivity": "cautious"})
+    assert not wake.listening
+
+    wake.resume("settings")
+    assert wake.listening
+
+
 def test_quit_closes_the_device_and_the_listener(world):
     """Before: nothing ever closed the shared source."""
     wake = world.controller()
-    wake.start(ENABLED)
+    wake.apply(ENABLED)
     wake.close()
 
     assert world.sources[0].closed
@@ -185,7 +260,7 @@ def test_quit_closes_the_device_and_the_listener(world):
 
 def test_detection_hands_over_the_replay_mark(world):
     wake = world.controller()
-    wake.start(ENABLED)
+    wake.apply(ENABLED)
     marks = []
     wake.detected.connect(marks.append)
 
@@ -206,7 +281,7 @@ def test_a_device_that_fails_to_open_is_reported_not_fatal(world):
     errors: list[str] = []
     wake.error.connect(errors.append)
 
-    wake.start(ENABLED)
+    wake.apply(ENABLED)
 
     assert errors and "device unavailable" in errors[0]
     assert world.engine.capture_source is None
