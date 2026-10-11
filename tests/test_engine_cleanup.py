@@ -239,3 +239,34 @@ async def test_a_remote_stt_is_closed_and_a_cached_one_kept(engine):
     await _run_cleanup(engine)
 
     assert rec.names().count("stt.close") == 1  # the cached one stays open
+
+
+class _UnownedBackend:
+    """A LocalAudioBackend built for a session no kit took over yet."""
+
+    def __init__(self, rec, name):
+        self._rec = rec
+        self._name = name
+
+    async def close(self):
+        self._rec.add(f"{self._name}.close")
+
+
+async def test_a_stop_before_the_kit_exists_closes_the_audio_backend(engine):
+    # A stop while MCP servers connect lands before the kit is built; the
+    # kit's close is what closes the transport (and its AEC) otherwise.
+    rec = _Recorder()
+    engine._transport = _UnownedBackend(rec, "transport")
+
+    await _run_cleanup(engine)
+
+    assert rec.names() == ["transport.close"]
+
+
+async def test_a_vc_stop_before_the_kit_exists_closes_its_backend(engine):
+    rec = _Recorder()
+    engine._backend = _UnownedBackend(rec, "backend")
+
+    await _run_cleanup(engine)
+
+    assert rec.names() == ["backend.close"]

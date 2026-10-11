@@ -476,6 +476,21 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
             self._log_handler.reset()
             self._set_state(EngineState.IDLE)
 
+    async def _close_unowned_backends(self) -> None:
+        """Close the audio backends no kit took over.
+
+        A stop while the session is still being built (MCP servers
+        connecting, models loading) lands before the kit exists — and the
+        kit's close is what otherwise closes the backend and its AEC.
+        """
+        for backend in (self._transport, self._backend):
+            if backend is None:
+                continue
+            try:
+                await backend.close()
+            except Exception:
+                logger.exception("cleanup: closing an unowned audio backend failed")
+
     async def _cleanup(self) -> None:
         self._watchdog.stop()
         self._pending_tool_calls = 0
@@ -517,6 +532,8 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
                 logger.info("cleanup: roomkit closed")
             except Exception:
                 logger.exception("cleanup: kit.close() failed")
+        else:
+            await self._close_unowned_backends()
         # Remove the voice error log handler to prevent handler accumulation.
         logging.getLogger("roomkit.voice").removeHandler(self._log_handler)
         if self._mcp:
