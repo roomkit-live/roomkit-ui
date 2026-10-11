@@ -6,14 +6,22 @@ import hashlib
 import logging
 import re
 import shutil
-import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from urllib.parse import quote, urljoin, urlparse
 
 import httpx
 
+from roomkit_ui.cli_exec import CliResult, ProcessRegistry, resolve_command, run_sync
+
 logger = logging.getLogger(__name__)
+
+_GIT_CLONE_TIMEOUT = 180.0
+_GIT_PULL_TIMEOUT = 120.0
+# Anything but letters, digits, ".", "_", "-" — a backslash included, which
+# Windows reads as a path separator.
+_UNSAFE_SEGMENT_CHARS = re.compile(r"[^A-Za-z0-9._-]+")
 
 _DISCOVERY_SCHEMA_V2 = "https://schemas.agentskills.io/discovery/0.2.0/schema.json"
 _WELL_KNOWN_PATHS = (".well-known/agent-skills", ".well-known/skills")
@@ -82,52 +90,103 @@ def repo_dir_name(url: str) -> str:
     raw = raw.rstrip("/")
     if raw.endswith(".git"):
         raw = raw[:-4]
-    parts = [p for p in raw.split("/") if p]
+    # One path segment each, never "." or "..": the name is joined under the
+    # repos directory, which a clone replaces and discovery scans.
+    parts = [_UNSAFE_SEGMENT_CHARS.sub("-", p) for p in raw.split("/")]
+    parts = [p for p in parts if p not in ("", ".", "..")]
     if len(parts) >= 2:
         return f"{parts[-2]}--{parts[-1]}"
     if parts:
         return parts[-1]
-    return "repo"
+    return f"repo-{hashlib.sha256(url.encode()).hexdigest()[:8]}"
+
+
+def _run_git(args: list[str], *, timeout: float, ceiling: Path | None = None) -> CliResult:
+    """Run git like any other child process: resolved on the user's PATH,
+    with the bundle's library paths stripped (``cli_exec``), bounded in time,
+    and never prompting — a credential prompt would wait for the timeout.
+
+    *ceiling* stops git from looking above that directory for a repository,
+    so ``-C`` on a folder that is not a clone fails instead of acting on an
+    enclosing one (a home directory kept in git, say).
+    """
+    git = resolve_command("git")
+    if git is None:
+        raise RuntimeError("git is not installed or not on PATH")
+    env = {"GIT_TERMINAL_PROMPT": "0"}
+    if ceiling is not None:
+        env["GIT_CEILING_DIRECTORIES"] = str(ceiling)
+    return run_sync([*git, *args], timeout=timeout, registry=ProcessRegistry(), extra_env=env)
+
+
+def _git_error(action: str, result: CliResult) -> RuntimeError:
+    if result.timed_out:
+        return RuntimeError(f"git {action} timed out")
+    detail = result.stderr.strip().splitlines()[-1:] or [f"exit code {result.exit_code}"]
+    return RuntimeError(f"git {action} failed: {detail[0]}")
 
 
 async def clone_repo(url: str) -> Path:
-    """Shallow-clone a git repo into the repos directory. Returns the clone path."""
+    """Shallow-clone a git repo into the repos directory. Returns the clone path.
+
+    Clones next to the destination and swaps it in only once the clone
+    succeeded: a network error must not cost the skills already installed.
+    """
     import asyncio
 
     dest = get_repos_dir() / repo_dir_name(url)
-    if dest.exists():
-        shutil.rmtree(dest)
-
-    def _clone() -> None:
-        subprocess.run(
-            ["git", "clone", "--depth", "1", url, str(dest)],
-            check=True,
-            capture_output=True,
-            text=True,
+    staging = Path(tempfile.mkdtemp(prefix=".clone-", dir=get_skills_dir()))
+    try:
+        # "--" ends the options: a URL starting with "-" is a URL, not a flag.
+        result = await asyncio.to_thread(
+            _run_git,
+            ["clone", "--depth", "1", "--", url, str(staging / "repo")],
+            timeout=_GIT_CLONE_TIMEOUT,
         )
-
-    await asyncio.to_thread(_clone)
+        if result.exit_code != 0 or result.timed_out:
+            raise _git_error("clone", result)
+        _swap_in(staging / "repo", dest)
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
     logger.info("Cloned %s → %s", url, dest)
     return dest
+
+
+def _swap_in(new: Path, dest: Path) -> None:
+    """Replace *dest* with *new*, keeping the old copy until the move succeeded."""
+    old = new.with_name("previous")
+    if dest.exists():
+        dest.rename(old)
+    try:
+        new.rename(dest)
+    except OSError:
+        if old.exists():
+            old.rename(dest)
+        raise
 
 
 async def pull_repo(repo_path: Path) -> bool:
     """Pull latest changes (fast-forward only). Returns True on success."""
     import asyncio
 
-    def _pull() -> bool:
-        result = subprocess.run(
-            ["git", "-C", str(repo_path), "pull", "--ff-only"],
-            capture_output=True,
-            text=True,
+    if not (repo_path / ".git").exists():
+        logger.warning("Pull skipped: %s is not a git clone", repo_path)
+        return False
+    try:
+        result = await asyncio.to_thread(
+            _run_git,
+            ["-C", str(repo_path), "pull", "--ff-only"],
+            timeout=_GIT_PULL_TIMEOUT,
+            ceiling=repo_path.parent,
         )
-        return result.returncode == 0
-
-    ok = await asyncio.to_thread(_pull)
+    except RuntimeError:
+        logger.warning("Pull failed for %s", repo_path, exc_info=True)
+        return False
+    ok = result.exit_code == 0 and not result.timed_out
     if ok:
         logger.info("Pulled %s", repo_path)
     else:
-        logger.warning("Pull failed for %s", repo_path)
+        logger.warning("Pull failed for %s: %s", repo_path, _git_error("pull", result))
     return ok
 
 
