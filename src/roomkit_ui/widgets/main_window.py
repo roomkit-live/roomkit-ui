@@ -113,6 +113,7 @@ class MainWindow(QMainWindow):
         # only once the session is actually active.
         self._idle_hangup = IdleHangup(self._engine, self)
         self._idle_hangup.hangup.connect(self._on_idle_hangup)
+        self._end_notice = ""  # why the session is ending, re-shown once it has
         self._apply_idle_hangup_settings()
         self.settings_saved.connect(self._apply_idle_hangup_settings)
 
@@ -179,8 +180,10 @@ class MainWindow(QMainWindow):
 
     def _on_idle_hangup(self, reason: str) -> None:
         # Say why the session closed — a call that ends by itself with no
-        # explanation reads as a crash.
+        # explanation reads as a crash.  Shown now, while the session winds
+        # down, and again once the IDLE transition has reset the chat.
         self._chat.add_info(reason)
+        self._end_notice = reason
         self._on_stop()
 
     def _on_state_changed(self, state: str) -> None:
@@ -198,6 +201,9 @@ class MainWindow(QMainWindow):
             self._idle_hangup.stop()
             self._loading_overlay.dismiss()
             self._chat.reset()
+            if self._end_notice:
+                self._chat.add_info(self._end_notice)
+                self._end_notice = ""
             self._vu.stop()
             self._info_bar.clear_session()
             for widget in self._active_app_widgets.values():
