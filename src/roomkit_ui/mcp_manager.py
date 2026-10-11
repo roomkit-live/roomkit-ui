@@ -437,10 +437,9 @@ class MCPManager:
             logger.warning("read_resource: no session for tool %r", tool_name)
             return None
         try:
-            from pydantic import AnyUrl
-
+            # mcp 2.x takes the URI as a str; an AnyUrl fails its validation.
             result = await asyncio.wait_for(
-                session.read_resource(AnyUrl(uri)),
+                session.read_resource(uri),
                 timeout=_CONNECT_TIMEOUT,
             )
             for content in result.contents:

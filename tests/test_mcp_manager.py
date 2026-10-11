@@ -370,6 +370,31 @@ async def test_close_all_shuts_a_real_stdio_server_down_promptly(tmp_path):
     assert manager._tasks == []
 
 
+async def test_read_resource_fetches_an_app_page_from_a_real_server(tmp_path):
+    # mcp 2.x validates the URI as a str: an AnyUrl failed every read, so no
+    # MCP App ever rendered and each one fell back to a text line.
+    server = tmp_path / "server.py"
+    server.write_text(
+        "from mcp.server.mcpserver import MCPServer\n"
+        "app = MCPServer('t')\n"
+        "@app.tool()\n"
+        "def show() -> str:\n"
+        "    return 'shown'\n"
+        "@app.resource('ui://t/app.html', mime_type='text/html;profile=mcp-app')\n"
+        "def page() -> str:\n"
+        "    return '<p>app</p>'\n"
+        "app.run('stdio')\n"
+    )
+    manager = MCPManager(
+        [{"name": "t", "transport": "stdio", "command": sys.executable, "args": str(server)}]
+    )
+    await manager.connect_all()
+    try:
+        assert await manager.read_resource("show", "ui://t/app.html") == "<p>app</p>"
+    finally:
+        await asyncio.wait_for(manager.close_all(), timeout=5)
+
+
 # -- servers that cannot start -----------------------------------------------------------
 
 
