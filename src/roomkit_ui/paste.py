@@ -9,6 +9,7 @@ goes through the Win32 API instead, in ``paste_windows``.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import re
@@ -186,6 +187,37 @@ def paste_failure_message() -> str:
             "with Ctrl+V."
         )
     return "Auto-paste failed. Text copied to clipboard — paste manually with Ctrl+V."
+
+
+class PasteError(Exception):
+    """The text could not be pasted; ``str()`` is the message for the user."""
+
+
+async def paste_into_focused(text: str) -> None:
+    """Copy *text* to the clipboard and paste it into the focused input.
+
+    The clipboard and keystroke helpers block (up to seconds), so they run
+    off the event loop. Raises :class:`PasteError` when a helper program is
+    missing, the clipboard refuses the text, or the keystroke is refused.
+    """
+    loop = asyncio.get_running_loop()
+    try:
+        await loop.run_in_executor(None, _copy_to_clipboard, text)
+        pasted = await loop.run_in_executor(None, _simulate_paste)
+    except FileNotFoundError as exc:
+        raise PasteError(_missing_helper_message(exc.filename)) from exc
+    except (OSError, subprocess.SubprocessError) as exc:
+        # OSError also covers the Win32 clipboard refusing the text.
+        raise PasteError(f"Paste failed: {exc}") from exc
+    if not pasted:
+        raise PasteError(paste_failure_message())
+
+
+def _missing_helper_message(program: str | None) -> str:
+    message = f"Missing helper program: {program}."
+    if sys.platform.startswith("linux"):
+        message += " Install xclip+xdotool (X11) or wl-copy+wtype (Wayland)."
+    return message
 
 
 def _get_frontmost_bundle() -> str | None:

@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-import subprocess
 from dataclasses import dataclass
 from enum import Enum, auto
 from typing import Any
@@ -13,26 +12,15 @@ from typing import Any
 from PySide6.QtCore import QObject, Signal
 
 from roomkit_ui.paste import (
+    PasteError,
     _activate_bundle,
-    _copy_to_clipboard,
     _get_frontmost_bundle,
-    _simulate_paste,
-    paste_failure_message,
+    paste_into_focused,
 )
 from roomkit_ui.settings import load_settings
 from roomkit_ui.stt_sessions import DictationSessionMixin
 
-# Re-exported for backward compatibility with any code that still does
-# ``from roomkit_ui.stt_engine import _copy_to_clipboard``.  New callers
-# should import from ``roomkit_ui.paste`` directly.
-__all__ = [
-    "DictationState",
-    "STTEngine",
-    "_activate_bundle",
-    "_copy_to_clipboard",
-    "_get_frontmost_bundle",
-    "_simulate_paste",
-]
+__all__ = ["DictationState", "STTEngine"]
 
 logger = logging.getLogger(__name__)
 
@@ -362,46 +350,21 @@ class STTEngine(DictationSessionMixin, QObject):
     # -- paste -----------------------------------------------------------------
 
     def paste_text(self, text: str) -> None:
-        """Copy *text* to clipboard and simulate Ctrl+V.
-
-        Runs blocking subprocess calls in a thread pool to avoid freezing
-        the event loop (clipboard copy/paste can block up to 5 seconds).
-        """
+        """Paste *text* into the app that had focus; say so when it fails."""
 
         async def _paste_async() -> None:
+            front = _get_frontmost_bundle()
+            logger.info("Pasting text to %s: %d chars", front or "(self)", len(text))
+            logger.debug("Paste text payload: %s", text)
             try:
-                loop = asyncio.get_running_loop()
-                front = _get_frontmost_bundle()
-                logger.info("Pasting text to %s: %d chars", front or "(self)", len(text))
-                logger.debug("Paste text payload: %s", text)
-                await loop.run_in_executor(None, _copy_to_clipboard, text)
-                ok = await loop.run_in_executor(None, _simulate_paste)
-                if not ok:
-                    msg = paste_failure_message()
-                    logger.warning(msg)
-                    try:
-                        self.error_occurred.emit(msg)
-                    except Exception:
-                        pass
-                    return
-                logger.info("Paste succeeded")
-            except FileNotFoundError as exc:
-                msg = (
-                    f"Missing helper program: {exc.filename}. "
-                    "Install xclip+xdotool (X11) or wl-copy+wtype (Wayland)."
-                )
-                logger.error(msg)
+                await paste_into_focused(text)
+            except PasteError as exc:
+                logger.warning("%s", exc)
                 try:
-                    self.error_occurred.emit(msg)
+                    self.error_occurred.emit(str(exc))
                 except Exception:
                     pass
-            except (OSError, subprocess.SubprocessError) as exc:
-                # OSError: the Win32 clipboard refused the text.
-                msg = f"Paste failed: {exc}"
-                logger.error(msg)
-                try:
-                    self.error_occurred.emit(msg)
-                except Exception:
-                    pass
+                return
+            logger.info("Paste succeeded")
 
         asyncio.ensure_future(_paste_async())

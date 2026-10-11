@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import ctypes
 import json
 import subprocess
@@ -165,3 +166,33 @@ async def test_paste_tool_reports_success(monkeypatch):
     result = json.loads(await ToolMixin._paste_text("hello"))
 
     assert result == {"status": "ok", "chars": 5}
+
+
+# -- one paste path for dictation and the tool ---------------------------------
+
+
+async def test_a_missing_helper_names_what_to_install_on_linux(monkeypatch):
+    def missing(_text):
+        raise FileNotFoundError(2, "No such file", "xclip")
+
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr(paste, "_copy_to_clipboard", missing)
+
+    with pytest.raises(paste.PasteError, match="xclip.*Install xclip"):
+        await paste.paste_into_focused("hello")
+
+
+async def test_dictation_reports_a_refused_paste(qapp, monkeypatch):
+    from roomkit_ui.stt_engine import STTEngine
+
+    monkeypatch.setattr(paste, "_copy_to_clipboard", lambda _text: None)
+    monkeypatch.setattr(paste, "_simulate_paste", lambda: False)
+    engine = STTEngine()
+    errors: list[str] = []
+    engine.error_occurred.connect(errors.append)
+
+    engine.paste_text("hello")
+    for _ in range(10):
+        await asyncio.sleep(0.01)
+
+    assert errors == [paste.paste_failure_message()]

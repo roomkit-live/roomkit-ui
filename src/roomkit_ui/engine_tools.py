@@ -280,31 +280,15 @@ class ToolMixin:
         """
         from roomkit import ToolFailedError, ToolRefusedError
 
+        from roomkit_ui.paste import PasteError, paste_into_focused
+
         if not text:
             raise ToolRefusedError("No text provided.")
         try:
-            from roomkit_ui.paste import (
-                _copy_to_clipboard,
-                _simulate_paste,
-                paste_failure_message,
-            )
-
-            loop = asyncio.get_running_loop()
-            await loop.run_in_executor(None, _copy_to_clipboard, text)
-            pasted = await loop.run_in_executor(None, _simulate_paste)
-        except FileNotFoundError as exc:
-            msg = f"Missing helper program: {exc.filename}"
-            logger.error("paste_text: %s", msg)
-            raise ToolFailedError(msg) from exc
-        except Exception as exc:
-            msg = f"Paste failed: {exc}"
-            logger.error("paste_text: %s", msg)
-            raise ToolFailedError(msg) from exc
-        if not pasted:
-            # The keystroke was refused (e.g. macOS Accessibility not granted).
-            msg = paste_failure_message()
-            logger.warning("paste_text: %s", msg)
-            raise ToolFailedError(msg)
+            await paste_into_focused(text)
+        except PasteError as exc:
+            logger.warning("paste_text: %s", exc)
+            raise ToolFailedError(str(exc)) from exc
         logger.info("paste_text: pasted %d chars", len(text))
         return json.dumps({"status": "ok", "chars": len(text)})
 
