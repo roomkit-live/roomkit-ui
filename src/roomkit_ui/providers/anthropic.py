@@ -16,6 +16,6 @@ def create(settings: dict) -> Any:
     return AnthropicAIProvider(
         AnthropicConfig(
             api_key=api_key,
-            model=settings.get("vc_anthropic_model", "claude-sonnet-4-20250514"),
+            model=settings.get("vc_anthropic_model", "claude-sonnet-5-5"),
         )
     )

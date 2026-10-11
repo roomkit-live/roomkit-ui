@@ -106,7 +106,7 @@ _DEFAULTS = {
     "conversation_mode": "realtime",  # "realtime" | "voice_channel"
     "vc_llm_provider": "anthropic",  # "anthropic" | "openai" | "gemini"
     "anthropic_api_key": "",
-    "vc_anthropic_model": "claude-sonnet-4-5-20250929",
+    "vc_anthropic_model": "claude-sonnet-5-5",
     "vc_openai_model": "gpt-4o",
     "vc_gemini_model": "gemini-2.0-flash",
     "vc_stt_provider": "local",  # "local" | "gradium"
@@ -205,6 +205,47 @@ _DEFAULTS = {
     "xai_silence_duration_ms": "",  # empty = default
     "xai_prefix_padding_ms": "",  # empty = default
 }
+
+
+# Defaults the vendor retires: (retired default, its successor, the notice).
+# The Settings dialog saves every field on close, so a stored value equal to
+# a retired default is, almost always, that default and not a deliberate
+# pick.  It moves on with the default, and the chat says so once — a pick
+# that happens to match can be made again.  Dates from roomkit 0.96.1's
+# Anthropic catalog: Sonnet 4.5 deprecated 2026-09-30, retiring 2026-11-30.
+_RETIRED_DEFAULTS: dict[str, tuple[str, str, str]] = {
+    "vc_anthropic_model": (
+        "claude-sonnet-4-5-20250929",
+        "claude-sonnet-5-5",
+        "Claude Sonnet 4.5 retires on 2026-11-30: the voice channel now uses "
+        "Claude Sonnet 5.5. Pick another model in Settings → AI Provider → LLM.",
+    ),
+}
+_NOTICES_GROUP = "notices"
+
+
+def _migrate_retired_default(qs: QSettings, key: str) -> None:
+    """Move a stored retired default to its successor and queue the notice."""
+    retired = _RETIRED_DEFAULTS.get(key)
+    if retired is None:
+        return
+    old, new, notice = retired
+    if qs.value(f"room/{key}") != old:
+        return
+    qs.setValue(f"room/{key}", new)
+    qs.setValue(f"{_NOTICES_GROUP}/{key}", notice)
+    qs.sync()
+
+
+def take_model_notices() -> list[str]:
+    """The notices left by retired-default migrations, each returned once."""
+    qs = QSettings()
+    qs.beginGroup(_NOTICES_GROUP)
+    notices = [str(qs.value(name)) for name in qs.childKeys()]
+    qs.remove("")
+    qs.endGroup()
+    qs.sync()
+    return notices
 
 
 def _settings_secret_name(key: str) -> str:
@@ -539,6 +580,7 @@ def load_settings() -> dict:
             out[key] = _load_secret_setting(qs, store, key)
             continue
 
+        _migrate_retired_default(qs, key)
         val = qs.value(f"room/{key}", default)
         if key == "mcp_servers":
             val = _hydrate_mcp_server_secrets(val, qs, store)

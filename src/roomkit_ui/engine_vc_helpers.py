@@ -167,3 +167,27 @@ def try_set_float(target: dict[str, Any], key: str, raw: str) -> None:
         target[key] = float(raw)
     except (ValueError, TypeError):
         pass
+
+
+def announce_llm_model(provider: Any, emit_notice) -> None:
+    """Say in the chat what the user should know about the session's model.
+
+    Once, that a retired default was moved to its successor (see
+    ``settings._RETIRED_DEFAULTS``).  Every session, that a model the user
+    kept is deprecated in roomkit's catalog: it stops answering on the
+    vendor's retirement date, and a deliberate pick is not overridden.
+    """
+    from roomkit_ui.settings import take_model_notices
+
+    for notice in take_model_notices():
+        emit_notice(notice)
+    try:
+        entry = provider.catalog_entry()
+    except Exception:
+        return
+    if entry is not None and getattr(entry, "deprecated", False):
+        name = getattr(entry, "display_name", None) or entry.id
+        emit_notice(
+            f"{name} is deprecated by its vendor and will stop answering. "
+            "Pick another model in Settings → AI Provider → LLM."
+        )

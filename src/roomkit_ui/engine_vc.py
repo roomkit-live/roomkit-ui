@@ -27,6 +27,7 @@ from roomkit_ui.engine_audio import (
 )
 from roomkit_ui.engine_state import EngineState
 from roomkit_ui.engine_vc_helpers import (
+    announce_llm_model,
     build_deepgram_stt,
     build_gradium_stt,
     build_interruption,
@@ -142,6 +143,7 @@ class VoiceChannelMixin:
             ai_provider = create_ai_provider(llm_provider_name, settings)
             model = ai_provider.model_name
             self._ai_pricing = _model_pricing(ai_provider)  # type: ignore[attr-defined]
+            announce_llm_model(ai_provider, self.session_notice.emit)  # type: ignore[attr-defined]
 
             # 4-5. Audio backend
             input_sample_rate = VC_INPUT_SAMPLE_RATE

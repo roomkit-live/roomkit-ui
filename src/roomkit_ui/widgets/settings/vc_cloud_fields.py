@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 from roomkit_ui.theme import colors
 
 VC_ANTHROPIC_MODELS = [
+    ("Sonnet 5.5", "claude-sonnet-5-5"),
     ("Opus 4.6", "claude-opus-4-6"),
     ("Sonnet 4.5", "claude-sonnet-4-5-20250929"),
     ("Sonnet 4", "claude-sonnet-4-20250514"),
