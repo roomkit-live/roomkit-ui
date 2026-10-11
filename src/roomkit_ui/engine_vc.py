@@ -42,6 +42,7 @@ from roomkit_ui.features import STT_PROVIDER_FEATURES, require, unavailable_reas
 from roomkit_ui.hooks import register_vc_hooks
 from roomkit_ui.providers import create_ai_provider
 from roomkit_ui.speaker_naming import (
+    NAME_SPEAKER_TOOL,
     NAMING_NOTICE,
     PRIMARY_UNKNOWN_NOTICE,
     build_roster,
@@ -297,7 +298,14 @@ class VoiceChannelMixin:
         skills_registry = self._load_skills(settings)
         if mcp_servers_configured(settings):
             self.loading_status.emit("Connecting MCP servers…")  # type: ignore[attr-defined]
-        toolset = await self._setup_tools(settings)  # type: ignore[attr-defined]
+        session_builtins = []
+        if self._speakers is not None:
+            # The assistant names the voices it hears introduced.
+            session_builtins.append(NAME_SPEAKER_TOOL)
+            self._speakers.assistant_names = True
+        toolset = await self._setup_tools(  # type: ignore[attr-defined]
+            settings, session_builtins=session_builtins
+        )
         return toolset, skills_registry
 
     async def _open_vc_room(

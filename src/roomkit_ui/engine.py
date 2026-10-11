@@ -453,11 +453,17 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         task.cancel()
         await asyncio.gather(task, return_exceptions=True)
 
-    async def _setup_tools(self, settings: dict) -> ToolSet:
-        """Connect MCP servers, probe CLI tools, and group both with the built-ins."""
+    async def _setup_tools(
+        self, settings: dict, *, session_builtins: list[dict] | None = None
+    ) -> ToolSet:
+        """Connect MCP servers, probe CLI tools, and group both with the built-ins.
+
+        *session_builtins* are built-ins only this session serves (the
+        engine handles them), declared before MCP tools claim their names.
+        """
         cli_tools = await self._setup_cli_tools(settings)
         mcp_tools = await self._setup_mcp_tools(settings)
-        builtin = list(BUILTIN_TOOLS)
+        builtin = list(BUILTIN_TOOLS) + list(session_builtins or [])
         # Declared only when a persistent store will actually answer it — a
         # dead tool in the declaration teaches the model to call into a void.
         from roomkit_ui.memory import RECALL_TOOL, memory_active

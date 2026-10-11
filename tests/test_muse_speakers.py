@@ -260,7 +260,7 @@ def test_the_note_says_who_is_who_once_two_voices_spoke():
     roster.name("Speaker A", "Sylvain")
     assert roster.prompt_note() == (
         "Several people speak in this conversation; each of their turns opens with "
-        "who said it.\n- Speaker A is Sylvain.\n- Speaker B has not been named yet."
+        'who said it.\n- Speaker A is "Sylvain".\n- Speaker B has not been named yet.'
     )
 
 
@@ -289,7 +289,7 @@ async def test_a_voice_named_mid_session_carries_its_name_from_then_on(labelled)
     # The earlier turn keeps its label; the note ties the two together.
     prompt = vc.ai.contexts[-1].system_prompt
     assert prompt.startswith("Be brief.")
-    assert "- Speaker B is Julie." in prompt
+    assert '- Speaker B is "Julie".' in prompt
 
 
 def test_naming_a_voice_nobody_heard_does_nothing():

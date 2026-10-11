@@ -10,6 +10,12 @@ turn's prompt do with it.
 A voice named mid-session keeps its label on the turns said before: the
 names reach the assistant as a note at the end of each turn's system prompt
 (``with_speaker_note``), which ties labels and names together.
+
+The assistant names voices too (``name_speaker``) when someone says who
+they are.  It names from what it hears, which anyone in the room can say,
+so a name is a plain name, a voice the user named stays as named, and a
+name another voice carries stays that voice's: "I'm Sylvain" from a second
+voice would otherwise have the assistant read it as Sylvain.
 """
 
 from __future__ import annotations
@@ -19,7 +25,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from roomkit_ui.speaker_roster import SpeakerRoster
+from roomkit_ui.speaker_roster import NAME_MAX, SpeakerRoster
 from roomkit_ui.vc_stt import labels_speakers
 
 logger = logging.getLogger(__name__)
@@ -37,6 +43,31 @@ RESTART_NOTICE = (
 )
 
 _UNATTRIBUTED = "Unknown speaker"  # roomkit's name for words attributed to nobody
+
+NAME_SPEAKER_TOOL: dict = {
+    "name": "name_speaker",
+    "description": (
+        "Put a person's name on one of the voices in this conversation, when "
+        'someone says who they are or who another speaker is ("I\'m Julie", '
+        '"this is my colleague Marc"). Their turns carry that name from then on. '
+        "A voice the user named keeps its name."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "speaker": {
+                "type": "string",
+                "description": 'The voice, as its turns show it: "Speaker B", or its '
+                "current name to correct it.",
+            },
+            "name": {
+                "type": "string",
+                "description": "The person's name as they gave it, a first name at least.",
+            },
+        },
+        "required": ["speaker", "name"],
+    },
+}
 
 
 def build_roster(settings: dict) -> SpeakerRoster | None:
@@ -98,6 +129,67 @@ def name_voice(engine: Any, key: str, name: str) -> None:
     roster.name(key, name)
     logger.info("Voice %s named %r", key, roster.display(key))
     _announce(engine, key, roster.display(key))
+
+
+def name_speaker_tool(engine: Any, arguments: dict[str, Any]) -> str:
+    """``name_speaker``: the assistant names a voice it heard introduced.
+
+    Refused (``ToolRefusedError``, nothing named) for a voice nobody heard,
+    a voice the user named, or something that is not a plain name.
+    """
+    from roomkit import ToolRefusedError
+
+    roster: SpeakerRoster | None = engine._speakers
+    if roster is None:
+        raise ToolRefusedError("This session does not tell the voices apart.")
+    key = roster.resolve(str(arguments.get("speaker") or ""))
+    if key is None:
+        voices = ", ".join(_listed(roster, k) for k in roster.heard()) or "none yet"
+        raise ToolRefusedError(f"No voice is called that. The voices: {voices}.")
+    if roster.named_by_user(key):
+        raise ToolRefusedError(
+            f"The user named {key} {roster.display(key)}; only the user renames it."
+        )
+    given = str(arguments.get("name") or "").strip()
+    if not _plain_name(given):
+        raise ToolRefusedError(
+            f"A name is letters, with spaces, hyphens or apostrophes: {_NAME_WORDS} "
+            f"words and {NAME_MAX} characters at most."
+        )
+    name = " ".join(given.split())
+    if roster.carried_by_another(key, name):
+        # Two voices under one name read as one person: a second voice saying
+        # it is someone already here must not pass for them.  The user can
+        # still join two voices Muse split, with a click.
+        raise ToolRefusedError(
+            f"Another voice is already called {name}; only the user can give "
+            "two voices the same name."
+        )
+    roster.name(key, name, by="assistant")
+    logger.info("Voice %s named %r by the assistant", key, name)
+    _announce(engine, key, name)
+    _notify(engine, f"{key} → {name}")
+    return f"{key} is now {name}."
+
+
+_NAME_WORDS = 4  # "Dr. Ana María López"; a sentence is not a name
+
+
+def _plain_name(name: str) -> bool:
+    """A person's name: letters, spaces, hyphens, apostrophes, dots; one
+    line, a few words.  What the assistant heard ends up in every turn's
+    prompt, so anything that reads like a sentence is refused."""
+    return (
+        0 < len(name) <= NAME_MAX
+        and len(name.split()) <= _NAME_WORDS
+        and any(ch.isalpha() for ch in name)
+        and all(ch.isalpha() or ch in " -'’." for ch in name)
+    )
+
+
+def _listed(roster: SpeakerRoster, key: str) -> str:
+    name = roster.named(key)
+    return f"{key} ({name})" if name else key
 
 
 TurnConfig = Callable[[Any, Any], Awaitable[Any]]

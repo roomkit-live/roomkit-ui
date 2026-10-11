@@ -4,7 +4,9 @@ Meta Muse labels each turn with the voice it heard: "A", "B"… in the order
 the voices first speak, within one stream.  roomkit names a label "Speaker A"
 and numbers a stream that starts over ("Speaker A#1"), so the same letter
 from two streams never reads as one person.  A label is nobody in particular
-until someone names it: the user, with a click on the speaker in the chat.
+until someone names it: the user (a click on the speaker in the chat) or the
+assistant (``name_speaker``, when someone says who they are).  The assistant
+names from what it hears, so it never overrides a name the user gave.
 
 Pure logic: the hooks and the chat call in (``speaker_naming``).
 """
@@ -12,6 +14,7 @@ Pure logic: the hooks and the chat call in (``speaker_naming``).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Literal
 
 NAME_MAX = 40
 """Longest name a voice takes: a name goes into every turn's system prompt."""
@@ -42,7 +45,10 @@ class SpeakerRoster:
 
     # "Listen only to primary speaker": only the user's turns reach the assistant.
     primary_only: bool = False
+    # The assistant can name voices (name_speaker is declared to it).
+    assistant_names: bool = False
     _names: dict[str, str] = field(default_factory=dict)
+    _named_by_user: set[str] = field(default_factory=set)
     _seen: list[str] = field(default_factory=list)
     _epoch: int = 0
 
@@ -57,7 +63,7 @@ class SpeakerRoster:
             self._seen.append(key)
         return Heard(key, new, restarted)
 
-    def name(self, key: str, name: str) -> None:
+    def name(self, key: str, name: str, *, by: Literal["user", "assistant"] = "user") -> None:
         """Put *name* on a voice; an empty one gives it back its label.
 
         Two voices may share a name: Muse sometimes splits one person in
@@ -69,6 +75,42 @@ class SpeakerRoster:
             self._names[key] = name
         else:
             self._names.pop(key, None)
+        if by == "user":
+            self._named_by_user.add(key)
+        else:
+            self._named_by_user.discard(key)
+
+    def named_by_user(self, key: str) -> bool:
+        """Whether the user named this voice: the assistant leaves it be."""
+        return key in self._named_by_user
+
+    def carried_by_another(self, key: str, name: str) -> bool:
+        """Whether a voice other than *key* already carries *name*."""
+        folded = " ".join(name.split()).casefold()
+        return any(
+            other != key and (named or "").casefold() == folded
+            for other, named in self._names.items()
+        )
+
+    def resolve(self, ref: str) -> str | None:
+        """The voice *ref* means: its label ("Speaker B", or "B" in the current
+        stream) or the name it carries ("Julie", the latest voice so named)."""
+        ref = " ".join(ref.split())
+        if not ref:
+            return None
+        if ref in self._seen:
+            return ref
+        bare = ref[len("speaker ") :] if ref.casefold().startswith("speaker ") else ref
+        # The current stream's voice first: "B" after a restart is "Speaker B#1".
+        for key in (_key(bare.upper(), self._epoch), f"Speaker {bare.upper()}"):
+            if key in self._seen:
+                return key
+        folded = ref.casefold()
+        for key in reversed(self._seen):
+            name = self._names.get(key)
+            if name and name.casefold() == folded:
+                return key
+        return None
 
     def display(self, key: str) -> str:
         """What the chat and the assistant call the voice: its name, else its label."""
@@ -100,14 +142,18 @@ class SpeakerRoster:
         """
         if len(self._seen) < 2:
             return None
-        return "\n".join(
-            [
-                "Several people speak in this conversation; each of their turns opens "
-                "with who said it.",
-                *(f"- {self._who(key)}" for key in self._seen),
-            ]
-        )
+        lines = [
+            "Several people speak in this conversation; each of their turns opens "
+            "with who said it.",
+            *(f"- {self._who(key)}" for key in self._seen),
+        ]
+        if self.assistant_names:
+            lines.append(
+                "When someone not yet named says who they are, call name_speaker "
+                "with their label and name."
+            )
+        return "\n".join(lines)
 
     def _who(self, key: str) -> str:
         name = self._names.get(key)
-        return f"{key} is {name}." if name else f"{key} has not been named yet."
+        return f'{key} is "{name}".' if name else f"{key} has not been named yet."

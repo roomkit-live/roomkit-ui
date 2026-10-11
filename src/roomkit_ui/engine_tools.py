@@ -149,6 +149,10 @@ class ToolMixin:
             return self._schedule_end_conversation()
         if name == "set_attitude":
             return await self._apply_attitude_by_name(arguments.get("name", ""))
+        if name == "name_speaker":
+            from roomkit_ui.speaker_naming import name_speaker_tool
+
+            return name_speaker_tool(self, arguments)
         if name == "recall_conversations":
             # Past-conversation search needs the session's kit and store.
             from roomkit_ui.memory import recall_conversations
