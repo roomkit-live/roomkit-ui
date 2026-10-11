@@ -58,15 +58,32 @@ class SecretStore:
         return self._fallback_reason
 
     def get_secret(self, name: str, default: str = "") -> str:
-        """Return a stored secret or *default* when no value exists."""
-        value = self._get_from_keyring(name)
-        if value is not None:
-            return value
+        """Return a stored secret or *default* when no value exists.
 
+        A fallback copy wins over the keyring: one only exists when the last
+        write could not reach the keyring (a successful write removes it), so
+        any keyring copy is older — reading it first would bring back a value
+        the user replaced while the keyring was locked.
+        """
         fallback = self._qs.value(self._fallback_key(name), None)
-        if fallback is None:
-            return default
-        return str(fallback)
+        if fallback is not None:
+            self._migrate_fallback(name, str(fallback))
+            return str(fallback)
+
+        value = self._get_from_keyring(name)
+        return default if value is None else value
+
+    def _migrate_fallback(self, name: str, value: str) -> None:
+        """Move a fallback copy into the keyring once it accepts writes again.
+
+        Only tried while the keyring has not failed in this process, so a
+        locked keyring is not asked to unlock on every read.
+        """
+        if self._keyring is None or self._fallback_reason is not None:
+            return
+        if self._set_in_keyring(name, value):
+            self._qs.remove(self._fallback_key(name))
+            self._qs.sync()
 
     def set_secret(self, name: str, value: str) -> None:
         """Store *value* for *name*.

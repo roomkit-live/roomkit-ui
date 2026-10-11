@@ -102,6 +102,34 @@ def test_successful_keyring_write_removes_stale_fallback():
     assert fallback_store.get_secret("token") == ""
 
 
+def test_a_value_written_while_the_keyring_was_locked_is_not_reverted():
+    keyring = _FakeKeyring()
+    store = SecretStore(service="svc", namespace="ns", keyring_backend=keyring)
+    store.set_secret("token", "old")
+
+    keyring.fail = True  # locked Secret Service: the new value goes to QSettings
+    store.set_secret("token", "new")
+    keyring.fail = False  # unlocked again; the keyring still holds "old"
+
+    assert store.get_secret("token") == "new"
+    # Next start: the fallback copy is moved into the keyring and dropped.
+    restarted = SecretStore(service="svc", namespace="ns", keyring_backend=keyring)
+    assert restarted.get_secret("token") == "new"
+    assert keyring.values == {("svc", "ns:token"): "new"}
+    assert not [k for k in QSettings().allKeys() if k.startswith("room/secrets")]
+
+
+def test_a_fallback_copy_is_not_migrated_while_the_keyring_still_fails():
+    keyring = _FakeKeyring(fail=True)
+    store = SecretStore(service="svc", namespace="ns", keyring_backend=keyring)
+    store.set_secret("token", "value")
+    calls = []
+    keyring.set_password = lambda *args: calls.append(args)
+
+    assert store.get_secret("token") == "value"
+    assert calls == []
+
+
 def test_default_store_is_singleton():
     first = get_secret_store()
     second = get_secret_store()
