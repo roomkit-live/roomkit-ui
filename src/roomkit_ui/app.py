@@ -82,42 +82,48 @@ from roomkit_ui.tray import TrayService  # noqa: E402
 from roomkit_ui.widgets.dictation_log import DictationLog  # noqa: E402
 from roomkit_ui.widgets.main_window import MainWindow  # noqa: E402
 
-# Log to file so we can diagnose issues when launched without a console.
-if sys.platform == "darwin":
-    _log_dir = os.path.join(os.path.expanduser("~"), "Library", "Logs", "RoomKit UI")
-else:
-    _xdg = os.environ.get(
-        "XDG_DATA_HOME", os.path.join(os.path.expanduser("~"), ".local", "share")
+
+def _configure_logging() -> None:
+    """Log to the console and to a file, so a launch without a console can be diagnosed.
+
+    The file starts fresh on every launch (mode="w").  That is why this runs
+    from main() and not at import: ``--doctor`` imports this module too, and
+    would wipe the log of the app it runs beside.
+    """
+    if sys.platform == "darwin":
+        log_dir = os.path.join(os.path.expanduser("~"), "Library", "Logs", "RoomKit UI")
+    else:
+        xdg = os.environ.get(
+            "XDG_DATA_HOME", os.path.join(os.path.expanduser("~"), ".local", "share")
+        )
+        log_dir = os.path.join(xdg, "roomkit-ui", "logs")
+    os.makedirs(log_dir, exist_ok=True)
+
+    logging.basicConfig(
+        level=logging.DEBUG if os.environ.get("DEBUG") else logging.INFO,
+        format="%(asctime)s %(name)s %(levelname)s %(message)s",
+        handlers=[
+            logging.StreamHandler(),
+            logging.FileHandler(os.path.join(log_dir, "roomkit-ui.log"), mode="w"),
+        ],
+        force=True,
     )
-    _log_dir = os.path.join(_xdg, "roomkit-ui", "logs")
-os.makedirs(_log_dir, exist_ok=True)
-_log_file = os.path.join(_log_dir, "roomkit-ui.log")
 
-logging.basicConfig(
-    level=logging.DEBUG if os.environ.get("DEBUG") else logging.INFO,
-    format="%(asctime)s %(name)s %(levelname)s %(message)s",
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler(_log_file, mode="w"),
-    ],
-    force=True,
-)
+    # Enable verbose logging for key subsystems only when DEBUG is set.
+    # The MCP library logs full message bodies (including HTML resources)
+    # at DEBUG level, so keep it at INFO unless explicitly debugging.
+    if os.environ.get("DEBUG"):
+        logging.getLogger("mcp").setLevel(logging.DEBUG)
+        logging.getLogger("roomkit").setLevel(logging.DEBUG)
+        logging.getLogger("roomkit.channels.realtime_voice").setLevel(logging.DEBUG)
+    else:
+        logging.getLogger("mcp").setLevel(logging.INFO)
+        logging.getLogger("roomkit").setLevel(logging.INFO)
+        logging.getLogger("roomkit.channels.realtime_voice").setLevel(logging.INFO)
 
-# Enable verbose logging for key subsystems only when DEBUG is set.
-# The MCP library logs full message bodies (including HTML resources)
-# at DEBUG level, so keep it at INFO unless explicitly debugging.
-if os.environ.get("DEBUG"):
-    logging.getLogger("mcp").setLevel(logging.DEBUG)
-    logging.getLogger("roomkit").setLevel(logging.DEBUG)
-    logging.getLogger("roomkit.channels.realtime_voice").setLevel(logging.DEBUG)
-else:
-    logging.getLogger("mcp").setLevel(logging.INFO)
-    logging.getLogger("roomkit").setLevel(logging.INFO)
-    logging.getLogger("roomkit.channels.realtime_voice").setLevel(logging.INFO)
-
-# OpenTelemetry SDK is very chatty at INFO (batch exports, connection status,
-# retries).  Keep it at WARNING so only actual problems reach the console.
-logging.getLogger("opentelemetry").setLevel(logging.WARNING)
+    # OpenTelemetry SDK is very chatty at INFO (batch exports, connection status,
+    # retries).  Keep it at WARNING so only actual problems reach the console.
+    logging.getLogger("opentelemetry").setLevel(logging.WARNING)
 
 
 def _build_capture_source(settings: dict):
@@ -214,6 +220,7 @@ def main() -> None:
         print_report()
         return
 
+    _configure_logging()
     _logger = logging.getLogger(__name__)
     if not _has_opengl:
         _logger.warning(
