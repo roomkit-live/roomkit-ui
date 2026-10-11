@@ -305,3 +305,27 @@ async def test_app_tool_call_gets_a_failure_as_the_envelope_the_bridge_reads():
     out = json.loads(await mgr.handle_app_tool_call("srv-a", "bad_tool", {}))
 
     assert "timed out" in out["error"]
+
+
+async def test_close_all_shuts_a_real_stdio_server_down_promptly(tmp_path):
+    # The server's stack used to be closed from a second task: anyio then
+    # cancelled the owning task instead, close_all waited its 15 s timeout
+    # and hung for good (plain asyncio and qasync alike), the child alive.
+    server = tmp_path / "server.py"
+    server.write_text(
+        "from mcp.server.mcpserver import MCPServer\n"
+        "app = MCPServer('t')\n"
+        "@app.tool()\n"
+        "def ping() -> str:\n"
+        "    return 'pong'\n"
+        "app.run('stdio')\n"
+    )
+    manager = MCPManager(
+        [{"name": "t", "transport": "stdio", "command": sys.executable, "args": str(server)}]
+    )
+    await manager.connect_all()
+    assert [t["name"] for t in manager.get_tools()] == ["ping"]
+
+    await asyncio.wait_for(manager.close_all(), timeout=5)
+
+    assert manager._tasks == []

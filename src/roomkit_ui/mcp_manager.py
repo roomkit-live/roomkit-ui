@@ -199,19 +199,10 @@ class MCPManager:
             self.failed_servers.append(name)
         finally:
             ready.set()  # unblock connect_all on any exit path
-            # Shield the close from cancellation so the subprocess gets
-            # properly terminated even if close_all() is impatient.
-            close_task = asyncio.ensure_future(self._safe_close_stack(stack, name))
-            try:
-                await asyncio.shield(close_task)
-            except asyncio.CancelledError:
-                # Shield was cancelled but close_task continues.
-                # Wait for the *same* task to finish — no double-close.
-                logger.info("MCP server %r: close shield cancelled, retrying", name)
-                try:
-                    await asyncio.wait_for(close_task, timeout=5.0)
-                except (TimeoutError, asyncio.CancelledError):
-                    logger.error("MCP server %r: stack close retry failed", name)
+            # Closed HERE, in the task that entered the stack: anyio cancel
+            # scopes must exit in their own task.  Closing from another task
+            # made anyio cancel this one instead, and the close then hung.
+            await self._safe_close_stack(stack, name)
             logger.info("MCP server %r: stack closed", name)
 
     def _register_tools(self, session: Any, result: Any, name: str) -> None:
