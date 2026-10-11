@@ -42,9 +42,15 @@ def register_vc_hooks(kit: Any, engine: Any, *, tts_filter: Any = None) -> None:
 
     *tts_filter* is the channel's: the assistant bubble shows what is spoken.
     """
-    from roomkit.models.enums import HookExecution, HookTrigger
-
     register_audio_hooks(kit, engine)
+    _register_vc_user_hooks(kit, engine)
+    _register_vc_assistant_hooks(kit, engine, tts_filter)
+    _register_vc_error_hooks(kit, engine)
+
+
+def _register_vc_user_hooks(kit: Any, engine: Any) -> None:
+    """The user's side: who speaks, what they said, when they talk."""
+    from roomkit.models.enums import HookExecution, HookTrigger
 
     @kit.hook(HookTrigger.ON_SPEAKER_CHANGE, HookExecution.ASYNC)
     async def _on_speaker_change(event, context):
@@ -108,6 +114,11 @@ def register_vc_hooks(kit: Any, engine: Any, *, tts_filter: Any = None) -> None:
         except Exception:
             pass
 
+
+def _register_vc_assistant_hooks(kit: Any, engine: Any, tts_filter: Any) -> None:
+    """The assistant's side: the bubble as the reply is spoken, its usage."""
+    from roomkit.models.enums import HookExecution, HookTrigger
+
     @kit.hook(HookTrigger.BEFORE_TTS, HookExecution.SYNC)
     async def _on_ai_response(text, context):
         from roomkit import HookResult
@@ -158,6 +169,11 @@ def register_vc_hooks(kit: Any, engine: Any, *, tts_filter: Any = None) -> None:
                 engine._accumulate_usage(usage)
         except Exception:
             pass
+
+
+def _register_vc_error_hooks(kit: Any, engine: Any) -> None:
+    """Failures the user would otherwise only notice as silence."""
+    from roomkit.models.enums import HookExecution, HookTrigger
 
     # Voice failures became framework events in roomkit 0.35 — surface them
     # in the chat instead of leaving the user with unexplained silence.
