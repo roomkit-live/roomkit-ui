@@ -149,6 +149,8 @@ class MainWindow(QMainWindow):
         self._pending_app_results.clear()
 
     def _on_start(self, capture_since: Any = None) -> None:
+        if self._engine.state not in (EngineState.IDLE, EngineState.ERROR):
+            return  # the engine refuses it: keep the chat of the session ending
         self._chat.clear()
         # clear() deleted every app widget along with the rest of the chat.
         self._active_app_widgets.clear()

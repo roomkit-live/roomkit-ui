@@ -80,6 +80,20 @@ def test_an_ordinary_session_end_leaves_no_stale_notice(window, monkeypatch):
     assert "Session closed after 15 s of silence." not in _chat_texts(window)
 
 
+# -- start while the engine is busy ---------------------------------------------
+
+
+def test_a_toggle_while_stopping_keeps_the_chat(window, monkeypatch):
+    # The engine refuses a start until it is IDLE or ERROR; the chat must not
+    # be wiped for a start that never happens.
+    window._chat.add_info("Last answer before the stop")
+    monkeypatch.setattr(type(window._engine), "state", property(lambda _e: EngineState.STOPPING))
+
+    window.toggle_session()
+
+    assert "Last answer before the stop" in _chat_texts(window)
+
+
 # -- MCP Apps ------------------------------------------------------------------
 
 
