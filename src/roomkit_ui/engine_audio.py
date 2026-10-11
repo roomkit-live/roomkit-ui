@@ -113,7 +113,18 @@ def build_debug_taps(settings: dict):
 
 
 def build_recorder(settings: dict):
-    """Build a (WavFileRecorder, RecordingConfig) pair, or (None, None) if disabled."""
+    """Build a (WavFileRecorder, RecordingConfig) pair, or (None, None) if disabled.
+
+    The recordings are written unencrypted.  roomkit's file recorders refuse
+    to start until the integrator chooses: a ``RecordingEncryption`` cipher, or
+    ``storage_encrypted_at_rest`` — the only way it offers to write plain WAV
+    files.  This is a debugging aid the user opts into, writing to a folder
+    they pick, and its files must stay playable in the Audio Debug page and any
+    audio tool; a cipher would make them unreadable there.  The flag records
+    that choice, not a claim about the disk — whether the folder sits on an
+    encrypted volume is the user's to know, which is why the settings must say
+    the files are not encrypted.
+    """
     if not settings.get("recording_enabled"):
         return None, None
     from pathlib import Path
@@ -133,7 +144,9 @@ def build_recorder(settings: dict):
         mode=RecordingMode(settings.get("recording_mode", "both")),
         channels=RecordingChannelMode(settings.get("recording_channels", "stereo")),
         storage=output_dir,
+        storage_encrypted_at_rest=True,
     )
+    logger.warning("Session recording on: unencrypted WAV files in %s", output_dir)
     return WavFileRecorder(), config
 
 
