@@ -127,3 +127,42 @@ def test_an_ai_channel_accepts_the_channel_options():
 
     toolset = ToolSet(builtin=list(BUILTIN_TOOLS), cli=[], mcp=[])
     AIChannel("ai", provider=MockAIProvider(responses=["ok"]), **toolset.channel_options())
+
+
+async def test_the_tools_reach_a_room_whose_binding_carries_none():
+    # A background task's room attaches the agent without the metadata it
+    # was given in the session's room: the tools must come with the turn.
+    from roomkit import ChannelCategory, RoomKit, SMSChannel, TextContent
+    from roomkit.channels.ai import AIChannel
+    from roomkit.models.delivery import InboundMessage
+    from roomkit.providers.ai.mock import MockAIProvider
+    from roomkit.providers.sms.mock import MockSMSProvider
+    from roomkit.skills import SkillRegistry
+
+    tools = ToolSet(
+        builtin=[{"name": "get_current_time", "description": "Time.", "parameters": {}}],
+        cli=CLI,
+        mcp=[{"name": "activate_skill", "description": "Named like the skills' own."}],
+    )
+    provider = MockAIProvider(responses=["ok"])
+    kit = RoomKit()
+    kit.register_channel(
+        AIChannel(
+            "ai", provider=provider, config_provider=tools.turn_config(), skills=SkillRegistry()
+        )
+    )
+    kit.register_channel(SMSChannel("sms", provider=MockSMSProvider()))
+    await kit.create_room(room_id="task")
+    await kit.attach_channel("task", "ai", category=ChannelCategory.INTELLIGENCE)
+    await kit.attach_channel("task", "sms")
+
+    await kit.process_inbound(
+        InboundMessage(channel_id="sms", sender_id="u", content=TextContent(body="hi"))
+    )
+    await kit.close()
+
+    declared = [t.name for t in provider.calls[0].tools]
+    assert {"get_current_time", "gh"} <= set(declared)
+    # The host's tool named like the skills' own is left out, where the
+    # constructor's tools= would refuse the channel (no skill, none declared).
+    assert "activate_skill" not in declared

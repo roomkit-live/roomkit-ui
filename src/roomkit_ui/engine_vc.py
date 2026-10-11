@@ -162,7 +162,7 @@ class VoiceChannelMixin:
 
             # 10-11. Framework + hooks
             voice_binding = await self._open_vc_room(
-                settings, voice, ai_channel, tools, tts_filter, llm_provider_name
+                settings, voice, ai_channel, tts_filter, llm_provider_name
             )
 
             # 12. Connect and start
@@ -252,6 +252,7 @@ class VoiceChannelMixin:
             provider=ai_provider,
             system_prompt=system_prompt,
             tool_handler=self._handle_tool_call,  # type: ignore[attr-defined]
+            config_provider=toolset.turn_config(),
             skills=skills_registry,
             # Provider SDKs no longer retry (Anthropic stopped in roomkit
             # 0.96); a 429/529 would fail the turn into silence.  Retries
@@ -266,7 +267,6 @@ class VoiceChannelMixin:
         settings: dict,
         voice: Any,
         ai_channel: Any,
-        tools: list[dict],
         tts_filter: Any,
         llm_provider_name: str,
     ) -> Any:
@@ -284,12 +284,9 @@ class VoiceChannelMixin:
         await ensure_room(kit)
 
         voice_binding = await kit.attach_channel(ROOM_ID, "voice")
-        await kit.attach_channel(
-            ROOM_ID,
-            "ai",
-            category=ChannelCategory.INTELLIGENCE,
-            metadata={"tools": tools},
-        )
+        # No tools in the binding's metadata: they come with each turn
+        # (ToolSet.turn_config), in this room and in a background task's.
+        await kit.attach_channel(ROOM_ID, "ai", category=ChannelCategory.INTELLIGENCE)
         register_vc_hooks(kit, self, tts_filter=tts_filter)
         if llm_provider_name == "local":
             register_local_tool_hint(kit, self.error_occurred.emit)  # type: ignore[attr-defined]

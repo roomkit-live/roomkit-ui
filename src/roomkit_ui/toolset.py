@@ -12,6 +12,7 @@ the combined list can answer that.
 from __future__ import annotations
 
 import re
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -43,6 +44,33 @@ class ToolSet:
     @property
     def has_mcp(self) -> bool:
         return bool(self.mcp)
+
+    def turn_config(self) -> Callable[[Any, Any], Awaitable[Any]]:
+        """An AIChannel ``config_provider`` declaring these tools on every turn.
+
+        Binding metadata reaches only the room it was attached with: a
+        background task runs the agent in a room of its own, attached without
+        it, where the agent would have no tool at all.  A turn config's tools
+        reach every room and are checked as the metadata's are: one named
+        like a tool the channel serves itself (skills, Tool Search) is left
+        out, where the constructor's ``tools=`` would refuse the channel.
+        """
+        from roomkit import AIChannelTurnConfig
+        from roomkit.providers.ai.base import AITool
+
+        tools = [
+            AITool(
+                name=t["name"],
+                description=t.get("description", ""),
+                parameters=t.get("parameters", {}),
+            )
+            for t in self.all
+        ]
+
+        async def provide(_binding: Any, _context: Any) -> Any:
+            return AIChannelTurnConfig(tools=list(tools))
+
+        return provide
 
     def channel_options(self) -> dict[str, Any]:
         """Tool settings for a roomkit channel, so it serves this app's limits.
