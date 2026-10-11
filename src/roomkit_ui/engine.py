@@ -139,6 +139,9 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         # start so mid-session attitude changes can recompute the full
         # prompt without reaching into channel internals.
         self._base_system_prompt: str = ""
+        # The settings the session started with; mid-session lookups read
+        # this, never load_settings() and its keyring round-trip.
+        self._session_settings: dict = {}
         # Diarization state
         self._diarization: Any = None
         self._current_speaker_id: str = ""
@@ -298,6 +301,7 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         """
         if self._state not in (EngineState.IDLE, EngineState.ERROR):
             return
+        self._session_settings = settings
         self._capture_since = capture_since
         self._mic_muted = False
         # Re-attach the log handler (removed during cleanup)

@@ -58,6 +58,7 @@ class ToolMixin:
     _attitude: str
     _attitude_name: str
     _base_system_prompt: str
+    _session_settings: dict
     _ai_channel: Any
     _channel: Any
     _session: Any
@@ -174,34 +175,35 @@ class ToolMixin:
             if pname.lower() == name.lower():
                 return await self._apply_attitude(pname, ptext)
 
-        # Look up in custom attitudes
-        try:
-            from roomkit_ui.settings import load_settings
-
-            settings = load_settings()
-            for att in json.loads(settings.get("custom_attitudes", "[]")):
-                if att.get("name", "").lower() == name.lower():
-                    return await self._apply_attitude(att["name"], att.get("text", ""))
-        except (json.JSONDecodeError, TypeError):
-            pass
+        custom = self._custom_attitudes()
+        for att in custom:
+            if att.get("name", "").lower() == name.lower():
+                return await self._apply_attitude(att["name"], att.get("text", ""))
 
         # Not found — return error with available names
         available = [n for n, _ in ATTITUDE_PRESETS]
-        try:
-            from roomkit_ui.settings import load_settings
-
-            settings = load_settings()
-            for att in json.loads(settings.get("custom_attitudes", "[]")):
-                if att.get("name"):
-                    available.append(att["name"])
-        except (json.JSONDecodeError, TypeError):
-            pass
+        available += [att["name"] for att in custom if att.get("name")]
         return json.dumps(
             {
                 "error": f"Unknown attitude '{name}'.",
                 "available": available,
             }
         )
+
+    def _custom_attitudes(self) -> list[dict]:
+        """The user's custom attitudes, from the session's settings snapshot.
+
+        Never ``load_settings()`` here: it reads every secret from the OS
+        keyring, synchronously on the event loop (and may prompt the macOS
+        Keychain) — mid-conversation, for one JSON list the session has.
+        """
+        try:
+            attitudes = json.loads(self._session_settings.get("custom_attitudes", "[]"))
+        except (json.JSONDecodeError, TypeError):
+            return []
+        if not isinstance(attitudes, list):
+            return []
+        return [att for att in attitudes if isinstance(att, dict)]
 
     async def _apply_attitude(self, name: str, description: str) -> str:
         """Apply a known attitude and update the live system prompt.
