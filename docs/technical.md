@@ -39,6 +39,7 @@ src/roomkit_ui/
 ├── skill_manager.py, skill_git.py, skill_well_known.py, skills_sh_client.py
 ├── stt_engine.py, stt_sessions.py, hotkey.py, paste.py, paste_windows.py, tray.py, sounds.py
 ├── speaker_manager.py, enrollment.py
+├── speaker_roster.py, speaker_naming.py   # Voices Meta Muse tells apart: names, the user's voice, name_speaker
 ├── model_catalog.py, model_download.py, model_manager.py, download_flight.py
 ├── settings.py, settings_secrets.py, secret_store.py, constants.py, icons.py, theme.py
 ├── providers/                  # LLM factories: anthropic, openai, gemini, local, llamacpp (lazy registry)

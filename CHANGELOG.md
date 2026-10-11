@@ -76,6 +76,11 @@ Each released section is the source for that version's GitHub release notes.
 - **Meta Muse Voice Transcribe** in the Voice Channel — streaming STT that ends each
   turn itself; the speech-recognition language becomes a bias, and optional keywords
   steer it toward names. New `meta-stt` extra (in `cloud`).
+- **Who is speaking, with Meta Muse** — with speaker identification on, Muse tells the
+  voices apart live, with no enrolment. Click a speaker in the chat to name them; the
+  assistant names those who introduce themselves; the first voice of a session is taken
+  as yours ("Your name" in Settings → Speakers); "Listen only to primary speaker" lets
+  through only the voice carrying your name, and nothing while none does.
 - **Barge-in modes** (Voice Channel) — Off, Any speech, or Words only, where "ok",
   "mm-hmm" or "merci" let the assistant go on and other words stop it. The old checkbox
   migrates.

@@ -46,6 +46,7 @@ xattr -cr "RoomKit UI.app"
 - **Voice Channel providers** — LLM: Anthropic (Claude Sonnet 5.5 by default), OpenAI, Gemini, local vLLM / Ollama, or llama.cpp; STT: local sherpa-onnx, Deepgram, Gradium, Azure MAI-Transcribe, Meta Muse Voice Transcribe; TTS: Piper, Pocket TTS, Qwen3-TTS, NeuTTS, ElevenLabs, Gradium, Azure MAI-Voice. Model lists come from roomkit's catalogs
 - **Local LLM with nothing to install** — llama.cpp: roomkit downloads a pinned `llama-server` and the GGUF model at first use
 - **Local TTS** — offline text-to-speech with Piper, Pocket TTS (seven languages, voice clone), Qwen3-TTS (voice clone), and NeuTTS (voice clone)
+- **Who is speaking** — with Meta Muse as the STT, the voices are told apart live, no enrolment: click a speaker in the chat to name them, the assistant names those who introduce themselves, and "Listen only to primary speaker" follows your name. With local STT, enrolled voices are recognised offline
 - **Wake word** — say an enrolled phrase to open a session; detection runs locally and nothing leaves the machine until it fires. Optional hang-up once the conversation goes quiet
 - **Conversation memory** — sessions share a persistent history; the assistant can search past conversations
 - **Real-time voice** — full-duplex voice conversation with interruption support; in Voice Channel mode, barge-in can be off, on any speech, or on words only (an "ok" or "mm-hmm" lets the assistant go on)
@@ -215,6 +216,7 @@ src/roomkit_ui/
 ├── stt_*.py, hotkey.py, paste*.py, tray.py              # System-wide dictation
 ├── model_*.py, download_flight.py                       # Local model catalog and downloads
 ├── speaker_manager.py, enrollment.py                    # Speaker profiles for diarization
+├── speaker_roster.py, speaker_naming.py                 # Voices Meta Muse tells apart, and their names
 ├── settings*.py, secret_store.py                        # QSettings + keyring
 ├── theme.py, icons.py, sounds.py, constants.py, aec_dump.py
 ├── providers/, tts/            # LLM and TTS factories (lazy registries)

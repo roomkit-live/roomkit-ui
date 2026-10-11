@@ -164,7 +164,28 @@ on a tap, not when the modifier is part of a chord. (`stt_engine.py`, `hotkey.py
 
 ### Speaker diarization & primary-speaker mode (Voice Channel only)
 
-Enroll speakers from a 10 s recording (split into overlapping windows for robust
+**With Meta Muse as the STT**, Muse tells the voices apart itself, live: no speaker
+model, no enrolment. The chat shows each turn under its voice ("Speaker A", "Speaker B",
+in the order they first speak), and a change of voice ends a turn. Naming them:
+
+- **A plain click** on a voice's name above its bubble asks who it is: a name typed, or
+  picked among the enrolled speakers and the names given this session. Every turn of
+  that voice, past and to come, takes the name.
+- **The assistant** names those who introduce themselves ("I'm Julie") with its
+  `name_speaker` tool, shown as "Speaker B → Julie". It never renames a voice you named,
+  never gives your name or a name another voice carries, and takes plain names only.
+- **The first voice is you** (Settings → Speakers, on by default): you open the session,
+  so the first voice takes your name ("Your name", else the primary speaker profile's).
+  Whoever speaks first is taken as you, though; a click puts it right.
+
+Each turn's prompt ends with who is who once two voices have spoken, so the turns said
+under a label before it was named still read as that person. *Primary speaker mode*
+lets through only the voice carrying your name, and nothing while none does. Muse knows
+nobody from one session to the next; a stream that starts over (after an hour, or an
+error) tells the voices apart afresh ("Speaker A#1"), and the names are to give again.
+(`speaker_roster.py`, `speaker_naming.py`, settings → Speakers)
+
+**With local STT**, enroll speakers from a 10 s recording (split into overlapping windows for robust
 embeddings) on the microphone sessions use. During a session each utterance is attributed
 to the voice heard longest over it: the chat labels the enrolled name or "Unknown", and
 the model reads the speakers' names once several people talk. *Primary speaker mode*

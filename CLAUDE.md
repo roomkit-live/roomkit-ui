@@ -41,6 +41,8 @@ src/roomkit_ui/
 ├── vc_stt.py            # VC cloud STT builders (dispatch table) + the turn VAD a turnless STT needs
 ├── vc_agent.py          # VC agent from the Agent tab: speak policy (classifier), thinker, background flag
 ├── agent_hooks.py       # VC agent chat lines: quiet turns, background tasks started/ended; running-task count
+├── speaker_roster.py    # Voices Muse tells apart + their names, the user's voice, primary gate, prompt note — leaf
+├── speaker_naming.py    # Muse speaker hook, name_voice (chat click), name_speaker tool, per-turn speaker note
 ├── engine_realtime.py   # Realtime start: media per attempt, no-MCP retry, channel — mixin
 ├── realtime_providers.py # Realtime builders + config (Gemini, OpenAI, GPT-Live, Deepgram, ElevenLabs, xAI), transport_audio_profile
 ├── engine_audio.py      # Pipeline builders: AEC, denoiser, VAD, diarization, recorder, DSP_THREADS, shared-mic rate
@@ -107,12 +109,13 @@ src/roomkit_ui/
     ├── hotkey_button.py   # Interactive hotkey capture widget
     ├── dictation_log.py   # Dictation event log window
     ├── wakeword_wizard.py # Guided wake-word enrolment
+    ├── voice_name_dialog.py # "Who is this?" when a voice's name is clicked in the chat
     └── settings/          # 13-tab dialog (panel.py), one <tab>_page.py per tab: general, ai, attitudes,
                            #  speakers, dictation, wakeword, models, mcp, cli_tools, audio_debug, telemetry,
                            #  about, plus skills/ (page, my_skills, marketplace, widgets). AI tab parts:
                            #  realtime_section, realtime_catalogs, realtime_gemini_live, realtime_gpt_live,
                            #  vc_local_fields, vc_cloud_fields, vc_azure_fields, vc_meta_fields, vc_agent_fields;
-                           #  also models_widgets, speakers_dialogs, feature_hints
+                           #  also models_widgets, speakers_dialogs, speakers_muse, feature_hints
 ```
 
 Engine composition: `Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject)` —
@@ -170,6 +173,8 @@ Every AI backend lives behind an extra declared in `pyproject.toml` AND mirrored
 - `uv sync` with no extra installs the core, which has no AI backend at all. Anything that builds or ships the app must use `--extra all --extra smart-turn` (the builds add Smart Turn, whose transformers modules are hidden imports) — so frozen builds carry neither Pocket TTS, Qwen3-TTS nor NeuTTS
 
 ### Audio
+- Meta Muse with speaker identification on (`vc_stt.labels_speakers`) labels the voices itself (`DIARIZATION`): the local identification does not run, and the labels hold only in roomkit's continuous mode — never give that session a pipeline VAD. The labels are per stream ("Speaker A", "Speaker A#1" after a restart) and name nobody: `SpeakerRoster` holds the names (`engine._speakers`, None otherwise)
+- Speaker names are an authorization surface: with "Listen only to primary speaker", only the voice carrying the user's name reaches the assistant (and its tools), and it fails closed while none does. The assistant's `name_speaker` names from what it hears, so it never renames a voice the user named, never gives the user's name or a name another voice carries, and takes plain names only (they go into every turn's prompt). Keep those refusals when touching `speaker_naming.py`
 - AEC wiring (realtime) is PER PROVIDER — mirror roomkit's example for that provider (`transport_audio_profile` in realtime_providers.py). Gemini/OpenAI Realtime/xAI/ElevenLabs: `aec` to `AudioPipelineConfig` ONLY (`LocalAudioBackend(aec=...)` flags NATIVE_AEC, the pipeline skips its AEC stage and loses the continuous playback reference — the 0.9.0 barge-in fix; `examples/realtime_voice_local_gemini.py`). Deepgram: `aec` to the TRANSPORT (inline on the PortAudio thread, sample-synchronous) + webrtc NS in the pipeline (`examples/realtime_voice_local_deepgram.py` — an open, poorly-aligned mic makes Deepgram transcribe its own voice and barge-in forever); `rt_prebuffer_ms=240` for Aura's bursts, with or without an AEC. GPT-Live: `aec` to the transport too + webrtc NS whether or not there is an AEC + the default 120 ms prebuffer (`examples/realtime_voice_local_openai_live.py`). No AEC at all mutes the mic during playback. VC mode still passes `aec` to both
 - No user denoiser on the realtime mic path — speech enhancers keep the dominant voice and eat the user's barge-in during doubletalk. Denoisers are VC-mode only. The two exceptions mirror roomkit's examples: the mild WebRTC noise suppressor for Deepgram (with an AEC) and GPT-Live
 - Realtime pipelines carry no VAD and no diarization (`_build_realtime_pipeline`). roomkit 0.97.0's RealtimeVoiceChannel forwards pipeline speaker changes at the provider's rate (0.96.1 did neither), but primary-speaker gating (`set_input_gated`) drops frames before the pipeline, and a pipeline VAD would take barge-in authority from the provider's server VAD (`_realtime_speech.py` early-returns). Diarization is Voice Channel only (`REALTIME_DIARIZATION_NOTICE`)
