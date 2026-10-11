@@ -17,7 +17,13 @@ def _opengl_available() -> bool:
 
     Tries to load libEGL and call eglGetDisplay + eglInitialize.
     Returns False if any step fails — meaning Chromium/ANGLE would crash.
+
+    Linux only. macOS and Windows render through Metal and Direct3D (ANGLE)
+    and ship no libEGL: probing there failed on every stock machine, which
+    then ran with the GPU disabled and a false "OpenGL not available".
     """
+    if not sys.platform.startswith("linux"):
+        return True
     try:
         egl_name = ctypes.util.find_library("EGL")
         if not egl_name:
@@ -34,35 +40,37 @@ def _opengl_available() -> bool:
         return False
 
 
-# ── Software rendering fallback ──────────────────────────────────────────
-# When the hardware GPU driver is broken or absent, we need software GL.
-# LIBGL_ALWAYS_SOFTWARE=1 forces Mesa to use llvmpipe (CPU-based OpenGL)
-# for both Qt Quick and Chromium's WebGL — this keeps WebGL available for
-# MCP Apps (e.g. Excalidraw) while avoiding GPU driver crashes.
-# The Chromium flags tell the embedded browser to allow software WebGL and
-# ignore the GPU blocklist.  Must be set *before* PySide6.
+def _graphics_env(has_opengl: bool) -> dict[str, str]:
+    """Environment the graphics stack reads at load: set *before* PySide6.
+
+    The Chromium flags always allow software WebGL and ignore the GPU
+    blocklist. Never add --disable-web-security: it is process-wide, and
+    with it an MCP App reads any cross-origin response, local and LAN
+    services included (a name like 127.0.0.1.nip.io gets past a hostname
+    check). The same-origin policy is what keeps that out of reach; ES-module
+    imports from CDNs work without it (esm.sh answers
+    `Access-Control-Allow-Origin: *`).
+
+    Without OpenGL, Chromium must not touch the GPU at all — ANGLE would
+    try an EGL context and abort() the process — and Qt Quick renders on the
+    CPU (QT_QUICK_BACKEND; QSG_RHI_BACKEND has no software value). Only then
+    is LIBGL_ALWAYS_SOFTWARE set: it forces Mesa onto llvmpipe, so on a
+    working GPU it cost hardware rendering for nothing, and it leaks into
+    every child process.
+    """
+    flags = "--enable-webgl-software-rendering --ignore-gpu-blocklist --disable-vulkan"
+    env: dict[str, str] = {}
+    if not has_opengl:
+        flags += " --disable-gpu --disable-gpu-compositing --in-process-gpu"
+        env["QT_QUICK_BACKEND"] = "software"
+        env["LIBGL_ALWAYS_SOFTWARE"] = "1"
+    env["QTWEBENGINE_CHROMIUM_FLAGS"] = flags
+    return env
+
+
 _has_opengl = _opengl_available()
-
-os.environ.setdefault("LIBGL_ALWAYS_SOFTWARE", "1")
-
-# Base Chromium flags (always set).
-# Never add --disable-web-security: it is process-wide, and with it an MCP
-# App reads any cross-origin response, local and LAN services included
-# (a name like 127.0.0.1.nip.io gets past a hostname check).  The same-origin
-# policy is what keeps that out of reach.  ES-module imports from CDNs work
-# without it — esm.sh answers `Access-Control-Allow-Origin: *`.
-_chromium_flags = "--enable-webgl-software-rendering --ignore-gpu-blocklist --disable-vulkan"
-
-if not _has_opengl:
-    # OpenGL is completely broken — tell Chromium to not touch the GPU at all,
-    # and force Qt Quick to use CPU rendering.  Without these, ANGLE
-    # attempts to create an EGL context and abort()s the whole process.
-    # (QSG_RHI_BACKEND has no software value — CPU rendering is selected
-    # via QT_QUICK_BACKEND alone; Qt 6.11 warns on unknown RHI keys.)
-    _chromium_flags += " --disable-gpu --disable-gpu-compositing --in-process-gpu"
-    os.environ.setdefault("QT_QUICK_BACKEND", "software")
-
-os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", _chromium_flags)
+for _key, _value in _graphics_env(_has_opengl).items():
+    os.environ.setdefault(_key, _value)
 
 from PySide6.QtCore import QTimer  # noqa: E402
 from PySide6.QtGui import QIcon  # noqa: E402
