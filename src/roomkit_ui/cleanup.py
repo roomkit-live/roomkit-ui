@@ -140,7 +140,7 @@ def cleanup_stale_fds(*, timers_only: bool = False, keep: Collection[int] = ()) 
             del cbs[tid]
             removed += 1
         if kill_tids:
-            logger.info("cleanup L3: killed %d timers", len(kill_tids))
+            logger.debug("cleanup L3: killed %d timers", len(kill_tids))
 
     # --- Layer 4: purge cancelled handles from asyncio _ready queue ---
     # Rotate through the deque in O(N): pop from left, re-append if active.
@@ -156,14 +156,16 @@ def cleanup_stale_fds(*, timers_only: bool = False, keep: Collection[int] = ()) 
             else:
                 ready.append(h)
         if dropped:
-            logger.info("cleanup L4: dropped %d cancelled handles", dropped)
+            logger.debug("cleanup L4: dropped %d cancelled handles", dropped)
             removed += dropped
 
     # --- Summary -----------------------------------------------------
     r_count = len(getattr(loop, "_read_notifiers", {}) or {})
     w_count = len(getattr(loop, "_write_notifiers", {}) or {})
     tasks = [t for t in asyncio.all_tasks(loop) if not t.done()]
-    logger.info(
+    # The end-of-session pass is routine: its detail is for debugging; the
+    # CPU monitor below still warns when something keeps spinning after it.
+    logger.debug(
         "cleanup: removed %d items, %d read + %d write notifiers remain "
         "(self-pipe=%d), %d live tasks",
         removed,
@@ -173,7 +175,7 @@ def cleanup_stale_fds(*, timers_only: bool = False, keep: Collection[int] = ()) 
         len(tasks),
     )
     for t in tasks:
-        logger.info("cleanup: live task: %s", t)
+        logger.debug("cleanup: live task: %s", t)
 
 
 async def post_cleanup_monitor() -> None:
@@ -195,7 +197,7 @@ async def post_cleanup_monitor() -> None:
         await asyncio.sleep(3)
         t1 = resource.getrusage(resource.RUSAGE_SELF)
         cpu = (t1.ru_utime - t0.ru_utime) + (t1.ru_stime - t0.ru_stime)
-        logger.info(
+        logger.debug(
             "cpu-monitor[%d]: %.2fs CPU in 3s",
             i,
             cpu,
