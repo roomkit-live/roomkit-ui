@@ -47,7 +47,7 @@ src/roomkit_ui/
 ├── builtin_tools.py     # Built-in tools (always available)
 ├── hooks.py             # RoomKit hook registration for UI events (VC + realtime)
 ├── watchdog.py          # Unanswered-speech detector (8 s) + model nudge
-├── idle_hangup.py       # Hangs up a session gone quiet (wake-word auto-hangup)
+├── idle_hangup.py       # Hangs up a session gone quiet (set on the Wake Word page, any session)
 ├── cleanup.py           # qasync timer/FD cleanup after MCP disconnect, registered_fds()
 ├── memory.py            # Persistent conversations: SQLite store, realtime recap, recall_conversations tool
 ├── aec_dump.py          # AEC dump for roomkit's offline bench (ROOMKIT_AEC_DUMP=<dir>, realtime only)
@@ -169,8 +169,8 @@ Every AI backend lives behind an extra declared in `pyproject.toml` AND mirrored
 - Realtime pipelines carry no VAD and no diarization (`_build_realtime_pipeline`). roomkit 0.96.1's RealtimeVoiceChannel forwards no speaker change and sends 16 kHz pipeline audio to the provider as 24 kHz, and a pipeline VAD would take barge-in authority from the provider's server VAD (`_realtime_speech.py` early-returns). Diarization is Voice Channel only (`REALTIME_DIARIZATION_NOTICE`)
 - The inbound DSP pool is ON (`DSP_THREADS = 1` in engine_audio.py, both modes): since roomkit 0.95 (RMK-392) the pipeline sends every stage callback back to its loop, in order. Before that, the pool dropped them (no mic audio, dead VU meter)
 - `InterruptionConfig`: pass `InterruptionStrategy.DISABLED` explicitly, not `None`. "Words only" barge-in is SEMANTIC + `PhraseBackchannelDetector`; with a non-streaming (Whisper-type) STT it keeps `cut_without_words` on, or nothing could interrupt
-- A turnless STT (Azure MAI-Transcribe) only finalises when the client commits: it needs a pipeline VAD (`stt_needs_turn_vad`, else an energy VAD)
-- Cached local TTS: a factory that is built from more than (provider, model, device) declares `cache_fields(settings)` in its `tts/` module (`tts_cache_fields`), or a changed voice keeps the old instance
+- A turnless STT (Azure MAI-Transcribe) only finalises when the client commits: without a pipeline VAD no transcript ever comes. `stt_needs_turn_vad` gives it one — the chosen VAD model, else an energy VAD
+- Cached local TTS (`tts._CACHED`): a factory built from more than (provider, model, device) declares `cache_fields(settings)` in its `tts/` module (`tts_cache_fields`; Pocket does), or a changed voice keeps the old instance. Qwen3/NeuTTS add their reference clip in `engine_vc._tts_cache_key`
 - Recording sets `storage_encrypted_at_rest=True`: roomkit's only switch for plain WAVs, recorded as a storage choice — not a claim about the disk. The UI says the files are unencrypted
 
 ### Wake word
