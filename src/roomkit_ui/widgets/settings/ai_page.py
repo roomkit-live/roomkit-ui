@@ -21,7 +21,7 @@ from roomkit_ui.features import (
     TTS_PROVIDER_FEATURES,
 )
 from roomkit_ui.theme import colors
-from roomkit_ui.widgets.settings.feature_hints import populate_provider_combo
+from roomkit_ui.widgets.settings.feature_hints import offer_install, populate_provider_combo
 from roomkit_ui.widgets.settings.realtime_section import RealtimeSection
 from roomkit_ui.widgets.settings.vc_agent_fields import VCAgentPage
 from roomkit_ui.widgets.settings.vc_cloud_fields import VCCloudFields
@@ -167,6 +167,9 @@ class _AIPage(QWidget):
                 self.vc_stt_provider.setCurrentIndex(i)
                 break
         stt_form.addRow("Provider", self.vc_stt_provider)
+        stt_form.addRow(
+            "", offer_install(self.vc_stt_provider, VC_STT_PROVIDERS, STT_PROVIDER_FEATURES)
+        )
         self._local.add_stt_fields(stt_form)
         self._cloud.add_stt_fields(stt_form)
 
@@ -187,6 +190,9 @@ class _AIPage(QWidget):
                 self.vc_provider.setCurrentIndex(i)
                 break
         llm_form.addRow("Provider", self.vc_provider)
+        llm_form.addRow(
+            "", offer_install(self.vc_provider, VC_LLM_PROVIDERS, AI_PROVIDER_FEATURES)
+        )
         self._cloud.add_llm_fields(llm_form)
         self._local.add_llm_fields(llm_form)
 
@@ -207,6 +213,9 @@ class _AIPage(QWidget):
                 self.vc_tts_provider.setCurrentIndex(i)
                 break
         tts_form.addRow("Provider", self.vc_tts_provider)
+        tts_form.addRow(
+            "", offer_install(self.vc_tts_provider, VC_TTS_PROVIDERS, TTS_PROVIDER_FEATURES)
+        )
         self._local.add_tts_fields(tts_form)
         self._cloud.add_tts_fields(tts_form)
 

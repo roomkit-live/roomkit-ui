@@ -9,7 +9,7 @@ from PySide6.QtWidgets import QCheckBox, QComboBox, QFormLayout, QLabel, QLineEd
 from roomkit_ui.features import SPEAK_POLICY_FEATURES
 from roomkit_ui.theme import colors
 from roomkit_ui.vc_agent import DEFAULT_AGENT_NAME, SPEAK_POLICIES
-from roomkit_ui.widgets.settings.feature_hints import populate_provider_combo
+from roomkit_ui.widgets.settings.feature_hints import offer_install, populate_provider_combo
 
 _SPEAKING_HINT = (
     "Always answer replies to every turn. Deciding, the assistant stays quiet while "
@@ -61,6 +61,7 @@ class VCAgentPage(QWidget):
                 self.speak_policy.setCurrentIndex(i)
                 break
         form.addRow("Speaking", self.speak_policy)
+        form.addRow("", offer_install(self.speak_policy, SPEAK_POLICIES, SPEAK_POLICY_FEATURES))
 
         # The OpenAI key is the one every OpenAI field shares (mirrored by the
         # dialog); only TypeSafe's is this tab's own.

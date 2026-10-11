@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
 
 from roomkit_ui.features import REALTIME_PROVIDER_FEATURES
 from roomkit_ui.theme import colors
-from roomkit_ui.widgets.settings.feature_hints import populate_provider_combo
+from roomkit_ui.widgets.settings.feature_hints import offer_install, populate_provider_combo
 from roomkit_ui.widgets.settings.realtime_catalogs import (
     DEEPGRAM_LANGUAGES,
     DEEPGRAM_LISTEN_MODELS,
@@ -106,6 +106,7 @@ class RealtimeSection(QWidget):
                 self.provider.setCurrentIndex(i)
                 break
         rt_form.addRow("Provider", self.provider)
+        rt_form.addRow("", offer_install(self.provider, PROVIDERS, REALTIME_PROVIDER_FEATURES))
 
     def _add_api_keys(self, settings: dict, rt_form: QFormLayout) -> None:
         """One API key field per provider; only the current one shows."""

@@ -14,10 +14,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from roomkit_ui.features import TURN_DETECTOR_FEATURES, unavailable_reason
+from roomkit_ui.features import TURN_DETECTOR_FEATURES
 from roomkit_ui.theme import colors
 from roomkit_ui.widgets.hotkey_button import HotkeyButton
-from roomkit_ui.widgets.settings.feature_hints import populate_provider_combo
+from roomkit_ui.widgets.settings.feature_hints import offer_install, populate_provider_combo
 
 _TURN_HINT = (
     "Audio-native turn completion — detects when the user has finished speaking "
@@ -345,6 +345,17 @@ class _GeneralPage(QWidget):
                 self.turn_detector.setCurrentIndex(i)
                 break
         form.addRow("Turn Detector", self.turn_detector)
+        if self.turn_detector.count() > 1:
+            # Item 0 is "None"; Smart Turn follows when its model is there.
+            form.addRow(
+                "",
+                offer_install(
+                    self.turn_detector,
+                    [("Smart Turn v3", "smart-turn")],
+                    TURN_DETECTOR_FEATURES,
+                    offset=1,
+                ),
+            )
 
         self.turn_threshold = QLineEdit(str(settings.get("vc_turn_threshold", "") or ""))
         self.turn_threshold.setPlaceholderText("0.5 (0 = eager … 1 = patient)")
@@ -381,9 +392,8 @@ class _GeneralPage(QWidget):
             self.turn_incomplete_wait,
         ):
             widget.setVisible(bool(detector))
-        feature = TURN_DETECTOR_FEATURES.get(detector)
-        reason = unavailable_reason(feature) if feature else None
-        self._turn_hint.setText(reason or _TURN_HINT)
+        # A detector not installed is said, with its Install, by offer_install.
+        self._turn_hint.setText(_TURN_HINT)
 
     def _on_device_changed(self, index: int) -> None:
         val = self._inference_providers[index][1]

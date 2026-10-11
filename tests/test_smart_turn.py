@@ -157,18 +157,20 @@ def general_page(qapp, monkeypatch):
 
 
 def test_a_missing_install_is_named_where_the_detector_is_picked(general_page, monkeypatch):
-    reason = "Smart Turn detector is not installed — run: pip install x"
+    from roomkit_ui import features
+    from roomkit_ui.widgets.install_offer import InstallOffer
+
     monkeypatch.setattr(
-        "roomkit_ui.widgets.settings.feature_hints.unavailable_reason", lambda key: reason
-    )
-    monkeypatch.setattr(
-        "roomkit_ui.widgets.settings.general_page.unavailable_reason", lambda key: reason
+        features, "missing_modules", lambda key: ("absent",) if key == "smart-turn" else ()
     )
 
     page = general_page(vc_turn_detector="smart-turn")
 
     assert page.turn_detector.currentText() == "Smart Turn v3 — not installed"
-    assert page._turn_hint.text() == reason
+    # Said under the combo, with the button that adds it.
+    (offer,) = page.findChildren(InstallOffer)
+    assert offer.isVisibleTo(page)
+    assert offer._label.text() == "Smart Turn detector is not installed."
     assert page.get_settings()["vc_turn_detector"] == "smart-turn"  # still the user's pick
 
 

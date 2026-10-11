@@ -374,6 +374,19 @@ class ChatView(QScrollArea):
         self._insert_status_row(widget)
         return widget
 
+    def add_install_offer(self, feature: str) -> None:
+        """A session that could not start for want of a component: what is
+        missing, and the button that adds it."""
+        from roomkit_ui.features import FEATURES
+        from roomkit_ui.widgets.install_offer import InstallOffer
+
+        self._finalize_current_bubble()
+        offer = InstallOffer(color=colors()["ACCENT_RED"], done_hint="Start the session again.")
+        label = FEATURES[feature].label
+        offer.set_feature(feature, text=f"The session could not start: {label} is not installed.")
+        offer.setContentsMargins(14, 2, 14, 2)
+        self._insert_status_row(offer)
+
     def add_error(self, message: str) -> None:
         """Show a centered error message in the chat area."""
         self._finalize_current_bubble()
