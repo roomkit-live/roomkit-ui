@@ -29,6 +29,8 @@ _PROVIDER_NAMES = {
     "elevenlabs": "ElevenLabs",
     "xai": "xAI Grok",
     "anthropic": "Anthropic",
+    "openai_live": "OpenAI GPT-Live",
+    "llamacpp": "llama.cpp",
 }
 
 

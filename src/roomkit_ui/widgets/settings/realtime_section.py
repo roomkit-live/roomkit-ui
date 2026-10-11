@@ -1,7 +1,7 @@
 """Realtime (speech-to-speech) provider settings.
 
-Five providers: Gemini Live, OpenAI Realtime, Deepgram Voice Agent,
-ElevenLabs Conversational AI and xAI Grok.  Each provider's widgets are
+Six providers: Gemini Live, OpenAI Realtime, Deepgram Voice Agent,
+ElevenLabs Conversational AI, xAI Grok and OpenAI GPT-Live.  Each provider's widgets are
 registered in ``self._provider_widgets`` so switching the provider combo
 shows exactly one group.
 """
@@ -26,6 +26,7 @@ from roomkit_ui.features import REALTIME_PROVIDER_FEATURES
 from roomkit_ui.theme import colors
 from roomkit_ui.widgets.settings.feature_hints import populate_provider_combo
 from roomkit_ui.widgets.settings.realtime_gemini_live import GeminiGenerationFields
+from roomkit_ui.widgets.settings.realtime_gpt_live import GPTLiveFields
 
 PROVIDERS = [
     ("Google Gemini", "gemini"),
@@ -33,6 +34,7 @@ PROVIDERS = [
     ("Deepgram Voice Agent", "deepgram"),
     ("ElevenLabs (Conversational AI)", "elevenlabs"),
     ("xAI Grok", "xai"),
+    ("OpenAI GPT-Live (full-duplex)", "openai_live"),
 ]
 
 # Fallback STS model ids, used until the installed roomkit ships the
@@ -382,6 +384,9 @@ class RealtimeSection(QWidget):
         self._xai_voice_label = QLabel("Voice")
         rt_form.addRow(self._xai_voice_label, self.xai_voice)
 
+        # ── OpenAI GPT-Live (shares the OpenAI key field above) ──
+        self._gpt_live = GPTLiveFields(settings, rt_form)
+
         rt_layout.addLayout(rt_form)
 
         # ── Gemini Advanced (collapsible) ──
@@ -729,6 +734,11 @@ class RealtimeSection(QWidget):
                 self.xai_voice,
                 self._xai_adv_toggle,
             ],
+            "openai_live": [
+                self._openai_key_label,
+                self.openai_api_key,
+                *self._gpt_live.widgets,
+            ],
         }
         self._adv_containers = {
             "gemini": (self._gemini_adv_container, self._gemini_adv_toggle),
@@ -753,10 +763,13 @@ class RealtimeSection(QWidget):
 
     def _on_provider_changed(self, index: int) -> None:
         current = PROVIDERS[index][1]
-        for name, widgets in self._provider_widgets.items():
-            visible = name == current
+        # Hide everything, then show the current provider's: a widget two
+        # providers share (the OpenAI key) must not depend on dict order.
+        for widgets in self._provider_widgets.values():
             for w in widgets:
-                w.setVisible(visible)
+                w.setVisible(False)
+        for w in self._provider_widgets.get(current, []):
+            w.setVisible(True)
         # Collapse the advanced blocks of every other provider.
         for name, (container, toggle) in self._adv_containers.items():
             if name != current:
@@ -860,6 +873,7 @@ class RealtimeSection(QWidget):
             "gemini_end_sensitivity": self.gemini_end_sensitivity.currentData() or "",
             "gemini_silence_duration_ms": self.gemini_silence_duration.text().strip(),
             **self._gemini_generation.get_settings(),
+            **self._gpt_live.get_settings(),
             "openai_turn_detection": (self.openai_turn_detection.currentData() or "server_vad"),
             "openai_eagerness": self.openai_eagerness.text().strip(),
             "openai_vad_threshold": self.openai_vad_threshold.text().strip(),

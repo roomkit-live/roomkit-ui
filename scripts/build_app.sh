@@ -60,6 +60,8 @@ uv run pyinstaller \
     --hidden-import=elevenlabs \
     --hidden-import=gradium \
     --hidden-import=websockets \
+    --hidden-import=tiktoken_ext \
+    --hidden-import=tiktoken_ext.openai_public \
     --hidden-import=sounddevice \
     --hidden-import=_sounddevice_data \
     --hidden-import=certifi \

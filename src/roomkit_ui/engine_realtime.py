@@ -1,7 +1,7 @@
 """Realtime speech-to-speech session mixin for ``Engine``.
 
-Contains the realtime startup path (Gemini Live, OpenAI Realtime,
-Deepgram Voice Agent, ElevenLabs Conversational AI, xAI Grok): build the
+Contains the realtime startup path (Gemini Live, OpenAI Realtime, OpenAI
+GPT-Live, Deepgram Voice Agent, ElevenLabs Conversational AI, xAI Grok): build the
 provider, wire audio pipeline + transport, connect MCP tools, register
 hooks, and hand off to the UI by populating ``engine._session``.
 
@@ -207,9 +207,10 @@ class RealtimeMixin:
         transport_aec, rt_denoiser, prebuffer_ms = _transport_audio_profile(
             provider_name, aec, sample_rate
         )
-        if transport_aec is not None:
+        if transport_aec is not None or rt_denoiser is not None:
             logger.info(
-                "Transport-level AEC (%s) + webrtc NS, prebuffer=%dms",
+                "Transport-level AEC=%s (%s) + webrtc NS, prebuffer=%dms",
+                transport_aec is not None,
                 provider_name,
                 prebuffer_ms,
             )
@@ -227,10 +228,11 @@ class RealtimeMixin:
         # _transport_audio_profile): Gemini/OpenAI keep the pipeline-stage AEC
         # (transport_aec is None — LocalAudioBackend(aec=...) would flag
         # NATIVE_AEC and lose the continuous playback reference, the 0.9.0
-        # barge-in fix), while Deepgram runs it at transport level like
-        # roomkit's examples/realtime_voice_local_deepgram.py, where NATIVE_AEC
-        # correctly makes the pipeline skip its own stage.  No AEC at all arms
-        # the playback gate (half-duplex).
+        # barge-in fix), while Deepgram and GPT-Live run it at transport level
+        # like roomkit's examples (realtime_voice_local_deepgram.py,
+        # realtime_voice_local_openai_live.py), where NATIVE_AEC correctly
+        # makes the pipeline skip its own stage.  No AEC at all arms the
+        # playback gate (half-duplex).
         transport = LocalAudioBackend(
             input_sample_rate=sample_rate,
             output_sample_rate=sample_rate,
@@ -424,8 +426,11 @@ def _refuses_session_config(exc: BaseException) -> bool:
       with an Error ("Deepgram rejected Settings").
 
     OpenAI and xAI open the socket first and report a bad ``session.update``
-    as a provider error afterwards: no start fails on their tools.  A bad
-    key, the network or a quota is none of these.
+    as a provider error afterwards: no start fails on their tools.  GPT-Live
+    hands the tools to its hosted backend in ``session.start``, and a refused
+    start is a ConnectionError ("GPT-Live session failed to start: <code>:
+    ...") whose code for a bad schema is unknown — so it is not retried.  A
+    bad key, the network or a quota is none of these.
     """
     for err in (exc, exc.__cause__):
         if err is None:
@@ -506,6 +511,9 @@ def _build_realtime_provider(provider_name: str, settings: dict) -> tuple[Any, s
     if provider_name == "xai":
         return _build_xai_realtime(settings)
 
+    if provider_name == "openai_live":
+        return _build_openai_live(settings)
+
     api_key = settings.get("api_key", "")
     if not api_key:
         raise ValueError("Google API key is required. Open Settings to enter it.")
@@ -560,13 +568,22 @@ def _transport_audio_profile(
     underruns seen in the field logs) whatever the AEC: half-duplex mutes
     the mic, not the bursts.  Gemini/OpenAI keep the pipeline-stage AEC,
     mirroring ``examples/realtime_voice_local_gemini.py``.
+
+    GPT-Live mirrors ``examples/realtime_voice_local_openai_live.py``: the
+    AEC at transport level too (the example hands it to both, and the
+    transport's NATIVE_AEC makes the pipeline skip its copy), a WebRTC noise
+    suppressor whether or not there is an AEC, and the default prebuffer.
+    Full-duplex keeps the mic open while the model speaks, so the echo path
+    must be sample-synchronous; without an AEC the mic is muted instead.
     """
+    from roomkit_ui.engine_audio import build_denoiser
+
+    if provider_name == "openai_live":
+        return aec, build_denoiser("webrtc", sample_rate), 120
     if provider_name != "deepgram":
         return None, None, 120
     if aec is None:
         return None, None, 240
-    from roomkit_ui.engine_audio import build_denoiser
-
     return aec, build_denoiser("webrtc", sample_rate), 240
 
 
@@ -714,6 +731,43 @@ def _build_xai_realtime(settings: dict) -> tuple[Any, str, str]:
     from roomkit.providers.xai.realtime import XAIRealtimeProvider
 
     return XAIRealtimeProvider(api_key=api_key, model=model), voice, model
+
+
+# The backend's own instructions — the live model's are the user's system
+# prompt.  Adapted from roomkit's examples/realtime_voice_local_openai_live.py,
+# minus its demo tools: the backend answers through the live model, which
+# speaks the result in its own words.
+_GPT_LIVE_BACKEND_INSTRUCTIONS = (
+    "You are helping an assistant during a live voice conversation. The request may "
+    "contain transcription errors; use the most likely intent. Use the available tools "
+    "when they help. Answer in the language the user speaks. Return the verified result "
+    "in concise, conversational plain text — no Markdown, no raw JSON — and never claim "
+    "an action completed without a tool result confirming it."
+)
+
+
+def _build_openai_live(settings: dict) -> tuple[Any, str, str]:
+    """GPT-Live: a full-duplex live model, and a backend OpenAI hosts for tools.
+
+    The live model holds no tools: it delegates reasoning and tool use to the
+    backend (``HostedReasoning``), whose function calls reach the channel's
+    tool handler like any provider's.
+    """
+    api_key = settings.get("openai_api_key", "")
+    if not api_key:
+        raise ValueError("OpenAI API key is required. Open Settings to enter it.")
+    model = settings.get("openai_live_model", "") or "gpt-live-1"
+    voice = settings.get("openai_live_voice", "") or "marin"
+
+    from roomkit.providers.openai.live import HostedReasoning, OpenAILiveProvider
+
+    backend = HostedReasoning(
+        model=settings.get("openai_live_backend_model", "") or "gpt-5.6-terra",
+        instructions=_GPT_LIVE_BACKEND_INSTRUCTIONS,
+        reasoning_effort=settings.get("openai_live_backend_effort", "") or "low",
+    )
+    provider = OpenAILiveProvider(api_key=api_key, model=model, delegation=backend)
+    return provider, voice, model
 
 
 def _build_provider_config(provider_name: str, settings: dict) -> dict[str, Any]:

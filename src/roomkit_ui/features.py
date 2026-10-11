@@ -135,6 +135,9 @@ REALTIME_PROVIDER_FEATURES: dict[str, str] = {
     "deepgram": "deepgram-agent",
     "elevenlabs": "elevenlabs",
     "xai": "openai-realtime",
+    # GPT-Live rides the same websocket transport; tiktoken (in the extra)
+    # only sizes context appends, and roomkit falls back to bytes without it.
+    "openai_live": "openai-realtime",
 }
 
 

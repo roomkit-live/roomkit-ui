@@ -224,6 +224,12 @@ _DEFAULTS = {
     "azure_speech_region": "",  # e.g. swedencentral
     "azure_tts_voice": "",  # empty = en-US-Harper:MAI-Voice-2.1-Flash
     "azure_tts_rate": "",  # SSML prosody rate: +15%, 1.2, fast (empty = the voice's own)
+    # OpenAI GPT-Live (roomkit 0.70+, full-duplex): the live model talks, a backend
+    # model OpenAI hosts reasons and calls the tools
+    "openai_live_model": "gpt-live-1",
+    "openai_live_voice": "marin",
+    "openai_live_backend_model": "gpt-5.6-terra",  # roomkit's example backend
+    "openai_live_backend_effort": "low",  # low | medium | high
 }
 
 
