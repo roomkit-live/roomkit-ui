@@ -1,6 +1,6 @@
 # Features
 
-> _Generated: 2026-06-11 — updated 2026-10-10 for roomkit 0.96.1 — re-run /project-review to update_
+> _Generated: 2026-06-11 — updated 2026-10-11 for roomkit 0.97.0 — re-run /project-review to update_
 
 Implementation details for each feature are in [technical.md](technical.md);
 system context in [architecture.md](architecture.md).
@@ -271,8 +271,8 @@ sequenceDiagram
 - One session at a time.
 - No text input — voice only (paste_text tool exists for the *model* to paste).
 - Realtime mode requires a cloud provider; no local speech-to-speech.
-- Realtime sessions run without speaker diarization (roomkit 0.96.1 forwards no speaker
-  change from a realtime channel).
+- Realtime sessions run without speaker diarization (primary-speaker gating drops the
+  audio before the pipeline that would diarize it).
 - The pre-built binaries carry Smart Turn but neither Pocket TTS, Qwen3-TTS nor NeuTTS
   (outside the `all` extra); install from source for those.
 - Azure MAI-Transcribe is not offered for dictation.

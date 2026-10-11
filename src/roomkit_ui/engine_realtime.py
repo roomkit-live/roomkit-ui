@@ -41,11 +41,9 @@ logger = logging.getLogger(__name__)
 
 _BLOCK_MS = 20
 
-# Diarization is a voice-channel feature: under roomkit 0.96.1 a realtime
-# session cannot run it.  RealtimeVoiceChannel registers no handler for the
-# pipeline's speaker changes and fires no ON_SPEAKER_CHANGE, so no label ever
-# reached the app; the 16 kHz pipeline the models need was forwarded to the
-# provider as if it were the 24 kHz transport audio; and primary-speaker
+# Diarization is a voice-channel feature.  roomkit 0.97.0's
+# RealtimeVoiceChannel fires ON_SPEAKER_CHANGE for its pipeline and hands the
+# provider audio at its own rate (0.96.1 did neither), but primary-speaker
 # gating (LocalAudioBackend.set_input_gated) drops frames before the
 # pipeline, so diarization could never hear the primary speaker again.
 REALTIME_DIARIZATION_NOTICE = (

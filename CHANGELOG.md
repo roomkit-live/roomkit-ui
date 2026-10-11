@@ -95,7 +95,7 @@ Each released section is the source for that version's GitHub release notes.
   skills, speakers and conversations in `~/Library/Application Support/RoomKit UI`. What
   older versions left in `~/.local/share/roomkit-ui` moves there once at startup; a
   folder already at its new home is never overwritten.
-- **roomkit `0.24.0` → `0.96.1`**, which brings the new providers, the model and voice
+- **roomkit `0.24.0` → `0.97.0`**, which brings the new providers, the model and voice
   catalogs, the conversation store and the shared microphone above. The app absorbs its
   behaviour changes: roomkit's own tool-call timeouts give way to the app's (MCP 60 s,
   each CLI tool its own), the built-ins stay declared when Tool Search activates, failed

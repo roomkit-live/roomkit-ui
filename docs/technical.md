@@ -1,6 +1,6 @@
 # Technical Reference
 
-> _Generated: 2026-06-11 — updated 2026-10-10 for roomkit 0.96.1 — re-run /project-review to update_
+> _Generated: 2026-06-11 — updated 2026-10-11 for roomkit 0.97.0 — re-run /project-review to update_
 
 System context lives in [architecture.md](architecture.md); feature-to-code mapping in
 [features.md](features.md); setup steps in [onboarding.md](onboarding.md).
@@ -12,7 +12,7 @@ System context lives in [architecture.md](architecture.md); feature-to-code mapp
 | Language | Python | 3.12+ |
 | GUI | PySide6-Essentials (Qt 6); PySide6-Addons via the `mcp-apps` extra | 6.11.1 |
 | Async/Qt bridge | qasync | 0.28.0 |
-| Voice/AI framework | roomkit (core: `local-audio`, `webrtc-aec`; every backend through an app extra) | 0.96.1 |
+| Voice/AI framework | roomkit (core: `local-audio`, `webrtc-aec`; every backend through an app extra) | 0.97.0 |
 | Tool protocol | mcp | 2.0.0 |
 | HTTP | httpx | 0.28.1 |
 | Secrets | keyring | 25.7.0 |
@@ -240,5 +240,4 @@ QT_QPA_PLATFORM=offscreen uv run pytest -q
 | 5 | Repeated stylesheet f-strings (~200 `setStyleSheet` calls) | `widgets/` | Shared style helpers per pattern |
 | 6 | `cleanup.py` depends on qasync name-mangled internals | `cleanup.py` | Re-verify on every qasync upgrade; upstream a fix |
 | 7 | MCP stdio and CLI tool execution trust is user-configured | `mcp_manager.py`, `cli_tools.py` | Consider per-call confirmation for sensitive tools |
-| 8 | Realtime sessions cannot run diarization (roomkit 0.96.1 forwards no speaker change from `RealtimeVoiceChannel`) | `engine_realtime.py` | Bring it back once roomkit reports pipeline speaker changes and forwards pipeline audio at the provider's rate |
-| 9 | Frozen builds: roomkit spawns `llama-server` with the app's environment, PyInstaller's library path included | `providers/llamacpp.py` | Fix upstream in roomkit's server spawn |
+| 8 | Realtime sessions run without diarization. roomkit 0.97.0 forwards pipeline speaker changes at the provider's rate; primary-speaker gating still drops frames before the pipeline | `engine_realtime.py` | Gate after diarization, then bring speaker labels and primary-speaker mode back |

@@ -1,6 +1,6 @@
 # Architecture
 
-> _Generated: 2026-06-11 — updated 2026-10-10 for roomkit 0.96.1 — re-run /project-review to update_
+> _Generated: 2026-06-11 — updated 2026-10-11 for roomkit 0.97.0 — re-run /project-review to update_
 
 RoomKit UI is a single-process desktop voice assistant. A PySide6 (Qt 6) GUI and an
 asyncio engine share one thread through [qasync](https://github.com/CabbageDevelopment/qasync),
