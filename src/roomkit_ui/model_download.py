@@ -144,6 +144,64 @@ def _declared_length(resp: Any) -> int:
     return int(value) if value.isdigit() else 0
 
 
+def _progress_sink(progress: ProgressCallback | None, total: int) -> Callable[[int], None]:
+    """Report 0 of *total* now, and return an ``on_bytes`` adding up from there."""
+    downloaded = 0
+    if progress is not None:
+        progress(0, total)
+
+    def on_bytes(n: int) -> None:
+        nonlocal downloaded
+        downloaded += n
+        if progress is not None:
+            progress(downloaded, total)
+
+    return on_bytes
+
+
+def _fetch_or_plan(raw_url: str, target: Path) -> tuple[Path, str, int, str] | None:
+    """Fetch *raw_url*: a small file is written to *target* now; a Git LFS
+    pointer comes back as ``(target, url, size, oid)`` to download later."""
+    with _urlopen(raw_url) as resp:
+        raw_bytes = resp.read()
+    lfs = _resolve_lfs_pointer(raw_bytes)
+    if lfs is None:
+        target.write_bytes(raw_bytes)
+        return None
+    oid, size = lfs
+    return target, _lfs_download_url(oid, size), size, oid
+
+
+def _download_planned(
+    planned: list[tuple[Path, str, int, str]], progress: ProgressCallback | None
+) -> None:
+    """Download the LFS files *_fetch_or_plan* returned, with one progress total."""
+    if not planned:
+        return
+    on_bytes = _progress_sink(progress, sum(size for _, _, size, _ in planned))
+    for target, url, size, oid in planned:
+        _download_file(url, target, expected_size=size, on_bytes=on_bytes, expected_sha256=oid)
+
+
+def _download_sized(
+    url: str,
+    target: Path,
+    progress: ProgressCallback | None,
+    expected_sha256: str | None = None,
+) -> None:
+    """Download one file, sized by a HEAD request so progress has a total."""
+    req = urllib.request.Request(url, method="HEAD")  # noqa: S310
+    with _urlopen(req) as resp:
+        total = _declared_length(resp)
+    _download_file(
+        url,
+        target,
+        expected_size=total,
+        on_bytes=_progress_sink(progress, total),
+        expected_sha256=expected_sha256,
+    )
+
+
 @single_flight
 def _download_model_sync(
     model_id: str,
@@ -161,44 +219,17 @@ def _download_model_sync(
     dest = model_path(model_id)
     dest.mkdir(parents=True, exist_ok=True)
 
-    # First pass: resolve LFS pointers to get total size
-    file_infos: list[tuple[str, str, int, str]] = []  # (fname, url, size, oid)
-    total_bytes = 0
+    # Small files are written as they come; LFS ones are downloaded after,
+    # under one progress total.
+    planned = []
     for fname in m.files:
         target = dest / fname
         if target.is_file():
             continue  # already downloaded
-        raw_url = f"{_RAW_URL}/{model_id}/v1/{fname}"
-        with _urlopen(raw_url) as resp:
-            raw_bytes = resp.read()
-        lfs = _resolve_lfs_pointer(raw_bytes)
+        lfs = _fetch_or_plan(f"{_RAW_URL}/{model_id}/v1/{fname}", target)
         if lfs is not None:
-            oid, size = lfs
-            real_url = _lfs_download_url(oid, size)
-            file_infos.append((fname, real_url, size, oid))
-            total_bytes += size
-        else:
-            # Small file — write directly
-            target.write_bytes(raw_bytes)
-
-    if not file_infos:
-        return
-
-    # Second pass: download with byte-level progress
-    downloaded = 0
-    if progress is not None:
-        progress(0, total_bytes)
-
-    for fname, url, size, oid in file_infos:
-        target = dest / fname
-
-        def _on_bytes(n: int) -> None:
-            nonlocal downloaded
-            downloaded += n
-            if progress is not None:
-                progress(downloaded, total_bytes)
-
-        _download_file(url, target, expected_size=size, on_bytes=_on_bytes, expected_sha256=oid)
+            planned.append(lfs)
+    _download_planned(planned, progress)
 
 
 @single_flight
@@ -209,24 +240,7 @@ def _download_gtcrn_sync(progress: ProgressCallback | None = None) -> None:
     target = dest / _GTCRN_FILENAME
     if target.is_file():
         return
-
-    downloaded = 0
-
-    def _on_bytes(n: int) -> None:
-        nonlocal downloaded
-        downloaded += n
-        if progress is not None:
-            progress(downloaded, total)
-
-    # HEAD request to get total size for progress reporting
-    req = urllib.request.Request(GTCRN_URL, method="HEAD")  # noqa: S310
-    with _urlopen(req) as resp:
-        total = int(resp.headers.get("Content-Length", 0))
-
-    if progress is not None:
-        progress(0, total)
-
-    _download_file(GTCRN_URL, target, expected_size=total, on_bytes=_on_bytes)
+    _download_sized(GTCRN_URL, target, progress)
 
 
 @single_flight
@@ -245,36 +259,12 @@ def _download_vad_model_sync(
     if target.is_file():
         return
 
-    repo_path = _VAD_REPO_PATHS[model_id]
-    raw_url = f"{_RAW_URL}/{repo_path}"
-
-    with _urlopen(raw_url) as resp:
-        raw_bytes = resp.read()
-
-    lfs = _resolve_lfs_pointer(raw_bytes)
+    lfs = _fetch_or_plan(f"{_RAW_URL}/{_VAD_REPO_PATHS[model_id]}", target)
     if lfs is not None:
-        oid, size = lfs
-        real_url = _lfs_download_url(oid, size)
-        downloaded = 0
-        if progress is not None:
-            progress(0, size)
-
-        def _on_bytes(n: int) -> None:
-            nonlocal downloaded
-            downloaded += n
-            if progress is not None:
-                progress(downloaded, size)
-
-        _download_file(
-            real_url, target, expected_size=size, on_bytes=_on_bytes, expected_sha256=oid
-        )
-    else:
-        total = len(raw_bytes)
-        if progress is not None:
-            progress(0, total)
-        target.write_bytes(raw_bytes)
-        if progress is not None:
-            progress(total, total)
+        _download_planned([lfs], progress)
+    elif progress is not None:
+        size = target.stat().st_size
+        progress(size, size)
 
 
 @single_flight
@@ -285,29 +275,7 @@ def _download_smart_turn_sync(progress: ProgressCallback | None = None) -> None:
     target = dest / _SMART_TURN_FILENAME
     if target.is_file():
         return
-
-    downloaded = 0
-
-    def _on_bytes(n: int) -> None:
-        nonlocal downloaded
-        downloaded += n
-        if progress is not None:
-            progress(downloaded, total)
-
-    req = urllib.request.Request(SMART_TURN_URL, method="HEAD")  # noqa: S310
-    with _urlopen(req) as resp:
-        total = int(resp.headers.get("Content-Length", 0))
-
-    if progress is not None:
-        progress(0, total)
-
-    _download_file(
-        SMART_TURN_URL,
-        target,
-        expected_size=total,
-        on_bytes=_on_bytes,
-        expected_sha256=SMART_TURN_SHA256,
-    )
+    _download_sized(SMART_TURN_URL, target, progress, expected_sha256=SMART_TURN_SHA256)
 
 
 def _generate_tokens_txt(onnx_json_path: Path, tokens_path: Path) -> None:
@@ -338,45 +306,18 @@ def _download_tts_model_sync(
     dest = tts_model_path(model_id)
     dest.mkdir(parents=True, exist_ok=True)
 
-    files_to_download: list[tuple[str, str, int, str]] = []
-    total_bytes = 0
-
+    planned = []
     for fname in (m.onnx_file, m.config_file, "tokens.txt"):
         target = dest / fname
         if target.is_file():
             continue
-        raw_url = f"{_RAW_URL}/tts/{model_id}/v1/{fname}"
         try:
-            with _urlopen(raw_url) as resp:
-                raw_bytes = resp.read()
+            lfs = _fetch_or_plan(f"{_RAW_URL}/tts/{model_id}/v1/{fname}", target)
         except urllib.error.HTTPError:
             continue  # tokens.txt may not be in repo yet
-        lfs = _resolve_lfs_pointer(raw_bytes)
         if lfs is not None:
-            oid, size = lfs
-            real_url = _lfs_download_url(oid, size)
-            files_to_download.append((fname, real_url, size, oid))
-            total_bytes += size
-        else:
-            target.write_bytes(raw_bytes)
-
-    if files_to_download:
-        downloaded = 0
-        if progress is not None:
-            progress(0, total_bytes)
-
-        for fname, url, size, oid in files_to_download:
-            target = dest / fname
-
-            def _on_bytes(n: int) -> None:
-                nonlocal downloaded
-                downloaded += n
-                if progress is not None:
-                    progress(downloaded, total_bytes)
-
-            _download_file(
-                url, target, expected_size=size, on_bytes=_on_bytes, expected_sha256=oid
-            )
+            planned.append(lfs)
+    _download_planned(planned, progress)
 
     # Fallback: generate tokens.txt from .onnx.json if not downloaded
     json_path = dest / m.config_file
@@ -486,19 +427,4 @@ def _download_speaker_model_sync(
     if asset_url is None:
         raise ValueError(f"No download URL for speaker model: {model_id}")
 
-    # HEAD request for content-length
-    req = urllib.request.Request(asset_url, method="HEAD")  # noqa: S310
-    with _urlopen(req) as resp:
-        total = int(resp.headers.get("Content-Length", 0))
-
-    downloaded = 0
-    if progress is not None:
-        progress(0, total)
-
-    def _on_bytes(n: int) -> None:
-        nonlocal downloaded
-        downloaded += n
-        if progress is not None:
-            progress(downloaded, total)
-
-    _download_file(asset_url, target, expected_size=total, on_bytes=_on_bytes)
+    _download_sized(asset_url, target, progress)

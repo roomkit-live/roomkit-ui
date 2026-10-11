@@ -227,3 +227,36 @@ def test_a_joined_download_reports_the_failure_to_every_caller(models_dir, monke
 
     assert len(started) == 1
     assert len(errors) == 2
+
+
+# -- small files now, LFS files after, under one progress total ---------------
+
+
+def test_an_stt_model_writes_small_files_and_downloads_lfs_ones_with_one_total(
+    models_dir, monkeypatch
+):
+    model = catalog.STT_MODELS[0]
+    small, *lfs_files = model.files[::-1]  # tokens.txt is small; the onnx files are LFS
+    oid = "a" * 64
+    pointer = f"version https://git-lfs.github.com/spec/v1\noid sha256:{oid}\nsize 10\n".encode()
+
+    def urlopen(url):
+        return _FakeResponse(b"tok 0\n" if url.endswith(small) else pointer)
+
+    downloads: list[tuple[str, int, str]] = []
+
+    def download_file(url, target, *, expected_size, on_bytes, expected_sha256):
+        downloads.append((target.name, expected_size, expected_sha256))
+        on_bytes(expected_size)
+
+    reports: list[tuple[int, int]] = []
+    monkeypatch.setattr(md, "_urlopen", urlopen)
+    monkeypatch.setattr(md, "_lfs_download_url", lambda oid, size: f"https://lfs/{oid}")
+    monkeypatch.setattr(md, "_download_file", download_file)
+
+    md._download_model_sync(model.id, lambda done, total: reports.append((done, total)))
+
+    assert (md.model_path(model.id) / small).read_bytes() == b"tok 0\n"
+    assert sorted(d[0] for d in downloads) == sorted(lfs_files)
+    total = 10 * len(lfs_files)
+    assert reports[0] == (0, total) and reports[-1] == (total, total)
