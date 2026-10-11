@@ -529,20 +529,42 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
                 logger.exception("cleanup: closing an unowned audio backend failed")
 
     async def _cleanup(self) -> None:
+        """Tear the session down, in the order the fixes below depend on."""
         self._watchdog.stop()
         self._pending_tool_calls = 0
         self._spk_timer.stop()
         self._spk_rms_queue.clear()
-        # Cancel any lingering post_cleanup_monitor from previous session
-        if self._cleanup_monitor_task is not None:
-            self._cleanup_monitor_task.cancel()
-            try:
-                await self._cleanup_monitor_task
-            except (asyncio.CancelledError, Exception):
-                pass
-            self._cleanup_monitor_task = None
+        await self._cancel_cleanup_monitor()
         await self._cancel_owned_tasks()
-        # Voice channel mode: disconnect backend
+        await self._end_voice_session()
+        await self._close_session_models()
+        await self._close_framework()
+        # Remove the voice error log handler to prevent handler accumulation.
+        logging.getLogger("roomkit.voice").removeHandler(self._log_handler)
+        await self._close_tool_sources()
+        # Skip close for cached diarization (extractor survives)
+        if self._diarization is not None and "diarization" not in self._cached_models:
+            try:
+                self._diarization.close()
+            except Exception:
+                pass
+        self._forget_session()
+        await self._finalize_event_loop()
+
+    async def _cancel_cleanup_monitor(self) -> None:
+        """Cancel a post_cleanup_monitor still running from the last session."""
+        if self._cleanup_monitor_task is None:
+            return
+        self._cleanup_monitor_task.cancel()
+        try:
+            await self._cleanup_monitor_task
+        except (asyncio.CancelledError, Exception):
+            pass
+        self._cleanup_monitor_task = None
+
+    async def _end_voice_session(self) -> None:
+        """Stop the mic and end the session: the backend in voice-channel
+        mode, the channel in realtime mode."""
         if self._backend and self._session:
             try:
                 logger.info("cleanup: disconnecting voice channel backend …")
@@ -551,7 +573,6 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
                 logger.info("cleanup: backend disconnected")
             except Exception:
                 logger.exception("cleanup: backend disconnect failed")
-        # Realtime mode: end session via channel
         elif self._channel and self._session and not self._backend:
             try:
                 logger.info("cleanup: ending voice session …")
@@ -559,20 +580,23 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
                 logger.info("cleanup: voice session ended")
             except Exception:
                 logger.exception("cleanup: end_session failed")
-        await self._close_session_models()
-        # Close roomkit — cancels in-flight streaming tasks; VoiceChannel.close()
-        # closes the backend (close_providers only gates STT/TTS).
-        if self._kit:
-            try:
-                logger.info("cleanup: closing roomkit …")
-                await self._kit.close()
-                logger.info("cleanup: roomkit closed")
-            except Exception:
-                logger.exception("cleanup: kit.close() failed")
-        else:
+
+    async def _close_framework(self) -> None:
+        """Close roomkit — it cancels in-flight streaming tasks, and
+        VoiceChannel.close() closes the backend (close_providers only gates
+        STT/TTS).  Without a kit, the backends are closed directly."""
+        if not self._kit:
             await self._close_unowned_backends()
-        # Remove the voice error log handler to prevent handler accumulation.
-        logging.getLogger("roomkit.voice").removeHandler(self._log_handler)
+            return
+        try:
+            logger.info("cleanup: closing roomkit …")
+            await self._kit.close()
+            logger.info("cleanup: roomkit closed")
+        except Exception:
+            logger.exception("cleanup: kit.close() failed")
+
+    async def _close_tool_sources(self) -> None:
+        """Disconnect the MCP servers and kill any CLI tool still running."""
         if self._mcp:
             try:
                 logger.info("cleanup: closing MCP …")
@@ -587,12 +611,13 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
                 self._cli.terminate_all()
             except Exception:
                 logger.exception("cleanup: cli.terminate_all() failed")
-        # Skip close for cached diarization (extractor survives)
-        if self._diarization is not None and "diarization" not in self._cached_models:
-            try:
-                self._diarization.close()
-            except Exception:
-                pass
+
+    def _forget_session(self) -> None:
+        """Drop every reference the session held.
+
+        ``self._attitude`` is kept across reconnects; stop() clears it when
+        the user explicitly ends the session.
+        """
         self._channel = None
         self._ai_channel = None
         self._session = None
@@ -610,27 +635,25 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         self._partial_buffers.clear()
         self._partial_speakers.clear()
         self._base_system_prompt = ""
-        # Note: self._attitude is preserved across reconnects and only
-        # cleared in stop() when the user explicitly ends the session.
 
-        # --- Task finalization ---
-        # kit.close() cancels VoiceChannel's scheduled tasks, but they
-        # need event-loop iterations to actually finalize (receive
-        # CancelledError).  Yield here so they can complete before we
-        # run cleanup_stale_fds() — otherwise cleanup kills the timer
-        # handles those tasks need, leaving them stuck in "cancelling"
-        # state forever and accumulating across sessions.
+    async def _finalize_event_loop(self) -> None:
+        """Let cancelled tasks finish, then clear what MCP/anyio left behind.
+
+        kit.close() cancels VoiceChannel's scheduled tasks, but they need
+        event-loop iterations to actually finalize (receive CancelledError).
+        Yield first, so cleanup_stale_fds() does not kill the timer handles
+        those tasks need — they would stay stuck "cancelling" forever and
+        accumulate across sessions.  Only FDs the session registered go: the
+        app's own were there before it.
+        """
         await asyncio.sleep(0)
         await asyncio.sleep(0)
-
-        # Now safe to clean up stale event-loop state left by MCP/anyio —
-        # only FDs the session registered: the app's own were there before.
         keep = self._fds_before_session
         cleanup_stale_fds(keep=keep)
         # The orphaned anyio timers may only appear after the current
         # event-loop iteration completes (they re-create themselves via
-        # call_soon).  Schedule a delayed second pass to catch them
-        # without interfering with ongoing task finalization.
+        # call_soon).  A delayed second pass catches them without
+        # interfering with ongoing task finalization.
         asyncio.get_running_loop().call_later(0.1, lambda: cleanup_stale_fds(keep=keep))
         # Monitor CPU after cleanup to verify the fix worked
         self._cleanup_monitor_task = self._create_owned_task(
