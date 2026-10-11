@@ -44,7 +44,7 @@ def test_the_refusal_names_the_feature_to_install(missing):
 
     assert refused.value.feature == "gemini"
     assert str(refused.value) == (
-        "Google Gemini is not installed — add it in Settings → Components."
+        "Google Gemini is not installed — add it in Settings → Models & components → Components."
     )
 
 
@@ -149,6 +149,6 @@ def test_without_pynput_the_hotkeys_say_so_once_and_start_nothing(qapp, missing,
     assert said[0].levelno == logging.INFO
     assert said[0].getMessage() == (
         "Global hotkeys off: Global hotkey support is not installed — add it in "
-        "Settings → Components."
+        "Settings → Models & components → Components."
     )
     assert all(lst._listener is None and lst._monitor is None for lst in listeners)

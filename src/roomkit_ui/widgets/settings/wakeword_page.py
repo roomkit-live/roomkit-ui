@@ -1,178 +1,226 @@
-"""Wake word settings: enrol a phrase, tune sensitivity, auto-hangup."""
+"""Wake phrase setup, local prerequisites and quiet-conversation preferences."""
 
 from __future__ import annotations
 
-import asyncio
-import logging
-
-from PySide6.QtWidgets import (
-    QCheckBox,
-    QComboBox,
-    QFormLayout,
-    QHBoxLayout,
-    QLabel,
-    QPushButton,
-    QSpinBox,
-    QVBoxLayout,
-    QWidget,
-)
+from PySide6.QtCore import Qt, Signal, Slot
+from PySide6.QtWidgets import QComboBox, QHBoxLayout, QPushButton, QSpinBox, QVBoxLayout, QWidget
 
 from roomkit_ui.features import unavailable_reason
 from roomkit_ui.model_catalog import (
-    WAKEWORD_ENCODER_SIZE,
     is_vad_model_downloaded,
     is_wakeword_encoder_downloaded,
     vad_model_path,
     wakeword_encoder_path,
 )
-from roomkit_ui.theme import colors
 from roomkit_ui.wakeword import clear as clear_fingerprint
 from roomkit_ui.wakeword import load as load_fingerprint
-
-logger = logging.getLogger(__name__)
+from roomkit_ui.widgets.install_offer import InstallOffer
+from roomkit_ui.widgets.settings.controls import (
+    AdvancedSection,
+    FeedbackLabel,
+    SettingsSection,
+    SettingsToggle,
+    StatusBadge,
+    label,
+    navigation_link,
+    page_layout,
+)
+from roomkit_ui.widgets.settings.model_jobs import model_downloads
+from roomkit_ui.widgets.settings.model_library import model_groups, wakeword_encoder_model
+from roomkit_ui.widgets.settings.models_widgets import _ModelRow
 
 _VAD_MODEL = "ten-vad"
 _VAD_FILE = "ten-vad.int8.onnx"
-
-# The factors live in wakeword.page_sensitivity.FACTORS.
-_SENSITIVITY_LABELS = [
-    ("Cautious — rarely wrong, may need repeating", "cautious"),
-    ("Balanced", "balanced"),
-    ("Responsive — always answers, may misfire", "responsive"),
-]
+_SENSITIVITY = (
+    ("Cautious", "cautious", "Fewer accidental activations; you may need to repeat the phrase."),
+    ("Balanced", "balanced", "A balance between recognition and accidental activations."),
+    (
+        "Responsive",
+        "responsive",
+        "Recognizes more variations; similar sounds may also activate it.",
+    ),
+)
 
 
 class _WakeWordPage(QWidget):
-    """Enrol and arm a spoken wake word."""
+    navigate_requested = Signal(str)
 
     def __init__(self, settings: dict, parent=None) -> None:
         super().__init__(parent)
-        self._settings = settings
-        self._c = colors()
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(16)
-
-        title = QLabel("Wake Word")
-        title.setStyleSheet("font-size: 18px; font-weight: 600; background: transparent;")
-        layout.addWidget(title)
-
-        desc = QLabel(
-            "Listen locally for a spoken phrase and open a session when it is "
-            "heard. Nothing leaves the machine until it fires."
+        self._settings = dict(settings)
+        self._runner = model_downloads()
+        layout = page_layout(
+            self,
+            "Wake Word",
+            "Start a conversation with a phrase you record. Detection runs on this device.",
         )
-        desc.setWordWrap(True)
-        desc.setStyleSheet(
-            f"font-size: 13px; color: {self._c['TEXT_SECONDARY']}; background: transparent;"
+        activation = SettingsSection("Hands-free activation")
+        self._enabled = SettingsToggle(
+            "Listen for the wake word", bool(settings.get("wakeword_enabled", False))
         )
-        layout.addWidget(desc)
-
-        # -- enrolment --
-        self._status = QLabel()
-        self._status.setWordWrap(True)
-        self._status.setStyleSheet(
-            f"QLabel {{ font-size: 12px; color: {self._c['TEXT_PRIMARY']};"
-            f" background: {self._c['BG_TERTIARY']}; border-radius: 6px;"
-            f" padding: 10px 12px; }}"
+        activation.add_row(
+            "Listen for the wake word",
+            "Listening resumes after Settings closes. "
+            "It pauses during conversations and dictation.",
+            self._enabled,
         )
-        layout.addWidget(self._status)
+        self._sensitivity = QComboBox()
+        for title, value, _description in _SENSITIVITY:
+            self._sensitivity.addItem(title, value)
+        index = self._sensitivity.findData(settings.get("wakeword_sensitivity", "balanced"))
+        self._sensitivity.setCurrentIndex(index if index >= 0 else 1)
+        activation.add_row(
+            "Sensitivity", "How closely speech must match your phrase.", self._sensitivity
+        )
+        self._sensitivity_hint = label("", "settingsHint")
+        self._sensitivity_hint.setContentsMargins(18, 0, 18, 16)
+        activation.content.addWidget(self._sensitivity_hint)
+        self._sensitivity.currentIndexChanged.connect(self._update_sensitivity)
+        self._update_sensitivity()
+        layout.addWidget(activation)
 
+        phrase = SettingsSection("Your wake phrase")
+        phrase.content.setContentsMargins(18, 16, 18, 16)
+        phrase.content.setSpacing(12)
+        self._badge = StatusBadge()
+        phrase.content.addWidget(self._badge, 0, Qt.AlignLeft)
+        self._status = FeedbackLabel()
+        phrase.content.addWidget(self._status)
+        self._phrase_info = label("", "settingsHint")
+        self._phrase_info.setTextFormat(Qt.PlainText)
+        phrase.content.addWidget(self._phrase_info)
         buttons = QHBoxLayout()
-        buttons.setSpacing(8)
-        self._download_button = QPushButton()
-        self._download_button.clicked.connect(self._download_encoder)
-        self._download_task: asyncio.Task | None = None
-        buttons.addWidget(self._download_button)
-        self._setup_button = QPushButton("Set up wake word…")
+        self._setup_button = QPushButton("Record a phrase…")
+        self._setup_button.setAutoDefault(False)
         self._setup_button.clicked.connect(self._open_wizard)
         buttons.addWidget(self._setup_button)
         self._forget_button = QPushButton("Forget phrase")
+        self._forget_button.setAutoDefault(False)
         self._forget_button.clicked.connect(self._forget)
         buttons.addWidget(self._forget_button)
-        buttons.addStretch(1)
-        layout.addLayout(buttons)
+        buttons.addStretch()
+        phrase.content.addLayout(buttons)
+        phrase.content.addWidget(
+            label("Recording or forgetting a phrase updates it immediately.", "settingsHint")
+        )
+        layout.addWidget(phrase)
 
-        # -- options --
-        form = QFormLayout()
-        form.setSpacing(10)
+        requirements = QWidget()
+        required_layout = QVBoxLayout(requirements)
+        required_layout.setContentsMargins(0, 0, 0, 0)
+        required_layout.setSpacing(12)
+        self.component_offer = InstallOffer("wakeword")
+        self.component_offer.installed.connect(self.refresh)
+        required_layout.addWidget(self.component_offer)
+        self._encoder_row = _ModelRow(wakeword_encoder_model(), allow_delete=False)
+        vad = next(
+            model for group in model_groups() for model in group.models if model.id == _VAD_MODEL
+        )
+        self._vad_row = _ModelRow(vad, allow_delete=False)
+        self._download_rows = (self._encoder_row, self._vad_row)
+        for row in self._download_rows:
+            row.action_btn.clicked.connect(
+                lambda _checked=False, model=row.model: self._runner.start(model)
+            )
+            required_layout.addWidget(row)
+        self.models_link = navigation_link("Manage files in Models & components →")
+        self.models_link.clicked.connect(lambda: self.navigate_requested.emit("models"))
+        required_layout.addWidget(self.models_link, 0, Qt.AlignLeft)
+        self.requirements = AdvancedSection("Components & local models", requirements)
+        self.requirements.set_expanded(bool(self._blocker()))
+        layout.addWidget(self.requirements)
 
-        self._enabled = QCheckBox("Listen for the wake word")
-        self._enabled.setChecked(bool(settings.get("wakeword_enabled", False)))
-        form.addRow("", self._enabled)
-
-        self._sensitivity = QComboBox()
-        for label, value in _SENSITIVITY_LABELS:
-            self._sensitivity.addItem(label, value)
-        current = str(settings.get("wakeword_sensitivity", "balanced"))
-        index = self._sensitivity.findData(current)
-        self._sensitivity.setCurrentIndex(index if index >= 0 else 1)
-        form.addRow("Sensitivity", self._sensitivity)
-
-        self._hangup_enabled = QCheckBox("Hang up when the conversation goes quiet")
-        self._hangup_enabled.setChecked(bool(settings.get("idle_hangup_enabled", False)))
-        form.addRow("", self._hangup_enabled)
-
+        hangup = SettingsSection(
+            "End quiet conversations",
+            "Applies to every conversation, including those started manually.",
+        )
+        self._hangup_enabled = SettingsToggle(
+            "Automatic hangup", bool(settings.get("idle_hangup_enabled", False))
+        )
+        hangup.add_row(
+            "Automatic hangup",
+            "End a quiet session when neither the assistant nor a tool is working.",
+            self._hangup_enabled,
+        )
         self._hangup_seconds = QSpinBox()
         self._hangup_seconds.setRange(5, 300)
         self._hangup_seconds.setSuffix(" s")
         self._hangup_seconds.setValue(int(settings.get("idle_hangup_seconds", 15) or 15))
-        form.addRow("After", self._hangup_seconds)
-
-        layout.addLayout(form)
-        layout.addStretch(1)
-
+        self._hangup_seconds.setEnabled(self._hangup_enabled.isChecked())
+        self._hangup_enabled.toggled.connect(self._hangup_seconds.setEnabled)
+        hangup.add_row(
+            "Quiet period", "Wait this long before ending the session.", self._hangup_seconds
+        )
+        layout.addWidget(hangup)
+        layout.addStretch()
+        self._enabled.toggled.connect(self.refresh)
+        self._runner.changed.connect(self._download_changed)
         self.refresh()
 
-    # -- state ---------------------------------------------------------------
+    def set_capture_settings(self, settings: dict) -> None:
+        """Use pending audio/provider choices when the user opens the recording wizard."""
+        self._settings.update(settings)
 
     def _blocker(self) -> str | None:
-        """What stops the wake word from working, phrased for the user."""
         reason = unavailable_reason("wakeword")
         if reason:
             return reason
         if not is_vad_model_downloaded(_VAD_MODEL):
-            return "The TEN VAD model is missing — download it in AI Models."
+            return "Download TEN VAD in Components & local models below before recording a phrase."
         if not is_wakeword_encoder_downloaded():
-            return "The wake-word encoder is not downloaded yet."
+            return "Download the wake-word encoder below before recording a phrase."
         return None
 
+    @Slot()
     def refresh(self) -> None:
-        """Re-read what is enrolled and what is missing."""
         blocker = self._blocker()
         fingerprint = load_fingerprint()
-
-        if blocker:
-            self._status.setText(blocker)
-            self._setup_button.setEnabled(False)
-            self._enabled.setEnabled(False)
-        elif fingerprint is not None and fingerprint.usable:
-            self._status.setText(
-                f"Enrolled: “{fingerprint.label}” — "
-                f"{len(fingerprint.prototypes)} recordings, "
-                f"{len(fingerprint.decoys)} decoys."
-            )
-            self._setup_button.setEnabled(True)
-            self._setup_button.setText("Record again…")
-            self._enabled.setEnabled(True)
-        else:
-            self._status.setText("No phrase enrolled yet.")
-            self._setup_button.setEnabled(True)
-            self._enabled.setEnabled(False)
-            self._enabled.setChecked(False)
-
+        enrolled = fingerprint is not None and fingerprint.usable
+        self._setup_button.setEnabled(blocker is None)
+        self._setup_button.setText("Record again…" if enrolled else "Record a phrase…")
+        # A missing file must not erase the stored choice, or prevent switching it off.
+        self._enabled.setEnabled((not blocker and enrolled) or self._enabled.isChecked())
         self._forget_button.setEnabled(fingerprint is not None)
-        self._refresh_download_button()
+        self._phrase_info.setText(
+            f"{len(fingerprint.prototypes)} phrase recordings · "
+            f"{len(fingerprint.decoys)} comparison recordings"
+            if fingerprint is not None and enrolled
+            else "Record your phrase and similar sounds in the guided setup."
+        )
+        states = [self._runner.states.get(row.model.id) for row in self._download_rows]
+        error = next((state.error for state in states if state and state.phase == "error"), "")
+        active = any(state and state.phase in {"resolving", "downloading"} for state in states)
+        if error:
+            self._badge.set_status("Download failed", "error")
+            self._status.set_status(f"Download failed: {error}", "error")
+        elif active:
+            self._badge.set_status("Downloading", "active")
+            self._status.set_status(
+                "Downloading required files. Progress continues if you close Settings."
+            )
+        elif blocker:
+            self._badge.set_status("Setup required", "neutral")
+            self._status.set_status(blocker)
+        elif enrolled:
+            assert fingerprint is not None
+            self._badge.set_status("Phrase recorded", "success")
+            self._status.set_status(f"Enrolled: “{fingerprint.label}”")
+        else:
+            self._badge.set_status("No phrase recorded", "neutral")
+            self._status.set_status(
+                "The required files are available. Record a phrase to enable listening."
+            )
+        for row in self._download_rows:
+            row.refresh(self._runner.states.get(row.model.id))
+        self.component_offer.set_feature("wakeword")
 
-    def _refresh_download_button(self) -> None:
-        """Offer the encoder download whenever it is what's missing."""
-        missing = not unavailable_reason("wakeword") and not is_wakeword_encoder_downloaded()
-        self._download_button.setVisible(missing)
-        if self._download_task is None:
-            self._download_button.setEnabled(True)
-            self._download_button.setText(f"Download encoder ({WAKEWORD_ENCODER_SIZE})")
+    @Slot(str)
+    def _download_changed(self, model_id: str) -> None:
+        if any(row.model.id == model_id for row in self._download_rows):
+            self.refresh()
 
-    # -- actions -------------------------------------------------------------
+    def _update_sensitivity(self) -> None:
+        self._sensitivity_hint.setText(_SENSITIVITY[self._sensitivity.currentIndex()][2])
 
     def _open_wizard(self) -> None:
         from roomkit_ui.wakeword.controller import capture_rate
@@ -186,56 +234,14 @@ class _WakeWordPage(QWidget):
             parent=self,
         )
         if dialog.exec():
-            # Enrolling is the user asking for this; arming it is the point.
-            self._enabled.setEnabled(True)
             self._enabled.setChecked(True)
             self._hangup_enabled.setChecked(True)
         self.refresh()
-
-    def _download_encoder(self) -> None:
-        from roomkit_ui.wakeword.encoder_download import download_encoder
-
-        loop = asyncio.get_event_loop()
-        self._download_button.setEnabled(False)
-        self._show_download_progress(0)
-
-        def progress(done: int, total: int) -> None:
-            pct = min(done * 100 // total, 100) if total > 0 else 0
-            loop.call_soon_threadsafe(self._show_download_progress, pct)
-
-        async def run() -> None:
-            try:
-                await download_encoder(progress)
-            except Exception as exc:
-                logger.exception("Wake-word encoder download failed")
-                self._finish_download(f"Download failed: {exc}")
-            else:
-                self._finish_download(None)
-
-        self._download_task = loop.create_task(run())
-
-    def _show_download_progress(self, pct: int) -> None:
-        try:
-            self._download_button.setText(f"Downloading… {pct}%")
-        except RuntimeError:
-            pass  # the dialog closed while the download ran
-
-    def _finish_download(self, error: str | None) -> None:
-        self._download_task = None
-        try:
-            self.refresh()
-            if error:
-                self._status.setText(error)
-                self._download_button.setText("Retry download")
-        except RuntimeError:
-            pass  # the dialog closed while the download ran
 
     def _forget(self) -> None:
         clear_fingerprint()
         self._enabled.setChecked(False)
         self.refresh()
-
-    # -- persistence ---------------------------------------------------------
 
     def get_settings(self) -> dict:
         return {

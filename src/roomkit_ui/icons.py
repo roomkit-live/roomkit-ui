@@ -17,6 +17,32 @@ _SVG_TEMPLATE = (
 )
 
 _PATHS = {
+    "magnifying-glass": (
+        '<circle cx="10.5" cy="10.5" r="7.5"/><path stroke-linecap="round" d="m16 16 5 5"/>'
+    ),
+    "squares-2x2": (
+        '<rect x="3" y="3" width="7" height="7" rx="2"/>'
+        '<rect x="14" y="3" width="7" height="7" rx="2"/>'
+        '<rect x="3" y="14" width="7" height="7" rx="2"/>'
+        '<rect x="14" y="14" width="7" height="7" rx="2"/>'
+    ),
+    "chat-bubble": '<path d="M21 11a8 8 0 0 1-8 8H6l-3 3V11a9 9 0 0 1 18 0Z"/>',
+    "user-group": (
+        '<circle cx="9" cy="7" r="4"/>'
+        '<path d="M2 21v-3a7 7 0 0 1 14 0v3M17 4a4 4 0 0 1 0 7M21 21v-3a7 7 0 0 0-4-5"/>'
+    ),
+    "bolt": '<path stroke-linejoin="round" d="m13 2-9 12h7l-1 8 10-13h-8l1-7Z"/>',
+    "layers": (
+        '<path stroke-linejoin="round" d="m12 2 9 5-9 5-9-5 9-5ZM3 12l9 5 9-5M3 17l9 5 9-5"/>'
+    ),
+    "cube": '<path stroke-linejoin="round" d="m12 2 9 5v10l-9 5-9-5V7l9-5Zm0 10 9-5M3 7l9 5v10"/>',
+    "plug": '<path d="M8 3v5M16 3v5M5 8h14v3a7 7 0 0 1-14 0V8ZM12 18v4"/>',
+    "command-line": (
+        '<rect x="2" y="4" width="20" height="16" rx="3"/><path d="m6 9 3 3-3 3M12 15h5"/>'
+    ),
+    "waveform": '<path stroke-linecap="round" d="M4 10v4M8 6v12M12 3v18M16 7v10M20 10v4"/>',
+    "chart-bar": '<path d="M4 3v18h17M8 17v-5M13 17V8M18 17V4"/>',
+    "information-circle": '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7v1"/>',
     "microphone": (
         '<path stroke-linecap="round" stroke-linejoin="round" '
         'd="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 '

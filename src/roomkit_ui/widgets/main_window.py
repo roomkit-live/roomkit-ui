@@ -15,7 +15,7 @@ from roomkit_ui.engine import Engine
 from roomkit_ui.engine_state import EngineState
 from roomkit_ui.idle_hangup import IdleHangup
 from roomkit_ui.settings import load_settings
-from roomkit_ui.theme import colors
+from roomkit_ui.theme_live import themed_style
 from roomkit_ui.widgets.chat_view import ChatView
 from roomkit_ui.widgets.control_bar import ControlBar
 from roomkit_ui.widgets.loading_overlay import LoadingOverlay
@@ -40,7 +40,6 @@ class MainWindow(QMainWindow):
         self.resize(420, 700)
 
         self._engine = Engine(self)
-        c = colors()
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -79,12 +78,14 @@ class MainWindow(QMainWindow):
         # ── Separator ──
         sep = QWidget()
         sep.setFixedHeight(1)
-        sep.setStyleSheet(f"background-color: {c['SEPARATOR']};")
+        themed_style(sep, lambda c: f"background-color: {c['SEPARATOR']};")
         root.addWidget(sep)
 
         # ── Control bar ──
         self._controls = ControlBar()
-        self._controls.setStyleSheet(f"ControlBar {{ background-color: {c['BG_SECONDARY']}; }}")
+        themed_style(
+            self._controls, lambda c: f"ControlBar {{ background-color: {c['BG_SECONDARY']}; }}"
+        )
         root.addWidget(self._controls)
 
         # ── Signals ──

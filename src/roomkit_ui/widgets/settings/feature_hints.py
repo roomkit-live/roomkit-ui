@@ -15,6 +15,7 @@ from PySide6.QtWidgets import QComboBox
 
 from roomkit_ui.features import unavailable_reason
 from roomkit_ui.theme import colors
+from roomkit_ui.theme_live import bind_theme
 from roomkit_ui.widgets.install_offer import InstallOffer
 
 
@@ -32,6 +33,14 @@ def populate_provider_combo(
     for label, _value in entries:
         combo.addItem(label)
     refresh_provider_combo(combo, entries, feature_map, offset=start)
+    bind_theme(combo, lambda: _refresh_colors(combo), name="provider_colors")
+
+
+def _refresh_colors(combo: QComboBox) -> None:
+    muted = QBrush(QColor(colors()["TEXT_SECONDARY"]))
+    for index in range(combo.count()):
+        if combo.itemData(index, Qt.ForegroundRole) is not None:
+            combo.setItemData(index, muted, Qt.ForegroundRole)
 
 
 def refresh_provider_combo(

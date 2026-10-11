@@ -169,12 +169,14 @@ class DictationSessionMixin:
             return None
         if not model_id:
             self._fail_start(
-                "No local STT model selected. Go to Settings → AI Models to choose one."
+                "No local STT model selected. Download one in Settings → Models & components, "
+                "then select it in Dictation."
             )
             return None
         if not is_model_downloaded(model_id):
             self._fail_start(
-                f"Model '{model_id}' is not downloaded. Go to Settings → AI Models to download it."
+                f"Model '{model_id}' is not downloaded. "
+                "Download it in Settings → Models & components → Local models."
             )
             return None
         try:

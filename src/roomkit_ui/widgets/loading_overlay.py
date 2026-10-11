@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
 )
 
 from roomkit_ui.theme import colors
+from roomkit_ui.theme_live import themed_style
 
 _SPINNER_SIZE = 44
 _SPINNER_ARC_SPAN = 300 * 16  # Qt angles are in 1/16 °
@@ -82,23 +83,26 @@ class LoadingOverlay(QWidget):
 
     def __init__(self, parent: QWidget) -> None:
         super().__init__(parent)
-        c = colors()
         self.setAutoFillBackground(True)
-        self.setStyleSheet(f"background-color: {c['BG_PRIMARY']};")
+        themed_style(self, lambda c: f"background-color: {c['BG_PRIMARY']};")
 
         self._spinner = _Spinner()
         self._status = QLabel("Starting…")
         self._status.setAlignment(Qt.AlignCenter)
         self._status.setWordWrap(True)
-        self._status.setStyleSheet(
-            f"color: {c['TEXT_SECONDARY']}; font-size: 13px; background: transparent;"
+        themed_style(
+            self._status,
+            lambda c: f"color: {c['TEXT_SECONDARY']}; font-size: 13px; background: transparent;",
         )
         self._cancel = QPushButton("Cancel")
         self._cancel.setCursor(Qt.PointingHandCursor)
-        self._cancel.setStyleSheet(
-            f"QPushButton {{ color: {c['TEXT_SECONDARY']}; background: transparent;"
-            f" border: 1px solid {c['SEPARATOR']}; border-radius: 6px; padding: 4px 14px; }}"
-            f"QPushButton:hover {{ color: {c['TEXT_PRIMARY']}; }}"
+        themed_style(
+            self._cancel,
+            lambda c: (
+                f"QPushButton {{ color: {c['TEXT_SECONDARY']}; background: transparent;"
+                f" border: 1px solid {c['SEPARATOR']}; border-radius: 6px; padding: 4px 14px; }}"
+                f"QPushButton:hover {{ color: {c['TEXT_PRIMARY']}; }}"
+            ),
         )
         self._cancel.clicked.connect(self.cancel_requested.emit)
 

@@ -1,4 +1,4 @@
-"""AI settings: conversation mode, provider, API key, model, voice, prompt."""
+"""Conversation voice setup: mode, providers, models and speaking behavior."""
 
 from __future__ import annotations
 
@@ -6,11 +6,9 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QComboBox,
     QFormLayout,
+    QFrame,
     QLabel,
     QLineEdit,
-    QStackedWidget,
-    QTabBar,
-    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -20,17 +18,14 @@ from roomkit_ui.features import (
     STT_PROVIDER_FEATURES,
     TTS_PROVIDER_FEATURES,
 )
-from roomkit_ui.theme import colors
+from roomkit_ui.widgets.settings.choice_cards import ChoiceCards
+from roomkit_ui.widgets.settings.controls import SettingsTabs, label
 from roomkit_ui.widgets.settings.feature_hints import offer_install, populate_provider_combo
+from roomkit_ui.widgets.settings.pipeline_summary import PipelineSummary
 from roomkit_ui.widgets.settings.realtime_section import RealtimeSection
 from roomkit_ui.widgets.settings.vc_agent_fields import VCAgentPage
 from roomkit_ui.widgets.settings.vc_cloud_fields import VCCloudFields
 from roomkit_ui.widgets.settings.vc_local_fields import VCLocalFields
-
-CONVERSATION_MODES = [
-    ("Speech-to-Speech (Realtime)", "realtime"),
-    ("Voice Channel (STT \u2192 LLM \u2192 TTS)", "voice_channel"),
-]
 
 VC_LLM_PROVIDERS = [
     ("Anthropic", "anthropic"),
@@ -74,37 +69,41 @@ _INTERRUPTION_HINT = (
 )
 
 
-class _AIPage(QWidget):
-    """AI settings: conversation mode, provider, API key, model, voice, prompt."""
+class VoiceSetup(QWidget):
+    """Conversation voice setup: mode, providers, models and speaking behavior."""
 
     def __init__(self, settings: dict, parent=None) -> None:
         super().__init__(parent)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(12)
+        layout.setSpacing(28)
 
-        c = colors()
-
-        title = QLabel("AI Provider")
-        title.setStyleSheet("font-size: 18px; font-weight: 600; background: transparent;")
-        layout.addWidget(title)
-
-        # -- Conversation mode selector --
-        mode_form = QFormLayout()
-        mode_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
-        mode_form.setSpacing(10)
-        mode_form.setLabelAlignment(Qt.AlignRight)
-
-        self.mode_combo = QComboBox()
-        for label, _value in CONVERSATION_MODES:
-            self.mode_combo.addItem(label)
-        current_mode = settings.get("conversation_mode", "realtime")
-        for i, (_, val) in enumerate(CONVERSATION_MODES):
-            if val == current_mode:
-                self.mode_combo.setCurrentIndex(i)
-                break
-        mode_form.addRow("Mode", self.mode_combo)
-        layout.addLayout(mode_form)
+        mode_heading = QVBoxLayout()
+        mode_heading.setSpacing(6)
+        mode_heading.addWidget(label("Conversation mode", "settingsSectionTitle"))
+        mode_heading.addWidget(
+            label("Choose the experience. Fine-tune the details below.", "settingsHint")
+        )
+        mode_heading.addSpacing(10)
+        self.mode_picker = ChoiceCards(
+            [
+                (
+                    "realtime",
+                    "Realtime",
+                    "A single provider handles a fluid, live voice conversation.",
+                    "waveform",
+                ),
+                (
+                    "voice_channel",
+                    "Voice Channel",
+                    "Choose separate models for transcription, reasoning, and speech.",
+                    "layers",
+                ),
+            ],
+            settings.get("conversation_mode", "realtime"),
+        )
+        mode_heading.addWidget(self.mode_picker)
+        layout.addLayout(mode_heading)
 
         # ── Realtime section (self-contained widget) ──
         self._realtime = RealtimeSection(settings)
@@ -114,50 +113,24 @@ class _AIPage(QWidget):
         self._vc_section = QWidget()
         vc_layout = QVBoxLayout(self._vc_section)
         vc_layout.setContentsMargins(0, 0, 0, 0)
-        vc_layout.setSpacing(10)
-
-        vc_section_label = QLabel("Voice Channel")
-        vc_section_label.setStyleSheet(
-            f"font-size: 12px; font-weight: 600; color: {c['TEXT_SECONDARY']};"
-            f" text-transform: uppercase; letter-spacing: 1px; background: transparent;"
-        )
-        vc_layout.addWidget(vc_section_label)
+        vc_layout.setSpacing(20)
+        vc_layout.addWidget(label("Build your voice pipeline", "settingsSectionTitle"))
+        self.pipeline = PipelineSummary()
+        vc_layout.addWidget(self.pipeline)
 
         # Sub-module instances
         self._local = VCLocalFields(self, settings)
         self._cloud = VCCloudFields(settings)
 
-        # -- Horizontal tab bar --
-        self._vc_tab_bar = QTabBar()
-        self._vc_tab_bar.addTab("STT")
-        self._vc_tab_bar.addTab("LLM")
-        self._vc_tab_bar.addTab("TTS")
-        self._vc_tab_bar.addTab("Agent")
-        self._vc_tab_bar.setExpanding(False)
-        self._vc_tab_bar.setDocumentMode(True)
-        self._vc_tab_bar.setStyleSheet(f"""
-            QTabBar::tab {{
-                padding: 5px 16px;
-                margin-right: 4px;
-                border-radius: 6px;
-                color: {c["TEXT_SECONDARY"]};
-                background: transparent;
-            }}
-            QTabBar::tab:selected {{
-                background: {c["BG_TERTIARY"]};
-                color: {c["TEXT_PRIMARY"]};
-            }}
-        """)
-        vc_layout.addWidget(self._vc_tab_bar)
-
-        self._vc_stack = QStackedWidget()
-
         # -- Page 0: STT --
-        stt_page = QWidget()
+        stt_page = QFrame()
+        stt_page.setObjectName("settingsCard")
         stt_form = QFormLayout(stt_page)
         stt_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
         stt_form.setSpacing(10)
-        stt_form.setLabelAlignment(Qt.AlignRight)
+        stt_form.setLabelAlignment(Qt.AlignLeft)
+        stt_form.setRowWrapPolicy(QFormLayout.WrapAllRows)
+        stt_form.setContentsMargins(20, 20, 20, 20)
 
         self.vc_stt_provider = QComboBox()
         populate_provider_combo(self.vc_stt_provider, VC_STT_PROVIDERS, STT_PROVIDER_FEATURES)
@@ -173,14 +146,19 @@ class _AIPage(QWidget):
         self._local.add_stt_fields(stt_form)
         self._cloud.add_stt_fields(stt_form)
 
-        self._vc_stack.addWidget(stt_page)
+        # Barge-in is decided on the microphone side, and what it can do
+        # depends on the STT (Words only needs one that hears words live).
+        self._add_interruption_fields(stt_form, settings)
 
         # -- Page 1: LLM --
-        llm_page = QWidget()
+        llm_page = QFrame()
+        llm_page.setObjectName("settingsCard")
         llm_form = QFormLayout(llm_page)
         llm_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
         llm_form.setSpacing(10)
-        llm_form.setLabelAlignment(Qt.AlignRight)
+        llm_form.setLabelAlignment(Qt.AlignLeft)
+        llm_form.setRowWrapPolicy(QFormLayout.WrapAllRows)
+        llm_form.setContentsMargins(20, 20, 20, 20)
 
         self.vc_provider = QComboBox()
         populate_provider_combo(self.vc_provider, VC_LLM_PROVIDERS, AI_PROVIDER_FEATURES)
@@ -196,14 +174,15 @@ class _AIPage(QWidget):
         self._cloud.add_llm_fields(llm_form)
         self._local.add_llm_fields(llm_form)
 
-        self._vc_stack.addWidget(llm_page)
-
         # -- Page 2: TTS --
-        tts_page = QWidget()
+        tts_page = QFrame()
+        tts_page.setObjectName("settingsCard")
         tts_form = QFormLayout(tts_page)
         tts_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
         tts_form.setSpacing(10)
-        tts_form.setLabelAlignment(Qt.AlignRight)
+        tts_form.setLabelAlignment(Qt.AlignLeft)
+        tts_form.setRowWrapPolicy(QFormLayout.WrapAllRows)
+        tts_form.setContentsMargins(20, 20, 20, 20)
 
         self.vc_tts_provider = QComboBox()
         populate_provider_combo(self.vc_tts_provider, VC_TTS_PROVIDERS, TTS_PROVIDER_FEATURES)
@@ -219,97 +198,63 @@ class _AIPage(QWidget):
         self._local.add_tts_fields(tts_form)
         self._cloud.add_tts_fields(tts_form)
 
-        self._add_interruption_fields(tts_form, settings)
-
-        self._vc_stack.addWidget(tts_page)
-
         # -- Page 3: Agent (turn-taking) --
         self._agent = VCAgentPage(settings)
-        self._vc_stack.addWidget(self._agent)
 
-        self._vc_tab_bar.currentChanged.connect(self._vc_stack.setCurrentIndex)
-        vc_layout.addWidget(self._vc_stack)
+        self.pipeline_tabs = SettingsTabs(
+            [
+                ("Listen · STT", stt_page),
+                ("Think · LLM", llm_page),
+                ("Speak · TTS", tts_page),
+                ("Agent", self._agent),
+            ]
+        )
+        vc_layout.addWidget(self.pipeline_tabs)
 
         # Gradium Advanced collapsible (below tabs, visible when Gradium selected)
         self._cloud.add_gradium_advanced(vc_layout)
 
         layout.addWidget(self._vc_section)
 
-        # ── System prompt (shared) ──
-        section = QLabel("System Prompt")
-        section.setStyleSheet(
-            f"font-size: 12px; font-weight: 600; color: {c['TEXT_SECONDARY']};"
-            f" text-transform: uppercase; letter-spacing: 1px; background: transparent;"
-        )
-        layout.addWidget(section)
-        self.prompt = QTextEdit()
-        self.prompt.setLineWrapMode(QTextEdit.WidgetWidth)
-        self.prompt.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.prompt.setPlainText(
-            settings.get(
-                "system_prompt",
-                "You are a friendly voice assistant. Be concise and helpful.",
-            )
-        )
-        self.prompt.setFixedHeight(80)
-        layout.addWidget(self.prompt)
-
-        # ── Default Attitude (shared) ──
-        attitude_label = QLabel("Default Attitude")
-        attitude_label.setStyleSheet(
-            f"font-size: 12px; font-weight: 600; color: {c['TEXT_SECONDARY']};"
-            f" text-transform: uppercase; letter-spacing: 1px; background: transparent;"
-        )
-        layout.addWidget(attitude_label)
-
-        self.attitude_combo = QComboBox()
-        layout.addWidget(self.attitude_combo)
-
-        attitude_hint = QLabel(
-            "Select the assistant's default personality. Manage attitudes in the Attitudes tab."
-        )
-        attitude_hint.setWordWrap(True)
-        attitude_hint.setStyleSheet(
-            f"font-size: 12px; color: {c['TEXT_SECONDARY']}; background: transparent;"
-        )
-        layout.addWidget(attitude_hint)
-
-        self._saved_selected_attitude = settings.get("selected_attitude", "")
-
-        layout.addStretch()
-
         # Wire signals
-        self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
+        self.mode_picker.value_changed.connect(self._on_mode_changed)
         self.vc_provider.currentIndexChanged.connect(self._on_vc_provider_changed)
         self.vc_stt_provider.currentIndexChanged.connect(self._on_vc_stt_provider_changed)
         self.vc_tts_provider.currentIndexChanged.connect(self._on_vc_tts_provider_changed)
 
+        self._local.vc_stt_model.currentIndexChanged.connect(
+            lambda: self._local.update_stt_visibility(self._current_stt_provider())
+        )
+        self._local.vc_tts_model.currentIndexChanged.connect(
+            lambda: self._local.update_tts_visibility(self._current_tts_provider())
+        )
+
         # Initial state
-        self._on_mode_changed(self.mode_combo.currentIndex())
+        self._on_mode_changed(self.mode_picker.value())
         self._on_vc_provider_changed(self.vc_provider.currentIndex())
         self._on_vc_stt_provider_changed(self.vc_stt_provider.currentIndex())
         self._on_vc_tts_provider_changed(self.vc_tts_provider.currentIndex())
 
+        for field in [*self.findChildren(QComboBox), *self.findChildren(QLineEdit)]:
+            field.setProperty("settingsFormField", True)
+
     def _add_interruption_fields(self, form: QFormLayout, settings: dict) -> None:
         self.vc_interruption_mode = QComboBox()
-        for label, value in VC_INTERRUPTION_MODES:
-            self.vc_interruption_mode.addItem(label, value)
+        for title, value in VC_INTERRUPTION_MODES:
+            self.vc_interruption_mode.addItem(title, value)
         idx = self.vc_interruption_mode.findData(settings.get("vc_interruption_mode", "off"))
         self.vc_interruption_mode.setCurrentIndex(max(idx, 0))
         form.addRow("Barge-in", self.vc_interruption_mode)
 
         hint = QLabel(_INTERRUPTION_HINT)
         hint.setWordWrap(True)
-        hint.setStyleSheet(
-            f"font-size: 11px; color: {colors()['TEXT_SECONDARY']};"
-            f" font-style: italic; background: transparent;"
-        )
+        hint.setObjectName("settingsHint")
         form.addRow("", hint)
 
     # -- Mode / provider change handlers --
 
-    def _on_mode_changed(self, index: int) -> None:
-        is_realtime = CONVERSATION_MODES[index][1] == "realtime"
+    def _on_mode_changed(self, mode: str) -> None:
+        is_realtime = mode == "realtime"
         self._realtime.setVisible(is_realtime)
         self._vc_section.setVisible(not is_realtime)
         # Realtime mode too: get_settings() reads these combos, and left
@@ -320,18 +265,42 @@ class _AIPage(QWidget):
         prov = VC_LLM_PROVIDERS[index][1]
         self._local.update_llm_visibility(prov)
         self._cloud.update_llm_visibility(prov)
+        self._update_pipeline_summary()
 
     def _on_vc_stt_provider_changed(self, index: int) -> None:
         prov = VC_STT_PROVIDERS[index][1]
         self._local.update_stt_visibility(prov)
         self._cloud.update_stt_visibility(prov)
         self._cloud.update_gradium_visibility(prov, self._current_tts_provider())
+        self._update_pipeline_summary()
 
     def _on_vc_tts_provider_changed(self, index: int) -> None:
         prov = VC_TTS_PROVIDERS[index][1]
         self._local.update_tts_visibility(prov)
         self._cloud.update_tts_visibility(prov)
         self._cloud.update_gradium_visibility(self._current_stt_provider(), prov)
+        self._update_pipeline_summary()
+
+    def _update_pipeline_summary(self) -> None:
+        stt = {"local": "Local", "azure_mai": "Azure MAI", "meta": "Meta Muse"}
+        llm = {"local": "Local", "llamacpp": "llama.cpp"}
+        tts = {
+            "piper": "Piper",
+            "qwen3": "Qwen3-TTS",
+            "neutts": "NeuTTS",
+            "pocket": "Pocket TTS",
+            "azure": "Azure MAI",
+        }
+        providers = (
+            (self.vc_stt_provider, VC_STT_PROVIDERS, stt),
+            (self.vc_provider, VC_LLM_PROVIDERS, llm),
+            (self.vc_tts_provider, VC_TTS_PROVIDERS, tts),
+        )
+        names = []
+        for combo, entries, short_names in providers:
+            title, value = entries[combo.currentIndex()]
+            names.append(short_names.get(value, title))
+        self.pipeline.set_providers(*names)
 
     def _current_stt_provider(self) -> str:
         idx: int = self.vc_stt_provider.currentIndex()
@@ -341,44 +310,7 @@ class _AIPage(QWidget):
         idx: int = self.vc_tts_provider.currentIndex()
         return VC_TTS_PROVIDERS[idx][1]
 
-    # -- Public API (panel.py compatibility) --
-
-    def populate_attitude_combo(self, all_names: list[str]) -> None:
-        # The saved attitude seeds the first fill only.  Refills (each visit
-        # to this tab, to list attitudes added meanwhile) keep the user's pick.
-        if self.attitude_combo.count():
-            target = self.attitude_combo.currentText()
-        else:
-            target = self._saved_selected_attitude
-        self.attitude_combo.blockSignals(True)
-        self.attitude_combo.clear()
-        self.attitude_combo.addItem("None")
-        for name in all_names:
-            self.attitude_combo.addItem(name)
-        if target:
-            idx = self.attitude_combo.findText(target)
-            if idx >= 0:
-                self.attitude_combo.setCurrentIndex(idx)
-        self.attitude_combo.blockSignals(False)
-
-    def api_key_fields(self) -> dict[str, list[QLineEdit]]:
-        """This page's copies of each API key that several tabs edit, by setting key."""
-        rt, cloud = self._realtime, self._cloud
-        return {
-            "openai_api_key": [
-                rt.openai_api_key,
-                cloud.vc_openai_api_key,
-                self._agent.openai_api_key,
-            ],
-            "api_key": [rt.gemini_api_key, cloud.vc_gemini_api_key],
-            "deepgram_api_key": [rt.deepgram_api_key, cloud.deepgram_api_key],
-            "elevenlabs_api_key": [rt.elevenlabs_api_key, cloud.elevenlabs_api_key],
-            "azure_speech_api_key": [cloud.azure.stt_key, cloud.azure.tts_key],
-        }
-
-    def selected_attitude_name(self) -> str:
-        text = str(self.attitude_combo.currentText())
-        return "" if text == "None" else text
+    # -- Models and settings --
 
     def refresh_vc_model_combos(self) -> None:
         # The saved models seed the first fill only.  Refills (to list models
@@ -394,7 +326,7 @@ class _AIPage(QWidget):
 
     def get_settings(self) -> dict:
         return {
-            "conversation_mode": CONVERSATION_MODES[self.mode_combo.currentIndex()][1],
+            "conversation_mode": self.mode_picker.value(),
             **self._realtime.get_settings(),
             "vc_llm_provider": VC_LLM_PROVIDERS[self.vc_provider.currentIndex()][1],
             "vc_stt_provider": VC_STT_PROVIDERS[self.vc_stt_provider.currentIndex()][1],
@@ -403,6 +335,4 @@ class _AIPage(QWidget):
             **self._local.get_settings(),
             **self._cloud.get_settings(),
             **self._agent.get_settings(),
-            "system_prompt": self.prompt.toPlainText().strip(),
-            "selected_attitude": self.selected_attitude_name(),
         }

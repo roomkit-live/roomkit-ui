@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from roomkit_ui.theme import colors
+from roomkit_ui.theme_live import themed_style
 from roomkit_ui.widgets.chat_bubble import ChatBubble
 
 # Entrance fade for new rows (bubbles, tool/info pills).
@@ -82,8 +82,6 @@ class ChatView(QScrollArea):
         self._last_assistant_bubble: ChatBubble | None = None
         self._loading_label: QLabel | None = None
 
-        c = colors()
-
         # Empty state (shown before conversation starts, centered vertically)
         self._empty_state = QWidget()
         self._empty_state.setStyleSheet("background: transparent;")
@@ -113,16 +111,20 @@ class ChatView(QScrollArea):
 
         heading = QLabel("RoomKit UI")
         heading.setAlignment(Qt.AlignCenter)
-        heading.setStyleSheet(
-            f"font-size: 18px; font-weight: 600;"
-            f" color: {c['TEXT_PRIMARY']}; background: transparent;"
+        themed_style(
+            heading,
+            lambda c: (
+                f"font-size: 18px; font-weight: 600;"
+                f" color: {c['TEXT_PRIMARY']}; background: transparent;"
+            ),
         )
         empty_layout.addWidget(heading)
 
         hint = QLabel("Press Start to begin a voice conversation")
         hint.setAlignment(Qt.AlignCenter)
-        hint.setStyleSheet(
-            f"font-size: 15px; color: {c['TEXT_SECONDARY']}; background: transparent;"
+        themed_style(
+            hint,
+            lambda c: f"font-size: 15px; color: {c['TEXT_SECONDARY']}; background: transparent;",
         )
         empty_layout.addWidget(hint)
 
@@ -133,9 +135,12 @@ class ChatView(QScrollArea):
         # Status indicator (Listening… / Thinking…)
         self._status_label = QLabel()
         self._status_label.setAlignment(Qt.AlignCenter)
-        self._status_label.setStyleSheet(
-            f"QLabel {{ color: {c['TEXT_SECONDARY']}; font-size: 12px; font-style: italic;"
-            f" background: transparent; padding: 4px; }}"
+        themed_style(
+            self._status_label,
+            lambda c: (
+                f"QLabel {{ color: {c['TEXT_SECONDARY']}; font-size: 12px; font-style: italic;"
+                f" background: transparent; padding: 4px; }}"
+            ),
         )
         self._status_label.hide()
         self._layout.addWidget(self._status_label)
@@ -300,13 +305,16 @@ class ChatView(QScrollArea):
         label = QLabel(text)
         label.setWordWrap(True)
         label.setAlignment(Qt.AlignLeft)
-        label.setStyleSheet(
-            f"QLabel {{"
-            f"  color: {color};"
-            f"  font-size: 12px;"
-            f"  background: transparent;"
-            f"  padding: 2px 24px;"
-            f"}}"
+        themed_style(
+            label,
+            lambda c: (
+                f"QLabel {{"
+                f"  color: {c.get(color, color)};"
+                f"  font-size: 12px;"
+                f"  background: transparent;"
+                f"  padding: 2px 24px;"
+                f"}}"
+            ),
         )
         return label
 
@@ -328,7 +336,7 @@ class ChatView(QScrollArea):
     def set_loading_status(self, message: str) -> None:
         """Show or update a single loading status label (replaces previous)."""
         if self._loading_label is None:
-            self._loading_label = self._make_status_label("", colors()["TEXT_SECONDARY"])
+            self._loading_label = self._make_status_label("", "TEXT_SECONDARY")
             self._insert_status_row(self._loading_label)
         self._loading_label.setText(message)
         self._scroll_to_bottom()
@@ -343,7 +351,7 @@ class ChatView(QScrollArea):
     def add_info(self, message: str) -> None:
         """Show a neutral info message in the chat area."""
         self._finalize_current_bubble()
-        self._insert_status_row(self._make_status_label(message, colors()["TEXT_SECONDARY"]))
+        self._insert_status_row(self._make_status_label(message, "TEXT_SECONDARY"))
 
     def add_tool_call(self, name: str, arguments: str) -> None:
         """Show a tool-call indicator in the chat area."""
@@ -381,7 +389,7 @@ class ChatView(QScrollArea):
         from roomkit_ui.widgets.install_offer import InstallOffer
 
         self._finalize_current_bubble()
-        offer = InstallOffer(color=colors()["ACCENT_RED"], done_hint="Start the session again.")
+        offer = InstallOffer(color="ACCENT_RED", done_hint="Start the session again.")
         label = FEATURES[feature].label
         offer.set_feature(feature, text=f"The session could not start: {label} is not installed.")
         offer.setContentsMargins(14, 2, 14, 2)
@@ -390,7 +398,7 @@ class ChatView(QScrollArea):
     def add_error(self, message: str) -> None:
         """Show a centered error message in the chat area."""
         self._finalize_current_bubble()
-        self._insert_status_row(self._make_status_label(message, colors()["ACCENT_RED"]))
+        self._insert_status_row(self._make_status_label(message, "ACCENT_RED"))
 
     def clear(self) -> None:
         """Remove all bubbles and error labels, switch to chat layout."""

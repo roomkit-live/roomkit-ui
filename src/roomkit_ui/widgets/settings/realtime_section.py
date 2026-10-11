@@ -15,13 +15,12 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QLabel,
     QLineEdit,
-    QPushButton,
     QVBoxLayout,
     QWidget,
 )
 
 from roomkit_ui.features import REALTIME_PROVIDER_FEATURES
-from roomkit_ui.theme import colors
+from roomkit_ui.widgets.settings.controls import AdvancedSection, SettingsSection
 from roomkit_ui.widgets.settings.feature_hints import offer_install, populate_provider_combo
 from roomkit_ui.widgets.settings.realtime_catalogs import (
     DEEPGRAM_LANGUAGES,
@@ -52,32 +51,29 @@ class RealtimeSection(QWidget):
 
     def __init__(self, settings: dict, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        c = colors()
 
         rt_layout = QVBoxLayout(self)
         rt_layout.setContentsMargins(0, 0, 0, 0)
         rt_layout.setSpacing(10)
 
-        section_label = QLabel("Realtime Provider")
-        section_label.setStyleSheet(
-            f"font-size: 12px; font-weight: 600; color: {c['TEXT_SECONDARY']};"
-            f" text-transform: uppercase; letter-spacing: 1px; background: transparent;"
-        )
-        rt_layout.addWidget(section_label)
+        section = SettingsSection("Your voice assistant")
+        section.content.setContentsMargins(20, 20, 20, 20)
+        rt_layout.addWidget(section)
+        rt_layout.setSpacing(20)
 
         rt_form = QFormLayout()
         rt_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
         rt_form.setSpacing(10)
-        rt_form.setLabelAlignment(Qt.AlignRight)
+        rt_form.setLabelAlignment(Qt.AlignLeft)
+        rt_form.setRowWrapPolicy(QFormLayout.WrapAllRows)
 
         self._add_provider_selector(settings, rt_form)
-        self._add_api_keys(settings, rt_form)
         self._add_models_and_voices(settings, rt_form)
         self._add_deepgram_fields(settings, rt_form)
         self._add_elevenlabs_fields(settings, rt_form)
         self._add_xai_fields(settings, rt_form)
         self._add_openai_live_fields(settings, rt_form)
-        rt_layout.addLayout(rt_form)
+        section.content.addLayout(rt_form)
         self._add_gemini_advanced(settings, rt_layout)
         self._add_openai_advanced(settings, rt_layout)
         self._add_deepgram_advanced(settings, rt_layout)
@@ -107,20 +103,6 @@ class RealtimeSection(QWidget):
                 break
         rt_form.addRow("Provider", self.provider)
         rt_form.addRow("", offer_install(self.provider, PROVIDERS, REALTIME_PROVIDER_FEATURES))
-
-    def _add_api_keys(self, settings: dict, rt_form: QFormLayout) -> None:
-        """One API key field per provider; only the current one shows."""
-        self.gemini_api_key = QLineEdit(settings.get("api_key", ""))
-        self.gemini_api_key.setEchoMode(QLineEdit.Password)
-        self.gemini_api_key.setPlaceholderText("Enter your Google API key")
-        self._gemini_key_label = QLabel("API Key")
-        rt_form.addRow(self._gemini_key_label, self.gemini_api_key)
-
-        self.openai_api_key = QLineEdit(settings.get("openai_api_key", ""))
-        self.openai_api_key.setEchoMode(QLineEdit.Password)
-        self.openai_api_key.setPlaceholderText("Enter your OpenAI API key")
-        self._openai_key_label = QLabel("API Key")
-        rt_form.addRow(self._openai_key_label, self.openai_api_key)
 
     def _add_models_and_voices(self, settings: dict, rt_form: QFormLayout) -> None:
         """Gemini and OpenAI model and voice combos, fed by roomkit's catalogs."""
@@ -166,11 +148,6 @@ class RealtimeSection(QWidget):
 
     def _add_deepgram_fields(self, settings: dict, rt_form: QFormLayout) -> None:
         """Deepgram Voice Agent: think/speak/listen stages and the half-duplex escape hatch."""
-        self.deepgram_api_key = QLineEdit(settings.get("deepgram_api_key", ""))
-        self.deepgram_api_key.setEchoMode(QLineEdit.Password)
-        self.deepgram_api_key.setPlaceholderText("Enter your Deepgram API key")
-        self._deepgram_key_label = QLabel("API Key")
-        rt_form.addRow(self._deepgram_key_label, self.deepgram_api_key)
 
         self.deepgram_voice = QComboBox()
         self.deepgram_voice.setEditable(True)
@@ -204,12 +181,6 @@ class RealtimeSection(QWidget):
 
     def _add_elevenlabs_fields(self, settings: dict, rt_form: QFormLayout) -> None:
         """ElevenLabs Conversational AI: the agent defines model and voice."""
-        c = colors()
-        self.elevenlabs_api_key = QLineEdit(settings.get("elevenlabs_api_key", ""))
-        self.elevenlabs_api_key.setEchoMode(QLineEdit.Password)
-        self.elevenlabs_api_key.setPlaceholderText("Enter your ElevenLabs API key")
-        self._elevenlabs_key_label = QLabel("API Key")
-        rt_form.addRow(self._elevenlabs_key_label, self.elevenlabs_api_key)
 
         self.elevenlabs_agent_id = QLineEdit(settings.get("elevenlabs_agent_id", ""))
         self.elevenlabs_agent_id.setPlaceholderText("agent_… (ElevenLabs dashboard → Agents)")
@@ -221,18 +192,11 @@ class RealtimeSection(QWidget):
             "(ElevenLabs dashboard). Tools must be declared there as client tools."
         )
         self._elevenlabs_note.setWordWrap(True)
-        self._elevenlabs_note.setStyleSheet(
-            f"font-size: 11px; color: {c['TEXT_SECONDARY']}; background: transparent;"
-        )
+        self._elevenlabs_note.setObjectName("settingsHint")
         rt_form.addRow("", self._elevenlabs_note)
 
     def _add_xai_fields(self, settings: dict, rt_form: QFormLayout) -> None:
         """xAI Grok model and voice."""
-        self.xai_api_key = QLineEdit(settings.get("xai_api_key", ""))
-        self.xai_api_key.setEchoMode(QLineEdit.Password)
-        self.xai_api_key.setPlaceholderText("Enter your xAI API key")
-        self._xai_key_label = QLabel("API Key")
-        rt_form.addRow(self._xai_key_label, self.xai_api_key)
 
         self.xai_model = QComboBox()
         populate_model_combo(
@@ -253,28 +217,18 @@ class RealtimeSection(QWidget):
         rt_form.addRow(self._xai_voice_label, self.xai_voice)
 
     def _add_openai_live_fields(self, settings: dict, rt_form: QFormLayout) -> None:
-        """OpenAI GPT-Live (shares the OpenAI key field)."""
+        """OpenAI GPT-Live model and voice controls."""
         self._gpt_live = GPTLiveFields(settings, rt_form)
 
     def _add_gemini_advanced(self, settings: dict, rt_layout: QVBoxLayout) -> None:
         """Gemini Advanced (collapsible)."""
-        c = colors()
-        self._gemini_adv_toggle = QPushButton("\u25b8 Advanced")
-        self._gemini_adv_toggle.setFlat(True)
-        self._gemini_adv_toggle.setCursor(Qt.PointingHandCursor)
-        self._gemini_adv_toggle.setStyleSheet(
-            "text-align: left; font-size: 12px; font-weight: 600;"
-            f" color: {c['TEXT_SECONDARY']}; background: transparent; border: none;"
-            " padding: 2px 0;"
-        )
-        self._gemini_adv_toggle.clicked.connect(self._toggle_gemini_advanced)
-        rt_layout.addWidget(self._gemini_adv_toggle)
-
         self._gemini_adv_container = QWidget()
         adv_form = QFormLayout(self._gemini_adv_container)
         adv_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
         adv_form.setSpacing(10)
-        adv_form.setLabelAlignment(Qt.AlignRight)
+        adv_form.setLabelAlignment(Qt.AlignLeft)
+        adv_form.setRowWrapPolicy(QFormLayout.WrapAllRows)
+        adv_form.setContentsMargins(20, 16, 20, 16)
 
         self.gemini_language = QComboBox()
         for label, _val in GEMINI_LANGUAGES:
@@ -343,28 +297,20 @@ class RealtimeSection(QWidget):
         self.gemini_silence_duration.setPlaceholderText("e.g. 1000")
         adv_form.addRow("Silence (ms)", self.gemini_silence_duration)
 
-        self._gemini_adv_container.hide()
-        rt_layout.addWidget(self._gemini_adv_container)
+        self._gemini_advanced = AdvancedSection(
+            "Advanced realtime settings", self._gemini_adv_container
+        )
+        rt_layout.addWidget(self._gemini_advanced)
 
     def _add_openai_advanced(self, settings: dict, rt_layout: QVBoxLayout) -> None:
         """OpenAI Advanced (collapsible)."""
-        c = colors()
-        self._openai_adv_toggle = QPushButton("\u25b8 Advanced")
-        self._openai_adv_toggle.setFlat(True)
-        self._openai_adv_toggle.setCursor(Qt.PointingHandCursor)
-        self._openai_adv_toggle.setStyleSheet(
-            "text-align: left; font-size: 12px; font-weight: 600;"
-            f" color: {c['TEXT_SECONDARY']}; background: transparent; border: none;"
-            " padding: 2px 0;"
-        )
-        self._openai_adv_toggle.clicked.connect(self._toggle_openai_advanced)
-        rt_layout.addWidget(self._openai_adv_toggle)
-
         self._openai_adv_container = QWidget()
         oai_form = QFormLayout(self._openai_adv_container)
         oai_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
         oai_form.setSpacing(10)
-        oai_form.setLabelAlignment(Qt.AlignRight)
+        oai_form.setLabelAlignment(Qt.AlignLeft)
+        oai_form.setRowWrapPolicy(QFormLayout.WrapAllRows)
+        oai_form.setContentsMargins(20, 16, 20, 16)
 
         turn_detection_options = [
             ("Server VAD (energy-based)", "server_vad"),
@@ -437,28 +383,20 @@ class RealtimeSection(QWidget):
         self.openai_create_response.setChecked(bool(settings.get("openai_create_response", True)))
         oai_form.addRow("", self.openai_create_response)
 
-        self._openai_adv_container.hide()
-        rt_layout.addWidget(self._openai_adv_container)
+        self._openai_advanced = AdvancedSection(
+            "Advanced realtime settings", self._openai_adv_container
+        )
+        rt_layout.addWidget(self._openai_advanced)
 
     def _add_deepgram_advanced(self, settings: dict, rt_layout: QVBoxLayout) -> None:
         """Deepgram Advanced (collapsible)."""
-        c = colors()
-        self._deepgram_adv_toggle = QPushButton("▸ Advanced")
-        self._deepgram_adv_toggle.setFlat(True)
-        self._deepgram_adv_toggle.setCursor(Qt.PointingHandCursor)
-        self._deepgram_adv_toggle.setStyleSheet(
-            "text-align: left; font-size: 12px; font-weight: 600;"
-            f" color: {c['TEXT_SECONDARY']}; background: transparent; border: none;"
-            " padding: 2px 0;"
-        )
-        self._deepgram_adv_toggle.clicked.connect(self._toggle_deepgram_advanced)
-        rt_layout.addWidget(self._deepgram_adv_toggle)
-
         self._deepgram_adv_container = QWidget()
         dg_form = QFormLayout(self._deepgram_adv_container)
         dg_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
         dg_form.setSpacing(10)
-        dg_form.setLabelAlignment(Qt.AlignRight)
+        dg_form.setLabelAlignment(Qt.AlignLeft)
+        dg_form.setRowWrapPolicy(QFormLayout.WrapAllRows)
+        dg_form.setContentsMargins(20, 16, 20, 16)
 
         self.deepgram_think_provider = QComboBox()
         for label, val in DEEPGRAM_THINK_PROVIDERS:
@@ -502,7 +440,7 @@ class RealtimeSection(QWidget):
                 break
         self.deepgram_speak_provider.setToolTip(
             "TTS vendor Deepgram hosts for the speak stage. ElevenLabs and OpenAI "
-            "use the API keys entered under their own provider sections."
+            "use the API keys in Providers & keys."
         )
         dg_form.addRow("TTS Provider", self.deepgram_speak_provider)
 
@@ -522,28 +460,20 @@ class RealtimeSection(QWidget):
         self.deepgram_greeting.setPlaceholderText("Optional line spoken when the session opens")
         dg_form.addRow("Greeting", self.deepgram_greeting)
 
-        self._deepgram_adv_container.hide()
-        rt_layout.addWidget(self._deepgram_adv_container)
+        self._deepgram_advanced = AdvancedSection(
+            "Advanced realtime settings", self._deepgram_adv_container
+        )
+        rt_layout.addWidget(self._deepgram_advanced)
 
     def _add_xai_advanced(self, settings: dict, rt_layout: QVBoxLayout) -> None:
         """xAI Advanced (collapsible)."""
-        c = colors()
-        self._xai_adv_toggle = QPushButton("▸ Advanced")
-        self._xai_adv_toggle.setFlat(True)
-        self._xai_adv_toggle.setCursor(Qt.PointingHandCursor)
-        self._xai_adv_toggle.setStyleSheet(
-            "text-align: left; font-size: 12px; font-weight: 600;"
-            f" color: {c['TEXT_SECONDARY']}; background: transparent; border: none;"
-            " padding: 2px 0;"
-        )
-        self._xai_adv_toggle.clicked.connect(self._toggle_xai_advanced)
-        rt_layout.addWidget(self._xai_adv_toggle)
-
         self._xai_adv_container = QWidget()
         xai_form = QFormLayout(self._xai_adv_container)
         xai_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
         xai_form.setSpacing(10)
-        xai_form.setLabelAlignment(Qt.AlignRight)
+        xai_form.setLabelAlignment(Qt.AlignLeft)
+        xai_form.setRowWrapPolicy(QFormLayout.WrapAllRows)
+        xai_form.setContentsMargins(20, 16, 20, 16)
 
         self.xai_vad_threshold = QLineEdit(str(settings.get("xai_vad_threshold", "") or ""))
         self.xai_vad_threshold.setPlaceholderText("0.5 (0 – 1)")
@@ -559,8 +489,8 @@ class RealtimeSection(QWidget):
         self.xai_prefix_padding.setPlaceholderText("300 (ms)")
         xai_form.addRow("Prefix Padding (ms)", self.xai_prefix_padding)
 
-        self._xai_adv_container.hide()
-        rt_layout.addWidget(self._xai_adv_container)
+        self._xai_advanced = AdvancedSection("Advanced realtime settings", self._xai_adv_container)
+        rt_layout.addWidget(self._xai_advanced)
 
     def _map_provider_widgets(self) -> None:
         """Which widgets show for which provider.
@@ -570,100 +500,63 @@ class RealtimeSection(QWidget):
         """
         self._provider_widgets: dict[str, list[QWidget]] = {
             "gemini": [
-                self._gemini_key_label,
-                self.gemini_api_key,
                 self._gemini_model_label,
                 self.gemini_model,
                 self._gemini_voice_label,
                 self.gemini_voice,
-                self._gemini_adv_toggle,
+                self._gemini_advanced,
             ],
             "openai": [
-                self._openai_key_label,
-                self.openai_api_key,
                 self._openai_model_label,
                 self.openai_model,
                 self._openai_voice_label,
                 self.openai_voice,
-                self._openai_adv_toggle,
+                self._openai_advanced,
             ],
             "deepgram": [
-                self._deepgram_key_label,
-                self.deepgram_api_key,
                 self._deepgram_voice_label,
                 self.deepgram_voice,
                 self._deepgram_language_label,
                 self.deepgram_language,
                 self.deepgram_half_duplex,
-                self._deepgram_adv_toggle,
+                self._deepgram_advanced,
             ],
             "elevenlabs": [
-                self._elevenlabs_key_label,
-                self.elevenlabs_api_key,
                 self._elevenlabs_agent_label,
                 self.elevenlabs_agent_id,
                 self._elevenlabs_note,
             ],
             "xai": [
-                self._xai_key_label,
-                self.xai_api_key,
                 self._xai_model_label,
                 self.xai_model,
                 self._xai_voice_label,
                 self.xai_voice,
-                self._xai_adv_toggle,
+                self._xai_advanced,
             ],
             "openai_live": [
-                self._openai_key_label,
-                self.openai_api_key,
                 *self._gpt_live.widgets,
             ],
         }
-        self._adv_containers = {
-            "gemini": (self._gemini_adv_container, self._gemini_adv_toggle),
-            "openai": (self._openai_adv_container, self._openai_adv_toggle),
-            "deepgram": (self._deepgram_adv_container, self._deepgram_adv_toggle),
-            "xai": (self._xai_adv_container, self._xai_adv_toggle),
+        self._advanced = {
+            "gemini": self._gemini_advanced,
+            "openai": self._openai_advanced,
+            "deepgram": self._deepgram_advanced,
+            "xai": self._xai_advanced,
         }
 
     # -- Visibility handlers --
 
     def _on_provider_changed(self, index: int) -> None:
         current = PROVIDERS[index][1]
-        # Hide everything, then show the current provider's: a widget two
-        # providers share (the OpenAI key) must not depend on dict order.
         for widgets in self._provider_widgets.values():
             for w in widgets:
                 w.setVisible(False)
         for w in self._provider_widgets.get(current, []):
             w.setVisible(True)
-        # Collapse the advanced blocks of every other provider.
-        for name, (container, toggle) in self._adv_containers.items():
+        for name, section in self._advanced.items():
             if name != current:
-                container.hide()
-                toggle.setText("\u25b8 Advanced")
-
-    def _toggle_gemini_advanced(self) -> None:
-        visible = not self._gemini_adv_container.isVisible()
-        self._gemini_adv_container.setVisible(visible)
-        self._gemini_adv_toggle.setText("\u25be Advanced" if visible else "\u25b8 Advanced")
-
-    def _toggle_openai_advanced(self) -> None:
-        visible = not self._openai_adv_container.isVisible()
-        self._openai_adv_container.setVisible(visible)
-        self._openai_adv_toggle.setText("\u25be Advanced" if visible else "\u25b8 Advanced")
-        if visible:
-            self._on_openai_turn_detection_changed(self.openai_turn_detection.currentIndex())
-
-    def _toggle_deepgram_advanced(self) -> None:
-        visible = not self._deepgram_adv_container.isVisible()
-        self._deepgram_adv_container.setVisible(visible)
-        self._deepgram_adv_toggle.setText("\u25be Advanced" if visible else "\u25b8 Advanced")
-
-    def _toggle_xai_advanced(self) -> None:
-        visible = not self._xai_adv_container.isVisible()
-        self._xai_adv_container.setVisible(visible)
-        self._xai_adv_toggle.setText("\u25be Advanced" if visible else "\u25b8 Advanced")
+                section.set_expanded(False)
+        self._on_openai_turn_detection_changed(self.openai_turn_detection.currentIndex())
 
     def _on_think_provider_changed(self, _index: int) -> None:
         # The old model id belongs to the previous vendor \u2014 start clean.
@@ -704,10 +597,6 @@ class RealtimeSection(QWidget):
     def get_settings(self) -> dict:
         return {
             "provider": PROVIDERS[self.provider.currentIndex()][1],
-            "_rt_gemini_key": self.gemini_api_key.text().strip(),
-            "_rt_openai_key": self.openai_api_key.text().strip(),
-            "_rt_deepgram_key": self.deepgram_api_key.text().strip(),
-            "_rt_elevenlabs_key": self.elevenlabs_api_key.text().strip(),
             "deepgram_agent_voice": self.deepgram_voice.currentText().strip(),
             "deepgram_agent_think_provider": (
                 self.deepgram_think_provider.currentData() or "open_ai"
@@ -722,7 +611,6 @@ class RealtimeSection(QWidget):
             "deepgram_agent_speak_speed": self.deepgram_speak_speed.text().strip(),
             "deepgram_agent_greeting": self.deepgram_greeting.text().strip(),
             "elevenlabs_agent_id": self.elevenlabs_agent_id.text().strip(),
-            "xai_api_key": self.xai_api_key.text().strip(),
             "xai_model": self.xai_model.currentText().strip(),
             "xai_voice": self.xai_voice.currentData() or "",
             "xai_vad_threshold": self.xai_vad_threshold.text().strip(),

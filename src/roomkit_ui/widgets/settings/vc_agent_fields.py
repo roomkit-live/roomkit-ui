@@ -4,10 +4,9 @@ thinks while it listens, and works in the background."""
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QCheckBox, QComboBox, QFormLayout, QLabel, QLineEdit, QWidget
+from PySide6.QtWidgets import QCheckBox, QComboBox, QFormLayout, QFrame, QLabel, QLineEdit, QWidget
 
 from roomkit_ui.features import SPEAK_POLICY_FEATURES
-from roomkit_ui.theme import colors
 from roomkit_ui.vc_agent import DEFAULT_AGENT_NAME, SPEAK_POLICIES
 from roomkit_ui.widgets.settings.feature_hints import offer_install, populate_provider_combo
 
@@ -36,22 +35,22 @@ _BACKGROUND_HINT = (
 def _hint(text: str) -> QLabel:
     label = QLabel(text)
     label.setWordWrap(True)
-    label.setStyleSheet(
-        f"font-size: 11px; color: {colors()['TEXT_SECONDARY']};"
-        f" font-style: italic; background: transparent;"
-    )
+    label.setObjectName("settingsHint")
     return label
 
 
-class VCAgentPage(QWidget):
+class VCAgentPage(QFrame):
     """The Agent tab of the Voice Channel section."""
 
     def __init__(self, settings: dict, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self.setObjectName("settingsCard")
         form = QFormLayout(self)
         form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
         form.setSpacing(10)
-        form.setLabelAlignment(Qt.AlignRight)
+        form.setLabelAlignment(Qt.AlignLeft)
+        form.setRowWrapPolicy(QFormLayout.WrapAllRows)
+        form.setContentsMargins(20, 20, 20, 20)
 
         self.speak_policy = QComboBox()
         populate_provider_combo(self.speak_policy, SPEAK_POLICIES, SPEAK_POLICY_FEATURES)
@@ -62,20 +61,6 @@ class VCAgentPage(QWidget):
                 break
         form.addRow("Speaking", self.speak_policy)
         form.addRow("", offer_install(self.speak_policy, SPEAK_POLICIES, SPEAK_POLICY_FEATURES))
-
-        # The OpenAI key is the one every OpenAI field shares (mirrored by the
-        # dialog); only TypeSafe's is this tab's own.
-        self.openai_api_key = QLineEdit(settings.get("openai_api_key", ""))
-        self.openai_api_key.setEchoMode(QLineEdit.Password)
-        self.openai_api_key.setPlaceholderText("Enter your OpenAI API key")
-        self._openai_key_label = QLabel("API Key")
-        form.addRow(self._openai_key_label, self.openai_api_key)
-
-        self.typesafe_api_key = QLineEdit(settings.get("typesafe_api_key", ""))
-        self.typesafe_api_key.setEchoMode(QLineEdit.Password)
-        self.typesafe_api_key.setPlaceholderText("Enter your TypeSafe API key")
-        self._typesafe_key_label = QLabel("API Key")
-        form.addRow(self._typesafe_key_label, self.typesafe_api_key)
 
         self.agent_name = QLineEdit(settings.get("vc_agent_name", ""))
         self.agent_name.setPlaceholderText(DEFAULT_AGENT_NAME)
@@ -103,13 +88,8 @@ class VCAgentPage(QWidget):
 
     def _update_visibility(self) -> None:
         policy = self.current_policy()
-        for label, field, shown in (
-            (self._openai_key_label, self.openai_api_key, policy == "openai"),
-            (self._typesafe_key_label, self.typesafe_api_key, policy == "jev"),
-            (self._agent_name_label, self.agent_name, policy != "off"),
-        ):
-            label.setVisible(shown)
-            field.setVisible(shown)
+        self._agent_name_label.setVisible(policy != "off")
+        self.agent_name.setVisible(policy != "off")
         self.thinker.setEnabled(policy != "off")
 
     def get_settings(self) -> dict:
@@ -118,5 +98,4 @@ class VCAgentPage(QWidget):
             "vc_agent_name": self.agent_name.text().strip(),
             "vc_thinker": self.thinker.isChecked(),
             "vc_background": self.background.isChecked(),
-            "typesafe_api_key": self.typesafe_api_key.text().strip(),
         }

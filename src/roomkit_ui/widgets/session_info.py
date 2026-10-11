@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
 )
 
 from roomkit_ui.theme import colors
+from roomkit_ui.theme_live import themed_style
 
 _COLLAPSED_HEIGHT = 36
 _MAX_EXPANDED_HEIGHT = 400
@@ -76,8 +77,6 @@ class SessionInfoBar(QWidget):
         self._anim_timer.setInterval(_ANIM_INTERVAL)
         self._anim_timer.timeout.connect(self._anim_tick)
 
-        c = colors()
-
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
@@ -86,15 +85,16 @@ class SessionInfoBar(QWidget):
         self._header = QWidget()
         self._header.setFixedHeight(_COLLAPSED_HEIGHT)
         self._header.setCursor(Qt.PointingHandCursor)
-        self._header.setStyleSheet(f"background-color: {c['BG_TERTIARY']};")
+        themed_style(self._header, lambda c: f"background-color: {c['BG_TERTIARY']};")
 
         header_layout = QHBoxLayout(self._header)
         header_layout.setContentsMargins(12, 0, 12, 0)
         header_layout.setSpacing(0)
 
         self._summary_label = QLabel()
-        self._summary_label.setStyleSheet(
-            f"color: {c['ACCENT_BLUE']}; font-size: 12px; background: transparent;"
+        themed_style(
+            self._summary_label,
+            lambda c: f"color: {c['ACCENT_BLUE']}; font-size: 12px; background: transparent;",
         )
         header_layout.addWidget(self._summary_label, 1)
 
@@ -109,8 +109,9 @@ class SessionInfoBar(QWidget):
         self._chevron = QLabel()
         self._chevron.setFixedWidth(20)
         self._chevron.setAlignment(Qt.AlignCenter)
-        self._chevron.setStyleSheet(
-            f"color: {c['ACCENT_BLUE']}; font-size: 14px; background: transparent;"
+        themed_style(
+            self._chevron,
+            lambda c: f"color: {c['ACCENT_BLUE']}; font-size: 14px; background: transparent;",
         )
         header_layout.addWidget(self._chevron)
 
@@ -119,7 +120,7 @@ class SessionInfoBar(QWidget):
         # ── Separator ──
         sep = QWidget()
         sep.setFixedHeight(1)
-        sep.setStyleSheet(f"background-color: {c['SEPARATOR']};")
+        themed_style(sep, lambda c: f"background-color: {c['SEPARATOR']};")
         outer.addWidget(sep)
 
         # ── Tool detail panel (scroll area) ──
@@ -132,7 +133,7 @@ class SessionInfoBar(QWidget):
         self._detail_area.hide()
 
         self._detail_container = QWidget()
-        self._detail_container.setStyleSheet(f"background-color: {c['BG_TERTIARY']};")
+        themed_style(self._detail_container, lambda c: f"background-color: {c['BG_TERTIARY']};")
         self._detail_layout = QVBoxLayout(self._detail_container)
         self._detail_layout.setContentsMargins(12, 4, 12, 8)
         self._detail_layout.setSpacing(2)
@@ -143,7 +144,7 @@ class SessionInfoBar(QWidget):
         # ── Bottom border ──
         border = QWidget()
         border.setFixedHeight(1)
-        border.setStyleSheet(f"background-color: {c['SEPARATOR']};")
+        themed_style(border, lambda c: f"background-color: {c['SEPARATOR']};")
         outer.addWidget(border)
 
         self._header.mousePressEvent = lambda _e: self._toggle()  # type: ignore[method-assign]
@@ -187,9 +188,12 @@ class SessionInfoBar(QWidget):
         if failed:
             failed_label = QLabel(f"\u26a0  Failed: {', '.join(failed)}")
             failed_label.setWordWrap(True)
-            failed_label.setStyleSheet(
-                f"color: {c['ACCENT_RED']}; font-size: 12px;"
-                f" background: transparent; padding: 2px 0;"
+            themed_style(
+                failed_label,
+                lambda c: (
+                    f"color: {c['ACCENT_RED']}; font-size: 12px;"
+                    f" background: transparent; padding: 2px 0;"
+                ),
             )
             self._detail_layout.addWidget(failed_label)
 
@@ -222,9 +226,12 @@ class SessionInfoBar(QWidget):
         )
         row.setTextFormat(Qt.RichText)
         row.setWordWrap(True)
-        row.setStyleSheet(
-            f"color: {c['TEXT_PRIMARY']}; font-size: 12px;"
-            f" background: transparent; padding: 1px 0;"
+        themed_style(
+            row,
+            lambda c: (
+                f"color: {c['TEXT_PRIMARY']}; font-size: 12px;"
+                f" background: transparent; padding: 1px 0;"
+            ),
         )
         self._detail_layout.addWidget(row)
 

@@ -1,20 +1,8 @@
-"""Voice Channel fields for Microsoft Foundry speech: MAI-Transcribe and MAI-Voice.
-
-One Foundry resource and one key serve both.  The STT page and the TTS page
-each carry a copy of the key field, kept identical by the dialog
-(``_AIPage.api_key_fields``), so the key sits on whichever tab needs it.
-"""
+"""Azure speech model, endpoint and voice settings; credentials live in Providers."""
 
 from __future__ import annotations
 
 from PySide6.QtWidgets import QFormLayout, QLabel, QLineEdit, QWidget
-
-
-def _secret_field(value: str) -> QLineEdit:
-    field = QLineEdit(value)
-    field.setEchoMode(QLineEdit.Password)
-    field.setPlaceholderText("Enter your Azure resource key")
-    return field
 
 
 def _set_visible(visible: bool, widgets: tuple[QWidget, ...]) -> None:
@@ -30,23 +18,16 @@ class AzureSpeechFields:
 
     def add_stt_rows(self, form: QFormLayout) -> None:
         s = self._settings
-        self.stt_key = _secret_field(s.get("azure_speech_api_key", ""))
         self.endpoint = QLineEdit(s.get("azure_mai_endpoint", ""))
         self.endpoint.setPlaceholderText("https://<resource>.services.ai.azure.com")
         self.deployment = QLineEdit(s.get("azure_mai_deployment", ""))
         self.deployment.setPlaceholderText("MAI-Transcribe-2-Streaming")
         self._stt_rows = self._add_rows(
-            form,
-            [
-                ("Azure Key", self.stt_key),
-                ("Endpoint", self.endpoint),
-                ("Deployment", self.deployment),
-            ],
+            form, [("Endpoint", self.endpoint), ("Deployment", self.deployment)]
         )
 
     def add_tts_rows(self, form: QFormLayout) -> None:
         s = self._settings
-        self.tts_key = _secret_field(s.get("azure_speech_api_key", ""))
         self.region = QLineEdit(s.get("azure_speech_region", ""))
         self.region.setPlaceholderText("e.g. swedencentral")
         self.voice = QLineEdit(s.get("azure_tts_voice", ""))
@@ -58,13 +39,7 @@ class AzureSpeechFields:
         self.rate = QLineEdit(s.get("azure_tts_rate", ""))
         self.rate.setPlaceholderText("+15%, 1.2 or fast (empty = the voice's own)")
         self._tts_rows = self._add_rows(
-            form,
-            [
-                ("Azure Key", self.tts_key),
-                ("Region", self.region),
-                ("Voice", self.voice),
-                ("Rate", self.rate),
-            ],
+            form, [("Region", self.region), ("Voice", self.voice), ("Rate", self.rate)]
         )
 
     @staticmethod
@@ -84,8 +59,6 @@ class AzureSpeechFields:
 
     def get_settings(self) -> dict:
         return {
-            # The two key fields are mirrored: either copy is the key.
-            "azure_speech_api_key": self.stt_key.text().strip(),
             "azure_mai_endpoint": self.endpoint.text().strip(),
             "azure_mai_deployment": self.deployment.text().strip(),
             "azure_speech_region": self.region.text().strip(),

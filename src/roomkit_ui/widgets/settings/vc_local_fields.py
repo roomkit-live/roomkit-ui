@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from roomkit_ui.theme import colors
+_MODEL_MISSING_ROLE = Qt.UserRole + 1
 
 _THINKING_HINT = (
     "Off, a reasoning model (Qwen3, DeepSeek-R1) answers at once instead of thinking "
@@ -48,12 +48,6 @@ class VCLocalFields:
         self._vc_local_model_label = QLabel("Model")
         form.addRow(self._vc_local_model_label, self.vc_local_model)
 
-        self.vc_local_api_key = QLineEdit(s.get("vc_local_api_key", ""))
-        self.vc_local_api_key.setEchoMode(QLineEdit.Password)
-        self.vc_local_api_key.setPlaceholderText("Optional")
-        self._vc_local_api_key_label = QLabel("API Key")
-        form.addRow(self._vc_local_api_key_label, self.vc_local_api_key)
-
         self.vc_local_tools = QCheckBox("Model supports tool use (function calling)")
         self.vc_local_tools.setChecked(bool(s.get("vc_local_tools", True)))
         self._vc_local_tools_label = QLabel("")
@@ -65,10 +59,7 @@ class VCLocalFields:
         form.addRow(self._vc_local_thinking_label, self.vc_local_thinking)
         self._vc_local_thinking_hint = QLabel(_THINKING_HINT)
         self._vc_local_thinking_hint.setWordWrap(True)
-        self._vc_local_thinking_hint.setStyleSheet(
-            f"font-size: 11px; color: {colors()['TEXT_SECONDARY']};"
-            f" font-style: italic; background: transparent;"
-        )
+        self._vc_local_thinking_hint.setObjectName("settingsHint")
         form.addRow("", self._vc_local_thinking_hint)
 
         self._add_llamacpp_fields(form)
@@ -78,7 +69,6 @@ class VCLocalFields:
         from roomkit_ui.providers.llamacpp import DEFAULT_MODEL
 
         s = self._settings
-        c = colors()
         self.vc_llamacpp_model = QLineEdit(s.get("vc_llamacpp_model", ""))
         self.vc_llamacpp_model.setPlaceholderText(DEFAULT_MODEL)
         self.vc_llamacpp_model.setToolTip(
@@ -86,7 +76,7 @@ class VCLocalFields:
         )
         self._vc_llamacpp_browse = QPushButton("Browse…")
         self._vc_llamacpp_browse.setCursor(Qt.PointingHandCursor)
-        self._vc_llamacpp_browse.setFixedHeight(28)
+        self._vc_llamacpp_browse.setAutoDefault(False)
         self._vc_llamacpp_browse.clicked.connect(self._browse_gguf)
         model_row = QHBoxLayout()
         model_row.setSpacing(6)
@@ -105,38 +95,32 @@ class VCLocalFields:
             "(several GB), then the server stays up between sessions."
         )
         self._vc_llamacpp_note.setWordWrap(True)
-        self._vc_llamacpp_note.setStyleSheet(
-            f"font-size: 11px; color: {c['TEXT_SECONDARY']}; background: transparent;"
-        )
+        self._vc_llamacpp_note.setObjectName("settingsHint")
         form.addRow("", self._vc_llamacpp_note)
 
     def add_stt_fields(self, form: QFormLayout) -> None:
-        c = colors()
         self.vc_stt_model = QComboBox()
         self._vc_stt_model_label = QLabel("STT Model")
-        self._vc_stt_no_models = QLabel("No STT models downloaded \u2014 go to AI Models tab.")
-        self._vc_stt_no_models.setWordWrap(True)
-        self._vc_stt_no_models.setStyleSheet(
-            f"font-size: 12px; color: {c['TEXT_SECONDARY']};"
-            f" font-style: italic; background: transparent;"
+        self._vc_stt_no_models = QLabel(
+            "No STT models downloaded \u2014 open Models & components."
         )
+        self._vc_stt_no_models.setWordWrap(True)
+        self._vc_stt_no_models.setObjectName("settingsHint")
         form.addRow(self._vc_stt_model_label, self.vc_stt_model)
         form.addRow("", self._vc_stt_no_models)
         self._vc_saved_stt = self._settings.get("vc_stt_model", "")
 
     def add_tts_fields(self, form: QFormLayout) -> None:
         s = self._settings
-        c = colors()
 
         # Piper model combo
         self.vc_tts_model = QComboBox()
         self._vc_tts_model_label = QLabel("TTS Model")
-        self._vc_tts_no_models = QLabel("No TTS models downloaded \u2014 go to AI Models tab.")
-        self._vc_tts_no_models.setWordWrap(True)
-        self._vc_tts_no_models.setStyleSheet(
-            f"font-size: 12px; color: {c['TEXT_SECONDARY']};"
-            f" font-style: italic; background: transparent;"
+        self._vc_tts_no_models = QLabel(
+            "No TTS models downloaded \u2014 open Models & components."
         )
+        self._vc_tts_no_models.setWordWrap(True)
+        self._vc_tts_no_models.setObjectName("settingsHint")
         form.addRow(self._vc_tts_model_label, self.vc_tts_model)
         form.addRow("", self._vc_tts_no_models)
         self._vc_saved_tts = s.get("vc_tts_model", "")
@@ -146,7 +130,7 @@ class VCLocalFields:
         self.vc_tts_ref_audio.setPlaceholderText("Path to reference WAV (3-15s of speech)")
         self._vc_ref_audio_browse = QPushButton("Browse\u2026")
         self._vc_ref_audio_browse.setCursor(Qt.PointingHandCursor)
-        self._vc_ref_audio_browse.setFixedHeight(28)
+        self._vc_ref_audio_browse.setAutoDefault(False)
         self._vc_ref_audio_browse.clicked.connect(self._browse_ref_audio)
         ref_audio_row = QHBoxLayout()
         ref_audio_row.setSpacing(6)
@@ -185,7 +169,7 @@ class VCLocalFields:
         )
         self._vc_pocket_browse = QPushButton("Browse…")
         self._vc_pocket_browse.setCursor(Qt.PointingHandCursor)
-        self._vc_pocket_browse.setFixedHeight(28)
+        self._vc_pocket_browse.setAutoDefault(False)
         self._vc_pocket_browse.clicked.connect(self._browse_pocket_clip)
         voice_row = QHBoxLayout()
         voice_row.setSpacing(6)
@@ -202,8 +186,6 @@ class VCLocalFields:
         self.vc_local_base_url.setVisible(is_local)
         self._vc_local_model_label.setVisible(is_local)
         self.vc_local_model.setVisible(is_local)
-        self._vc_local_api_key_label.setVisible(is_local)
-        self.vc_local_api_key.setVisible(is_local)
         self._vc_local_tools_label.setVisible(is_local)
         self.vc_local_tools.setVisible(is_local)
         is_llamacpp = provider == "llamacpp"
@@ -222,16 +204,28 @@ class VCLocalFields:
 
     def update_stt_visibility(self, provider: str) -> None:
         is_local = provider == "local"
-        self._vc_stt_model_label.setVisible(is_local)
-        self.vc_stt_model.setVisible(is_local)
-        self._vc_stt_no_models.setVisible(is_local and self.vc_stt_model.count() == 0)
+        self._vc_stt_model_label.setVisible(is_local and self.vc_stt_model.count() > 0)
+        self.vc_stt_model.setVisible(is_local and self.vc_stt_model.count() > 0)
+        missing = bool(self.vc_stt_model.currentData(_MODEL_MISSING_ROLE))
+        self._vc_stt_no_models.setText(
+            "Download the selected STT model in Models & components."
+            if missing
+            else "No STT models downloaded — open Models & components."
+        )
+        self._vc_stt_no_models.setVisible(is_local and (missing or self.vc_stt_model.count() == 0))
 
     def update_tts_visibility(self, provider: str) -> None:
         is_piper = provider == "piper"
         is_voice_clone = provider in ("qwen3", "neutts")
-        self._vc_tts_model_label.setVisible(is_piper)
-        self.vc_tts_model.setVisible(is_piper)
-        self._vc_tts_no_models.setVisible(is_piper and self.vc_tts_model.count() == 0)
+        self._vc_tts_model_label.setVisible(is_piper and self.vc_tts_model.count() > 0)
+        self.vc_tts_model.setVisible(is_piper and self.vc_tts_model.count() > 0)
+        missing = bool(self.vc_tts_model.currentData(_MODEL_MISSING_ROLE))
+        self._vc_tts_no_models.setText(
+            "Download the selected voice in Models & components."
+            if missing
+            else "No TTS models downloaded — open Models & components."
+        )
+        self._vc_tts_no_models.setVisible(is_piper and (missing or self.vc_tts_model.count() == 0))
         self._vc_ref_audio_label.setVisible(is_voice_clone)
         self.vc_tts_ref_audio.setVisible(is_voice_clone)
         self._vc_ref_audio_browse.setVisible(is_voice_clone)
@@ -264,12 +258,16 @@ class VCLocalFields:
             if is_model_downloaded(m.id):
                 self.vc_stt_model.addItem(f"{m.name} ({m.type})", m.id)
         target = saved_stt or (self.vc_stt_model.itemData(0) if self.vc_stt_model.count() else "")
+        missing_stt = bool(target and self.vc_stt_model.findData(target) < 0)
+        if missing_stt:
+            name = next((model.name for model in STT_MODELS if model.id == target), target)
+            self.vc_stt_model.addItem(f"{name} — not downloaded", target)
+            self.vc_stt_model.setItemData(self.vc_stt_model.count() - 1, True, _MODEL_MISSING_ROLE)
         for i in range(self.vc_stt_model.count()):
             if self.vc_stt_model.itemData(i) == target:
                 self.vc_stt_model.setCurrentIndex(i)
                 break
         self.vc_stt_model.blockSignals(False)
-        self._vc_stt_no_models.setVisible(self.vc_stt_model.count() == 0)
 
         # TTS
         self.vc_tts_model.blockSignals(True)
@@ -278,6 +276,11 @@ class VCLocalFields:
             if is_tts_model_downloaded(tm.id):
                 self.vc_tts_model.addItem(tm.name, tm.id)
         target = saved_tts or (self.vc_tts_model.itemData(0) if self.vc_tts_model.count() else "")
+        missing_tts = bool(target and self.vc_tts_model.findData(target) < 0)
+        if missing_tts:
+            name = next((model.name for model in TTS_MODELS if model.id == target), target)
+            self.vc_tts_model.addItem(f"{name} — not downloaded", target)
+            self.vc_tts_model.setItemData(self.vc_tts_model.count() - 1, True, _MODEL_MISSING_ROLE)
         for i in range(self.vc_tts_model.count()):
             if self.vc_tts_model.itemData(i) == target:
                 self.vc_tts_model.setCurrentIndex(i)
@@ -311,7 +314,6 @@ class VCLocalFields:
         return {
             "vc_local_base_url": self.vc_local_base_url.text().strip(),
             "vc_local_model": self.vc_local_model.text().strip(),
-            "vc_local_api_key": self.vc_local_api_key.text().strip(),
             "vc_local_tools": self.vc_local_tools.isChecked(),
             "vc_llamacpp_model": self.vc_llamacpp_model.text().strip(),
             "vc_llamacpp_context": self.vc_llamacpp_context.text().strip(),

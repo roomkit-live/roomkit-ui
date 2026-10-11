@@ -157,11 +157,10 @@ def section(qapp):
         s.deleteLater()
 
 
-def test_gpt_live_is_offered_and_shares_the_openai_key(section):
+def test_gpt_live_is_offered_with_its_own_voice_controls(section):
     page = section(provider="openai_live")
 
     assert ("OpenAI GPT-Live (full-duplex)", "openai_live") in PROVIDERS
-    assert not page.openai_api_key.isHidden()
     assert not page._gpt_live.voice.isHidden()
     assert page.openai_voice.isHidden()  # OpenAI Realtime's own rows
 
@@ -169,7 +168,6 @@ def test_gpt_live_is_offered_and_shares_the_openai_key(section):
 def test_the_openai_realtime_rows_hide_gpt_live(section):
     page = section(provider="openai")
 
-    assert not page.openai_api_key.isHidden()
     assert page._gpt_live.voice.isHidden()
 
 

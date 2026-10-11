@@ -37,6 +37,7 @@ class ComponentInstaller(QObject):
         self._log: list[str] = []
         self._pending = ""
         self._cancelled = False
+        self.last_result: tuple[str, bool, str] | None = None
 
     @property
     def running(self) -> Component | None:
@@ -55,6 +56,7 @@ class ComponentInstaller(QObject):
             return False
         self._component, self._log, self._pending = component, [], ""
         self._cancelled = False
+        self.last_result = None
         process = QProcess(self)
         process.setProgram(plan.argv[0])
         process.setArguments(list(plan.argv[1:]))
@@ -115,7 +117,8 @@ class ComponentInstaller(QObject):
         features.refresh()
         message = self._outcome(component, ok, exit_code)
         logger.info("Install of %s: %s", component.extra, message)
-        self.finished.emit(component.extra, ok and not self._cancelled, message)
+        self.last_result = (component.extra, ok and not self._cancelled, message)
+        self.finished.emit(*self.last_result)
 
     def _outcome(self, component: Component, ok: bool, exit_code: int) -> str:
         if self._cancelled:

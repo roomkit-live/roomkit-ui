@@ -109,7 +109,7 @@ def test_an_exclusive_extra_is_sent_to_the_components_tab(gemini_missing, monkey
         offer._button.click()
 
         assert ci.installer().running is None
-        assert "Settings → Components" in offer._label.text()
+        assert "Settings → Models & components → Components" in offer._label.text()
     finally:
         shiboken6.delete(offer)
 

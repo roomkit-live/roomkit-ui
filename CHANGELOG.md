@@ -12,6 +12,68 @@ Each released section is the source for that version's GitHub release notes.
 ## [Unreleased]
 
 ### Added
+- **Providers and Integrations alignment** — provider credentials use grouped cloud/local
+  cards with status and Manage actions; key fields open on demand. Integrations follows
+  MCP servers, CLI tools, Skills with large empty states and actions on each entry.
+  Browse skills.sh stays visible above installed skills, including at the minimum window
+  size. Source management and the online catalogue open without nested tabs.
+  Settings search includes a theme-aware magnifying glass. Dropdown lists follow the
+  Settings palette, including their frames on macOS, with roomier rows and violet selection.
+- **Settings prototype alignment** — Conversation uses large Realtime / Voice Channel
+  radio cards and a live three-step provider summary. Provider fields are grouped in
+  cards with labels above controls. Shared underlined tabs, roomier setting rows and
+  larger appearance previews restore the prototype's hierarchy across Settings.
+  The old mode dropdown and four duplicate realtime disclosure implementations are
+  removed. Mode changes preserve missing local model selections until explicitly replaced.
+- **Diagnostics and About settings** — Recorded audio, Pipeline capture and Telemetry
+  share one destination. Audio files can be filtered by name and source, with explicit
+  playback and folder actions. Deletion confirms only the displayed selection, preserves
+  files modified since listing and reports failures. Empty custom stage selections turn
+  capture off instead of recording every stage. OTLP setup shows protocol-specific defaults
+  and component installation guidance. About displays the installed version, copyable
+  support information and the complete MIT license. The old Audio Debug page and its
+  nested file scroller are removed; search, contextual links and live themes use the
+  shared Settings controls.
+- **Dictation and Wake Word settings** — clearer activation, shortcut, transcription
+  and phrase setup sections use the shared Settings controls. Unavailable local dictation
+  models remain selected until the user replaces them. Missing components offer the
+  existing install/copy-command action. Wake-word files share the model library's download
+  progress and retry state across Settings windows; the old page-owned download task is
+  removed. Recording a wake phrase uses pending microphone/provider choices. Search
+  explains prerequisites without enabling a feature or changing its provider.
+- **Integrations workspace** — Skills, MCP servers and CLI tools share one Settings
+  destination, with searchable lists, explicit add/edit/remove actions and setup status.
+  Skills separates Installed, Marketplace and Sources; MCP and CLI forms keep advanced
+  options folded away. Shared controls replace custom card layouts, duplicate styles
+  and source editors. Edits survive navigation and live theme changes. OAuth captures
+  the selected server's credentials before starting and keeps its result with that
+  server and URL; a public HTTP response alone no longer claims a token was stored.
+  Skill source downloads keep their feedback with the source that started them, and
+  marketplace installation status checks that its configured source exists on disk.
+- **Models & components library** — one Settings destination separates local model
+  files from feature dependencies. Search and filters narrow the lists; global search
+  opens a specific model or component. Download progress survives closing and reopening
+  Settings, with one operation per model and a retry after failure. Component installation
+  keeps its outcome and restart action when reopened, with output behind Installation details.
+  Shared catalogue rows replace repeated model forms and unused radio controls.
+- **Redesigned Settings workspace** — a resizable window remembers its size, with
+  pages grouped into Workspace, Capabilities and System. General has visual light/dark
+  theme choices, keyboard-accessible switches and clearer shortcut controls. Theme changes
+  apply and persist immediately; the footer explains that other edits save on close.
+- **Search Settings** — Ctrl/Cmd+K or Ctrl/Cmd+F searches setting names, English/French
+  aliases and old destinations such as Attitudes. Results open the right page, tab and
+  advanced section, then focus and highlight the control. Search never indexes entered
+  values or changes a provider or mode to reveal a dependent setting. Escape clears the
+  search before closing.
+- **Live appearance** — switching light/dark updates existing Settings controls, navigation
+  icons and chat messages without rebuilding forms, losing edits or restarting work.
+  Palette bindings replace fixed color snapshots and disconnect with their widgets.
+- **Settings organized by task** — Audio & voice groups devices, processing and speaker
+  recognition; Conversation groups voice setup and personality; Privacy & memory owns
+  history and session recording. Providers & keys edits each provider credential once,
+  with search and masked fields. The duplicated key controls, mirroring and temporary
+  secret aliases are removed. Existing saved keys and settings remain compatible.
+  Missing audio devices or models retain their selected value when Settings closes.
 - **Optional backends that report themselves** — `roomkit-ui --doctor` lists what an
   install carries and the command that completes it, on any console (a Windows cp1252 one
   included) and without touching a running app's log. Settings marks a provider whose

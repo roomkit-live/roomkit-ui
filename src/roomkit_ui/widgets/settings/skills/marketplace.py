@@ -6,22 +6,19 @@ import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 
-from PySide6.QtCore import Qt, QTimer, QUrl
+from PySide6.QtCore import QTimer, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QHBoxLayout,
-    QLabel,
     QLineEdit,
-    QPushButton,
-    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
 from shiboken6 import isValid
 
 from roomkit_ui.skills_sh_client import BASE_URL, SkillsShClient, SkillsShSkill
-from roomkit_ui.theme import colors
-from roomkit_ui.widgets.settings.skills.widgets import FlowLayout, SkillCard
+from roomkit_ui.widgets.settings.controls import FeedbackLabel, label, navigation_link
+from roomkit_ui.widgets.settings.skills.widgets import SkillCard
 
 logger = logging.getLogger(__name__)
 
@@ -57,55 +54,38 @@ class MarketplaceTab(QWidget):
         self._search_timer.setInterval(400)
         self._search_timer.timeout.connect(lambda: self._do_search(self._pending_query))
 
-        c = colors()
-
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 4, 0, 0)
-        layout.setSpacing(8)
+        layout.setSpacing(16)
+        layout.addWidget(label("Discover skills on skills.sh", "settingsSectionTitle"))
+        layout.addWidget(
+            label(
+                "Search the online directory and install skill sources for your assistant.",
+                "settingsHint",
+            )
+        )
 
         search_row = QHBoxLayout()
         search_row.setSpacing(8)
-        search_icon = QLabel("\U0001f50d")
-        search_icon.setStyleSheet("background: transparent; font-size: 14px;")
-        search_row.addWidget(search_icon)
-
         self._search_input = QLineEdit()
-        self._search_input.setPlaceholderText("Search skills.sh...")
+        self._search_input.setPlaceholderText("Search skills.sh…")
+        self._search_input.setAccessibleName("Search the skills.sh marketplace")
+        self._search_input.setClearButtonEnabled(True)
         self._search_input.textChanged.connect(self._on_search_changed)
         search_row.addWidget(self._search_input, 1)
 
-        open_btn = QPushButton("Open skills.sh")
-        open_btn.setCursor(Qt.PointingHandCursor)
-        open_btn.setFixedHeight(28)
-        open_btn.setStyleSheet(
-            f"QPushButton {{ font-size: 11px; font-weight: 600;"
-            f" background: {c['BG_SECONDARY']}; color: {c['ACCENT_BLUE']};"
-            f" border: 1px solid {c['SEPARATOR']}; border-radius: 6px;"
-            # Plain string: "}}" would stay literal and break the whole sheet.
-            " padding: 0 10px; }"
-            f"QPushButton:hover {{ background: {c['BG_TERTIARY']}; }}"
-        )
+        open_btn = navigation_link("Open skills.sh ↗")
         open_btn.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(BASE_URL)))
         search_row.addWidget(open_btn)
         layout.addLayout(search_row)
 
-        self._status = QLabel("")
-        self._status.setWordWrap(True)
-        self._status.setStyleSheet(
-            f"font-size: 11px; color: {c['TEXT_SECONDARY']}; background: transparent;"
-        )
+        self._status = FeedbackLabel()
         layout.addWidget(self._status)
-
         self._container = QWidget()
-        self._flow = FlowLayout(self._container, h_spacing=10, v_spacing=10)
-
-        scroll = QScrollArea()
-        scroll.setWidget(self._container)
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll.setFrameShape(QScrollArea.NoFrame)
-        scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
-        layout.addWidget(scroll, 1)
+        self._flow = QVBoxLayout(self._container)
+        self._flow.setContentsMargins(0, 0, 0, 0)
+        self._flow.setSpacing(12)
+        layout.addWidget(self._container)
 
     @property
     def loaded(self) -> bool:
@@ -128,7 +108,7 @@ class MarketplaceTab(QWidget):
             self._clear_cards()
             self._status.setText("Type at least 2 characters to search skills.sh.")
             return
-        self._status.setText("Searching...")
+        self._status.set_status("Searching…", "active")
         asyncio.ensure_future(self._run_search(query, self._search_seq))
 
     async def _run_search(self, query: str, seq: int) -> None:
@@ -139,11 +119,13 @@ class MarketplaceTab(QWidget):
                 return
             self._results = results
             self._render(results)
-            self._status.setText(f"{len(results)} results")
+            self._status.set_status(
+                f"{len(results)} results" if results else "No skills found. Try another search."
+            )
         except Exception as exc:
             logger.exception("skills.sh search failed")
             if self._is_latest_search(seq):
-                self._status.setText(f"Search failed: {exc}")
+                self._status.set_status(f"Search failed: {exc}", "error")
 
     def _is_latest_search(self, seq: int) -> bool:
         """Whether search *seq* may still update the tab.
@@ -158,8 +140,10 @@ class MarketplaceTab(QWidget):
         self._cards.clear()
         while self._flow.count():
             item = self._flow.takeAt(0)
-            if item and item.widget():
-                item.widget().deleteLater()
+            widget = item.widget() if item else None
+            if widget is not None:
+                widget.hide()
+                widget.deleteLater()
 
     def _render(self, items: list[SkillsShSkill]) -> None:
         self._clear_cards()
@@ -199,9 +183,7 @@ class MarketplaceTab(QWidget):
 
     @staticmethod
     def _show_installing(card: SkillCard) -> None:
-        if card.action_btn:
-            card.action_btn.setText("Installing...")
-            card.action_btn.setEnabled(False)
+        card.set_install_state("installing")
 
     async def _do_install(self, skill: SkillsShSkill) -> None:
         # The card is looked up again once the install returns: a search
@@ -214,21 +196,14 @@ class MarketplaceTab(QWidget):
                 return  # the Settings dialog closed during the install
             card = self._cards.get(skill.id)
             if card is not None and card.action_btn:
-                c = colors()
-                card.action_btn.setText("Installed \u2713")
-                card.action_btn.setStyleSheet(
-                    f"QPushButton {{ font-size: 11px; font-weight: 600;"
-                    f" background: {c['BG_TERTIARY']}; color: {c['TEXT_SECONDARY']};"
-                    " border: none; border-radius: 6px; padding: 0 12px; }"
-                )
+                card.set_install_state("installed")
         except Exception as exc:
             logger.exception("Failed to install skills.sh source %s", skill.source)
             if not isValid(self):
                 return
             card = self._cards.get(skill.id)
             if card is not None and card.action_btn:
-                card.action_btn.setText("Retry")
-                card.action_btn.setEnabled(True)
-            self._status.setText(f"Install failed: {exc}")
+                card.set_install_state("error")
+            self._status.set_status(f"Install failed: {exc}", "error")
         finally:
             self._installing_source = None

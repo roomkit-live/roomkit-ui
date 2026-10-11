@@ -9,7 +9,7 @@ from roomkit_ui import engine_vc
 from roomkit_ui.engine import Engine
 from roomkit_ui.settings import _DEFAULTS
 from roomkit_ui.tts import is_cached_tts, pocket
-from roomkit_ui.widgets.settings.ai_page import VC_TTS_PROVIDERS, _AIPage
+from roomkit_ui.widgets.settings.voice_setup import VC_TTS_PROVIDERS, VoiceSetup
 
 # -- factory -------------------------------------------------------------------
 
@@ -125,7 +125,7 @@ async def test_a_clip_recorded_again_in_place_rebuilds_it(engine, tmp_path):
 
 
 def test_the_settings_page_offers_pocket_with_its_fields(qapp):
-    page = _AIPage(
+    page = VoiceSetup(
         {
             **_DEFAULTS,
             "vc_tts_provider": "pocket",

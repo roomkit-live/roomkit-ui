@@ -422,7 +422,8 @@ class VoiceChannelMixin:
         stt_model_id = settings.get("vc_stt_model", "")
         if not stt_model_id:
             raise ValueError(
-                "No STT model selected. Download one in AI Models and select it in Settings."
+                "No STT model selected. Download one in Models & components, "
+                "then select it in Conversation → Listen."
             )
         stt_translate = settings.get("stt_translate", False)
         stt_key = ("stt", stt_model_id, stt_language, stt_translate, inference_device)

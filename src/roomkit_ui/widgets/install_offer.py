@@ -14,7 +14,7 @@ from PySide6.QtWidgets import QApplication, QHBoxLayout, QLabel, QPushButton, QW
 from roomkit_ui.component_installer import installer
 from roomkit_ui.components import Component, Installer, component_of, install_plan
 from roomkit_ui.features import FEATURES
-from roomkit_ui.theme import colors
+from roomkit_ui.theme_live import themed_style
 
 
 class InstallOffer(QWidget):
@@ -41,9 +41,12 @@ class InstallOffer(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         self._label = QLabel()
         self._label.setWordWrap(True)
-        self._label.setStyleSheet(
-            f"font-size: 12px; color: {color or colors()['TEXT_SECONDARY']};"
-            " background: transparent;"
+        themed_style(
+            self._label,
+            lambda c: (
+                f"font-size: 12px; color: {c.get(color, color) or c['TEXT_SECONDARY']};"
+                " background: transparent;"
+            ),
         )
         layout.addWidget(self._label, 1)
         self._button = QPushButton()
@@ -97,7 +100,7 @@ class InstallOffer(QWidget):
             # The Components tab asks what to give up; one click here must not.
             self._label.setText(
                 f"{self._component.title} would break {', '.join(plan.conflicts)}: "
-                "install it from Settings → Components."
+                "install it from Settings → Models & components → Components."
             )
             return
         installer().install(self._component)

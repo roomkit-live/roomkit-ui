@@ -4,27 +4,18 @@ from __future__ import annotations
 
 import json
 
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (
-    QFormLayout,
-    QHBoxLayout,
-    QLabel,
-    QLineEdit,
-    QListWidget,
-    QListWidgetItem,
-    QPushButton,
-    QStackedWidget,
-    QTextEdit,
-    QVBoxLayout,
-    QWidget,
-)
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtWidgets import QFrame, QLineEdit, QTextEdit, QVBoxLayout, QWidget
 
 from roomkit_ui.constants import ATTITUDE_PRESETS
-from roomkit_ui.theme import colors
+from roomkit_ui.widgets.settings.controls import SettingsForm, label, navigation_link
+from roomkit_ui.widgets.settings.integration_controls import DetailStack, IntegrationList
 
 
 class _AttitudesPage(QWidget):
     """Attitudes management page with list/edit navigation."""
+
+    changed = Signal()
 
     def __init__(self, settings: dict, parent=None) -> None:
         super().__init__(parent)
@@ -35,121 +26,63 @@ class _AttitudesPage(QWidget):
             self._custom = []
 
         self._editing_row = -1
-        c = colors()
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-
-        self._stack = QStackedWidget()
+        self._stack = DetailStack()
         layout.addWidget(self._stack)
 
-        # ── Page 0: Attitude list ──
-        list_page = QWidget()
-        list_layout = QVBoxLayout(list_page)
-        list_layout.setContentsMargins(0, 0, 0, 0)
-        list_layout.setSpacing(12)
-
-        title = QLabel("Attitudes")
-        title.setStyleSheet("font-size: 18px; font-weight: 600; background: transparent;")
-        list_layout.addWidget(title)
-
-        desc = QLabel(
-            "Define personality presets for the assistant. Select which one to use in AI Provider."
+        overview = QWidget()
+        overview_layout = QVBoxLayout(overview)
+        overview_layout.setContentsMargins(0, 0, 0, 0)
+        overview_layout.setSpacing(12)
+        overview_layout.addWidget(label("Personality presets", "settingsSectionTitle"))
+        self.entries = IntegrationList(
+            "Personality presets",
+            "View a built-in style or create and edit your own.",
+            "personality",
         )
-        desc.setWordWrap(True)
-        desc.setStyleSheet(
-            f"font-size: 13px; color: {c['TEXT_SECONDARY']}; background: transparent;"
-        )
-        list_layout.addWidget(desc)
+        overview_layout.addWidget(self.entries)
+        self._att_list = self.entries.list
+        self._remove_btn = self.entries.remove_button
+        self.entries.add_requested.connect(self._add_attitude)
+        self.entries.edit_requested.connect(self._show_edit)
+        self.entries.remove_requested.connect(lambda _row: self._remove_attitude())
+        self._att_list.currentRowChanged.connect(self._on_selection_changed)
+        self.entries.search.textChanged.connect(lambda: self._on_selection_changed())
+        self._stack.addWidget(overview)
 
-        self._att_list = QListWidget()
-        self._att_list.setStyleSheet(
-            f"QListWidget {{ border: 1px solid {c['SEPARATOR']}; border-radius: 6px; }}"
-            f"QListWidget::item {{ padding: 6px 10px; }}"
-        )
-        list_layout.addWidget(self._att_list, 1)
-
-        _btn_style = (
-            f"QPushButton {{ font-size: 18px; font-weight: 700;"
-            f" color: {c['TEXT_PRIMARY']}; background-color: {c['BG_SECONDARY']};"
-            f" border: 1px solid {c['BG_TERTIARY']}; border-radius: 6px;"
-            f" padding: 0px; margin: 0px;"
-            f" min-width: 28px; min-height: 28px; }}"
-            f"QPushButton:hover {{ background-color: {c['BG_TERTIARY']}; }}"
-        )
-        btn_row = QHBoxLayout()
-        btn_row.setSpacing(4)
-        add_btn = QPushButton("+")
-        add_btn.setFixedSize(28, 28)
-        add_btn.setStyleSheet(_btn_style)
-        add_btn.clicked.connect(self._add_attitude)
-        self._remove_btn = QPushButton("\u2212")
-        self._remove_btn.setFixedSize(28, 28)
-        self._remove_btn.setStyleSheet(_btn_style)
-        self._remove_btn.clicked.connect(self._remove_attitude)
-        btn_row.addWidget(add_btn)
-        btn_row.addWidget(self._remove_btn)
-        btn_row.addStretch()
-        list_layout.addLayout(btn_row)
-
-        self._stack.addWidget(list_page)
-
-        # ── Page 1: Edit form ──
-        edit_page = QWidget()
-        edit_layout = QVBoxLayout(edit_page)
-        edit_layout.setContentsMargins(0, 0, 0, 0)
-        edit_layout.setSpacing(12)
-
-        back_btn = QPushButton("\u2190  Back to list")
-        back_btn.setCursor(Qt.PointingHandCursor)
-        back_btn.setStyleSheet(
-            f"QPushButton {{ background: transparent; border: none;"
-            f" color: {c['ACCENT_BLUE']}; font-size: 13px;"
-            f" text-align: left; padding: 0; }}"
-            f"QPushButton:hover {{ text-decoration: underline; }}"
-        )
-        back_btn.clicked.connect(self._show_list)
-        edit_layout.addWidget(back_btn)
-
-        self._edit_title = QLabel()
-        self._edit_title.setStyleSheet(
-            "font-size: 18px; font-weight: 600; background: transparent;"
-        )
-        edit_layout.addWidget(self._edit_title)
-
-        form = QFormLayout()
-        form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
-        form.setSpacing(10)
-        form.setLabelAlignment(Qt.AlignRight)
-
+        editor = QWidget()
+        editor_layout = QVBoxLayout(editor)
+        editor_layout.setContentsMargins(0, 0, 0, 0)
+        editor_layout.setSpacing(16)
+        back = navigation_link("← Back to personalities")
+        back.clicked.connect(self._show_list)
+        editor_layout.addWidget(back, 0, Qt.AlignLeft)
+        self._edit_title = label("", "settingsSectionTitle")
+        self._edit_title.setTextFormat(Qt.PlainText)
+        editor_layout.addWidget(self._edit_title)
+        self._edit_hint = label("", "settingsHint")
+        editor_layout.addWidget(self._edit_hint)
+        card = QFrame()
+        card.setObjectName("settingsCard")
+        form = SettingsForm(card)
+        form.setContentsMargins(20, 20, 20, 20)
         self._name_edit = QLineEdit()
-        self._name_edit.setPlaceholderText("e.g. Pirate")
+        self._name_edit.setPlaceholderText("e.g. Calm and concise")
         form.addRow("Name", self._name_edit)
-
         self._text_edit = QTextEdit()
+        self._text_edit.setAcceptRichText(False)
         self._text_edit.setLineWrapMode(QTextEdit.WidgetWidth)
         self._text_edit.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self._text_edit.setFixedHeight(120)
+        self._text_edit.setMinimumHeight(160)
         self._text_edit.setPlaceholderText(
             "Describe the assistant's personality and communication style."
         )
-        form.addRow("Text", self._text_edit)
-
-        edit_layout.addLayout(form)
-        edit_layout.addStretch()
-
-        self._stack.addWidget(edit_page)
-
-        # Start on list page
-        self._stack.setCurrentIndex(0)
-
-        # Populate list
+        form.addRow("Communication style", self._text_edit)
+        editor_layout.addWidget(card)
+        self._stack.addWidget(editor)
         self._rebuild_list()
-
-        # Connections
-        self._att_list.itemDoubleClicked.connect(self._on_item_activated)
-        self._att_list.currentRowChanged.connect(self._on_selection_changed)
         self._name_edit.textChanged.connect(self._sync_to_model)
         self._text_edit.textChanged.connect(self._sync_to_model)
 
@@ -165,15 +98,18 @@ class _AttitudesPage(QWidget):
     def _rebuild_list(self) -> None:
         self._att_list.clear()
         for name, _text in ATTITUDE_PRESETS:
-            self._att_list.addItem(f"{name}  (preset)")
+            self.entries.append(name, "Included with RoomKit · view only", "Built-in")
         for att in self._custom:
-            self._att_list.addItem(att.get("name", "Unnamed"))
+            self.entries.append(att.get("name") or "Unnamed", "Your communication style", "Custom")
+        self.entries.refresh()
+        self._on_selection_changed()
 
     # -- navigation ----------------------------------------------------------
 
     def _show_list(self) -> None:
         self._editing_row = -1
         self._stack.setCurrentIndex(0)
+        self._att_list.setFocus()
 
     def _show_edit(self, row: int) -> None:
         total = self._preset_count + len(self._custom)
@@ -189,7 +125,7 @@ class _AttitudesPage(QWidget):
             name = att.get("name", "")
             text = att.get("text", "")
 
-        self._edit_title.setText(name or "New Attitude")
+        self._edit_title.setText(name or "New personality")
 
         for w in (self._name_edit, self._text_edit):
             w.blockSignals(True)
@@ -202,22 +138,31 @@ class _AttitudesPage(QWidget):
         for w in (self._name_edit, self._text_edit):
             w.blockSignals(False)
 
+        self._edit_hint.setText(
+            "Built-in personalities are read-only. Add a personality to create your own style."
+            if is_preset
+            else "Changes are saved when you close Settings."
+        )
         self._stack.setCurrentIndex(1)
+        (self._text_edit if is_preset else self._name_edit).setFocus()
 
-    def _on_item_activated(self, _item: QListWidgetItem) -> None:
+    def _on_selection_changed(self, _row: int = -1) -> None:
         row = self._att_list.currentRow()
-        self._show_edit(row)
-
-    def _on_selection_changed(self, row: int) -> None:
-        # Disable remove button for presets
-        self._remove_btn.setEnabled(not self._is_preset(row))
+        item = self._att_list.currentItem()
+        selected = item is not None and not item.isHidden()
+        self.entries.edit_button.setEnabled(selected)
+        self.entries.edit_button.setText(
+            "View selected" if self._is_preset(row) else "Edit selected"
+        )
+        self._remove_btn.setEnabled(selected and not self._is_preset(row))
 
     # -- add / remove --------------------------------------------------------
 
     def _add_attitude(self) -> None:
         att = {"name": "", "text": ""}
         self._custom.append(att)
-        self._att_list.addItem("Unnamed")
+        self.entries.search.clear()
+        self.entries.append("Unnamed", "Your communication style", "Custom")
         new_row = self._preset_count + len(self._custom) - 1
         self._att_list.setCurrentRow(new_row)
         self._show_edit(new_row)
@@ -230,6 +175,7 @@ class _AttitudesPage(QWidget):
         if 0 <= idx < len(self._custom):
             self._custom.pop(idx)
             self._rebuild_list()
+            self.changed.emit()
 
     # -- sync ----------------------------------------------------------------
 
@@ -242,11 +188,12 @@ class _AttitudesPage(QWidget):
             return
         self._custom[idx]["name"] = self._name_edit.text().strip()
         self._custom[idx]["text"] = self._text_edit.toPlainText().strip()
-        # Update list item text
-        item = self._att_list.item(row)
-        if item:
-            item.setText(self._custom[idx]["name"] or "Unnamed")
-        self._edit_title.setText(self._custom[idx]["name"] or "New Attitude")
+        self.entries.update_entry(
+            row, self._custom[idx]["name"] or "Unnamed", "Your communication style", "Custom"
+        )
+        self._on_selection_changed()
+        self._edit_title.setText(self._custom[idx]["name"] or "New personality")
+        self.changed.emit()
 
     # -- public API ----------------------------------------------------------
 
@@ -257,6 +204,12 @@ class _AttitudesPage(QWidget):
         names = [name for name, _text in ATTITUDE_PRESETS]
         names.extend(att.get("name", "") for att in self._custom if att.get("name"))
         return names
+
+    def personality_text(self, name: str) -> str:
+        for preset, text in ATTITUDE_PRESETS:
+            if preset == name:
+                return text
+        return next((a.get("text", "") for a in self._custom if a.get("name") == name), "")
 
     def get_settings(self) -> dict:
         """Return this page's settings slice."""

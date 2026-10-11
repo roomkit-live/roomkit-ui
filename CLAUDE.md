@@ -113,9 +113,24 @@ src/roomkit_ui/
     ├── wakeword_wizard.py # Guided wake-word enrolment
     ├── voice_name_dialog.py # "Who is this?" when a voice's name is clicked in the chat
     ├── install_offer.py   # "<X> is not installed. [Install]" under a provider combo and in the chat
-    └── settings/          # 14-tab dialog (panel.py), one <tab>_page.py per tab: general, ai, attitudes,
-                           #  speakers, dictation, wakeword, models, mcp, cli_tools, audio_debug, telemetry,
-                           #  components, about, plus skills/ (page, my_skills, marketplace, widgets). AI tab parts:
+    └── settings/          # Resizable settings workspace (panel.py); page_registry.py owns IDs,
+                           #  groups, factories and refresh hooks; navigation.py renders the sidebar.
+                           #  controls.py (sections, forms, feedback), appearance.py and style.py
+                           #  are shared UI building blocks;
+                           #  choice_cards.py provides accessible mode cards;
+                           #  pipeline_summary.py reflects the selected STT/LLM/TTS providers.
+                           #  conversation_page.py owns voice_setup.py and the personality editor;
+                           #  audio_page.py owns audio_processing.py and speakers_page.py.
+                           #  providers_page.py owns every shared provider credential; privacy_page.py
+                           #  owns memory and session recording. diagnostics_page.py groups
+                           #  recordings_page.py (file browser and owned media player),
+                           #  audio_capture_page.py (debug taps) and telemetry_page.py (OTLP).
+                           #  library_page.py groups models_page.py and components_page.py;
+                           #  model_library.py describes each model kind's file operations;
+                           #  model_jobs.py owns download progress for the application.
+                           #  integrations_page.py groups skills/, mcp_page.py and cli_tools_page.py;
+                           #  integration_controls.py shares searchable lists and detail views.
+                           #  Other pages: dictation, wakeword, about. Voice parts:
                            #  realtime_section, realtime_catalogs, realtime_gemini_live, realtime_gpt_live,
                            #  vc_local_fields, vc_cloud_fields, vc_azure_fields, vc_meta_fields, vc_agent_fields;
                            #  also models_widgets, speakers_dialogs, speakers_muse, feature_hints
@@ -143,7 +158,11 @@ Every AI backend lives behind an extra declared in `pyproject.toml` AND mirrored
 - The graphics environment is decided by `app._graphics_env()` and applied BEFORE PySide6 is imported. The OpenGL probe runs on Linux only (macOS/Windows render through Metal/Direct3D and ship no libEGL); only without OpenGL does it set `QT_QUICK_BACKEND=software`, `LIBGL_ALWAYS_SOFTWARE=1` and Chromium's GPU-off flags
 - Never pass `--disable-web-security` to Chromium: it is process-wide, and MCP Apps rely on the same-origin policy (with `url_policy`) to keep local and LAN services out of reach
 - Qt signals in async callbacks: always wrap emit() in try/except — the C++ object may be deleted
-- The Settings dialog has no Save button: it saves in `done()`, on every way out (Esc included), and is destroyed after. Work that outlives it (downloads, OAuth, skill installs) must check its widget still exists. Shared API-key fields are mirrored live across tabs (`_link_api_key_fields`)
+- The theme alone saves and applies immediately through `theme_live.apply_theme`; other Settings edits save in `done()` on every way out (Esc included). The dialog is destroyed after closing. Work that outlives it (downloads, OAuth, skill installs) must check its widget still exists. Provider credentials are edited only in `ProvidersPage`; each persisted setting has one page owner. Do not add duplicate key fields or temporary secret aliases
+- Live palette styles use `theme_live.themed_style(widget, lambda c: ...)`; callbacks are parented to their widget and replaced on state changes. Do not rebuild pages to switch themes or cache a palette for later rendering. Search metadata lives in `PageSpec.search`; it contains labels, aliases and control paths, never entered values.
+- Models & components keeps the `models` page ID; its two tabs own model files and optional dependencies separately. `model_jobs.ModelDownloads` owns async download tasks for the application; pages subscribe through Qt slots so destroying one disconnects its updates. Keep the late-progress guard and backend `download_flight` deduplication. Refresh/filter/theme changes must not start work or rebuild rows. `ComponentInstaller.last_result` keeps the outcome and restart action when Settings reopens.
+- Integrations owns the four saved slices for Skills, MCP and CLI; its child views stay alive across tab switches. List filtering hides rows without changing configuration indices. OAuth snapshots credentials before scheduling work and binds feedback to server ID + URL. Git source feedback belongs to its URL, so completion never reports success on another source being edited. An enabled integration or stored token does not establish a working connection.
+- Dictation retains unavailable model IDs as labelled choices. Wake Word shares `model_jobs` and model rows with the library; no page-owned download task. Opening its page supplies pending audio/provider values to the recording wizard. Refresh may disable activation when prerequisites are absent, but must preserve its checked value and allow switching an unavailable feature off. Recording/forgetting a phrase changes its file immediately; other preferences save on close.
 - Secrets go through `settings_secrets.py` (keyring via `SecretStore`): API keys, MCP OAuth client secrets, and secret-looking env values of MCP servers AND CLI tools. Never write one to QSettings directly
 
 ### Session lifecycle

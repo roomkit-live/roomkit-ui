@@ -135,13 +135,13 @@ roomkit-ui --doctor
 
 The app never fails silently on a missing backend: unavailable providers are
 marked in Settings, and starting a session with one says so in the chat. In a pip,
-pipx or uv tool install, **Settings → Components** installs them (as does the
+pipx or uv tool install, **Settings → Models & components → Components** installs them (as does the
 Install button next to a provider marked "not installed", or in the chat); in a
 source checkout it gives the `uv sync --inexact --extra …` command to run.
 
 ### GPU acceleration (optional)
 
-Local STT models can run on GPU for faster inference. The inference device can be selected in Settings > General > Audio Processing.
+Local STT models can run on GPU for faster inference. The inference device can be selected in Settings > Audio & voice > Devices & processing.
 
 **NVIDIA CUDA** (Linux):
 
@@ -168,32 +168,60 @@ writes, so a CUDA wheel of another version mixes two builds' libraries.
 ## Usage
 
 1. Click the gear icon to open **Settings**
-2. Go to **AI Provider**, select your provider and enter your API key
-3. Close **Settings** — there is no Save button: changes are saved however the
-   dialog is closed, Esc included — then press the green call button to start a
+2. Add your API key in **Providers & keys**, then choose your mode and provider in **Conversation**
+3. Close **Settings** — other edits save whenever the dialog closes, Esc included;
+   the light/dark theme applies immediately — then press the green call button to start a
    voice session
 4. Speak naturally — the AI will respond in real-time
 5. Press the red button to end the session
 
+Search Settings with **Ctrl/Cmd+K** or **Ctrl/Cmd+F**. Results open the matching
+page and focus its control; Escape clears the search.
+
+**Conversation** uses two large cards to choose **Realtime** or **Voice Channel**.
+The Voice Channel overview shows the selected transcription, reasoning and speech
+providers, with detailed controls below. Arrow keys switch between the mode cards;
+pending settings remain intact when switching modes or themes.
+
+**Models & components** groups downloadable model files and optional components in two
+tabs. Filter models by use or download status, and components by installation status.
+Downloads continue when you close Settings; reopening shows their current progress.
+Use downloaded files in Conversation, Dictation, Audio & voice or Wake Word.
+
+**Integrations** groups **MCP servers**, **CLI tools** and **Skills**. Search each list
+by name, use **Manage** on an entry to edit it, or add a new one. Skills shows installed
+skills with a **Browse skills.sh** button at the top and a **Manage sources** link for
+folders/repositories. MCP and CLI editors keep
+environment variables and other advanced options in a disclosure below the main fields.
+
+**Diagnostics** groups **Recorded audio**, **Pipeline capture** and **Telemetry**.
+Filter WAV files by name or source, play them, or open either output folder. Deletion
+asks you to confirm the displayed files; files outside the selection remain untouched.
+Capture and trace-export changes apply to the next session. **About** includes the
+installed version, a copy-version-info action and the full MIT license.
+
 ### Local STT dictation
 
-1. Go to **Settings > AI Models** and download a speech-to-text model
-2. Go to **Settings > Dictation**, set STT Provider to **Local** and select your model
+1. Go to **Settings > Models & components > Local models** and download a speech-to-text model
+2. Go to **Settings > Dictation**, enable dictation, choose your shortcut, and set
+   **Speech recognition provider** to **Local**, then select your model
 3. Press the global hotkey to record, release to transcribe and paste
 
 ### Wake word
 
-1. Go to **Settings > Wake Word**. If the encoder is missing, click
-   **Download encoder (~12 MB)**
-2. Click **Set up wake word…** and follow the guided recording: the phrase said
+1. Go to **Settings > Wake Word**. Open **Components & local models** to install any
+   missing component and download the encoder (~12 MB) and TEN VAD. Downloads continue
+   if you close Settings; their progress is shared with **Models & components**
+2. Click **Record a phrase…** and follow the guided recording: the phrase said
    normally, more quietly and from further away, then a few words that sound
    close to it and must not wake it
-3. Check **Listen for the wake word**. Saying the phrase opens a session, and what
-   you say right after it reaches the assistant. **Hang up when the conversation
-   goes quiet** returns to listening on its own
+3. Enable **Listen for the wake word**. Saying the phrase opens a session, and what
+   you say right after it reaches the assistant. **Automatic hangup** returns to
+   listening after the configured quiet period
 
 The wake word stands down during a session, during dictation and while Settings
 is open.
+Recording or forgetting a phrase takes effect immediately; other settings save on close.
 
 ## Documentation
 
@@ -224,7 +252,7 @@ src/roomkit_ui/
 ├── providers/, tts/            # LLM and TTS factories (lazy registries)
 ├── wakeword/                   # Wake word: capture, detection, enrolment
 └── widgets/                    # Main window, chat, MCP App views, wake-word wizard,
-                                #  14-tab settings dialog
+                                #  settings workspace with grouped navigation
 ```
 
 Every module is described in the Architecture section of [CLAUDE.md](CLAUDE.md).

@@ -101,12 +101,12 @@ def test_provider_maps_point_at_known_features(provider_map):
 def test_settings_combos_cover_every_offered_provider():
     """Every provider the UI offers must resolve, or be core-only on purpose."""
     from roomkit_ui.vc_agent import SPEAK_POLICIES
-    from roomkit_ui.widgets.settings.ai_page import (
+    from roomkit_ui.widgets.settings.realtime_catalogs import PROVIDERS as RT_PROVIDERS
+    from roomkit_ui.widgets.settings.voice_setup import (
         VC_LLM_PROVIDERS,
         VC_STT_PROVIDERS,
         VC_TTS_PROVIDERS,
     )
-    from roomkit_ui.widgets.settings.realtime_catalogs import PROVIDERS as RT_PROVIDERS
 
     # The policies that need no backend of their own: none, and the
     # conversation model the session already requires.
@@ -137,7 +137,10 @@ def test_require_raises_pointing_at_the_components_tab(monkeypatch):
     with pytest.raises(FeatureUnavailableError) as excinfo:
         require("gradium")
     message = str(excinfo.value)
-    assert message == "Gradium is not installed — add it in Settings → Components."
+    assert (
+        message
+        == "Gradium is not installed — add it in Settings → Models & components → Components."
+    )
 
 
 def test_frozen_build_does_not_tell_users_to_pip_install(monkeypatch):

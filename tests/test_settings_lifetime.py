@@ -18,7 +18,7 @@ import roomkit_ui.skill_well_known as skill_well_known
 import roomkit_ui.widgets.settings.skills.marketplace as marketplace_mod
 from roomkit_ui.settings import _DEFAULTS
 from roomkit_ui.skills_sh_client import SkillsShSkill
-from roomkit_ui.widgets.settings.audio_debug_page import _HAS_MULTIMEDIA, _AudioDebugPage
+from roomkit_ui.widgets.settings.recordings_page import _HAS_MULTIMEDIA, RecordingsPage
 from roomkit_ui.widgets.settings.skills import _SkillsPage
 from roomkit_ui.widgets.settings.skills.marketplace import MarketplaceTab
 from roomkit_ui.widgets.settings.speakers_page import _SpeakersPage
@@ -87,7 +87,7 @@ async def test_a_voice_test_finishing_after_the_dialog_closed_is_dropped(qapp, m
 
 @pytest.mark.skipif(not _HAS_MULTIMEDIA, reason="PySide6 QtMultimedia not installed")
 def test_the_audio_player_goes_away_with_the_page(qapp):
-    page = _AudioDebugPage(dict(_DEFAULTS))
+    page = RecordingsPage(dict(_DEFAULTS))
     player, output = page._player, page._audio_output
 
     shiboken6.delete(page)

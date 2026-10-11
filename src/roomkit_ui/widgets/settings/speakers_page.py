@@ -5,13 +5,11 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QCheckBox,
     QComboBox,
     QDialog,
     QHBoxLayout,
-    QLabel,
     QPushButton,
     QSlider,
     QVBoxLayout,
@@ -19,7 +17,14 @@ from PySide6.QtWidgets import (
 )
 from shiboken6 import isValid
 
-from roomkit_ui.theme import colors
+from roomkit_ui.widgets.settings.controls import (
+    AdvancedSection,
+    FeedbackLabel,
+    SettingsForm,
+    SettingsSection,
+    SettingsToggle,
+    label,
+)
 from roomkit_ui.widgets.settings.speakers_dialogs import _EnrollDialog, _SpeakerRow
 from roomkit_ui.widgets.settings.speakers_muse import MuseSpeakersSection
 
@@ -31,165 +36,131 @@ class _SpeakersPage(QWidget):
 
     def __init__(self, settings: dict, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self._settings = settings
-        c = colors()
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(16)
+        layout.setSpacing(28)
 
-        title = QLabel("Speakers")
-        title.setStyleSheet("font-size: 18px; font-weight: 600; background: transparent;")
-        layout.addWidget(title)
-
-        desc = QLabel(
-            "Enable speaker identification to label who is talking in the chat. "
-            "Voice Channel mode only: realtime sessions run without it. "
-            "With Meta Muse as the STT, Muse tells the voices apart itself, live: "
-            "no speaker model, no enrolment. Otherwise the local model below matches "
-            "each voice to the speakers enrolled with a 10-second sample."
+        recognition = SettingsSection(
+            "Speaker recognition",
+            "Label who is talking in Voice Channel conversations. "
+            "Realtime sessions run without speaker identification.",
         )
-        desc.setWordWrap(True)
-        desc.setStyleSheet(
-            f"font-size: 13px; color: {c['TEXT_SECONDARY']}; background: transparent;"
+        self._enable_cb = SettingsToggle(
+            "Identify speakers", bool(settings.get("diarization_enabled", False))
         )
-        layout.addWidget(desc)
-
-        # -- Enable toggle --
-        self._enable_cb = QCheckBox("Enable Speaker Identification")
-        self._enable_cb.setChecked(settings.get("diarization_enabled", False))
-        layout.addWidget(self._enable_cb)
-
-        # -- Model selection --
-        model_row = QHBoxLayout()
-        model_label = QLabel("Speaker Model:")
-        model_label.setStyleSheet(
-            f"font-size: 13px; color: {c['TEXT_SECONDARY']}; background: transparent;"
+        recognition.add_row(
+            "Identify speakers",
+            "Use enrolled voices with a local model, or let Meta Muse tell voices apart live.",
+            self._enable_cb,
         )
-        model_row.addWidget(model_label)
+        self._primary_cb = SettingsToggle(
+            "Listen only to primary speaker", bool(settings.get("primary_speaker_mode", False))
+        )
+        recognition.add_row(
+            "Listen only to primary speaker",
+            "Only the primary voice triggers responses. Other and unrecognized voices stay "
+            "in the chat but are not sent to the assistant. With Meta Muse, the voice "
+            "carrying your name is primary.",
+            self._primary_cb,
+        )
+        layout.addWidget(recognition)
 
+        local = SettingsSection(
+            "Local recognition",
+            "Match each voice to a speaker enrolled with a 10-second sample. "
+            "Meta Muse does not use this model or these samples.",
+        )
+        local.content.setContentsMargins(20, 20, 20, 20)
+        local.content.setSpacing(16)
+        form = SettingsForm()
         self._model_combo = QComboBox()
-        self._model_combo.addItem("(none)", "")
-        from roomkit_ui.model_manager import SPEAKER_MODELS, is_speaker_model_downloaded
+        self.refresh_models(settings.get("diarization_model", ""))
+        form.addRow("Speaker model", self._model_combo)
+        local.content.addLayout(form)
+        self._model_hint = label("", "settingsHint")
+        local.content.addWidget(self._model_hint)
+        self._model_combo.currentIndexChanged.connect(self._update_model_hint)
+        self._update_model_hint()
 
-        for sm in SPEAKER_MODELS:
-            suffix = " (downloaded)" if is_speaker_model_downloaded(sm.id) else ""
-            self._model_combo.addItem(f"{sm.name}{suffix}", sm.id)
-
-        current_model = settings.get("diarization_model", "")
-        idx = self._model_combo.findData(current_model)
-        if idx >= 0:
-            self._model_combo.setCurrentIndex(idx)
-        model_row.addWidget(self._model_combo, 1)
-        layout.addLayout(model_row)
-
-        # -- Threshold slider --
-        thresh_row = QHBoxLayout()
-        thresh_label = QLabel("Recognition Threshold:")
-        thresh_label.setStyleSheet(
-            f"font-size: 13px; color: {c['TEXT_SECONDARY']}; background: transparent;"
-        )
-        thresh_row.addWidget(thresh_label)
-
+        tuning = QWidget()
+        tuning_form = SettingsForm(tuning)
+        threshold_control = QWidget()
+        threshold_row = QHBoxLayout(threshold_control)
+        threshold_row.setContentsMargins(0, 0, 0, 0)
         self._threshold_slider = QSlider(Qt.Horizontal)
+        self._threshold_slider.setAccessibleName("Recognition threshold")
         self._threshold_slider.setRange(25, 65)
-        threshold = settings.get("diarization_threshold", 0.4)
-        if isinstance(threshold, str):
-            try:
-                threshold = float(threshold)
-            except (ValueError, TypeError):
-                threshold = 0.4
+        try:
+            threshold = float(settings.get("diarization_threshold", 0.4))
+        except (ValueError, TypeError):
+            threshold = 0.4
         self._threshold_slider.setValue(int(threshold * 100))
         self._threshold_slider.setTickInterval(10)
-        thresh_row.addWidget(self._threshold_slider, 1)
-
-        self._thresh_value = QLabel(f"{threshold:.2f}")
-        self._thresh_value.setFixedWidth(36)
-        self._thresh_value.setStyleSheet(
-            f"font-size: 12px; color: {c['TEXT_SECONDARY']}; background: transparent;"
+        threshold_row.addWidget(self._threshold_slider, 1)
+        self._thresh_value = label(
+            f"{self._threshold_slider.value() / 100:.2f}", "settingsHint", wrap=False
         )
-        thresh_row.addWidget(self._thresh_value)
+        threshold_row.addWidget(self._thresh_value)
         self._threshold_slider.valueChanged.connect(
             lambda v: self._thresh_value.setText(f"{v / 100:.2f}")
         )
-        layout.addLayout(thresh_row)
+        tuning_form.addRow("Recognition threshold", threshold_control)
+        tuning_form.addRow(label("Higher values require a closer voice match.", "settingsHint"))
+        self.threshold_advanced = AdvancedSection("Recognition tuning", tuning)
+        local.content.addWidget(self.threshold_advanced)
+        layout.addWidget(local)
 
-        # -- Primary speaker mode --
-        self._primary_cb = QCheckBox("Listen only to primary speaker")
-        self._primary_cb.setChecked(settings.get("primary_speaker_mode", False))
-        layout.addWidget(self._primary_cb)
+        enrolled = SettingsSection("Enrolled speakers", "Voice samples are stored on this device.")
+        self._speakers_layout = enrolled.content
+        self._speakers_layout.setContentsMargins(20, 18, 20, 18)
+        self._speakers_layout.setSpacing(16)
+        self._speaker_rows: list[_SpeakerRow] = []
+        self._refresh_speakers()
+        layout.addWidget(enrolled)
 
-        primary_desc = QLabel(
-            "When enabled, only the primary speaker's voice triggers AI responses. "
-            "Other speakers' words are shown but not sent to the assistant, and so are "
-            "those of a voice nobody enrolled. Each utterance is judged on its own voice. "
-            "With Meta Muse, the primary speaker is the voice carrying your name."
-        )
-        primary_desc.setWordWrap(True)
-        primary_desc.setStyleSheet(
-            f"font-size: 12px; color: {c['TEXT_SECONDARY']}; background: transparent;"
-        )
-        layout.addWidget(primary_desc)
+        actions = QHBoxLayout()
+        self._enroll_btn = QPushButton("Enroll speaker")
+        self._enroll_btn.clicked.connect(self._on_enroll)
+        self._test_btn = QPushButton("Test recognition · 3s")
+        self._test_btn.clicked.connect(self._on_test)
+        for button in (self._enroll_btn, self._test_btn):
+            button.setAutoDefault(False)
+            button.setCursor(Qt.PointingHandCursor)
+            actions.addWidget(button)
+        actions.addStretch()
+        layout.addLayout(actions)
+        self._test_result = FeedbackLabel()
+        layout.addWidget(self._test_result)
 
         self._muse = MuseSpeakersSection(settings)
         layout.addWidget(self._muse)
-
-        # -- Enrolled speakers section --
-        speakers_section = QLabel("Enrolled Speakers")
-        speakers_section.setStyleSheet(
-            f"font-size: 12px; font-weight: 600; color: {c['TEXT_SECONDARY']};"
-            f" text-transform: uppercase; letter-spacing: 1px; background: transparent;"
-        )
-        layout.addWidget(speakers_section)
-
-        self._speakers_frame = QWidget()
-        self._speakers_frame.setStyleSheet(
-            f"background: {c['BG_SECONDARY']}; border: 1px solid {c['SEPARATOR']};"
-            f" border-radius: 8px;"
-        )
-        self._speakers_layout = QVBoxLayout(self._speakers_frame)
-        self._speakers_layout.setContentsMargins(4, 4, 4, 4)
-        self._speakers_layout.setSpacing(0)
-
-        self._speaker_rows: list[_SpeakerRow] = []
-        self._refresh_speakers()
-        layout.addWidget(self._speakers_frame)
-
-        # -- Enroll button --
-        self._enroll_btn = QPushButton("+ Enroll New Speaker")
-        self._enroll_btn.setCursor(Qt.PointingHandCursor)
-        self._enroll_btn.setStyleSheet(
-            f"QPushButton {{ font-size: 13px; padding: 8px 16px;"
-            f" background: {c['ACCENT_BLUE']}; color: white;"
-            f" border: none; border-radius: 8px; }}"
-            f"QPushButton:hover {{ opacity: 0.9; }}"
-        )
-        self._enroll_btn.clicked.connect(self._on_enroll)
-        layout.addWidget(self._enroll_btn)
-
-        # -- Test Recognition button --
-        self._test_btn = QPushButton("Test Recognition")
-        self._test_btn.setCursor(Qt.PointingHandCursor)
-        self._test_btn.setStyleSheet(
-            f"QPushButton {{ font-size: 13px; padding: 8px 16px;"
-            f" background: {c['BG_TERTIARY']}; color: {c['TEXT_PRIMARY']};"
-            f" border: 1px solid {c['SEPARATOR']}; border-radius: 8px; }}"
-            f"QPushButton:hover {{ background: {c['BG_SECONDARY']}; }}"
-        )
-        self._test_btn.clicked.connect(self._on_test)
-        layout.addWidget(self._test_btn)
-
-        # Test result label
-        self._test_result = QLabel("")
-        self._test_result.setWordWrap(True)
-        self._test_result.setAlignment(Qt.AlignCenter)
-        self._test_result.setStyleSheet(
-            f"font-size: 13px; background: transparent; color: {c['TEXT_SECONDARY']};"
-        )
-        self._test_result.hide()
-        layout.addWidget(self._test_result)
-
         layout.addStretch()
+
+    def refresh_models(self, selected: str | None = None) -> None:
+        from roomkit_ui.model_manager import SPEAKER_MODELS, is_speaker_model_downloaded
+
+        selected = self._model_combo.currentData() if selected is None else selected
+        self._model_combo.blockSignals(True)
+        self._model_combo.clear()
+        self._model_combo.addItem("None", "")
+        for model in SPEAKER_MODELS:
+            state = "Downloaded" if is_speaker_model_downloaded(model.id) else "Not downloaded"
+            self._model_combo.addItem(f"{model.name} · {state}", model.id)
+        if selected and self._model_combo.findData(selected) < 0:
+            self._model_combo.addItem(f"{selected} (unavailable)", selected)
+        self._model_combo.setCurrentIndex(max(0, self._model_combo.findData(selected or "")))
+        self._model_combo.blockSignals(False)
+        if hasattr(self, "_model_hint"):
+            self._update_model_hint()
+
+    def _update_model_hint(self) -> None:
+        self._model_hint.setText(
+            "Ready to enroll and recognize voices."
+            if self._get_model_path()
+            else "Select a downloaded speaker model to enroll or test voices. "
+            "Downloads are in Models & components."
+        )
 
     def _refresh_speakers(self) -> None:
         """Rebuild the enrolled speakers list."""
@@ -200,26 +171,26 @@ class _SpeakersPage(QWidget):
                 continue
             widget = item.widget()
             if widget is not None:
+                widget.hide()
                 widget.deleteLater()
         self._speaker_rows.clear()
 
         from roomkit_ui.speaker_manager import load_speakers
 
-        c = colors()
         speakers = load_speakers()
 
         if not speakers:
-            empty = QLabel("No speakers enrolled yet.")
-            empty.setAlignment(Qt.AlignCenter)
-            empty.setStyleSheet(
-                f"font-size: 12px; color: {c['TEXT_SECONDARY']};"
-                f" background: transparent; padding: 12px;"
+            self._speakers_layout.addWidget(
+                label(
+                    "No speakers enrolled yet. Add a voice sample to recognize someone "
+                    "in your conversations.",
+                    "settingsHint",
+                )
             )
-            self._speakers_layout.addWidget(empty)
             return
 
         for sp in speakers:
-            row = _SpeakerRow(sp.name, len(sp.embeddings), sp.is_primary, c)
+            row = _SpeakerRow(sp.name, len(sp.embeddings), sp.is_primary)
             row.primary_btn.clicked.connect(lambda _=False, n=sp.name: self._set_primary(n))
             row.sample_btn.clicked.connect(lambda _=False, n=sp.name: self._add_sample(n))
             row.delete_btn.clicked.connect(lambda _=False, n=sp.name: self._delete_speaker(n))
@@ -245,15 +216,7 @@ class _SpeakersPage(QWidget):
     def _on_enroll(self) -> None:
         model_path = self._get_model_path()
         if model_path is None:
-            c = colors()
-            # Brief visual hint — no model selected or not downloaded
-            self._enroll_btn.setText("Download a speaker model first!")
-            self._enroll_btn.setStyleSheet(
-                f"QPushButton {{ font-size: 13px; padding: 8px 16px;"
-                f" background: {c['ACCENT_RED']}; color: white;"
-                f" border: none; border-radius: 8px; }}"
-            )
-            QTimer.singleShot(2000, self._reset_enroll_btn)
+            self._show_test_result("Select and download a speaker model first.", "error")
             return
 
         dlg = _EnrollDialog(model_path, self)
@@ -274,16 +237,6 @@ class _SpeakersPage(QWidget):
                 save_speaker(profile)
             self._refresh_speakers()
 
-    def _reset_enroll_btn(self) -> None:
-        c = colors()
-        self._enroll_btn.setText("+ Enroll New Speaker")
-        self._enroll_btn.setStyleSheet(
-            f"QPushButton {{ font-size: 13px; padding: 8px 16px;"
-            f" background: {c['ACCENT_BLUE']}; color: white;"
-            f" border: none; border-radius: 8px; }}"
-            f"QPushButton:hover {{ opacity: 0.9; }}"
-        )
-
     def _set_primary(self, name: str) -> None:
         from roomkit_ui.speaker_manager import set_primary_speaker
 
@@ -293,6 +246,7 @@ class _SpeakersPage(QWidget):
     def _add_sample(self, name: str) -> None:
         model_path = self._get_model_path()
         if model_path is None:
+            self._show_test_result("Select and download a speaker model first.", "error")
             return
 
         dlg = _EnrollDialog(model_path, self)
@@ -396,25 +350,12 @@ class _SpeakersPage(QWidget):
             finally:
                 if isValid(self):
                     self._test_btn.setEnabled(True)
-                    self._test_btn.setText("Test Recognition")
+                    self._test_btn.setText("Test recognition · 3s")
 
         loop.create_task(_run())
 
     def _show_test_result(self, text: str, level: str = "info") -> None:
-        c = colors()
-        if level == "success":
-            color = c["ACCENT_GREEN"]
-        elif level == "error":
-            color = c["ACCENT_RED"]
-        elif level == "warning":
-            color = "#FF9F0A"  # orange
-        else:
-            color = c["TEXT_SECONDARY"]
-        self._test_result.setText(text)
-        self._test_result.setStyleSheet(
-            f"font-size: 13px; font-weight: 500; background: transparent; color: {color};"
-        )
-        self._test_result.show()
+        self._test_result.set_status(text, level if level in {"success", "error"} else "neutral")
 
     def get_settings(self) -> dict:
         return {

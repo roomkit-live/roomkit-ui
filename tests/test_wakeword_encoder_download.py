@@ -5,10 +5,12 @@ from __future__ import annotations
 import asyncio
 
 import pytest
+import shiboken6
 
 from roomkit_ui import model_catalog, model_download
 from roomkit_ui.wakeword import encoder_download
 from roomkit_ui.widgets.settings import wakeword_page
+from roomkit_ui.widgets.settings.model_jobs import ModelDownloads
 
 
 @pytest.fixture
@@ -58,19 +60,25 @@ def page(qapp, home, monkeypatch):
     monkeypatch.setattr(wakeword_page, "unavailable_reason", lambda _feature: None)
     monkeypatch.setattr(wakeword_page, "is_vad_model_downloaded", lambda _model: True)
     monkeypatch.setattr(wakeword_page, "load_fingerprint", lambda: None)
-    return wakeword_page._WakeWordPage({})
+    runner = ModelDownloads(qapp)
+    monkeypatch.setattr(wakeword_page, "model_downloads", lambda: runner)
+    page = wakeword_page._WakeWordPage({})
+    yield page
+    shiboken6.delete(page)
+    shiboken6.delete(runner)
 
 
 async def _settle(page) -> None:
     for _ in range(100):
-        if page._download_task is None:
+        if not page._runner._tasks:
             return
         await asyncio.sleep(0.01)
+    assert not page._runner._tasks, "Download did not finish"
 
 
 def test_a_missing_encoder_offers_a_download(page):
     """Before: only "Expected at <path>", and no way to get the file."""
-    assert not page._download_button.isHidden()
+    assert not page._encoder_row.action_btn.isHidden()
     assert not page._setup_button.isEnabled()
 
 
@@ -83,10 +91,10 @@ async def test_downloading_unlocks_enrolment(page, monkeypatch):
 
     monkeypatch.setattr(encoder_download, "download_encoder", fake_download)
 
-    page._download_button.click()
+    page._encoder_row.action_btn.click()
     await _settle(page)
 
-    assert page._download_button.isHidden()
+    assert page._encoder_row.action_btn.isHidden()
     assert page._setup_button.isEnabled()
 
 
@@ -96,9 +104,9 @@ async def test_a_failed_download_says_so_and_offers_a_retry(page, monkeypatch):
 
     monkeypatch.setattr(encoder_download, "download_encoder", failing_download)
 
-    page._download_button.click()
+    page._encoder_row.action_btn.click()
     await _settle(page)
 
     assert "sha256 mismatch" in page._status.text()
-    assert page._download_button.text() == "Retry download"
-    assert page._download_button.isEnabled()
+    assert page._encoder_row.action_btn.text() == "Retry download"
+    assert page._encoder_row.action_btn.isEnabled()

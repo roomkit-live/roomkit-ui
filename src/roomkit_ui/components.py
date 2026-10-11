@@ -1,6 +1,6 @@
 """How this install takes a component: an optional backend, one extra of the app.
 
-Settings → Components lists them, and a provider marked "not installed" or a
+Settings → Models & components → Components lists them, and a provider marked "not installed" or a
 session that could not start offers to install one.  What installing means
 depends on how the app itself was installed:
 

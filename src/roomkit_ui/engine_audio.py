@@ -183,7 +183,7 @@ def build_recorder(settings: dict):
     to start until the integrator chooses: a ``RecordingEncryption`` cipher, or
     ``storage_encrypted_at_rest`` — the only way it offers to write plain WAV
     files.  This is a debugging aid the user opts into, writing to a folder
-    they pick, and its files must stay playable in the Audio Debug page and any
+    they pick, and its files must stay playable in the Diagnostics page and any
     audio tool; a cipher would make them unreadable there.  The flag records
     that choice, not a claim about the disk — whether the folder sits on an
     encrypted volume is the user's to know, which is why the settings must say

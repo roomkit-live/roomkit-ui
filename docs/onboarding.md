@@ -30,8 +30,8 @@ out `qwen3-tts`, `neutts`, `smart-turn` and `pocket-tts`; add at most one of the
 three (they pin conflicting `transformers` versions), e.g.
 `uv sync --extra dev --extra smart-turn`.
 
-First run: gear icon → **AI Provider** → pick a provider, paste your API key → close
-Settings (it saves on close, Esc included; there is no Save button) → green call button →
+First run: gear icon → **Providers & keys** → paste your API key → **Conversation** →
+pick your mode and provider → close Settings (other edits save on close, Esc included; themes apply immediately) → green call button →
 talk.
 
 ## Environment variables
@@ -105,7 +105,7 @@ add logic that is testable without Qt, add a pytest target with it (see
 | Understand the system | [architecture.md](architecture.md) |
 | Change a session mode / provider | `engine_vc.py`, `engine_vc_helpers.py`, `vc_stt.py`, `engine_realtime.py`, `realtime_providers.py`, `providers/`, `tts/` |
 | Add an optional backend | `pyproject.toml` extras, `features.py` (the Components tab and Install offers follow from it) |
-| Add a tool | `builtin_tools.py` (builtin), or declare a CLI tool / MCP server in Settings |
+| Add a tool | `builtin_tools.py` (builtin), or declare a CLI tool / MCP server in Settings → Integrations |
 | Touch teardown/cleanup | `engine.py:_cleanup`, `cleanup.py` |
 | Work on the wake word | `wakeword/` (start with `controller.py`), `widgets/wakeword_wizard.py` |
 | Add a settings field | `widgets/settings/<page>.py` + key in `settings.py` (secrets: `settings_secrets.py`) |

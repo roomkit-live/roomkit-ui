@@ -219,7 +219,7 @@ def unavailable_reason(key: str) -> str | None:
     # Not a pip command: it is wrong in a source checkout (uv sync) and a uv
     # tool install (no pip); the Components tab gives the one that fits, and
     # installs it where it can.  --doctor still prints the commands.
-    return f"{label} is not installed — add it in Settings → Components."
+    return f"{label} is not installed — add it in Settings → Models & components → Components."
 
 
 def require(key: str) -> None:

@@ -9,6 +9,7 @@ from PySide6.QtGui import QMouseEvent
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout
 
 from roomkit_ui.theme import CHAT_FONT_SIZE_PX, colors, fixed_font_family
+from roomkit_ui.theme_live import bind_theme, themed_style
 
 
 def _markdown_to_html(text: str, c: dict[str, str]) -> str:
@@ -118,7 +119,6 @@ class ChatBubble(QFrame):
         # the animation first, then do the real finalization.
         self._finalize_pending = False
 
-        c = colors()
         is_user = role in ("user", "other")
 
         # ── Container ──
@@ -130,19 +130,21 @@ class ChatBubble(QFrame):
         self._bubble = QFrame()
         self._bubble.setObjectName("bubbleFrame")
         if is_user:
-            bg = c["BUBBLE_OTHER_BG"] if role == "other" else c["BUBBLE_USER_BG"]
-            self._bubble.setStyleSheet(
-                f"QFrame#bubbleFrame {{"
-                f"  background-color: {bg};"
-                f"  border-radius: 18px;"
-                f"  border-top-right-radius: 4px;"
-                f"}}"
+            bubble_color = "BUBBLE_OTHER_BG" if role == "other" else "BUBBLE_USER_BG"
+            themed_style(
+                self._bubble,
+                lambda c: (
+                    f"QFrame#bubbleFrame {{"
+                    f"  background-color: {c[bubble_color]};"
+                    f"  border-radius: 18px;"
+                    f"  border-top-right-radius: 4px;"
+                    f"}}"
+                ),
             )
         else:
             self._bubble.setStyleSheet("QFrame#bubbleFrame { background: transparent; }")
 
         # ── Message text ──
-        text_color = c["BUBBLE_USER_TEXT"] if is_user else c["BUBBLE_AI_TEXT"]
         self._label = QLabel(text)
         self._label.setWordWrap(True)
         self._label.setTextFormat(Qt.PlainText)
@@ -151,27 +153,33 @@ class ChatBubble(QFrame):
         # (the user's bubble vs the assistant's open column).
         if is_user:
             self._label.setMaximumWidth(420)
-            self._label.setStyleSheet(
-                f"QLabel {{"
-                f"  color: {text_color};"
-                f"  font-size: {CHAT_FONT_SIZE_PX}px;"
-                f"  line-height: 1.5;"
-                f"  padding: 9px 14px 8px 14px;"
-                f"  background: transparent;"
-                f"}}"
+            themed_style(
+                self._label,
+                lambda c: (
+                    f"QLabel {{"
+                    f"  color: {(c['BUBBLE_USER_TEXT'] if is_user else c['BUBBLE_AI_TEXT'])};"
+                    f"  font-size: {CHAT_FONT_SIZE_PX}px;"
+                    f"  line-height: 1.5;"
+                    f"  padding: 9px 14px 8px 14px;"
+                    f"  background: transparent;"
+                    f"}}"
+                ),
             )
         else:
             # No width cap on the label itself: it fills the (capped)
             # container, so the wrap measure is fixed by layout, not by
             # content — that is what keeps the word reveal steady.
-            self._label.setStyleSheet(
-                f"QLabel {{"
-                f"  color: {text_color};"
-                f"  font-size: {CHAT_FONT_SIZE_PX}px;"
-                f"  line-height: 1.55;"
-                f"  padding: 6px 14px 6px 14px;"
-                f"  background: transparent;"
-                f"}}"
+            themed_style(
+                self._label,
+                lambda c: (
+                    f"QLabel {{"
+                    f"  color: {(c['BUBBLE_USER_TEXT'] if is_user else c['BUBBLE_AI_TEXT'])};"
+                    f"  font-size: {CHAT_FONT_SIZE_PX}px;"
+                    f"  line-height: 1.55;"
+                    f"  padding: 6px 14px 6px 14px;"
+                    f"  background: transparent;"
+                    f"}}"
+                ),
             )
 
         bubble_layout = QVBoxLayout(self._bubble)
@@ -187,13 +195,16 @@ class ChatBubble(QFrame):
         self._time_label = QLabel(self._created.strftime("%H:%M"))
         align = Qt.AlignRight if is_user else Qt.AlignLeft
         self._time_label.setAlignment(align)
-        self._time_label.setStyleSheet(
-            f"QLabel {{"
-            f"  color: {c['TEXT_SECONDARY']};"
-            f"  font-size: 10px;"
-            f"  background: transparent;"
-            f"  padding: 2px 4px 0px 4px;"
-            f"}}"
+        themed_style(
+            self._time_label,
+            lambda c: (
+                f"QLabel {{"
+                f"  color: {c['TEXT_SECONDARY']};"
+                f"  font-size: 10px;"
+                f"  background: transparent;"
+                f"  padding: 2px 4px 0px 4px;"
+                f"}}"
+            ),
         )
         if not is_user:
             self._time_label.setVisible(False)
@@ -216,13 +227,16 @@ class ChatBubble(QFrame):
         self._interrupted_label: QLabel | None = None
         if not is_user:
             self._interrupted_label = QLabel("— interrupted")
-            self._interrupted_label.setStyleSheet(
-                f"QLabel {{"
-                f"  color: {c['TEXT_SECONDARY']};"
-                f"  font-size: 11px;"
-                f"  background: transparent;"
-                f"  padding: 0px 14px 2px 14px;"
-                f"}}"
+            themed_style(
+                self._interrupted_label,
+                lambda c: (
+                    f"QLabel {{"
+                    f"  color: {c['TEXT_SECONDARY']};"
+                    f"  font-size: 11px;"
+                    f"  background: transparent;"
+                    f"  padding: 0px 14px 2px 14px;"
+                    f"}}"
+                ),
             )
             self._interrupted_label.setVisible(False)
 
@@ -248,14 +262,17 @@ class ChatBubble(QFrame):
             self._speaker_label.clicked.connect(self.speaker_clicked)
             spk_align = Qt.AlignRight if role == "user" else Qt.AlignLeft
             self._speaker_label.setAlignment(spk_align)
-            self._speaker_label.setStyleSheet(
-                f"QLabel {{"
-                f"  color: {c['SPEAKER_LABEL']};"
-                f"  font-size: 10px;"
-                f"  font-weight: 500;"
-                f"  background: transparent;"
-                f"  padding: 0px 14px 1px 14px;"
-                f"}}"
+            themed_style(
+                self._speaker_label,
+                lambda c: (
+                    f"QLabel {{"
+                    f"  color: {c['SPEAKER_LABEL']};"
+                    f"  font-size: 10px;"
+                    f"  font-weight: 500;"
+                    f"  background: transparent;"
+                    f"  padding: 0px 14px 1px 14px;"
+                    f"}}"
+                ),
             )
             self._speaker_label.setVisible(bool(speaker_name))
             outer.addWidget(self._speaker_label)
@@ -265,6 +282,7 @@ class ChatBubble(QFrame):
             outer.addWidget(self._interrupted_label)
         outer.addLayout(time_row)
         self.setStyleSheet("background: transparent;")
+        bind_theme(self, self._refresh_markdown)
 
     @property
     def role(self) -> str:
@@ -370,6 +388,10 @@ class ChatBubble(QFrame):
                 self._stream_timer.start()
             return
         self._complete_finalize()
+
+    def _refresh_markdown(self) -> None:
+        if self._finalized and self._role not in ("user", "other"):
+            self._label.setText(_markdown_to_html(self._raw_text, colors()))
 
     def _complete_finalize(self) -> None:
         self._finalize_pending = False

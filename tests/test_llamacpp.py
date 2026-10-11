@@ -121,9 +121,9 @@ def test_the_settings_page_offers_llamacpp_with_its_fields(qapp):
     import shiboken6
 
     from roomkit_ui.settings import _DEFAULTS
-    from roomkit_ui.widgets.settings.ai_page import VC_LLM_PROVIDERS, _AIPage
+    from roomkit_ui.widgets.settings.voice_setup import VC_LLM_PROVIDERS, VoiceSetup
 
-    page = _AIPage(
+    page = VoiceSetup(
         {
             **_DEFAULTS,
             "vc_llm_provider": "llamacpp",

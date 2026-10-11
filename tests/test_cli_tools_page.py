@@ -52,7 +52,7 @@ def test_a_human_name_shows_what_the_assistant_will_actually_call(page):
 
     assert page._name_status.text() == "The assistant calls this: github_cli"
     # The list keeps the name as typed — only the function name is derived.
-    assert page._tool_list.item(0).text() == "GitHub CLI"
+    assert page.catalog.rows[0].title.text() == "GitHub CLI"
 
 
 def test_a_name_with_nothing_usable_in_it_is_called_out(page):
@@ -67,7 +67,7 @@ def test_editing_a_field_syncs_to_the_model_without_a_save_button(page):
     page._name_edit.setText("gh")
 
     assert page._tools[0]["name"] == "gh"
-    assert page._tool_list.item(0).text() == "gh"
+    assert page.catalog.rows[0].title.text() == "gh"
 
 
 def test_populating_the_form_does_not_clobber_a_sibling_declaration(page):
@@ -88,7 +88,8 @@ def test_a_disabled_tool_says_so_in_the_list(page):
     page._name_edit.setText("gh")
     page._enabled_check.setChecked(False)
 
-    assert page._tool_list.item(0).text() == "gh (disabled)"
+    assert page.catalog.rows[0].title.text() == "gh"
+    assert "Disabled" in page.catalog.rows[0].accessibleName()
 
 
 def test_the_command_field_reports_a_resolved_binary(page):
@@ -124,12 +125,11 @@ def test_the_env_field_names_what_it_sets_without_showing_the_values(page):
 def test_removing_a_tool_drops_it_from_both_model_and_list(page):
     page._add_tool()
     page._name_edit.setText("gh")
-    page._tool_list.setCurrentRow(0)
 
-    page._remove_tool()
+    page.catalog.rows[0].remove_button.click()
 
     assert page._tools == []
-    assert page._tool_list.count() == 0
+    assert len(page.catalog.rows) == 0
 
 
 def test_help_depth_hides_when_seeding_is_off(page):

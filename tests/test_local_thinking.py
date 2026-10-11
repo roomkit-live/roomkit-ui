@@ -17,7 +17,7 @@ from roomkit.providers.ai.base import AIContext, AIMessage
 
 from roomkit_ui.providers import local
 from roomkit_ui.settings import _DEFAULTS
-from roomkit_ui.widgets.settings.ai_page import _AIPage
+from roomkit_ui.widgets.settings.voice_setup import VoiceSetup
 
 _OLLAMA = "http://localhost:11434/v1"
 _VLLM = "http://gpu-box:8000/v1"
@@ -95,7 +95,7 @@ def test_ollama_is_recognised_by_its_port(base_url, ollama):
 
 @pytest.mark.parametrize("thinking", [True, False])
 def test_the_settings_page_keeps_the_choice(qapp, thinking):
-    page = _AIPage({**_DEFAULTS, "vc_local_thinking": thinking})
+    page = VoiceSetup({**_DEFAULTS, "vc_local_thinking": thinking})
     try:
         assert page.get_settings()["vc_local_thinking"] is thinking
     finally:

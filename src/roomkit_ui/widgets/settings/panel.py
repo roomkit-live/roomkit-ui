@@ -1,246 +1,350 @@
-"""Settings dialog with vertical tab navigation."""
+"""Resizable Settings workspace with grouped navigation and save-on-close."""
 
 from __future__ import annotations
 
-from functools import partial
+from pathlib import Path
 
-from PySide6.QtCore import QSize
+from PySide6.QtCore import QEvent, QSettings, QSize, Qt, QTimer
+from PySide6.QtGui import QIcon, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QDialog,
+    QFrame,
     QHBoxLayout,
+    QLabel,
     QLineEdit,
-    QListWidget,
-    QListWidgetItem,
+    QPushButton,
     QScrollArea,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
 
+from roomkit_ui.icons import svg_icon
 from roomkit_ui.settings import load_settings, save_settings
-from roomkit_ui.theme import colors
-from roomkit_ui.widgets.settings.about_page import _AboutPage
-from roomkit_ui.widgets.settings.ai_page import _AIPage
-from roomkit_ui.widgets.settings.attitudes_page import _AttitudesPage
-from roomkit_ui.widgets.settings.audio_debug_page import _AudioDebugPage
-from roomkit_ui.widgets.settings.cli_tools_page import _CliToolsPage
-from roomkit_ui.widgets.settings.components_page import _ComponentsPage
-from roomkit_ui.widgets.settings.dictation_page import _DictationPage
-from roomkit_ui.widgets.settings.general_page import _GeneralPage
-from roomkit_ui.widgets.settings.mcp_page import _MCPPage
-from roomkit_ui.widgets.settings.models_page import _ModelsPage
-from roomkit_ui.widgets.settings.skills import _SkillsPage
-from roomkit_ui.widgets.settings.speakers_page import _SpeakersPage
-from roomkit_ui.widgets.settings.telemetry_page import _TelemetryPage
-from roomkit_ui.widgets.settings.wakeword_page import _WakeWordPage
-
-
-def _mirror_text(fields: list[QLineEdit], text: str) -> None:
-    """Copy a user edit to the other fields.  setText() emits no textEdited,
-    so mirroring never loops; the edited field is skipped so its cursor stays.
-    """
-    for field in fields:
-        if field.text() != text:
-            field.setText(text)
+from roomkit_ui.theme_live import apply_theme, bind_theme
+from roomkit_ui.widgets.settings.controls import label
+from roomkit_ui.widgets.settings.navigation import SettingsNavigation
+from roomkit_ui.widgets.settings.page_registry import PAGE_SPECS
+from roomkit_ui.widgets.settings.search import SearchResult, SearchResults, find_settings
+from roomkit_ui.widgets.settings.style import settings_colors, settings_stylesheet
 
 
 class SettingsPanel(QDialog):
-    """Modal settings dialog with vertical tab navigation."""
+    """Each page has a stable identity, independent of sidebar group headings."""
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Settings")
-        self.setFixedSize(880, 680)
+        self.setObjectName("settingsPanel")
+        self.setWindowTitle("Settings — RoomKit")
         self.setModal(True)
-
+        self._restore_size()
         settings = load_settings()
-        c = colors()
-
-        # ── Sidebar ──
-        self._sidebar = QListWidget()
-        self._sidebar.setFixedWidth(150)
-        self._sidebar.setFrameShape(QListWidget.NoFrame)
-        self._sidebar.setStyleSheet(
-            f"QListWidget {{ background: transparent; border: none; outline: none; }}"
-            f"QListWidget::item {{"
-            f"  padding: 10px 14px; border-radius: 8px; color: {c['TEXT_SECONDARY']};"
-            f"  font-size: 13px; font-weight: 500;"
-            f"}}"
-            f"QListWidget::item:selected {{"
-            f"  background-color: {c['BG_TERTIARY']}; color: {c['TEXT_PRIMARY']};"
-            f"}}"
-            f"QListWidget::item:hover:!selected {{"
-            f"  background-color: rgba(142, 142, 147, 0.12);"
-            f"}}"
-        )
-
-        for label in (
-            "General",
-            "AI Provider",
-            "Attitudes",
-            "Speakers",
-            "Dictation",
-            "Wake Word",
-            "AI Models",
-            "Skills",
-            "MCP Servers",
-            "CLI Tools",
-            "Audio Debug",
-            "Telemetry",
-            "Components",
-            "About",
-        ):
-            item = QListWidgetItem(label)
-            item.setSizeHint(item.sizeHint().expandedTo(QSize(0, 38)))
-            self._sidebar.addItem(item)
-
-        # ── Pages ──
+        bind_theme(self, self._apply_style)
+        self._specs = {spec.key: spec for spec in PAGE_SPECS}
+        self._current_page_key = "general"
         self._stack = QStackedWidget()
-        self._general = _GeneralPage(settings)
-        self._ai = _AIPage(settings)
-        self._attitudes = _AttitudesPage(settings)
-        self._speakers = _SpeakersPage(settings)
-        self._dictation = _DictationPage(settings)
-        self._wakeword = _WakeWordPage(settings)
-        self._models = _ModelsPage(settings)
-        self._skills = _SkillsPage(settings)
-        self._mcp = _MCPPage(settings)
-        self._cli_tools = _CliToolsPage(settings)
-        self._audio_debug = _AudioDebugPage(settings)
-        self._telemetry = _TelemetryPage(settings)
-        self._components = _ComponentsPage(settings)
-        self._about = _AboutPage()
-        self._pages = (
-            self._general,
-            self._ai,
-            self._attitudes,
-            self._speakers,
-            self._dictation,
-            self._wakeword,
-            self._models,
-            self._skills,
-            self._mcp,
-            self._cli_tools,
-            self._audio_debug,
-            self._telemetry,
-            self._components,
-            self._about,
+        self._page_widgets: dict[str, QWidget] = {}
+        self._scrolls: dict[str, QScrollArea] = {}
+        self._build_pages(settings)
+        self._general.theme_picker.theme_changed.connect(apply_theme)
+        self._sidebar = SettingsNavigation(PAGE_SPECS)
+        self._breadcrumb = label("", "settingsBreadcrumb", wrap=False)
+        self._search = QLineEdit()
+        self._search.setPlaceholderText("Search settings…")
+        self._search.setAccessibleName("Search settings")
+        self._search.setClearButtonEnabled(True)
+        self._search.setToolTip("Find a setting by name or keyword. Ctrl/Cmd+K or Ctrl/Cmd+F.")
+        search_action = self._search.addAction(QIcon(), QLineEdit.LeadingPosition)
+        search_action.setText("Search settings")
+        search_action.triggered.connect(self._focus_search)
+        bind_theme(
+            self._search,
+            lambda: search_action.setIcon(
+                svg_icon("magnifying-glass", settings_colors()["muted"], 18)
+            ),
         )
-
-        # Populate the AI tab's attitude combo from the attitudes page
-        self._ai.populate_attitude_combo(self._attitudes.all_attitude_names())
-        self._link_api_key_fields()
+        self._search_results = SearchResults()
+        self._search_notice = label("", "settingsSearchNotice")
+        self._search_notice.hide()
+        self._highlighted: QWidget | None = None
+        self._highlight_timer = QTimer(self)
+        self._highlight_timer.setSingleShot(True)
+        self._highlight_timer.timeout.connect(self._clear_highlight)
+        self._focus_timer = QTimer(self)
+        self._focus_timer.setSingleShot(True)
+        self._focus_timer.timeout.connect(self._focus_search_target)
+        self._pending_target: QWidget | None = None
+        self._save_hint = label(
+            "Theme changes apply immediately. Other changes are saved on close.",
+            "settingsSaveHint",
+        )
+        content = QHBoxLayout(self)
+        content.setContentsMargins(0, 0, 0, 0)
+        content.setSpacing(0)
+        content.addWidget(self._build_sidebar())
+        content.addWidget(self._build_workspace(), 1)
+        self._sidebar.page_selected.connect(self._on_page_changed)
+        self._sidebar.itemClicked.connect(lambda _: self._search.clear())
+        self._search.textChanged.connect(self._search_changed)
+        self._search_results.activated.connect(self._open_search_result)
+        self._search.installEventFilter(self)
+        self._search_results.list.installEventFilter(self)
+        for sequence in (QKeySequence(QKeySequence.Find), QKeySequence("Ctrl+K")):
+            shortcut = QShortcut(sequence, self)
+            shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+            shortcut.activated.connect(self._focus_search)
         for page in self._pages:
+            if hasattr(page, "navigate_requested"):
+                page.navigate_requested.connect(self._navigate)
+        self._sidebar.select_page("general")
+
+    def _apply_style(self) -> None:
+        self.setStyleSheet(settings_stylesheet(str(QSettings().value("room/theme", "dark"))))
+
+    def _navigate(self, key: str) -> None:
+        key, _, section = key.partition(":")
+        self._sidebar.select_page(key)
+        if key == "conversation" and section == "personality":
+            self._conversation.tabs.bar.setCurrentIndex(1)
+        if key == "diagnostics":
+            self._diagnostics.tabs.bar.setCurrentIndex(2 if section == "telemetry" else 0)
+            self._diagnostics.reveal_search_target()
+        if key == "models":
+            self._models.tabs.bar.setCurrentIndex(1 if section == "components" else 0)
+            self._models.models.clear_filters()
+
+    def _restore_size(self) -> None:
+        screen = self.screen()
+        available = screen.availableGeometry().size() if screen else QSize(1280, 900)
+        minimum = QSize(820, 620).boundedTo(available)
+        self.setMinimumSize(minimum)
+        saved = QSettings().value("ui/settings_size")
+        size = saved if isinstance(saved, QSize) and saved.isValid() else QSize(1060, 820)
+        self.resize(size.expandedTo(minimum).boundedTo(available))
+
+    def _build_pages(self, settings: dict) -> None:
+        for spec in PAGE_SPECS:
+            page = spec.create(settings)
+            setattr(self, f"_{spec.key}", page)
+            self._page_widgets[spec.key] = page
             scroll = QScrollArea()
-            scroll.setWidget(page)
             scroll.setWidgetResizable(True)
             scroll.setFrameShape(QScrollArea.NoFrame)
-            scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
+            # Keep long legacy provider forms scrollable while the pages migrate.
+            container = QWidget()
+            layout = QVBoxLayout(container)
+            layout.setContentsMargins(32, 28, 32, 28)
+            layout.addWidget(page)
+            scroll.setWidget(container)
+            self._scrolls[spec.key] = scroll
             self._stack.addWidget(scroll)
+        self._pages = tuple(self._page_widgets.values())
+        self._privacy.recording_directory_changed.connect(
+            self._diagnostics.set_recording_directory
+        )
 
-        self._sidebar.currentRowChanged.connect(self._on_tab_changed)
-        self._sidebar.setCurrentRow(0)
+    def _build_sidebar(self) -> QWidget:
+        sidebar = QWidget()
+        sidebar.setObjectName("settingsSidebar")
+        sidebar.setFixedWidth(228)
+        layout = QVBoxLayout(sidebar)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        brand = QHBoxLayout()
+        brand.setContentsMargins(22, 25, 22, 21)
+        brand.setSpacing(10)
+        mark = QLabel()
+        asset = Path(__file__).resolve().parents[2] / "assets" / "logo.svg"
+        mark.setPixmap(QIcon(str(asset)).pixmap(34, 34))
+        brand.addWidget(mark)
+        brand.addWidget(label("roomkit.", "settingsBrand", wrap=False))
+        brand.addStretch()
+        layout.addLayout(brand)
+        title = label("Settings", "settingsNavTitle", wrap=False)
+        title.setContentsMargins(22, 0, 22, 6)
+        layout.addWidget(title)
+        search_row = QHBoxLayout()
+        search_row.setContentsMargins(12, 4, 12, 8)
+        search_row.addWidget(self._search)
+        layout.addLayout(search_row)
+        layout.addWidget(self._sidebar, 1)
+        layout.addWidget(label("Your desktop voice assistant", "settingsVersion"))
+        return sidebar
 
-        # ── Layout ──
-        content = QHBoxLayout()
-        content.setSpacing(0)
-        content.addWidget(self._sidebar)
+    def _build_workspace(self) -> QWidget:
+        workspace = QWidget()
+        layout = QVBoxLayout(workspace)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        toolbar = QFrame()
+        toolbar.setObjectName("settingsToolbar")
+        top = QHBoxLayout(toolbar)
+        top.setContentsMargins(32, 18, 32, 18)
+        top.addWidget(self._breadcrumb)
+        top.addStretch()
+        layout.addWidget(toolbar)
+        self._search_notice.setContentsMargins(32, 10, 32, 10)
+        layout.addWidget(self._search_notice)
+        self._content_stack = QStackedWidget()
+        self._content_stack.addWidget(self._stack)
+        self._content_stack.addWidget(self._search_results)
+        layout.addWidget(self._content_stack, 1)
+        footer = QFrame()
+        footer.setObjectName("settingsFooter")
+        bottom = QHBoxLayout(footer)
+        bottom.setContentsMargins(32, 12, 24, 12)
+        bottom.setSpacing(16)
+        bottom.addWidget(self._save_hint, 1)
+        self._done_button = QPushButton("Done")
+        self._done_button.setAutoDefault(False)
+        self._done_button.setCursor(Qt.PointingHandCursor)
+        self._done_button.clicked.connect(self.accept)
+        bottom.addWidget(self._done_button)
+        layout.addWidget(footer)
+        return workspace
 
-        # Vertical separator
-        sep = QWidget()
-        sep.setFixedWidth(1)
-        sep.setStyleSheet(f"background-color: {c['SEPARATOR']};")
-        content.addWidget(sep)
+    def _on_page_changed(self, key: str) -> None:
+        self._current_page_key = key
+        self._search.clear()
+        self._search_notice.hide()
+        self._clear_highlight()
+        spec = self._specs[key]
+        self._stack.setCurrentWidget(self._scrolls[key])
+        self._breadcrumb.setText(f"Settings  /  {spec.group}  /  {spec.title}")
+        if key == "wakeword":
+            self._wakeword.set_capture_settings(
+                {**self._audio.get_settings(), **self._conversation.get_settings()}
+            )
+        if spec.refresh:
+            getattr(self._page_widgets[key], spec.refresh)()
 
-        right = QVBoxLayout()
-        right.setContentsMargins(20, 16, 20, 16)
-        right.setSpacing(12)
-        right.addWidget(self._stack, 1)
-        content.addLayout(right, 1)
+    def _focus_search(self) -> None:
+        self._search.setFocus(Qt.ShortcutFocusReason)
+        self._search.selectAll()
 
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.addLayout(content)
+    def _search_changed(self, text: str) -> None:
+        self._search_notice.hide()
+        self._clear_highlight()
+        searching = bool(text.strip())
+        self._content_stack.setCurrentIndex(1 if searching else 0)
+        if searching:
+            self._breadcrumb.setText("Settings  /  Search")
+            self._search_results.show_results(find_settings(PAGE_SPECS, text))
+        else:
+            spec = self._specs[self._current_page_key]
+            self._breadcrumb.setText(f"Settings  /  {spec.group}  /  {spec.title}")
+            self._search_results.show_results([])
 
-    _AI_TAB = 1
-    _ATTITUDES_TAB = 2
-    _SPEAKERS_TAB = 3
-    _DICTATION_TAB = 4
-    _WAKEWORD_TAB = 5
-    _SKILLS_TAB = 7
-    _AUDIO_DEBUG_TAB = 10
+    @staticmethod
+    def _resolve(page: QWidget, path: str):
+        value = page
+        for part in path.split("."):
+            value = value[part] if isinstance(value, dict) else getattr(value, part)
+        return value
 
-    def _link_api_key_fields(self) -> None:
-        """Mirror each shared API key across every tab that edits it.
+    def _open_search_result(self, result: SearchResult) -> None:
+        self._search.clear()
+        self._sidebar.select_page(result.page)
+        page = self._page_widgets[result.page]
+        target = result.target
+        for path, index in target.tabs:
+            self._resolve(page, path).bar.setCurrentIndex(index)
+        if result.page in {"providers", "integrations"}:
+            page.reveal_search_target(target.control)
+        elif hasattr(page, "reveal_search_target"):
+            page.reveal_search_target()
+        if target.disclosure:
+            self._resolve(page, target.disclosure).set_expanded(True)
+        widget = self._resolve(page, target.control) if target.control else page
+        if (not widget.isVisibleTo(page) or not widget.isEnabled()) and target.fallback:
+            widget = self._resolve(page, target.fallback)
+            self._search_notice.setText(target.unavailable)
+        else:
+            self._search_notice.setText(f"Found: {target.title}")
+        self._search_notice.show()
+        self._pending_target = widget
+        # Wait for tab/disclosure layout before scrolling and placing keyboard focus.
+        self._focus_timer.start(0)
 
-        One key shows up on several tabs (realtime, voice channel,
-        dictation), each copy loaded with the saved value.  Left apart,
-        the save had to pick one: a new key typed on the Dictation tab lost
-        to the untouched realtime copy, and a cleared key came back.
-        Mirrored, the copies always hold the same value.
-        """
-        groups = self._ai.api_key_fields()
-        groups["openai_api_key"].append(self._dictation.openai_api_key)
-        groups["deepgram_api_key"].append(self._dictation.deepgram_api_key)
-        for fields in groups.values():
-            for field in fields:
-                field.textEdited.connect(partial(_mirror_text, fields))
+    def _focus_search_target(self) -> None:
+        widget = self._pending_target
+        if widget is None:
+            return
+        self._pending_target = None
+        for scroll in self._scrolls.values():
+            if scroll.isAncestorOf(widget):
+                scroll.ensureWidgetVisible(widget, 16, 32)
+                break
+        focus = widget
+        if focus.focusPolicy() == Qt.NoFocus:
+            focus = next(
+                (
+                    child
+                    for child in widget.findChildren(QWidget)
+                    if child.focusPolicy() != Qt.NoFocus
+                    and child.isVisibleTo(widget)
+                    and child.isEnabled()
+                ),
+                widget,
+            )
+        focus.setFocus(Qt.ShortcutFocusReason)
+        self._highlighted = widget
+        widget.setProperty("settingsSearchHit", True)
+        widget.style().unpolish(widget)
+        widget.style().polish(widget)
+        widget.update()
+        self._highlight_timer.start(2200)
 
-    def _on_tab_changed(self, index: int) -> None:
-        self._stack.setCurrentIndex(index)
-        if index == self._AI_TAB:
-            self._ai.refresh_vc_model_combos()
-            self._ai.populate_attitude_combo(self._attitudes.all_attitude_names())
-        elif index == self._DICTATION_TAB:
-            self._dictation.refresh_model_combo()
-        elif index == self._WAKEWORD_TAB:
-            self._wakeword.refresh()
-        elif index == self._SKILLS_TAB:
-            self._skills._refresh_skills()
-        elif index == self._AUDIO_DEBUG_TAB:
-            self._audio_debug.refresh_files()
+    def _clear_highlight(self) -> None:
+        self._focus_timer.stop()
+        self._pending_target = None
+        if self._highlighted is not None:
+            widget = self._highlighted
+            widget.setProperty("settingsSearchHit", False)
+            widget.style().unpolish(widget)
+            widget.style().polish(widget)
+            widget.update()
+            self._highlighted = None
+        self._highlight_timer.stop()
+
+    def eventFilter(self, watched, event) -> bool:  # noqa: N802
+        if event.type() == QEvent.KeyPress:
+            if event.key() in (Qt.Key_Return, Qt.Key_Enter):
+                self._search_results.activate_current()
+                return True
+            if event.key() == Qt.Key_Escape and self._search.text():
+                self._search.clear()
+                self._focus_search()
+                return True
+            if (
+                watched is self._search
+                and event.key() == Qt.Key_Down
+                and self._search_results.list.count()
+                and self._content_stack.currentIndex() == 1
+            ):
+                self._search_results.list.setFocus(Qt.TabFocusReason)
+                return True
+        return super().eventFilter(watched, event)
+
+    def keyPressEvent(self, event) -> None:  # noqa: N802
+        if event.key() == Qt.Key_Escape and self._search.text():
+            self._search.clear()
+            self._focus_search()
+            event.accept()
+            return
+        super().keyPressEvent(event)
 
     def done(self, result: int) -> None:
-        # Every way out funnels through done(): Esc and reject() call it
-        # directly, and the title-bar close reaches it via reject().  A
-        # closeEvent hook would miss Esc — QDialog never sends a QCloseEvent
-        # for it — and the user's changes would be discarded.
+        # Esc, Done, and the title-bar close all save exactly once.
         self._save()
+        QSettings().setValue("ui/settings_size", self.size())
         super().done(result)
 
     def _save(self) -> None:
-        from roomkit_ui.theme import get_stylesheet
-
         # Collect settings from each page that has them
         settings: dict = {}
         for page in self._pages:
             if hasattr(page, "get_settings"):
                 settings.update(page.get_settings())
 
-        # The copies of a shared key are mirrored (_link_api_key_fields), so
-        # any one of them is the key — an emptied one included.  Pop every
-        # temp copy all the same: a leftover would be persisted in plaintext
-        # by save_settings().
-        def merge_key(*temp_names: str) -> str:
-            values: list[str] = [settings.pop(name, "") for name in temp_names]
-            return values[0]
-
-        settings["openai_api_key"] = merge_key(
-            "_rt_openai_key", "_vc_openai_key", "_dict_openai_key"
-        )
-        settings["api_key"] = merge_key("_rt_gemini_key", "_vc_gemini_key")
-        settings["deepgram_api_key"] = merge_key(
-            "_rt_deepgram_key", "_vc_deepgram_key", "_dict_deepgram_key"
-        )
-        # The VC TTS page writes elevenlabs_api_key directly; the realtime
-        # copy mirrors it.
-        settings.pop("_rt_elevenlabs_key", None)
-
         save_settings(settings)
-
-        # Apply the new theme stylesheet immediately
-        from PySide6.QtWidgets import QApplication
-
-        app = QApplication.instance()
-        if app is not None:
-            app.setStyleSheet(get_stylesheet(settings["theme"]))

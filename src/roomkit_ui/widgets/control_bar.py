@@ -12,6 +12,7 @@ from PySide6.QtWidgets import QHBoxLayout, QPushButton, QWidget
 from roomkit_ui.engine_state import EngineState
 from roomkit_ui.icons import svg_icon
 from roomkit_ui.theme import colors
+from roomkit_ui.theme_live import bind_theme
 
 # ---------------------------------------------------------------------------
 # Base circle button
@@ -427,6 +428,14 @@ class ControlBar(QWidget):
         row.addWidget(self._center_btn, alignment=Qt.AlignVCenter)
         row.addStretch()
         row.addWidget(self._right_btn, alignment=Qt.AlignVCenter)
+        bind_theme(self, self._refresh_theme)
+
+    def _refresh_theme(self) -> None:
+        self._right_btn.setIcon(svg_icon("cog-6-tooth", colors()["TEXT_SECONDARY"], 18))
+        if self._left_btn.mode == "reset":
+            self._left_btn._apply_reset_icon()
+        else:
+            self._left_btn._apply_mute_icon()
 
     # -- public API ----------------------------------------------------------
 

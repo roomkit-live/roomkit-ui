@@ -10,7 +10,7 @@ from roomkit_ui.secret_store import SecretStore
 from roomkit_ui.settings import _DEFAULTS, load_settings, save_settings
 from roomkit_ui.tts import azure as azure_tts
 from roomkit_ui.vc_stt import build_azure_mai_stt, build_turn_vad, stt_needs_turn_vad
-from roomkit_ui.widgets.settings.ai_page import VC_STT_PROVIDERS, VC_TTS_PROVIDERS, _AIPage
+from roomkit_ui.widgets.settings.voice_setup import VC_STT_PROVIDERS, VC_TTS_PROVIDERS, VoiceSetup
 
 ENDPOINT = "https://acme.services.ai.azure.com"
 STT = {"azure_speech_api_key": "k", "azure_mai_endpoint": ENDPOINT}
@@ -133,7 +133,7 @@ def test_the_azure_key_lives_in_the_keyring_not_in_qsettings(monkeypatch):
 
 
 def test_the_settings_page_offers_azure_on_both_pages(qapp):
-    page = _AIPage(
+    page = VoiceSetup(
         {
             **_DEFAULTS,
             "vc_stt_provider": "azure_mai",
@@ -150,10 +150,8 @@ def test_the_settings_page_offers_azure_on_both_pages(qapp):
         assert ("Azure MAI-Voice", "azure") in VC_TTS_PROVIDERS
         assert not azure.endpoint.isHidden()
         assert not azure.region.isHidden()
-        # One key, one copy per page, mirrored by the dialog.
-        assert page.api_key_fields()["azure_speech_api_key"] == [azure.stt_key, azure.tts_key]
         out = page.get_settings()
-        assert out["azure_speech_api_key"] == "k"
+        assert "azure_speech_api_key" not in out
         assert out["azure_mai_endpoint"] == ENDPOINT
         assert out["azure_speech_region"] == "swedencentral"
         assert out["azure_tts_rate"] == "+15%"
@@ -162,7 +160,7 @@ def test_the_settings_page_offers_azure_on_both_pages(qapp):
 
 
 def test_azure_rows_stay_hidden_for_other_providers(qapp):
-    page = _AIPage(dict(_DEFAULTS))
+    page = VoiceSetup(dict(_DEFAULTS))
     try:
         assert page._cloud.azure.endpoint.isHidden()
         assert page._cloud.azure.voice.isHidden()

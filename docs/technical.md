@@ -46,7 +46,7 @@ src/roomkit_ui/
 ├── tts/                        # TTS factories: piper, pocket, qwen3, neutts, gradium, elevenlabs, azure
 ├── wakeword/                   # Wake word: controller, listener, capture, detection, enrolment
 └── widgets/                    # Main window, chat, MCP App views, loading overlay, wake-word wizard,
-                                #  settings/ (14-tab dialog)
+                                #  settings/ (grouped settings workspace)
 ```
 
 The Architecture section of [CLAUDE.md](../CLAUDE.md) describes every module.
@@ -108,7 +108,7 @@ def create_ai_provider(name: str, settings: dict) -> Any:
 Heavy SDKs (anthropic, google-genai, openai) are only imported when the user actually
 selects that provider. `features.py` maps each provider to an extra and the modules it
 imports; a missing one reaches the chat and the Settings combo as "<feature> is not
-installed — add it in Settings → Components" (with an Install button), and `--doctor`
+installed — add it in Settings → Models & components → Components" (with an Install button), and `--doctor`
 as the command that installs it. Extras that pin conflicting `transformers` versions (`qwen3-tts`,
 `neutts`, `smart-turn`) are listed in `EXCLUSIVE_EXTRAS`, mirroring `[tool.uv].conflicts`.
 
@@ -119,7 +119,7 @@ says how this install takes one (`install_plan`): in a plain environment the app
 `uv pip install --python <this interpreter> 'roomkit-ui[<extra>]==<version>'` (or this
 environment's pip) through `component_installer.py`, one install at a time for the whole
 app; a source checkout gets `uv sync --inexact --extra <extra>`; a frozen build nothing.
-Settings → Components, the line under a combo whose choice is missing
+Settings → Models & components → Components, the line under a combo whose choice is missing
 (`widgets/install_offer.py`) and the chat after a failed start all use it.
 
 ### Tool calls
@@ -267,7 +267,7 @@ QT_QPA_PLATFORM=offscreen uv run pytest -q
 | 1 | No end-to-end coverage with real devices and providers | engine workflows, audio | Scripted smoke sessions against the providers' sandboxes |
 | 2 | GitHub release-asset models publish no digest — size-checked only | `model_download.py` (GTCRN, speaker models) | Pin SHA-256 per asset in the catalog |
 | 3 | SecretStore can fall back to QSettings when no OS keyring backend is available | `secret_store.py`, `settings_secrets.py`, `mcp_auth.py` | Surface backend status in Settings and docs |
-| 4 | Largest modules: `realtime_section.py` (~750 l), `engine.py` (~660 l), `engine_vc.py` (~570 l), `mcp_page.py` (~540 l), `models_page.py` (~530 l), `audio_debug_page.py` (~510 l) | - | Split by responsibility when they next grow |
+| 4 | Largest modules: `realtime_section.py` (~750 l), `engine.py` (~660 l), `engine_vc.py` (~570 l), `mcp_page.py` (~540 l), `models_page.py` (~530 l) | - | Split by responsibility when they next grow; Audio Debug has been replaced by focused Diagnostics pages |
 | 5 | Repeated stylesheet f-strings (~200 `setStyleSheet` calls) | `widgets/` | Shared style helpers per pattern |
 | 6 | `cleanup.py` depends on qasync name-mangled internals | `cleanup.py` | Re-verify on every qasync upgrade; upstream a fix |
 | 7 | MCP stdio and CLI tool execution trust is user-configured | `mcp_manager.py`, `cli_tools.py` | Consider per-call confirmation for sensitive tools |

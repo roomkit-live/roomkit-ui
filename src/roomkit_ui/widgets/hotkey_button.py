@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import sys
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QEvent, Qt
 from PySide6.QtWidgets import QPushButton
 
-from roomkit_ui.theme import colors
+from roomkit_ui.theme_live import themed_style
 
 # ── Qt modifier → pynput token ──────────────────────────────────────────
 # On macOS, Qt swaps Control and Meta: physical Command (⌘) → Qt.ControlModifier,
@@ -239,6 +239,7 @@ class HotkeyButton(QPushButton):
     # ── Recording lifecycle ─────────────────────────────────────────────
 
     def _start_recording(self) -> None:
+        self.setFocus(Qt.OtherFocusReason)
         self._recording = True
         self._pending_modifier = None
         self.setText("Press a key or combination\u2026")
@@ -252,6 +253,12 @@ class HotkeyButton(QPushButton):
         self._apply_style()
 
     # ── Event overrides ─────────────────────────────────────────────────
+
+    def event(self, event) -> bool:
+        if event.type() == QEvent.ShortcutOverride and self._recording:
+            event.accept()
+            return True
+        return super().event(event)
 
     def keyPressEvent(self, event) -> None:
         if not self._recording:
@@ -315,21 +322,26 @@ class HotkeyButton(QPushButton):
     # ── Styling ─────────────────────────────────────────────────────────
 
     def _apply_style(self) -> None:
-        c = colors()
         if self._recording:
-            self.setStyleSheet(
-                f"QPushButton {{ border: 2px solid {c['ACCENT_BLUE']};"
-                f" background-color: {c['BG_SECONDARY']};"
-                f" color: {c['TEXT_SECONDARY']};"
-                f" border-radius: 8px; padding: 8px 12px;"
-                f" font-size: 14px; font-style: italic; }}"
+            themed_style(
+                self,
+                lambda c: (
+                    f"QPushButton {{ border: 2px solid {c['ACCENT_BLUE']};"
+                    f" background-color: {c['BG_SECONDARY']};"
+                    f" color: {c['TEXT_SECONDARY']};"
+                    f" border-radius: 8px; padding: 8px 12px;"
+                    f" font-size: 14px; font-style: italic; }}"
+                ),
             )
         else:
-            self.setStyleSheet(
-                f"QPushButton {{ border: 1px solid {c['BG_TERTIARY']};"
-                f" background-color: {c['BG_SECONDARY']};"
-                f" color: {c['TEXT_PRIMARY']};"
-                f" border-radius: 8px; padding: 8px 12px;"
-                f" font-size: 14px; }}"
-                f"QPushButton:hover {{ border-color: {c['ACCENT_BLUE']}; }}"
+            themed_style(
+                self,
+                lambda c: (
+                    f"QPushButton {{ border: 1px solid {c['BG_TERTIARY']};"
+                    f" background-color: {c['BG_SECONDARY']};"
+                    f" color: {c['TEXT_PRIMARY']};"
+                    f" border-radius: 8px; padding: 8px 12px;"
+                    f" font-size: 14px; }}"
+                    f"QPushButton:hover {{ border-color: {c['ACCENT_BLUE']}; }}"
+                ),
             )

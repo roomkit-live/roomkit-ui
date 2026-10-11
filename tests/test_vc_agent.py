@@ -192,10 +192,8 @@ def test_the_agent_tab_saves_its_choices(qapp):
         "vc_agent_name": "Nova",
         "vc_thinker": False,
         "vc_background": False,
-        "typesafe_api_key": "ts",
     }
-    assert not page.typesafe_api_key.isHidden()
-    assert page.openai_api_key.isHidden()
+    assert not page.agent_name.isHidden()
 
     page.speak_policy.setCurrentIndex(0)  # Always answer
     assert page.agent_name.isHidden()

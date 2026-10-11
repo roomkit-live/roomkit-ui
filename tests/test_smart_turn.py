@@ -140,15 +140,14 @@ def test_the_unfinished_turn_wait(raw, ms):
 
 
 @pytest.fixture
-def general_page(qapp, monkeypatch):
-    from roomkit_ui.widgets.settings import general_page as page_mod
+def audio_page(qapp, monkeypatch):
+    from roomkit_ui.widgets.settings import audio_processing as page_mod
 
-    monkeypatch.setattr(page_mod, "_list_audio_devices", lambda: ([], []))
     monkeypatch.setattr("roomkit_ui.model_manager.is_smart_turn_downloaded", lambda: True)
     pages = []
 
     def _build(**overrides):
-        pages.append(page_mod._GeneralPage({**_DEFAULTS, **overrides}))
+        pages.append(page_mod.AudioSettings({**_DEFAULTS, **overrides}, ([], [])))
         return pages[-1]
 
     yield _build
@@ -156,7 +155,7 @@ def general_page(qapp, monkeypatch):
         shiboken6.delete(page)
 
 
-def test_a_missing_install_is_named_where_the_detector_is_picked(general_page, monkeypatch):
+def test_a_missing_install_is_named_where_the_detector_is_picked(audio_page, monkeypatch):
     from roomkit_ui import features
     from roomkit_ui.widgets.install_offer import InstallOffer
 
@@ -164,7 +163,7 @@ def test_a_missing_install_is_named_where_the_detector_is_picked(general_page, m
         features, "missing_modules", lambda key: ("absent",) if key == "smart-turn" else ()
     )
 
-    page = general_page(vc_turn_detector="smart-turn")
+    page = audio_page(vc_turn_detector="smart-turn")
 
     assert page.turn_detector.currentText() == "Smart Turn v3 — not installed"
     # Said under the combo, with the button that adds it.
@@ -174,12 +173,12 @@ def test_a_missing_install_is_named_where_the_detector_is_picked(general_page, m
     assert page.get_settings()["vc_turn_detector"] == "smart-turn"  # still the user's pick
 
 
-def test_an_installed_detector_keeps_its_settings(general_page, monkeypatch):
+def test_an_installed_detector_keeps_its_settings(audio_page, monkeypatch):
     monkeypatch.setattr(
         "roomkit_ui.widgets.settings.feature_hints.unavailable_reason", lambda key: None
     )
 
-    page = general_page(vc_turn_detector="smart-turn", vc_turn_incomplete_wait_ms="2500")
+    page = audio_page(vc_turn_detector="smart-turn", vc_turn_incomplete_wait_ms="2500")
 
     assert page.turn_detector.currentText() == "Smart Turn v3"
     assert page.get_settings()["vc_turn_incomplete_wait_ms"] == "2500"

@@ -12,7 +12,7 @@ from roomkit_ui.features import STT_PROVIDER_FEATURES
 from roomkit_ui.secret_store import SecretStore
 from roomkit_ui.settings import _DEFAULTS, load_settings, save_settings
 from roomkit_ui.vc_stt import _META_LANGUAGES, CLOUD_STT_BUILDERS, build_meta_stt
-from roomkit_ui.widgets.settings.ai_page import VC_STT_PROVIDERS, _AIPage
+from roomkit_ui.widgets.settings.voice_setup import VC_STT_PROVIDERS, VoiceSetup
 
 
 def _config(**settings):
@@ -94,7 +94,7 @@ def test_the_meta_key_lives_in_the_keyring_not_in_qsettings(monkeypatch):
 
 
 def test_the_settings_page_offers_muse_with_its_fields(qapp):
-    page = _AIPage(
+    page = VoiceSetup(
         {
             **_DEFAULTS,
             "vc_stt_provider": "meta",
@@ -105,20 +105,18 @@ def test_the_settings_page_offers_muse_with_its_fields(qapp):
     try:
         meta = page._cloud.meta
         assert ("Meta Muse Voice Transcribe", "meta") in VC_STT_PROVIDERS
-        assert not meta.api_key.isHidden()
         assert not meta.keywords.isHidden()
         out = page.get_settings()
         assert out["vc_stt_provider"] == "meta"
-        assert out["meta_api_key"] == "k"
+        assert "meta_api_key" not in out
         assert out["meta_stt_keywords"] == "RoomKit"
     finally:
         shiboken6.delete(page)
 
 
 def test_meta_rows_stay_hidden_for_other_providers(qapp):
-    page = _AIPage(dict(_DEFAULTS))
+    page = VoiceSetup(dict(_DEFAULTS))
     try:
-        assert page._cloud.meta.api_key.isHidden()
         assert page._cloud.meta.keywords.isHidden()
     finally:
         shiboken6.delete(page)

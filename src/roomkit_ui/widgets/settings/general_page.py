@@ -1,434 +1,103 @@
-"""General settings: audio device selection, theme, hotkey, audio processing."""
+"""Everyday preferences with reusable native Settings sections."""
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (
-    QCheckBox,
-    QComboBox,
-    QFormLayout,
-    QLabel,
-    QLineEdit,
-    QPushButton,
-    QVBoxLayout,
-    QWidget,
-)
+from PySide6.QtCore import Signal
+from PySide6.QtWidgets import QVBoxLayout, QWidget
 
-from roomkit_ui.features import TURN_DETECTOR_FEATURES
-from roomkit_ui.theme import colors
 from roomkit_ui.widgets.hotkey_button import HotkeyButton
-from roomkit_ui.widgets.settings.feature_hints import offer_install, populate_provider_combo
-
-_TURN_HINT = (
-    "Audio-native turn completion — detects when the user has finished speaking "
-    "from prosody alone. Download the model in AI Models tab."
+from roomkit_ui.widgets.settings.appearance import ThemePicker
+from roomkit_ui.widgets.settings.controls import (
+    SettingsSection,
+    SettingsToggle,
+    label,
+    navigation_link,
+    page_layout,
 )
-
-THEMES = [
-    ("Dark", "dark"),
-    ("Light", "light"),
-]
-
-AEC_MODES = [
-    ("WebRTC (recommended)", "webrtc"),
-    ("Speex", "speex"),
-    ("None", "none"),
-]
-
-DENOISE_MODES = [
-    ("None", "none"),
-    ("RNNoise (Linux/macOS)", "rnnoise"),
-    ("GTCRN (cross-platform)", "gtcrn"),
-]
-
-
-def _list_audio_devices() -> tuple[list[tuple[int, str]], list[tuple[int, str]]]:
-    """Return (input_devices, output_devices) as lists of (index, name)."""
-    try:
-        import sounddevice as sd
-
-        devices = sd.query_devices()
-        inputs: list[tuple[int, str]] = []
-        outputs: list[tuple[int, str]] = []
-        for i, d in enumerate(devices):
-            name = d["name"]
-            if d["max_input_channels"] > 0:
-                inputs.append((i, name))
-            if d["max_output_channels"] > 0:
-                outputs.append((i, name))
-        return inputs, outputs
-    except Exception:
-        return [], []
 
 
 class _GeneralPage(QWidget):
-    """General settings: audio device selection + theme."""
+    navigate_requested = Signal(str)
 
     def __init__(self, settings: dict, parent=None) -> None:
         super().__init__(parent)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(16)
-
-        c = colors()
-
-        title = QLabel("General")
-        title.setStyleSheet("font-size: 18px; font-weight: 600; background: transparent;")
-        layout.addWidget(title)
-
-        # Theme selector
-        theme_section = QLabel("Appearance")
-        theme_section.setStyleSheet(
-            f"font-size: 12px; font-weight: 600; color: {c['TEXT_SECONDARY']};"
-            f" text-transform: uppercase; letter-spacing: 1px; background: transparent;"
+        layout = page_layout(self, "General", "Appearance, shortcuts, and everyday preferences.")
+        layout.addWidget(self._appearance(settings))
+        layout.addWidget(self._shortcuts(settings))
+        personal = SettingsSection("Make it yours")
+        self.personality_link = navigation_link("Choose personality →")
+        self.personality_link.clicked.connect(
+            lambda: self.navigate_requested.emit("conversation:personality")
         )
-        layout.addWidget(theme_section)
-
-        theme_form = QFormLayout()
-        theme_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
-        theme_form.setSpacing(10)
-        theme_form.setLabelAlignment(Qt.AlignRight)
-        self.theme_combo = QComboBox()
-        for label, _value in THEMES:
-            self.theme_combo.addItem(label)
-        current_theme = settings.get("theme", "dark")
-        for i, (_, val) in enumerate(THEMES):
-            if val == current_theme:
-                self.theme_combo.setCurrentIndex(i)
-                break
-        theme_form.addRow("Theme", self.theme_combo)
-        layout.addLayout(theme_form)
-
-        # Assistant hotkey
-        hotkey_section = QLabel("Assistant Hotkey")
-        hotkey_section.setStyleSheet(
-            f"font-size: 12px; font-weight: 600; color: {c['TEXT_SECONDARY']};"
-            f" text-transform: uppercase; letter-spacing: 1px; background: transparent;"
+        personal.add_row(
+            "Your assistant's personality",
+            "Choose a communication style and instructions.",
+            self.personality_link,
         )
-        layout.addWidget(hotkey_section)
-
-        hotkey_form = QFormLayout()
-        hotkey_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
-        hotkey_form.setSpacing(10)
-        hotkey_form.setLabelAlignment(Qt.AlignRight)
-
-        self.assistant_hotkey_enabled = QCheckBox("Enable global hotkey to start/stop session")
-        self.assistant_hotkey_enabled.setChecked(
-            bool(settings.get("assistant_hotkey_enabled", True))
+        self.memory_link = navigation_link("Manage memory →")
+        self.memory_link.clicked.connect(lambda: self.navigate_requested.emit("privacy"))
+        personal.add_row(
+            "Conversation memory",
+            "Choose what your assistant remembers between sessions.",
+            self.memory_link,
         )
-        hotkey_form.addRow("", self.assistant_hotkey_enabled)
-
-        self.assistant_hotkey = HotkeyButton()
-        self.assistant_hotkey.set_value(settings.get("assistant_hotkey", "<ctrl>+<shift>+a"))
-        hotkey_form.addRow("Hotkey", self.assistant_hotkey)
-
-        hotkey_hint = QLabel("Press the button, then press your desired key combination.")
-        hotkey_hint.setWordWrap(True)
-        hotkey_hint.setStyleSheet(
-            f"font-size: 11px; color: {c['TEXT_SECONDARY']}; background: transparent;"
+        layout.addWidget(personal)
+        self.audio_link = navigation_link("Configure audio & voice →")
+        self.audio_link.clicked.connect(lambda: self.navigate_requested.emit("audio"))
+        audio = SettingsSection("Your audio setup")
+        audio.add_row(
+            "Microphone and speakers",
+            "Choose your devices and adjust audio quality.",
+            self.audio_link,
         )
-        hotkey_form.addRow("", hotkey_hint)
-
-        self.conversation_memory = QCheckBox("Remember conversations across sessions")
-        self.conversation_memory.setChecked(bool(settings.get("conversation_memory", True)))
-        self.conversation_memory.setToolTip(
-            "Persist the conversation history locally (SQLite) so the assistant "
-            "remembers previous sessions and can search them."
-        )
-        hotkey_form.addRow("", self.conversation_memory)
-
-        layout.addLayout(hotkey_form)
-
-        # Audio devices
-        section = QLabel("Audio Devices")
-        section.setStyleSheet(
-            f"font-size: 12px; font-weight: 600; color: {c['TEXT_SECONDARY']};"
-            f" text-transform: uppercase; letter-spacing: 1px; background: transparent;"
-        )
-        layout.addWidget(section)
-
-        form = QFormLayout()
-        form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
-        form.setSpacing(10)
-        form.setLabelAlignment(Qt.AlignRight)
-
-        inputs, outputs = _list_audio_devices()
-
-        self.input_combo = QComboBox()
-        self.input_combo.addItem("System Default", None)
-        for idx, name in inputs:
-            self.input_combo.addItem(name, idx)
-        saved_input = settings.get("input_device")
-        if saved_input is not None:
-            for i in range(self.input_combo.count()):
-                if self.input_combo.itemData(i) == saved_input:
-                    self.input_combo.setCurrentIndex(i)
-                    break
-        form.addRow("Microphone", self.input_combo)
-
-        self.output_combo = QComboBox()
-        self.output_combo.addItem("System Default", None)
-        for idx, name in outputs:
-            self.output_combo.addItem(name, idx)
-        saved_output = settings.get("output_device")
-        if saved_output is not None:
-            for i in range(self.output_combo.count()):
-                if self.output_combo.itemData(i) == saved_output:
-                    self.output_combo.setCurrentIndex(i)
-                    break
-        form.addRow("Speaker", self.output_combo)
-
-        layout.addLayout(form)
-
-        # Audio processing
-        proc_section = QLabel("Audio Processing")
-        proc_section.setStyleSheet(
-            f"font-size: 12px; font-weight: 600; color: {c['TEXT_SECONDARY']};"
-            f" text-transform: uppercase; letter-spacing: 1px; background: transparent;"
-        )
-        layout.addWidget(proc_section)
-
-        proc_form = QFormLayout()
-        proc_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
-        proc_form.setSpacing(10)
-        proc_form.setLabelAlignment(Qt.AlignRight)
-
-        # AEC
-        self.aec = QComboBox()
-        for label, _value in AEC_MODES:
-            self.aec.addItem(label)
-        current_aec = settings.get("aec_mode", "webrtc")
-        for i, (_, val) in enumerate(AEC_MODES):
-            if val == current_aec:
-                self.aec.setCurrentIndex(i)
-                break
-        proc_form.addRow("Echo Cancel", self.aec)
-
-        # Denoise
-        self.denoise = QComboBox()
-        for label, _value in DENOISE_MODES:
-            self.denoise.addItem(label)
-        current_denoise = settings.get("denoise", "none")
-        for i, (_, val) in enumerate(DENOISE_MODES):
-            if val == current_denoise:
-                self.denoise.setCurrentIndex(i)
-                break
-        # Denoisers only apply to Voice Channel mode — in realtime they
-        # suppress the user's barge-in speech during doubletalk.
-        proc_form.addRow("Denoise (Voice Channel)", self.denoise)
-
-        # VAD model (used by both voice channel STT and realtime diarization)
-        from roomkit_ui.model_manager import VAD_MODELS, is_vad_model_downloaded
-
-        self.vad_model = QComboBox()
-        self.vad_model.addItem("None", "")
-        for vm in VAD_MODELS:
-            if is_vad_model_downloaded(vm.id):
-                self.vad_model.addItem(vm.name, vm.id)
-        saved_vad = settings.get("vc_vad_model", "")
-        for i in range(self.vad_model.count()):
-            if self.vad_model.itemData(i) == saved_vad:
-                self.vad_model.setCurrentIndex(i)
-                break
-        proc_form.addRow("VAD", self.vad_model)
-
-        self._vad_hint = QLabel("Voice activity detection — required for speaker diarization.")
-        self._vad_hint.setWordWrap(True)
-        self._vad_hint.setStyleSheet(
-            f"font-size: 11px; color: {c['TEXT_SECONDARY']};"
-            f" font-style: italic; background: transparent;"
-        )
-        proc_form.addRow("", self._vad_hint)
-
-        # ── VAD Advanced (collapsible) ──
-        self._vad_adv_toggle = QPushButton("\u25b8 Advanced")
-        self._vad_adv_toggle.setFlat(True)
-        self._vad_adv_toggle.setCursor(Qt.PointingHandCursor)
-        self._vad_adv_toggle.setStyleSheet(
-            "text-align: left; font-size: 12px; font-weight: 600;"
-            f" color: {c['TEXT_SECONDARY']}; background: transparent; border: none;"
-            " padding: 2px 0;"
-        )
-        self._vad_adv_toggle.clicked.connect(self._toggle_vad_advanced)
-        proc_form.addRow("", self._vad_adv_toggle)
-
-        self._vad_adv_container = QWidget()
-        vad_form = QFormLayout(self._vad_adv_container)
-        vad_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
-        vad_form.setSpacing(10)
-        vad_form.setLabelAlignment(Qt.AlignRight)
-
-        self.vad_threshold = QLineEdit(str(settings.get("vad_threshold", "") or ""))
-        self.vad_threshold.setPlaceholderText("0.35 (lower = more sensitive)")
-        vad_form.addRow("Threshold", self.vad_threshold)
-
-        self.vad_silence_ms = QLineEdit(str(settings.get("vad_silence_ms", "") or ""))
-        self.vad_silence_ms.setPlaceholderText("500")
-        vad_form.addRow("Silence (ms)", self.vad_silence_ms)
-
-        self.vad_min_speech_ms = QLineEdit(str(settings.get("vad_min_speech_ms", "") or ""))
-        self.vad_min_speech_ms.setPlaceholderText("250")
-        vad_form.addRow("Min Speech (ms)", self.vad_min_speech_ms)
-
-        self.vad_speech_pad_ms = QLineEdit(str(settings.get("vad_speech_pad_ms", "") or ""))
-        self.vad_speech_pad_ms.setPlaceholderText("1000")
-        vad_form.addRow("Speech Pad (ms)", self.vad_speech_pad_ms)
-
-        self.vad_energy_silence_rms = QLineEdit(
-            str(settings.get("vad_energy_silence_rms", "") or "")
-        )
-        self.vad_energy_silence_rms.setPlaceholderText("20 (0 = disabled)")
-        vad_form.addRow("Energy Silence", self.vad_energy_silence_rms)
-
-        self._vad_adv_container.hide()
-        proc_form.addRow("", self._vad_adv_container)
-
-        self.vad_model.currentIndexChanged.connect(self._on_vad_changed)
-        self._on_vad_changed(self.vad_model.currentIndex())
-
-        self._add_turn_detector_fields(proc_form, settings)
-
-        # Inference device
-        from roomkit_ui.model_manager import detect_providers
-
-        self._inference_providers = detect_providers()
-        self.inference_device = QComboBox()
-        for label, _value in self._inference_providers:
-            self.inference_device.addItem(label)
-        current_device = settings.get("inference_device", "cpu")
-        for i, (_, val) in enumerate(self._inference_providers):
-            if val == current_device:
-                self.inference_device.setCurrentIndex(i)
-                break
-        proc_form.addRow("Inference Device", self.inference_device)
-
-        self._device_hint = QLabel()
-        self._device_hint.setWordWrap(True)
-        self._device_hint.setStyleSheet(
-            f"font-size: 11px; color: {c['TEXT_SECONDARY']};"
-            f" font-style: italic; background: transparent;"
-        )
-        proc_form.addRow("", self._device_hint)
-        self.inference_device.currentIndexChanged.connect(self._on_device_changed)
-        self._on_device_changed(self.inference_device.currentIndex())
-
-        layout.addLayout(proc_form)
+        layout.addWidget(audio)
         layout.addStretch()
 
-    def _toggle_vad_advanced(self) -> None:
-        visible = not self._vad_adv_container.isVisible()
-        self._vad_adv_container.setVisible(visible)
-        self._vad_adv_toggle.setText("\u25be Advanced" if visible else "\u25b8 Advanced")
+    def _appearance(self, settings: dict) -> QWidget:
+        section = QWidget()
+        layout = QVBoxLayout(section)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+        layout.addWidget(label("Appearance", "settingsSectionTitle"))
+        layout.addWidget(label("A comfortable space, day or night.", "settingsHint"))
+        self.theme_picker = ThemePicker(settings.get("theme", "dark"))
+        layout.addWidget(self.theme_picker)
+        layout.addWidget(label("Your theme changes immediately.", "settingsHint"))
+        return section
 
-    def _on_vad_changed(self, index: int) -> None:
-        has_vad = bool(self.vad_model.currentData())
-        self._vad_adv_toggle.setVisible(has_vad)
-        if not has_vad:
-            self._vad_adv_container.hide()
-            self._vad_adv_toggle.setText("\u25b8 Advanced")
-
-    def _add_turn_detector_fields(self, form: QFormLayout, settings: dict) -> None:
-        """Turn detector (Smart Turn), its threshold and its wait for more speech."""
-        from roomkit_ui.model_manager import is_smart_turn_downloaded
-
-        self.turn_detector = QComboBox()
-        self.turn_detector.addItem("None", "")
-        if is_smart_turn_downloaded():
-            # Flagged "not installed" when the smart-turn extra is missing.
-            populate_provider_combo(
-                self.turn_detector, [("Smart Turn v3", "smart-turn")], TURN_DETECTOR_FEATURES
-            )
-            self.turn_detector.setItemData(self.turn_detector.count() - 1, "smart-turn")
-        saved_td = settings.get("vc_turn_detector", "")
-        for i in range(self.turn_detector.count()):
-            if self.turn_detector.itemData(i) == saved_td:
-                self.turn_detector.setCurrentIndex(i)
-                break
-        form.addRow("Turn Detector", self.turn_detector)
-        if self.turn_detector.count() > 1:
-            # Item 0 is "None"; Smart Turn follows when its model is there.
-            form.addRow(
-                "",
-                offer_install(
-                    self.turn_detector,
-                    [("Smart Turn v3", "smart-turn")],
-                    TURN_DETECTOR_FEATURES,
-                    offset=1,
-                ),
-            )
-
-        self.turn_threshold = QLineEdit(str(settings.get("vc_turn_threshold", "") or ""))
-        self.turn_threshold.setPlaceholderText("0.5 (0 = eager … 1 = patient)")
-        self._turn_threshold_label = QLabel("Turn Threshold")
-        form.addRow(self._turn_threshold_label, self.turn_threshold)
-
-        self.turn_incomplete_wait = QLineEdit(
-            str(settings.get("vc_turn_incomplete_wait_ms", "") or "")
+    def _shortcuts(self, settings: dict) -> SettingsSection:
+        section = SettingsSection("Keyboard shortcuts", "One gesture to start a conversation.")
+        self.assistant_hotkey_enabled = SettingsToggle(
+            "Enable assistant shortcut", bool(settings.get("assistant_hotkey_enabled", True))
         )
-        self.turn_incomplete_wait.setPlaceholderText("1500")
-        self.turn_incomplete_wait.setToolTip(
-            "How long a turn judged unfinished waits for you to go on before it is answered."
+        section.add_row(
+            "Talk to your assistant",
+            "Start or end a voice session from any app.",
+            self.assistant_hotkey_enabled,
         )
-        self._turn_wait_label = QLabel("Unfinished Wait (ms)")
-        form.addRow(self._turn_wait_label, self.turn_incomplete_wait)
-
-        self._turn_hint = QLabel(_TURN_HINT)
-        self._turn_hint.setWordWrap(True)
-        self._turn_hint.setStyleSheet(
-            f"font-size: 11px; color: {colors()['TEXT_SECONDARY']};"
-            f" font-style: italic; background: transparent;"
+        self.assistant_hotkey = HotkeyButton()
+        self.assistant_hotkey.setAutoDefault(False)
+        self.assistant_hotkey.setMinimumWidth(140)
+        self.assistant_hotkey.set_value(settings.get("assistant_hotkey", "<ctrl>+<shift>+a"))
+        self.assistant_hotkey.setEnabled(self.assistant_hotkey_enabled.isChecked())
+        self.assistant_hotkey_enabled.toggled.connect(self.assistant_hotkey.setEnabled)
+        section.add_row(
+            "Assistant shortcut",
+            "Click the keys, then press your new shortcut. Escape cancels recording.",
+            self.assistant_hotkey,
         )
-        form.addRow("", self._turn_hint)
-
-        self.turn_detector.currentIndexChanged.connect(self._on_turn_detector_changed)
-        self._on_turn_detector_changed(self.turn_detector.currentIndex())
-
-    def _on_turn_detector_changed(self, index: int) -> None:
-        detector = self.turn_detector.currentData() or ""
-        for widget in (
-            self._turn_threshold_label,
-            self.turn_threshold,
-            self._turn_wait_label,
-            self.turn_incomplete_wait,
-        ):
-            widget.setVisible(bool(detector))
-        # A detector not installed is said, with its Install, by offer_install.
-        self._turn_hint.setText(_TURN_HINT)
-
-    def _on_device_changed(self, index: int) -> None:
-        val = self._inference_providers[index][1]
-        if val == "cuda":
-            self._device_hint.setText(
-                "Affects local STT models only. Requires the sherpa-onnx CUDA wheel "
-                "and cuDNN 9: uv pip install sherpa-onnx==1.12.23+cuda12.cudnn9 "
-                "-f https://k2-fsa.github.io/sherpa/onnx/cuda.html"
-            )
-            self._device_hint.show()
-        elif val == "coreml":
-            self._device_hint.setText("Affects local STT models only.")
-            self._device_hint.show()
-        else:
-            self._device_hint.hide()
+        self.dictation_link = navigation_link("Configure dictation →")
+        self.dictation_link.clicked.connect(lambda: self.navigate_requested.emit("dictation"))
+        section.add_row(
+            "Dictation",
+            "Speak directly into the app you are using.",
+            self.dictation_link,
+        )
+        return section
 
     def get_settings(self) -> dict:
-        """Return this page's settings slice."""
         return {
-            "theme": THEMES[self.theme_combo.currentIndex()][1],
-            "aec_mode": AEC_MODES[self.aec.currentIndex()][1],
-            "denoise": DENOISE_MODES[self.denoise.currentIndex()][1],
-            "vc_vad_model": self.vad_model.currentData() or "",
-            "vad_threshold": self.vad_threshold.text().strip(),
-            "vad_silence_ms": self.vad_silence_ms.text().strip(),
-            "vad_min_speech_ms": self.vad_min_speech_ms.text().strip(),
-            "vad_speech_pad_ms": self.vad_speech_pad_ms.text().strip(),
-            "vad_energy_silence_rms": self.vad_energy_silence_rms.text().strip(),
-            "vc_turn_detector": self.turn_detector.currentData() or "",
-            "vc_turn_threshold": self.turn_threshold.text().strip(),
-            "vc_turn_incomplete_wait_ms": self.turn_incomplete_wait.text().strip(),
-            "inference_device": self._inference_providers[self.inference_device.currentIndex()][1],
-            "input_device": self.input_combo.currentData(),
-            "output_device": self.output_combo.currentData(),
+            "theme": self.theme_picker.value(),
             "assistant_hotkey_enabled": self.assistant_hotkey_enabled.isChecked(),
             "assistant_hotkey": self.assistant_hotkey.value(),
-            "conversation_memory": self.conversation_memory.isChecked(),
         }

@@ -151,3 +151,27 @@ def test_deepgram_defaults_half_duplex_off_and_auto_model(section):
     assert out["deepgram_agent_half_duplex"] is False
     assert out["deepgram_agent_listen_model"] == ""  # auto
     assert out["deepgram_agent_listen_language"] == ""  # English default
+
+
+def test_shared_advanced_sections_follow_provider_without_losing_edits(qapp):
+    import shiboken6
+
+    from roomkit_ui.widgets.settings.realtime_section import PROVIDERS, RealtimeSection
+
+    page = RealtimeSection({"provider": "openai", "openai_silence_duration_ms": 720})
+    page.show()
+    page._advanced["openai"].button.click()
+    qapp.processEvents()
+    assert page._advanced["openai"].button.isChecked()
+    before = page.get_settings()
+    page.provider.setCurrentIndex(
+        next(i for i, (_, key) in enumerate(PROVIDERS) if key == "gemini")
+    )
+    assert page._advanced["openai"].isHidden()
+    assert not page._advanced["openai"].button.isChecked()
+    page.provider.setCurrentIndex(
+        next(i for i, (_, key) in enumerate(PROVIDERS) if key == "openai")
+    )
+    page._advanced["openai"].button.click()
+    assert page.get_settings() == before
+    shiboken6.delete(page)

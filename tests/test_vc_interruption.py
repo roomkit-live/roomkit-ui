@@ -13,7 +13,7 @@ from roomkit.voice.interruption import InterruptionHandler, InterruptionStrategy
 
 from roomkit_ui.engine_vc_helpers import build_interruption
 from roomkit_ui.settings import _DEFAULTS
-from roomkit_ui.widgets.settings.ai_page import _AIPage
+from roomkit_ui.widgets.settings.voice_setup import VoiceSetup
 
 
 def _handler(mode: str, *, stt_streams: bool) -> InterruptionHandler:
@@ -99,10 +99,10 @@ def test_off_queues_the_speech_for_after_the_reply():
 
 @pytest.fixture
 def ai_page(qapp):
-    pages: list[_AIPage] = []
+    pages: list[VoiceSetup] = []
 
-    def _build(**overrides) -> _AIPage:
-        pages.append(_AIPage({**_DEFAULTS, **overrides}))
+    def _build(**overrides) -> VoiceSetup:
+        pages.append(VoiceSetup({**_DEFAULTS, **overrides}))
         return pages[-1]
 
     yield _build

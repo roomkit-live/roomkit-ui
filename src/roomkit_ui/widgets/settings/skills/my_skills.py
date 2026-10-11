@@ -1,172 +1,155 @@
-"""My Skills tab — source list and skill card grid."""
+"""Installed skills with local filtering and explicit enabled states."""
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QComboBox,
+    QFrame,
     QHBoxLayout,
-    QLabel,
-    QListWidget,
+    QLineEdit,
     QPushButton,
-    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
 
-from roomkit_ui.theme import colors
-from roomkit_ui.widgets.settings.skills.widgets import FlowLayout, SkillCard
-
-
-def source_display(src: dict) -> str:
-    """Format a source dict for display in the source list."""
-    label = src.get("label") or "Unnamed"
-    src_type = src.get("type", "git")
-    return f"{label} ({src_type})"
+from roomkit_ui.widgets.settings.catalog_controls import CatalogNotice, EmptyState, mark_dividers
+from roomkit_ui.widgets.settings.controls import FeedbackLabel, label
+from roomkit_ui.widgets.settings.search import normalized
+from roomkit_ui.widgets.settings.skills.widgets import SkillCard
 
 
 class MySkillsTab(QWidget):
-    """Self-contained 'My Skills' tab content."""
-
     def __init__(
-        self,
-        *,
-        on_add_source,
-        on_remove_source,
-        on_source_activated,
-        on_skill_toggled,
-        on_refresh,
-        parent=None,
+        self, *, on_skill_toggled, on_refresh, on_add_source, on_browse_marketplace, parent=None
     ) -> None:
         super().__init__(parent)
         self._cb_skill_toggled = on_skill_toggled
-
-        c = colors()
-
+        self._cards: list[SkillCard] = []
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 4, 0, 0)
-        layout.setSpacing(8)
-
-        # Source management row
-        src_row = QHBoxLayout()
-        src_row.setSpacing(8)
-        src_label = QLabel("Sources")
-        src_label.setStyleSheet(
-            f"font-size: 12px; font-weight: 600; color: {c['TEXT_SECONDARY']};"
-            f" text-transform: uppercase; letter-spacing: 1px; background: transparent;"
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(16)
+        heading = QHBoxLayout()
+        heading.addWidget(label("Agent skills", "settingsSectionTitle"), 1)
+        self.browse_marketplace = QPushButton("Browse skills.sh")
+        self.browse_marketplace.setObjectName("settingsPrimary")
+        self.browse_marketplace.setAutoDefault(False)
+        self.browse_marketplace.clicked.connect(on_browse_marketplace)
+        heading.addWidget(self.browse_marketplace)
+        self.add_source = QPushButton("+ Add skill source")
+        self.add_source.setAutoDefault(False)
+        self.add_source.clicked.connect(on_add_source)
+        heading.addWidget(self.add_source)
+        layout.addLayout(heading)
+        layout.addWidget(
+            label("Reusable instructions for tasks your assistant performs.", "settingsHint")
         )
-        src_row.addWidget(src_label)
-        src_row.addStretch()
-        add_src_btn = QPushButton("+ Add Source")
-        add_src_btn.setCursor(Qt.PointingHandCursor)
-        add_src_btn.setFixedHeight(26)
-        add_src_btn.setStyleSheet(
-            f"QPushButton {{ font-size: 11px; font-weight: 600;"
-            f" background: {c['BG_SECONDARY']}; color: {c['ACCENT_BLUE']};"
-            f" border: 1px solid {c['SEPARATOR']}; border-radius: 6px;"
-            f" padding: 0 10px; }}"
-            f"QPushButton:hover {{ background: {c['BG_TERTIARY']}; }}"
+        self._filters = QWidget()
+        search_row = QHBoxLayout(self._filters)
+        search_row.setContentsMargins(0, 0, 0, 0)
+        self.search = QLineEdit()
+        self.search.setPlaceholderText("Find an installed skill…")
+        self.search.setAccessibleName("Find an installed skill")
+        self.search.setClearButtonEnabled(True)
+        search_row.addWidget(self.search, 1)
+        self.availability = QComboBox()
+        self.availability.setAccessibleName("Skill activation status")
+        for title, value in (("All skills", ""), ("Enabled", "enabled"), ("Disabled", "disabled")):
+            self.availability.addItem(title, value)
+        search_row.addWidget(self.availability)
+        layout.addWidget(self._filters)
+        self._summary_row = QWidget()
+        summary_row = QHBoxLayout(self._summary_row)
+        summary_row.setContentsMargins(0, 0, 0, 0)
+        self.summary = label("", "settingsHint")
+        summary_row.addWidget(self.summary, 1)
+        self.refresh_button = QPushButton("Refresh skills")
+        self.refresh_button.setAutoDefault(False)
+        self.refresh_button.clicked.connect(on_refresh)
+        summary_row.addWidget(self.refresh_button)
+        layout.addWidget(self._summary_row)
+        self._feedback = FeedbackLabel()
+        layout.addWidget(self._feedback)
+        self.empty = EmptyState(
+            "No skills found",
+            "Add a local source or a Git repository to discover skills.",
+            "+ Add skill source",
+            "sparkles",
         )
-        add_src_btn.clicked.connect(on_add_source)
-        src_row.addWidget(add_src_btn)
-        manage_btn = QPushButton("\u2699")
-        manage_btn.setToolTip("Manage sources")
-        manage_btn.setCursor(Qt.PointingHandCursor)
-        manage_btn.setFixedSize(26, 26)
-        manage_btn.setStyleSheet(
-            f"QPushButton {{ font-size: 14px; background: {c['BG_SECONDARY']};"
-            f" border: 1px solid {c['SEPARATOR']}; border-radius: 6px; padding: 0; }}"
-            f"QPushButton:hover {{ background: {c['BG_TERTIARY']}; }}"
+        self.empty.activated.connect(on_add_source)
+        layout.addWidget(self.empty)
+        self.no_matches = label(
+            "No matching skills. Clear the search or change the filter.", "settingsHint"
         )
-        manage_btn.clicked.connect(self._toggle_source_list)
-        src_row.addWidget(manage_btn)
-        layout.addLayout(src_row)
-
-        # Collapsible source list
-        self._source_list_wrapper = QWidget()
-        sl_layout = QVBoxLayout(self._source_list_wrapper)
-        sl_layout.setContentsMargins(0, 0, 0, 0)
-        sl_layout.setSpacing(4)
-        self.source_list = QListWidget()
-        self.source_list.setStyleSheet(
-            f"QListWidget {{ border: 1px solid {c['SEPARATOR']}; border-radius: 6px; }}"
-            f"QListWidget::item {{ padding: 6px 10px; }}"
+        layout.addWidget(self.no_matches)
+        self._container = QFrame()
+        self._container.setObjectName("settingsCard")
+        self._flow = QVBoxLayout(self._container)
+        self._flow.setContentsMargins(0, 0, 0, 0)
+        self._flow.setSpacing(0)
+        layout.addWidget(self._container)
+        layout.addWidget(
+            CatalogNotice(
+                "Skills supply instructions. "
+                "Enabling a skill does not grant a connection or install a model.",
+            )
         )
-        self.source_list.setMaximumHeight(120)
-        sl_layout.addWidget(self.source_list)
-
-        _btn_style = (
-            f"QPushButton {{ font-size: 16px; font-weight: 700;"
-            f" color: {c['TEXT_PRIMARY']}; background-color: {c['BG_SECONDARY']};"
-            f" border: 1px solid {c['BG_TERTIARY']}; border-radius: 6px;"
-            f" padding: 0px; min-width: 26px; min-height: 26px; }}"
-            f"QPushButton:hover {{ background-color: {c['BG_TERTIARY']}; }}"
-        )
-        sl_btn_row = QHBoxLayout()
-        sl_btn_row.setSpacing(4)
-        remove_btn = QPushButton("\u2212")
-        remove_btn.setFixedSize(26, 26)
-        remove_btn.setStyleSheet(_btn_style)
-        remove_btn.clicked.connect(lambda: on_remove_source(self.source_list.currentRow()))
-        sl_btn_row.addWidget(remove_btn)
-        sl_btn_row.addStretch()
-        sl_layout.addLayout(sl_btn_row)
-
-        self._source_list_wrapper.setVisible(False)
-        layout.addWidget(self._source_list_wrapper)
-
-        # My skills cards (scroll area)
-        self._container = QWidget()
-        self._flow = FlowLayout(self._container, h_spacing=10, v_spacing=10)
-
-        scroll = QScrollArea()
-        scroll.setWidget(self._container)
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll.setFrameShape(QScrollArea.NoFrame)
-        scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
-        layout.addWidget(scroll, 1)
-
-        # Refresh button
-        refresh_btn = QPushButton("Refresh Skills")
-        refresh_btn.setCursor(Qt.PointingHandCursor)
-        refresh_btn.clicked.connect(on_refresh)
-        layout.addWidget(refresh_btn)
-
-        # Source double-click
-        self.source_list.itemDoubleClicked.connect(
-            lambda _item: on_source_activated(self.source_list.currentRow())
-        )
-
-    def _toggle_source_list(self) -> None:
-        self._source_list_wrapper.setVisible(not self._source_list_wrapper.isVisible())
+        self.search.textChanged.connect(self._filter)
+        self.availability.currentIndexChanged.connect(self._filter)
 
     def refresh(self, sources: list[dict], enabled: set[str]) -> None:
-        """Re-scan sources and rebuild the skill card grid."""
-        # Clear existing cards
         while self._flow.count():
             item = self._flow.takeAt(0)
-            if item and item.widget():
-                item.widget().deleteLater()
-
+            widget = item.widget() if item else None
+            if widget is not None:
+                widget.hide()
+                widget.deleteLater()
+        self._cards.clear()
+        self._feedback.set_status("")
         try:
             from roomkit_ui.skill_manager import discover_all_skills
 
             skills = discover_all_skills(sources)
-        except Exception:
+        except Exception as exc:
             skills = []
-
-        for meta, _skill_path, source_label in skills:
+            self._feedback.set_status(f"Could not read skills: {exc}", "error")
+        for meta, _path, source in skills:
             card = SkillCard(
                 name=meta.name,
                 description=meta.description,
-                source_label=source_label,
+                source_label=source,
                 checked=meta.name in enabled,
-                marketplace=False,
             )
-            if card.checkbox:
+            if card.checkbox is not None:
                 card.checkbox.toggled.connect(
-                    lambda checked, n=meta.name: self._cb_skill_toggled(n, checked)
+                    lambda checked, n=meta.name: self._toggled(n, checked)
                 )
             self._flow.addWidget(card)
+            self._cards.append(card)
+        self._filter()
 
-        self._container.updateGeometry()
+    def _toggled(self, name: str, enabled: bool) -> None:
+        self._cb_skill_toggled(name, enabled)
+        self._filter()
+
+    def _filter(self) -> None:
+        words = normalized(self.search.text()).split()
+        state = self.availability.currentData()
+        visible = 0
+        enabled = 0
+        for card in self._cards:
+            checked = card.checkbox is not None and card.checkbox.isChecked()
+            matches = all(word in normalized(card.name) for word in words) and (
+                not state or checked == (state == "enabled")
+            )
+            card.setVisible(matches)
+            visible += matches
+            enabled += checked
+        self.summary.setText(f"{visible} skills shown · {enabled} enabled")
+        populated = bool(self._cards)
+        self.empty.setVisible(not populated)
+        self.no_matches.setVisible(populated and visible == 0)
+        self._container.setVisible(visible > 0)
+        self._filters.setVisible(populated)
+        self._summary_row.setVisible(populated)
+        self.add_source.setVisible(populated)
+        mark_dividers(self._cards)

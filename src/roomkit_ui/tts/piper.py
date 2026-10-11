@@ -14,7 +14,8 @@ def create(settings: dict) -> tuple[Any, int]:
     tts_model_id = settings.get("vc_tts_model", "")
     if not tts_model_id:
         raise ValueError(
-            "No TTS model selected. Download one in AI Models and select it in Settings."
+            "No TTS model selected. Download one in Models & components, "
+            "then select it in Conversation → Speak."
         )
     inference_device = settings.get("inference_device", "cpu")
     config = build_tts_config(tts_model_id, provider=inference_device)

@@ -27,7 +27,7 @@ realtime session started with diarization enabled runs without it and says so in
 
 A missing backend never fails silently: the provider is marked in Settings with an
 Install button under it, and a session started with it offers the same Install in the
-chat; Settings → Components lists them all (`features.py`, `components.py`).
+chat; Settings → Models & components → Components lists them all (`features.py`, `components.py`).
 
 ### Realtime providers
 
@@ -79,12 +79,13 @@ kept, never replaced. Agent Skills reach realtime sessions as well as Voice Chan
   default: each sentence is synthesized as soon as it is written (v4 / v4 Turbo and the
   v2 / v2.5 models). v4 is the default model; v3 has no streaming socket and keeps
   whole-reply synthesis.
-- **Barge-in** — Off (the assistant finishes), Any speech interrupts, or Words only:
-  roomkit's semantic strategy with its `PhraseBackchannelDetector`, so "ok", "mm-hmm",
-  "d'accord" or "merci" let the assistant go on while other words stop it. With a
-  streaming STT, sound without words never cuts in. A non-streaming (Whisper-type) local
-  STT has no words before the speech ends, so there any speech that lasts stops the
-  assistant; the Settings hint says so.
+- **Barge-in** (Settings → Conversation → Voice setup → Voice Channel → Listen · STT) — Off (the assistant finishes), Any
+  speech interrupts, or Words only: roomkit's semantic strategy with its
+  `PhraseBackchannelDetector`, so "ok", "mm-hmm", "d'accord" or "merci" let the assistant
+  go on while other words stop it. With a streaming STT, sound without words never cuts
+  in. A non-streaming (Whisper-type) local STT has no words before the speech ends, so
+  there any speech that lasts stops the assistant; the Settings hint says so. It sits with
+  the STT because what it can do depends on the STT.
 - **TTS filtering** — the voice skips emoji, a JSON object the model wrote instead of
   calling a tool, notes to itself ("(Note: …)"), separators and bracketed stage
   directions; the chat shows the same filtered text. On an ElevenLabs model that performs
@@ -97,7 +98,7 @@ kept, never replaced. Agent Skills reach realtime sessions as well as Voice Chan
   or STT failure, and a local model without tool support each show a line in the chat. A
   transient provider refusal is retried twice before that.
 
-### Voice Channel agent (Settings → AI → Voice Channel → Agent)
+### Voice Channel agent (Settings → Conversation → Voice setup → Voice Channel → Agent)
 
 Three add-ons, all off by default. One that cannot run is left out of the session and the
 chat says why; none fails the start.
@@ -132,12 +133,15 @@ transcription — so the phrase works in any language.
 - **Enrolment** — a guided wizard records the phrase said normally, more quietly and
   from further away, then words that sound close and must not wake it; the threshold is
   measured between the two, and the wizard says when they overlap and suggests a more
-  distinctive phrase. The whisper-tiny encoder it needs (~12 MB) downloads from the page.
+  distinctive phrase. Components & local models on this page offers the whisper-tiny
+  encoder (~12 MB) and TEN VAD, using the same progress and retry state as the library.
+  Closing Settings does not interrupt a download. Recording and forgetting a phrase
+  update it immediately; recording uses pending microphone/provider choices.
 - **Sensitivity** — Cautious, Balanced or Responsive, scaling the measured threshold.
 - **Replay** — the request said right after the phrase reaches the provider: sessions
   subscribe to the shared microphone and replay from the wake mark (both modes, when the
   microphone's rate fits the session).
-- **Auto-hangup** — "Hang up when the conversation goes quiet" after a set number of
+- **Auto-hangup** — "Automatic hangup" after a set number of
   seconds (15 by default), never while a tool call is in flight or the assistant speaks;
   the wake word then listens again. Set on this page, it applies to every session, and
   the chat says why the session closed.
@@ -148,7 +152,7 @@ transcription — so the phrase works in any language.
 
 ### Conversation memory
 
-Settings → General → "Remember conversations across sessions", on by default. Sessions
+Settings → Privacy & memory → "Remember conversations", on by default. Sessions
 share one persistent history (`conversations.db`, readable by its owner only). The Voice
 Channel's AI reads it as context; a realtime provider gets a recap of recent exchanges
 (answers the user never heard are left out, cut answers are marked interrupted); the
@@ -175,7 +179,7 @@ in the order they first speak), and a change of voice ends a turn. Naming them:
 - **The assistant** names those who introduce themselves ("I'm Julie") with its
   `name_speaker` tool, shown as "Speaker B → Julie". It never renames a voice you named,
   never gives your name or a name another voice carries, and takes plain names only.
-- **The first voice is you** (Settings → Speakers, on by default): you open the session,
+- **The first voice is you** (Settings → Audio & voice → Speaker recognition, on by default): you open the session,
   so the first voice takes your name ("Your name", else the primary speaker profile's).
   Whoever speaks first is taken as you, though; a click puts it right.
 
@@ -184,26 +188,26 @@ under a label before it was named still read as that person. *Primary speaker mo
 lets through only the voice carrying your name, and nothing while none does. Muse knows
 nobody from one session to the next; a stream that starts over (after an hour, or an
 error) tells the voices apart afresh ("Speaker A#1"), and the names are to give again.
-(`speaker_roster.py`, `speaker_naming.py`, settings → Speakers)
+(`speaker_roster.py`, `speaker_naming.py`, settings → Audio & voice → Speaker recognition)
 
 **With local STT**, enroll speakers from a 10 s recording (split into overlapping windows for robust
 embeddings) on the microphone sessions use. During a session each utterance is attributed
 to the voice heard longest over it: the chat labels the enrolled name or "Unknown", and
 the model reads the speakers' names once several people talk. *Primary speaker mode*
 makes the assistant answer only utterances attributed to the enrolled primary speaker.
-(`enrollment.py`, `speaker_manager.py`, `hooks.py`, settings → Speakers)
+(`enrollment.py`, `speaker_manager.py`, `hooks.py`, settings → Audio & voice → Speaker recognition)
 
 ### Tools: MCP + CLI + built-ins + MCP Apps
 
 - **Built-in tools** (always available): date/time, RoomKit info, attitudes (list, set),
   clipboard paste, end-conversation (only on an explicit goodbye), and
   `recall_conversations` when memory is on. (`builtin_tools.py`, `engine_tools.py`)
-- **CLI tools**: declare a local binary once (settings → CLI Tools) and the model can run
+- **CLI tools**: declare a local binary once (Settings → Integrations → CLI tools) and the model can run
   it, its `--help` seeded into the tool description. The page warns that a declared CLI
   runs with the user's permissions and any arguments the assistant chooses, without
   asking. (`cli_tools.py`, `cli_help.py`)
 - **MCP servers**: stdio / SSE / streamable-HTTP transports, OAuth2 for HTTP servers,
-  configured in settings → MCP. An MCP tool named like a built-in or CLI tool, or with a
+  configured in Settings → Integrations → MCP servers. An MCP tool named like a built-in or CLI tool, or with a
   name providers refuse, is left out and named in the chat. (`mcp_manager.py`)
 - Dispatch order: engine built-ins, built-ins, CLI tools, then the owning MCP session. A
   failed call is reported to the model as a failure on every provider.
@@ -214,7 +218,9 @@ makes the assistant answer only utterances attributed to the enrolled primary sp
 ### Skills & attitudes
 
 - **Skills**: instruction packages discovered from git repos or local folders;
-  settings can search skills.sh through its public search endpoint. GitHub-backed
+  Settings → Integrations → Skills shows installed skills, with **Browse skills.sh**
+  at the top and **Manage sources** for folders/repositories. The online catalogue
+  searches skills.sh through its public search endpoint. GitHub-backed
   results install as explicit Git sources; well-known results install over https into
   local skill folders after validating the public discovery index, then skills are enabled
   per-skill and registered into roomkit's `SkillRegistry`, in both modes.
@@ -225,18 +231,43 @@ makes the assistant answer only utterances attributed to the enrolled primary sp
 
 ### Local model management
 
-Settings → AI Models downloads and manages local models: STT (Whisper, Parakeet, Zipformer,
+Settings → Models & components → Local models manages local models: STT (Whisper, Parakeet, Zipformer,
 Kroko-FR), TTS (3 Piper French voices, espeak-ng data), VAD (TEN, Silero), speaker
-embeddings (TitaNet, WeSpeaker, CAM++), GTCRN denoiser, Smart Turn v3.2. Downloads resolve
+embeddings (TitaNet, WeSpeaker, CAM++), GTCRN denoiser, Smart Turn v3.2 and the wake-word
+encoder. Downloads resolve
 GitHub LFS pointers, give up on a stalled connection, and run once per model even if
 Settings is reopened mid-download; GPU inference (CUDA/CoreML) is selectable.
-(`model_catalog.py`, `model_download.py`, `models_page.py`)
+The catalogue groups models by use and filters by name, category and download status.
+Download progress belongs to the application and reappears when Settings is reopened;
+failed downloads expose an error and Retry. Downloading files does not change the chosen
+provider or model. Links from Conversation, Dictation, Audio & voice and Wake Word open the library
+while keeping pending edits. Global search can reveal an individual model or component.
+(`model_catalog.py`, `model_download.py`, `model_library.py`, `model_jobs.py`, `models_page.py`)
 
-### Recording & audio debug
+The Components tab lists the dependencies separately, with name and installation filters.
+It preserves automatic installation, command copying in a source checkout, bundled-build
+restrictions, conflict confirmation and cancellation. Installation output is expandable;
+the last outcome and any required restart remain visible after reopening Settings.
 
-Settings → Audio Debug: pipeline debug taps and session recording. Recordings are plain,
-unencrypted WAV files in a folder the user picks; the page lists, plays (with the
-`mcp-apps` extra, which carries QtMultimedia), reveals and deletes them.
+### Diagnostics
+
+Settings → Privacy & memory controls session recording and its output folder. Recordings
+are plain, unencrypted WAV files. Settings → Diagnostics groups three tabs:
+
+- **Recorded audio** searches both output folders by name and source, showing up to
+  100 matching WAV files, newest first. It plays files with QtMultimedia (the `mcp-apps`
+  extra), opens either folder and confirms deletion of the displayed selection only.
+  Changed files are preserved and failures are reported. Playback stops when leaving
+  the browser. Pending output-folder edits are used without saving Settings first.
+- **Pipeline capture** enables debug taps and selects all or individual processing
+  stages. Clearing the last selected stage turns capture off; re-enabling requires
+  selecting a stage. Capture writes unencrypted WAV files from the next session.
+- **Telemetry** selects disabled, local logs or OpenTelemetry export. OTLP settings
+  retain their values when disabled, show the gRPC/HTTP default endpoint and offer
+  installation guidance when the component is missing. Changes apply to the next session.
+
+About shows the installed application version and runtime, copies those details for
+support, links to the project website and keeps the complete MIT license in a disclosure.
 
 ### UI
 
@@ -245,8 +276,30 @@ text typeset in the column and rolling out with its voice, cut short with an
 "— interrupted" mark on barge-in; markdown; animated VU meter; collapsible session-info
 bar with token usage; a full-window loading curtain with a Cancel button while a session
 connects; dark/light themes; synthesized start/stop sounds; a watchdog that nudges a model
-that left the user's speech unanswered. The Settings dialog (14 tabs) has no Save button:
-it saves whenever it closes.
+that left the user's speech unanswered. Settings is a resizable workspace with grouped navigation. General contains appearance
+and shortcuts; Conversation groups voice setup and personality; Audio & voice groups
+devices, processing and speaker recognition. Providers & keys is the single editor for
+provider credentials, shared by conversation and dictation. The footer explains that
+Done, Escape and closing the window save pending edits. Light/dark theme changes apply
+and persist immediately across existing widgets and chat messages. Search (Ctrl/Cmd+K
+or Ctrl/Cmd+F) recognizes setting names and English/French aliases, opens the matching
+page/tab/disclosure, and focuses the control. Search indexes no entered values; dependent
+settings explain their prerequisites without changing a provider or mode. Escape clears
+an active search first.
+
+Integrations brings Skills, MCP servers and CLI tools into one destination. Searchable
+lists expose add, edit and remove actions, with setup/availability status; enabled does
+not mean connected. Forms separate main fields from advanced configuration and retain
+edits when switching tabs. Installed skills can be filtered by name and activation;
+removing a skill source keeps its files on disk. OAuth feedback follows its server and
+URL, and downloading or updating a source reports on that source even if another is open.
+
+Dictation separates activation and shortcut from transcription choices. Missing backends
+offer installation; unavailable local models retain their saved ID until replaced by the
+user. The translation control appears for local Whisper and keeps its value when hidden.
+Wake Word separates activation, phrase recording, prerequisites and quiet-conversation
+hangup; sensitivity choices have short labels and explanations. Search reveals unavailable
+controls through an explanation and their prerequisite, preserving the current preferences.
 
 ## User roles & permissions
 

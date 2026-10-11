@@ -1,217 +1,216 @@
-"""Agent Skills configuration page — orchestrator."""
+"""Skill activation, marketplace and sources inside Settings integrations."""
 
 from __future__ import annotations
 
 import asyncio
 import json
+from pathlib import Path
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
-    QFormLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QPushButton,
-    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
 from shiboken6 import isValid
 
 from roomkit_ui.skills_sh_client import SkillsShClient, SkillsShSkill
-from roomkit_ui.theme import colors
+from roomkit_ui.widgets.settings.controls import (
+    FeedbackLabel,
+    SettingsForm,
+    SettingsSection,
+    label,
+    navigation_link,
+)
+from roomkit_ui.widgets.settings.integration_controls import (
+    DetailStack,
+    IntegrationCatalog,
+)
 from roomkit_ui.widgets.settings.skills.marketplace import MarketplaceTab
-from roomkit_ui.widgets.settings.skills.my_skills import MySkillsTab, source_display
-from roomkit_ui.widgets.settings.skills.widgets import make_tab_toggle
+from roomkit_ui.widgets.settings.skills.my_skills import MySkillsTab
 
 
 class _SkillsPage(QWidget):
-    """Agent Skills configuration page with card-based UI and skills.sh marketplace."""
-
     def __init__(self, settings: dict, parent=None) -> None:
         super().__init__(parent)
-        self._sources: list[dict] = []
         try:
-            self._sources = json.loads(settings.get("skill_sources", "[]"))
+            raw = json.loads(settings.get("skill_sources", "[]"))
         except (json.JSONDecodeError, TypeError):
-            self._sources = []
-        self._sources = [s for s in self._sources if s.get("type") in {"git", "local"}]
-
-        self._enabled: set[str] = set()
+            raw = []
+        self._sources = (
+            [s for s in raw if isinstance(s, dict) and s.get("type") in {"git", "local"}]
+            if isinstance(raw, list)
+            else []
+        )
         try:
-            self._enabled = set(json.loads(settings.get("enabled_skills", "[]")))
+            raw_enabled = json.loads(settings.get("enabled_skills", "[]"))
         except (json.JSONDecodeError, TypeError):
-            self._enabled = set()
-
+            raw_enabled = []
+        self._enabled = (
+            {name for name in raw_enabled if isinstance(name, str)}
+            if isinstance(raw_enabled, list)
+            else set()
+        )
         self._editing_row = -1
-
-        c = colors()
-
+        self._git_states: dict[str, tuple[str, str, bool]] = {}
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-
-        self._stack = QStackedWidget()
+        self._stack = DetailStack()
         layout.addWidget(self._stack)
-
-        # ── Page 0: Overview (tabs) ──
-        overview = QWidget()
-        ov_layout = QVBoxLayout(overview)
-        ov_layout.setContentsMargins(0, 0, 0, 0)
-        ov_layout.setSpacing(12)
-
-        title = QLabel("Agent Skills")
-        title.setStyleSheet("font-size: 18px; font-weight: 600; background: transparent;")
-        ov_layout.addWidget(title)
-
-        desc = QLabel("Manage local skills and browse skills.sh.")
-        desc.setWordWrap(True)
-        desc.setStyleSheet(
-            f"font-size: 13px; color: {c['TEXT_SECONDARY']}; background: transparent;"
-        )
-        ov_layout.addWidget(desc)
-
-        # Tab toggle
-        self._tab_toggle, self._tab_buttons = make_tab_toggle(
-            ["My Skills", "skills.sh"], self._on_tab_switch
-        )
-        ov_layout.addWidget(self._tab_toggle)
-
-        # ── Tab content stack ──
-        self._tab_stack = QStackedWidget()
-        ov_layout.addWidget(self._tab_stack, 1)
-
-        # -- My Skills tab --
         self._my_skills_tab = MySkillsTab(
-            on_add_source=self._add_source,
-            on_remove_source=self._remove_source,
-            on_source_activated=self._on_source_activated,
             on_skill_toggled=self._on_skill_toggled,
             on_refresh=self._refresh_skills,
+            on_add_source=self._add_source,
+            on_browse_marketplace=self._browse_marketplace,
         )
-        self._tab_stack.addWidget(self._my_skills_tab)
-
-        # -- Marketplace tab --
         self._marketplace_tab = MarketplaceTab(
             on_install_source=self._install_marketplace_source,
             is_source_installed=self._is_marketplace_source_installed,
         )
-        self._tab_stack.addWidget(self._marketplace_tab)
-
-        self._tab_stack.setCurrentIndex(0)
-
+        self.sources = IntegrationCatalog(
+            "Skill sources",
+            "Read skills from a Git repository or a local folder. "
+            "Removing a source here keeps its files on disk.",
+            "+ Add source",
+            "No skill sources yet",
+            "Add a local folder or a Git repository to discover skills.",
+            "sparkles",
+        )
+        self.sources.add_requested.connect(self._add_source)
+        self.sources.edit_requested.connect(self._show_edit)
+        self.sources.remove_requested.connect(self._remove_source)
+        overview = QWidget()
+        overview_layout = QVBoxLayout(overview)
+        overview_layout.setContentsMargins(0, 0, 0, 0)
+        overview_layout.setSpacing(20)
+        self.overview_back = navigation_link("← Back to skills")
+        self.overview_back.clicked.connect(lambda: self.show_view(0))
+        self.overview_back.hide()
+        overview_layout.addWidget(self.overview_back, 0, Qt.AlignLeft)
+        self.views = DetailStack()
+        for view in (self._my_skills_tab, self._marketplace_tab, self.sources):
+            self.views.addWidget(view)
+        overview_layout.addWidget(self.views)
+        self.sources_link = navigation_link("Manage sources →")
+        self.sources_link.clicked.connect(lambda: self.show_view(2))
+        overview_layout.addWidget(self.sources_link, 0, Qt.AlignLeft)
         self._stack.addWidget(overview)
 
-        # ── Page 1: Edit Source ──
         edit_page = QWidget()
         edit_layout = QVBoxLayout(edit_page)
         edit_layout.setContentsMargins(0, 0, 0, 0)
-        edit_layout.setSpacing(12)
-
-        back_btn = QPushButton("\u2190  Back to overview")
-        back_btn.setCursor(Qt.PointingHandCursor)
-        back_btn.setStyleSheet(
-            f"QPushButton {{ background: transparent; border: none;"
-            f" color: {c['ACCENT_BLUE']}; font-size: 13px;"
-            f" text-align: left; padding: 0; }}"
-            f"QPushButton:hover {{ text-decoration: underline; }}"
-        )
-        back_btn.clicked.connect(self._show_overview)
-        edit_layout.addWidget(back_btn)
-
-        self._edit_title = QLabel()
-        self._edit_title.setStyleSheet(
-            "font-size: 18px; font-weight: 600; background: transparent;"
-        )
+        edit_layout.setSpacing(20)
+        self.back_button = navigation_link("← Back to sources")
+        self.back_button.clicked.connect(self._show_overview)
+        edit_layout.addWidget(self.back_button, 0, Qt.AlignLeft)
+        self._edit_title = label("", "settingsSectionTitle")
+        self._edit_title.setTextFormat(Qt.PlainText)
         edit_layout.addWidget(self._edit_title)
-
-        form = QFormLayout()
-        form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
-        form.setSpacing(10)
-        form.setLabelAlignment(Qt.AlignRight)
-
+        section = SettingsSection("Skill source")
+        section.content.setContentsMargins(18, 16, 18, 16)
+        form = SettingsForm()
         self._label_edit = QLineEdit()
-        self._label_edit.setPlaceholderText("e.g. My Skills Collection")
-        form.addRow("Label", self._label_edit)
-
+        self._label_edit.setPlaceholderText("e.g. My skills collection")
+        form.addRow("Name", self._label_edit)
         self._type_combo = QComboBox()
-        self._type_combo.addItem("Git Repository", "git")
-        self._type_combo.addItem("Local Directory", "local")
-        form.addRow("Type", self._type_combo)
-
+        self._type_combo.addItem("Git repository", "git")
+        self._type_combo.addItem("Local folder", "local")
+        form.addRow("Source type", self._type_combo)
         self._url_edit = QLineEdit()
         self._url_edit.setPlaceholderText("e.g. https://github.com/org/skills")
-        self._url_label = QLabel("URL")
+        self._url_label = QLabel("Repository URL")
         form.addRow(self._url_label, self._url_edit)
-
         self._path_edit = QLineEdit()
         self._path_edit.setPlaceholderText("/path/to/skills")
-        self._path_label = QLabel("Path")
-        path_row = QHBoxLayout()
-        path_row.setSpacing(6)
-        path_row.addWidget(self._path_edit, 1)
-        browse_btn = QPushButton("Browse")
-        browse_btn.setCursor(Qt.PointingHandCursor)
-        browse_btn.clicked.connect(self._browse_path)
-        path_row.addWidget(browse_btn)
+        self._path_label = QLabel("Folder")
         self._path_widget = QWidget()
-        self._path_widget.setLayout(path_row)
+        path_row = QHBoxLayout(self._path_widget)
+        path_row.setContentsMargins(0, 0, 0, 0)
+        path_row.addWidget(self._path_edit, 1)
+        browse = QPushButton("Browse")
+        browse.setAutoDefault(False)
+        browse.clicked.connect(self._browse_path)
+        path_row.addWidget(browse)
         form.addRow(self._path_label, self._path_widget)
-
-        edit_layout.addLayout(form)
-
-        # Clone / Update button + status
-        action_row = QHBoxLayout()
-        action_row.setSpacing(8)
-        self._clone_btn = QPushButton("Clone")
-        self._clone_btn.setCursor(Qt.PointingHandCursor)
-        self._clone_btn.clicked.connect(self._on_clone_update)
-        action_row.addWidget(self._clone_btn)
-        self._action_status = QLabel("")
-        self._action_status.setWordWrap(True)
-        self._action_status.setStyleSheet(
-            f"font-size: 12px; color: {c['TEXT_SECONDARY']}; background: transparent;"
-        )
-        action_row.addWidget(self._action_status, 1)
+        section.content.addLayout(form)
+        edit_layout.addWidget(section)
         self._action_row_widget = QWidget()
-        self._action_row_widget.setLayout(action_row)
+        action = QVBoxLayout(self._action_row_widget)
+        action.setContentsMargins(0, 0, 0, 0)
+        self._action_status = FeedbackLabel()
+        action.addWidget(self._action_status)
+        self._clone_btn = QPushButton("Download source")
+        self._clone_btn.setAutoDefault(False)
+        self._clone_btn.clicked.connect(self._on_clone_update)
+        action.addWidget(self._clone_btn, 0, Qt.AlignLeft)
         edit_layout.addWidget(self._action_row_widget)
-
-        edit_layout.addStretch()
-
         self._stack.addWidget(edit_page)
-
-        # Start on overview
-        self._stack.setCurrentIndex(0)
-
-        # Populate source list
-        for src in self._sources:
-            self._my_skills_tab.source_list.addItem(source_display(src))
-
-        # Connections
+        for source in self._sources:
+            self._append_source(source)
         self._type_combo.currentIndexChanged.connect(self._on_type_changed)
         self._label_edit.textChanged.connect(self._sync_source_to_model)
         self._url_edit.textChanged.connect(self._sync_source_to_model)
         self._path_edit.textChanged.connect(self._sync_source_to_model)
-
-        # Initial skill discovery
         self._refresh_skills()
 
-    # -- tab navigation ------------------------------------------------------
-
-    def _on_tab_switch(self, idx: int) -> None:
-        self._tab_toggle._apply_styles(idx)  # type: ignore[attr-defined]
-        self._tab_stack.setCurrentIndex(idx)
-        if idx == 1 and not self._marketplace_tab.loaded:
+    def show_view(self, index: int) -> None:
+        self.views.setCurrentIndex(index)
+        self.overview_back.setVisible(index != 0)
+        self.sources_link.setVisible(index == 0)
+        if index == 1 and not self._marketplace_tab.loaded:
             self._marketplace_tab.load()
+        if index == 0:
+            self._refresh_skills()
+
+    def _browse_marketplace(self) -> None:
+        self.show_view(1)
+        self._marketplace_tab._search_input.setFocus()
+
+    def _source_entry(self, source: dict) -> tuple[str, str, str, str]:
+        name = source.get("label") or "Unnamed source"
+        if source.get("type") == "local":
+            exists = bool(source.get("path")) and Path(source["path"]).is_dir()
+            return (
+                name,
+                "Local folder",
+                "Available" if exists else "Folder missing",
+                "success" if exists else "error",
+            )
+        from roomkit_ui.skill_manager import get_repos_dir, repo_dir_name
+
+        url = source.get("url", "")
+        if state := self._git_states.get(url):
+            _text, tone, running = state
+            status = (
+                "Working…" if running else "Update failed" if tone == "error" else "Downloaded"
+            )
+            return name, "Git repository", status, tone
+        exists = bool(url) and (get_repos_dir() / repo_dir_name(url)).is_dir()
+        return (
+            name,
+            "Git repository",
+            "Downloaded" if exists else "Download needed",
+            "success" if exists else "neutral",
+        )
+
+    def _append_source(self, source: dict) -> None:
+        self.sources.append(*self._source_entry(source))
+
+    def _refresh_source_entries(self) -> None:
+        for i, source in enumerate(self._sources):
+            self.sources.update_entry(i, *self._source_entry(source))
 
     # -- page navigation -----------------------------------------------------
 
     def _show_overview(self) -> None:
         self._editing_row = -1
         self._stack.setCurrentIndex(0)
+        self._refresh_skills()
 
     def _show_edit(self, row: int) -> None:
         if row < 0 or row >= len(self._sources):
@@ -237,26 +236,25 @@ class _SkillsPage(QWidget):
             w.blockSignals(False)
 
         self._update_type_visibility(src_type)
-        self._action_status.setText("")
+        self._refresh_source_action()
         self._stack.setCurrentIndex(1)
-
-    def _on_source_activated(self, row: int) -> None:
-        self._show_edit(row)
 
     # -- source management ---------------------------------------------------
 
     def _add_source(self) -> None:
         src: dict = {"type": "git", "url": "", "path": "", "label": ""}
         self._sources.append(src)
-        self._my_skills_tab.source_list.addItem(source_display(src))
+        self._append_source(src)
+        self.show_view(2)
         self._show_edit(len(self._sources) - 1)
         self._label_edit.setFocus()
 
     def _remove_source(self, row: int) -> None:
-        if row < 0:
+        if row < 0 or row >= len(self._sources):
             return
         self._sources.pop(row)
-        self._my_skills_tab.source_list.takeItem(row)
+        self.sources.remove(row)
+        self._editing_row = -1
         self._refresh_skills()
 
     def _matching_git_source_index(self, url: str) -> int:
@@ -278,19 +276,18 @@ class _SkillsPage(QWidget):
         return -1
 
     def _is_marketplace_source_installed(self, skill: SkillsShSkill) -> bool:
+        from roomkit_ui.skill_manager import get_repos_dir, repo_dir_name, well_known_skill_dir
+
         github_url = skill.github_url
         if github_url:
-            return self._matching_git_source_index(github_url) >= 0
+            return (
+                self._matching_git_source_index(github_url) >= 0
+                and (get_repos_dir() / repo_dir_name(github_url)).is_dir()
+            )
 
         if skill.is_well_known_source:
-            from roomkit_ui.skill_manager import well_known_skill_dir
-
-            return (
-                self._matching_local_source_index(
-                    str(well_known_skill_dir(skill.source, skill.skill_id))
-                )
-                >= 0
-            )
+            dest = well_known_skill_dir(skill.source, skill.skill_id)
+            return self._matching_local_source_index(str(dest)) >= 0 and dest.is_dir()
         return False
 
     async def _install_marketplace_source(self, skill: SkillsShSkill) -> None:
@@ -318,7 +315,7 @@ class _SkillsPage(QWidget):
                 "label": f"skills.sh · {skill.source}",
             }
             self._sources.append(src)
-            self._my_skills_tab.source_list.addItem(source_display(src))
+            self._append_source(src)
 
         from roomkit_ui.skill_git import clone_repo, pull_repo
         from roomkit_ui.skill_manager import get_repos_dir, repo_dir_name
@@ -358,7 +355,7 @@ class _SkillsPage(QWidget):
             return
         if self._matching_local_source_index(src["path"]) < 0:
             self._sources.append(src)
-            self._my_skills_tab.source_list.addItem(source_display(src))
+            self._append_source(src)
 
     # -- edit form -----------------------------------------------------------
 
@@ -374,14 +371,7 @@ class _SkillsPage(QWidget):
         self._path_label.setVisible(not is_git)
         self._path_widget.setVisible(not is_git)
         self._action_row_widget.setVisible(is_git)
-        if is_git:
-            from roomkit_ui.skill_manager import get_repos_dir, repo_dir_name
-
-            url = self._url_edit.text().strip()
-            if url and (get_repos_dir() / repo_dir_name(url)).exists():
-                self._clone_btn.setText("Update")
-            else:
-                self._clone_btn.setText("Clone")
+        self._refresh_source_action()
 
     def _sync_source_to_model(self) -> None:
         row = self._editing_row
@@ -392,9 +382,8 @@ class _SkillsPage(QWidget):
         src["type"] = self._type_combo.currentData()
         src["url"] = self._url_edit.text().strip()
         src["path"] = self._path_edit.text().strip()
-        item = self._my_skills_tab.source_list.item(row)
-        if item:
-            item.setText(source_display(src))
+        self.sources.update_entry(row, *self._source_entry(src))
+        self._refresh_source_action()
         self._edit_title.setText(src["label"] or "New Source")
 
     def _browse_path(self) -> None:
@@ -402,66 +391,52 @@ class _SkillsPage(QWidget):
         if path:
             self._path_edit.setText(path)
 
+    def _refresh_source_action(self) -> None:
+        url = self._url_edit.text().strip()
+        if state := self._git_states.get(url):
+            text, tone, running = state
+            self._action_status.set_status(text, tone)
+            self._clone_btn.setEnabled(not running)
+        else:
+            self._action_status.set_status("")
+            self._clone_btn.setEnabled(True)
+        from roomkit_ui.skill_manager import get_repos_dir, repo_dir_name
+
+        exists = bool(url) and (get_repos_dir() / repo_dir_name(url)).exists()
+        self._clone_btn.setText("Update source" if exists else "Download source")
+
     def _on_clone_update(self) -> None:
         url = self._url_edit.text().strip()
         if not url:
-            self._action_status.setText("Enter a URL first")
-            self._action_status.setStyleSheet(
-                "font-size: 12px; color: #f44336; background: transparent;"
-            )
+            self._action_status.set_status("Enter a repository URL first", "error")
             return
-
-        self._clone_btn.setEnabled(False)
-        self._action_status.setText("Working...")
-        self._action_status.setStyleSheet(
-            "font-size: 12px; color: #ff9800; background: transparent;"
-        )
-
+        if self._git_states.get(url, ("", "", False))[2]:
+            return
+        self._git_states[url] = ("Working…", "active", True)
+        self._refresh_source_action()
+        self._refresh_source_entries()
         asyncio.ensure_future(self._run_git_op(url))
 
     async def _run_git_op(self, url: str) -> None:
-        """Clone or pull a git repo in the background."""
+        """An operation's result stays attached to its URL when another source is edited."""
         try:
             from roomkit_ui.skill_git import clone_repo, pull_repo
             from roomkit_ui.skill_manager import get_repos_dir, repo_dir_name
 
             dest = get_repos_dir() / repo_dir_name(url)
             if dest.exists():
-                ok = await pull_repo(dest)
-                if not isValid(self):
-                    return  # the Settings dialog closed during the pull
-                if ok:
-                    self._action_status.setText("Updated successfully")
-                    self._action_status.setStyleSheet(
-                        "font-size: 12px; color: #4caf50; background: transparent;"
-                    )
-                else:
-                    self._action_status.setText("Update failed")
-                    self._action_status.setStyleSheet(
-                        "font-size: 12px; color: #f44336; background: transparent;"
-                    )
+                if not await pull_repo(dest):
+                    raise RuntimeError("Git update failed")
+                text = "Updated successfully"
             else:
                 await clone_repo(url)
-                if not isValid(self):
-                    return  # the Settings dialog closed during the clone
-                self._action_status.setText("Cloned successfully")
-                self._action_status.setStyleSheet(
-                    "font-size: 12px; color: #4caf50; background: transparent;"
-                )
-                self._clone_btn.setText("Update")
+                text = "Downloaded successfully"
+            self._git_states[url] = (text, "success", False)
         except Exception as exc:
-            if not isValid(self):
-                return
-            self._action_status.setText(f"Error: {exc}")
-            self._action_status.setStyleSheet(
-                "font-size: 12px; color: #f44336; background: transparent;"
-            )
-        finally:
-            try:
-                self._clone_btn.setEnabled(True)
-            except Exception:
-                pass
-        self._refresh_skills()
+            self._git_states[url] = (f"Error: {exc}", "error", False)
+        if isValid(self):
+            self._refresh_source_action()
+            self._refresh_skills()
 
     # -- My Skills: discovery & cards ----------------------------------------
 
@@ -474,6 +449,7 @@ class _SkillsPage(QWidget):
     def _refresh_skills(self) -> None:
         """Re-scan sources and rebuild the skill card grid."""
         self._my_skills_tab.refresh(self._sources, self._enabled)
+        self._refresh_source_entries()
 
     # -- serialization -------------------------------------------------------
 

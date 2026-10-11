@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtWidgets import QFormLayout, QLabel, QLineEdit, QWidget
+from PySide6.QtWidgets import QFormLayout, QLabel, QLineEdit
 
 
 class MetaSTTFields:
@@ -13,28 +13,20 @@ class MetaSTTFields:
 
     def add_stt_rows(self, form: QFormLayout) -> None:
         s = self._settings
-        self.api_key = QLineEdit(s.get("meta_api_key", ""))
-        self.api_key.setEchoMode(QLineEdit.Password)
-        self.api_key.setPlaceholderText("Enter your Meta API key")
         self.keywords = QLineEdit(s.get("meta_stt_keywords", ""))
         self.keywords.setPlaceholderText("RoomKit, Tremblay (optional)")
         self.keywords.setToolTip(
             "Comma-separated names and terms Muse should expect: product names, "
             "people, places. A bias, not a guaranteed spelling."
         )
-        rows: list[QWidget] = []
-        for label_text, field in (("Meta Key", self.api_key), ("Keywords", self.keywords)):
-            label = QLabel(label_text)
-            form.addRow(label, field)
-            rows += [label, field]
-        self._rows = tuple(rows)
+        self._label = QLabel("Keywords")
+        form.addRow(self._label, self.keywords)
 
     def update_stt_visibility(self, provider: str) -> None:
-        for widget in self._rows:
-            widget.setVisible(provider == "meta")
+        self._label.setVisible(provider == "meta")
+        self.keywords.setVisible(provider == "meta")
 
     def get_settings(self) -> dict:
         return {
-            "meta_api_key": self.api_key.text().strip(),
             "meta_stt_keywords": self.keywords.text().strip(),
         }

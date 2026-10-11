@@ -11,8 +11,6 @@ import importlib
 
 from PySide6.QtWidgets import QComboBox, QFormLayout, QLabel, QWidget
 
-from roomkit_ui.theme import colors
-
 LIVE_MODELS = ["gpt-live-1"]  # used only if roomkit's catalog cannot be read
 LIVE_VOICES = ["marin"]
 BACKEND_EFFORTS = [("Low (fastest)", "low"), ("Medium", "medium"), ("High", "high")]
@@ -82,9 +80,7 @@ class GPTLiveFields:
             "Keep echo cancellation on (or wear headphones) so it does not hear itself."
         )
         self.note.setWordWrap(True)
-        self.note.setStyleSheet(
-            f"font-size: 11px; color: {colors()['TEXT_SECONDARY']}; background: transparent;"
-        )
+        self.note.setObjectName("settingsHint")
         self.widgets: list[QWidget] = [self.note]
         for label_text, field in (
             ("Model", self.model),

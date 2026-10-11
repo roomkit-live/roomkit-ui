@@ -4,17 +4,17 @@ import pytest
 import shiboken6
 
 from roomkit_ui.settings import _DEFAULTS
-from roomkit_ui.widgets.settings.ai_page import _AIPage
 from roomkit_ui.widgets.settings.vc_cloud_fields import ELEVENLABS_MODELS, VC_ANTHROPIC_MODELS
+from roomkit_ui.widgets.settings.voice_setup import VoiceSetup
 
 
 @pytest.fixture
 def page_over(qapp):
     """Build an AI page over the defaults plus *overrides*; destroy it after."""
-    pages: list[_AIPage] = []
+    pages: list[VoiceSetup] = []
 
-    def _build(**overrides) -> _AIPage:
-        pages.append(_AIPage({**_DEFAULTS, **overrides}))
+    def _build(**overrides) -> VoiceSetup:
+        pages.append(VoiceSetup({**_DEFAULTS, **overrides}))
         return pages[-1]
 
     yield _build
@@ -127,3 +127,19 @@ def test_the_stream_input_toggle_shows_with_elevenlabs_only(page_over):
 
     page._cloud.update_tts_visibility("piper")
     assert toggle.isHidden()
+
+
+def test_gradium_disclosure_tracks_provider_and_preserves_hidden_edits(page_over):
+    page = page_over(conversation_mode="voice_channel", vc_stt_provider="gradium")
+    page.show()
+    cloud = page._cloud
+    cloud.gradium_advanced.button.click()
+    assert cloud.gradium_speed.isVisible()
+    cloud.gradium_speed.setText("1.2")
+    page.vc_stt_provider.setCurrentIndex(0)
+    assert not cloud.gradium_advanced.isVisible()
+    page.vc_stt_provider.setCurrentIndex(1)
+    assert not cloud.gradium_advanced.button.isChecked()
+    cloud.gradium_advanced.button.click()
+    assert cloud.gradium_speed.isVisible()
+    assert page.get_settings()["gradium_speed"] == "1.2"

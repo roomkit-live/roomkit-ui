@@ -198,3 +198,44 @@ def test_a_tab_opened_mid_install_shows_it_running(runner, qtbot):
         with qtbot.waitSignal(runner.finished, timeout=10000):
             runner.cancel()
         shiboken6.delete(page)
+
+
+def test_reopening_after_install_keeps_the_outcome_and_restart_action(runner, qtbot, monkeypatch):
+    monkeypatch.setattr(
+        type(component_of("gemini")), "installed", lambda self: self.extra != "gemini"
+    )
+    with qtbot.waitSignal(runner.finished, timeout=10000):
+        runner.install(component_of("gemini"))
+    page = components_page._ComponentsPage({})
+    try:
+        assert "restart RoomKit UI" in page._progress.text()
+        assert page._restart.isVisibleTo(page)
+        assert not page._cancel.isVisibleTo(page)
+        assert page._log.toPlainText()
+        page.refresh()
+        assert page._restart.isVisibleTo(page)
+    finally:
+        shiboken6.delete(page)
+
+
+def test_component_filters_survive_refresh_and_clear_to_the_same_rows(qapp, monkeypatch):
+    monkeypatch.setattr(
+        type(component_of("gemini")), "installed", lambda self: self.extra != "gemini"
+    )
+    page = components_page._ComponentsPage({})
+    try:
+        row = _row(page, "gemini")
+        page.search.setText("gemini")
+        page.availability.setCurrentIndex(1)
+        assert row.isHidden() and not page.empty.isHidden()
+        page.refresh()
+        assert page.search.text() == "gemini"
+        assert row.isHidden()
+        page.availability.setCurrentIndex(2)
+        assert not row.isHidden()
+        page.reset.click()
+        assert _row(page, "gemini") is row
+        assert page.search.text() == ""
+        assert not page.empty.isVisibleTo(page)
+    finally:
+        shiboken6.delete(page)

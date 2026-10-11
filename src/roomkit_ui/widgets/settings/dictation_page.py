@@ -1,192 +1,184 @@
-"""Dictation settings: enable, STT provider, hotkey, language."""
+"""Dictation activation, shortcut and transcription preferences."""
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (
-    QCheckBox,
-    QComboBox,
-    QFormLayout,
-    QLabel,
-    QLineEdit,
-    QVBoxLayout,
-    QWidget,
-)
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtWidgets import QComboBox, QWidget
 
 from roomkit_ui.constants import STT_LANGUAGES, STT_PROVIDERS
-from roomkit_ui.theme import colors
 from roomkit_ui.widgets.hotkey_button import HotkeyButton
+from roomkit_ui.widgets.install_offer import InstallOffer
+from roomkit_ui.widgets.settings.controls import (
+    FeedbackLabel,
+    SettingRow,
+    SettingsForm,
+    SettingsSection,
+    SettingsToggle,
+    label,
+    navigation_link,
+    page_layout,
+)
+from roomkit_ui.widgets.settings.feature_hints import (
+    offer_install,
+    populate_provider_combo,
+    refresh_provider_combo,
+)
+
+_PROVIDER_FEATURES = {
+    "openai": "openai-realtime",
+    "deepgram": "deepgram",
+    "local": "local-voice",
+}
 
 
 class _DictationPage(QWidget):
-    """Dictation settings: enable, STT provider, hotkey, language."""
+    navigate_requested = Signal(str)
 
     def __init__(self, settings: dict, parent=None) -> None:
         super().__init__(parent)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(16)
-
-        title = QLabel("Dictation")
-        title.setStyleSheet("font-size: 18px; font-weight: 600; background: transparent;")
-        layout.addWidget(title)
-
-        desc = QLabel(
-            "Press a global hotkey to record speech and paste the "
-            "transcription into the focused input field."
+        layout = page_layout(
+            self,
+            "Dictation",
+            "Speak, then paste the transcription into the app you are using.",
         )
-        desc.setWordWrap(True)
-        c = colors()
-        desc.setStyleSheet(
-            f"font-size: 13px; color: {c['TEXT_SECONDARY']}; background: transparent;"
+        activation = SettingsSection("Activation & shortcut")
+        self.enabled = SettingsToggle("Enable dictation", bool(settings.get("stt_enabled", True)))
+        activation.add_row(
+            "Enable dictation", "Use a global shortcut to start and stop recording.", self.enabled
         )
-        layout.addWidget(desc)
+        self.hotkey = HotkeyButton()
+        self.hotkey.setAutoDefault(False)
+        self.hotkey.setMinimumWidth(140)
+        self.hotkey.set_value(settings.get("stt_hotkey", "<ctrl>+<shift>+h"))
+        self.hotkey.setEnabled(self.enabled.isChecked())
+        self.enabled.toggled.connect(self.hotkey.setEnabled)
+        activation.add_row(
+            "Dictation shortcut",
+            "Click the keys, then press a new shortcut. Escape cancels recording.",
+            self.hotkey,
+        )
+        self.hotkey_offer = InstallOffer("hotkey")
+        activation.content.addWidget(self.hotkey_offer)
+        layout.addWidget(activation)
 
-        form = QFormLayout()
-        form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
-        form.setSpacing(10)
-        form.setLabelAlignment(Qt.AlignRight)
-
-        # Enable
-        self.enabled = QCheckBox("Enable dictation")
-        self.enabled.setChecked(bool(settings.get("stt_enabled", True)))
-        form.addRow("", self.enabled)
-
-        # STT Provider
+        transcription = SettingsSection("Transcription", "Choose how your speech becomes text.")
+        transcription.content.setContentsMargins(18, 16, 18, 16)
+        transcription.content.setSpacing(12)
+        form = SettingsForm()
         self.stt_provider = QComboBox()
-        for label, _value in STT_PROVIDERS:
-            self.stt_provider.addItem(label)
-        current_stt = settings.get("stt_provider", "openai")
-        for i, (_, val) in enumerate(STT_PROVIDERS):
-            if val == current_stt:
-                self.stt_provider.setCurrentIndex(i)
-                break
-        form.addRow("STT Provider", self.stt_provider)
-
-        # OpenAI API key (shown only for OpenAI provider)
-        self.openai_api_key = QLineEdit(settings.get("openai_api_key", ""))
-        self.openai_api_key.setEchoMode(QLineEdit.Password)
-        self.openai_api_key.setPlaceholderText("Required for dictation STT")
-        self._openai_key_label = QLabel("OpenAI Key")
-        form.addRow(self._openai_key_label, self.openai_api_key)
-
-        # Deepgram API key (shown only for Deepgram provider)
-        self.deepgram_api_key = QLineEdit(settings.get("deepgram_api_key", ""))
-        self.deepgram_api_key.setEchoMode(QLineEdit.Password)
-        self.deepgram_api_key.setPlaceholderText("Required for dictation STT")
-        self._deepgram_key_label = QLabel("Deepgram Key")
-        form.addRow(self._deepgram_key_label, self.deepgram_api_key)
-
-        # Local model combo (shown only for Local provider)
-        self._model_combo = QComboBox()
-        self._model_label = QLabel("Model")
-        form.addRow(self._model_label, self._model_combo)
-
-        self._no_models_hint = QLabel(
-            "No models downloaded \u2014 go to the AI Models tab to download one."
+        populate_provider_combo(self.stt_provider, STT_PROVIDERS, _PROVIDER_FEATURES)
+        current = settings.get("stt_provider", "openai")
+        self.stt_provider.setCurrentIndex(
+            next((i for i, (_, value) in enumerate(STT_PROVIDERS) if value == current), 0)
         )
-        self._no_models_hint.setWordWrap(True)
-        self._no_models_hint.setStyleSheet(
-            f"font-size: 12px; color: {c['TEXT_SECONDARY']};"
-            f" font-style: italic; background: transparent;"
-        )
-        form.addRow("", self._no_models_hint)
+        form.addRow("Speech recognition provider", self.stt_provider)
+        self.provider_offer = offer_install(self.stt_provider, STT_PROVIDERS, _PROVIDER_FEATURES)
+        form.addRow(self.provider_offer)
+        self._provider_hint = label("", "settingsHint")
+        form.addRow(self._provider_hint)
+        self.providers_link = navigation_link("Manage providers & keys →")
+        self.providers_link.clicked.connect(lambda: self.navigate_requested.emit("providers"))
+        form.addRow(self.providers_link)
 
         self._saved_model = settings.get("stt_model", "")
-
-        # Hotkey / Language
-        self.hotkey = HotkeyButton()
-        self.hotkey.set_value(settings.get("stt_hotkey", "<ctrl>+<shift>+h"))
-        form.addRow("Hotkey", self.hotkey)
+        self._model_combo = QComboBox()
+        self._model_combo.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+        self._model_combo.setMinimumContentsLength(18)
+        self._model_label = label("Local model", "settingsFieldLabel")
+        form.addRow(self._model_label, self._model_combo)
+        self._no_models_hint = FeedbackLabel()
+        form.addRow(self._no_models_hint)
+        self.models_link = navigation_link("Browse local models →")
+        self.models_link.clicked.connect(lambda: self.navigate_requested.emit("models"))
+        form.addRow(self.models_link)
 
         self.language = QComboBox()
-        for label, _value in STT_LANGUAGES:
-            self.language.addItem(label)
-        current_lang = settings.get("stt_language", "")
-        for i, (_, val) in enumerate(STT_LANGUAGES):
-            if val == current_lang:
-                self.language.setCurrentIndex(i)
-                break
-        form.addRow("Language", self.language)
-
-        # Translate to English (Whisper only)
-        self.translate = QCheckBox("Translate to English (Whisper only)")
-        self.translate.setChecked(bool(settings.get("stt_translate", False)))
-        form.addRow("", self.translate)
-
-        layout.addLayout(form)
-
-        hint = QLabel("Click the button above, then press your desired key combination.")
-        hint.setWordWrap(True)
-        hint.setStyleSheet(
-            f"font-size: 11px; color: {c['TEXT_SECONDARY']}; background: transparent;"
+        for title, value in STT_LANGUAGES:
+            self.language.addItem(title, value)
+        self.language.setCurrentIndex(
+            max(0, self.language.findData(settings.get("stt_language", "")))
         )
-        layout.addWidget(hint)
-
+        form.addRow("Spoken language", self.language)
+        transcription.content.addLayout(form)
+        self.translate = SettingsToggle(
+            "Translate to English", bool(settings.get("stt_translate", False))
+        )
+        self._translation_row = SettingRow(
+            "Translate to English",
+            "Use Whisper to produce English text from your speech.",
+            self.translate,
+        )
+        transcription.content.addWidget(self._translation_row)
+        layout.addWidget(transcription)
+        self.audio_link = navigation_link("Choose microphone in Audio & voice →")
+        self.audio_link.clicked.connect(lambda: self.navigate_requested.emit("audio"))
+        layout.addWidget(self.audio_link, 0, Qt.AlignLeft)
         layout.addStretch()
 
-        # Populate model combo and wire provider switch
+        self.stt_provider.currentIndexChanged.connect(self._update_provider)
+        self._model_combo.currentIndexChanged.connect(self._update_provider)
         self.refresh_model_combo()
-        self.stt_provider.currentIndexChanged.connect(self._on_stt_provider_changed)
-        self._model_combo.currentIndexChanged.connect(self._update_translate_visibility)
-        self._on_stt_provider_changed(self.stt_provider.currentIndex())
 
-    def _on_stt_provider_changed(self, index: int) -> None:
-        prov = STT_PROVIDERS[index][1]
-        is_openai = prov == "openai"
-        is_deepgram = prov == "deepgram"
-        is_local = prov == "local"
-        self._openai_key_label.setVisible(is_openai)
-        self.openai_api_key.setVisible(is_openai)
-        self._deepgram_key_label.setVisible(is_deepgram)
-        self.deepgram_api_key.setVisible(is_deepgram)
-        self._model_label.setVisible(is_local)
-        self._model_combo.setVisible(is_local)
-        self._no_models_hint.setVisible(is_local and self._model_combo.count() == 0)
-        self._update_translate_visibility()
+    def _update_provider(self) -> None:
+        from roomkit_ui.model_manager import is_model_downloaded
 
-    def _update_translate_visibility(self) -> None:
-        is_local = STT_PROVIDERS[self.stt_provider.currentIndex()][1] == "local"
-        model_id = self._model_combo.currentData() or ""
-        is_whisper = model_id.startswith("whisper")
-        self.translate.setVisible(is_local and is_whisper)
+        provider = STT_PROVIDERS[self.stt_provider.currentIndex()][1]
+        local = provider == "local"
+        for widget in (self._model_label, self._model_combo, self.models_link):
+            widget.setVisible(local)
+        self.providers_link.setVisible(not local)
+        self._provider_hint.setText(
+            "Speech is transcribed on this device. Choose a downloaded model below."
+            if local
+            else f"{STT_PROVIDERS[self.stt_provider.currentIndex()][0]} receives your audio for "
+            "transcription. Its key is managed in Providers & keys."
+        )
+        model = self.selected_model_id()
+        missing = local and (not model or not is_model_downloaded(model))
+        self._no_models_hint.set_status(
+            (
+                "The selected model is not downloaded. Download it or choose another model."
+                if model
+                else "Download a speech recognition model to use local dictation."
+            )
+            if missing
+            else "",
+            "error",
+        )
+        self._translation_row.setVisible(local and model.startswith("whisper"))
 
     def selected_model_id(self) -> str:
-        """Return the model ID selected in the combo box."""
         return self._model_combo.currentData() or ""
 
     def refresh_model_combo(self) -> None:
-        """Rebuild the model combo with currently downloaded models."""
+        """Keep an unavailable selection visible until the user chooses a replacement."""
         from roomkit_ui.model_manager import STT_MODELS, is_model_downloaded
 
-        picked = self._model_combo.currentData()  # kept over the saved model on a refill
+        target = self._model_combo.currentData() or self._saved_model
         self._model_combo.blockSignals(True)
         self._model_combo.clear()
-        for m in STT_MODELS:
-            if is_model_downloaded(m.id):
-                self._model_combo.addItem(f"{m.name} ({m.type})", m.id)
-
-        # Restore previous selection
-        target = picked or self._saved_model or self._model_combo.itemData(0)
-        for i in range(self._model_combo.count()):
-            if self._model_combo.itemData(i) == target:
-                self._model_combo.setCurrentIndex(i)
-                break
+        for model in STT_MODELS:
+            if is_model_downloaded(model.id):
+                self._model_combo.addItem(f"{model.name} ({model.type})", model.id)
+        if target and self._model_combo.findData(target) < 0:
+            name = next((model.name for model in STT_MODELS if model.id == target), target)
+            self._model_combo.addItem(f"{name} — not downloaded", target)
+        if target:
+            self._model_combo.setCurrentIndex(self._model_combo.findData(target))
         self._model_combo.blockSignals(False)
-
-        has_models = self._model_combo.count() > 0
-        is_local = STT_PROVIDERS[self.stt_provider.currentIndex()][1] == "local"
-        self._no_models_hint.setVisible(is_local and not has_models)
+        refresh_provider_combo(self.stt_provider, STT_PROVIDERS, _PROVIDER_FEATURES)
+        self.provider_offer.set_feature(
+            _PROVIDER_FEATURES[STT_PROVIDERS[self.stt_provider.currentIndex()][1]]
+        )
+        self.hotkey_offer.set_feature("hotkey")
+        self._update_provider()
 
     def get_settings(self) -> dict:
-        """Return this page's settings slice."""
         return {
             "stt_enabled": self.enabled.isChecked(),
             "stt_hotkey": self.hotkey.value(),
             "stt_provider": STT_PROVIDERS[self.stt_provider.currentIndex()][1],
             "stt_model": self.selected_model_id(),
-            "stt_language": STT_LANGUAGES[self.language.currentIndex()][1],
+            "stt_language": self.language.currentData(),
             "stt_translate": self.translate.isChecked(),
-            "_dict_openai_key": self.openai_api_key.text().strip(),
-            "_dict_deepgram_key": self.deepgram_api_key.text().strip(),
         }
