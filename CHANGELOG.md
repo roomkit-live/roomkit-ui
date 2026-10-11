@@ -12,6 +12,13 @@ Each released section is the source for that version's GitHub release notes.
 ## [Unreleased]
 
 ### Added
+- **Thinking and effort for the Voice Channel LLM** (Conversation → Voice Channel →
+  Think · LLM) — Claude takes Thinking (on/off) and Effort (low to max) apart, Gemini a
+  thinking level, Off included; each defaults to the model's own. A note under them says
+  what the selected model does differently (one that always thinks, one that takes no
+  effort). Thinking on and Extra high/Max give the reply room under `max_tokens`. OpenAI
+  has none: a voice turn carries tools, and with tools GPT-5.4 and later take no
+  reasoning. Claude's Off and Effort need roomkit 0.98.
 - **Providers and Integrations alignment** — provider credentials use grouped cloud/local
   cards with status and Manage actions; key fields open on demand. Integrations follows
   MCP servers, CLI tools, Skills with large empty states and actions on each entry.
@@ -237,6 +244,31 @@ Each released section is the source for that version's GitHub release notes.
   without it and says so; Voice Channel mode is unchanged.
 
 ### Fixed
+- **No more "Channel ai not found in registry" in realtime sessions** — the durable room
+  kept the LLM channel a Voice Channel session had bound, and every realtime event was
+  routed to it. A session now unbinds what it does not serve when it opens the room.
+- **Realtime (Gemini, OpenAI Realtime, xAI, ElevenLabs): the assistant no longer cuts
+  itself off** — roomkit's pipeline paused the echo canceller at the end of every reply;
+  resumed at the next one, it took seconds to cancel again, and the provider heard its
+  own voice as the user speaking. The canceller now stays on for the whole session, as
+  the transport already keeps its own (Deepgram, GPT-Live, Voice Channel).
+- **A new session no longer takes up the last one** — the Voice Channel's AI read the
+  durable room as its conversation, so at the first "hello" it went on with what the last
+  session left open (an apology for ending it), and each such answer, stored, fed the next
+  session. It now reads only the current session's turns and, as in realtime, gets past
+  ones as a recap quoted as the past, to bring up only when the user does. The recap no
+  longer drops out of a realtime prompt on an attitude change.
+- **Realtime: a cut reply is no longer shown twice** — Gemini writes its reply ahead of
+  its voice and sends the whole transcript after the barge-in, which opened a second
+  entry repeating it. What a provider still sends of a cut reply stays out of the chat,
+  and the cut entry keeps what the time spoken had said (roomkit reports no played
+  position for realtime yet).
+- **Voice Channel: a reply cut off by a barge-in is shown once, as far as it was heard**
+  — speaking over the assistant marked its reply interrupted, then showed the whole
+  reply again in a second entry. The cut now follows roomkit's barge-in, so speech it
+  lets through leaves the reply whole. The entry keeps what had been said (estimated from
+  the audio played), ends on a whole word and is marked "— interrupted". Barge-in moves
+  to the Listen · STT tab: what it can do depends on the STT.
 - **Voice Channel: every sentence no longer heard and answered twice** — attaching the
   voice channel opened a microphone session on its own, next to the app's, so each
   sentence went through two captures and two STT streams and every reply played twice.
