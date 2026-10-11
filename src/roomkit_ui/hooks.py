@@ -89,8 +89,8 @@ def _register_vc_user_hooks(kit: Any, engine: Any) -> None:
                 pass
             return HookResult.block("non-primary speaker")
 
-        # A new user turn: the next assistant sentence opens a new reply.
-        engine._partial_buffers.pop("assistant", None)
+        # A user turn leaves the reply being spoken open: its end (AFTER_TTS)
+        # or a barge-in closes it.
         try:
             engine.transcription.emit(text, "user", True, speaker)
         except Exception:
@@ -124,12 +124,20 @@ def _register_vc_assistant_hooks(kit: Any, engine: Any, tts_filter: Any) -> None
     """The assistant's side: the bubble as the reply is spoken, its usage."""
     from roomkit.models.enums import HookExecution, HookTrigger
 
+    # The reply roomkit cut (barge-in): the chat closed its bubble then, and
+    # the AFTER_TTS roomkit still runs for it must not open a second one.
+    cut = False
+
     @kit.hook(HookTrigger.BEFORE_TTS, HookExecution.SYNC)
     async def _on_ai_response(text, context):
         from roomkit import HookResult
 
+        nonlocal cut
         if engine._state != EngineState.ACTIVE:
             return HookResult.allow()
+        # A sentence spoken after a cut belongs to the next reply, whose
+        # final must show even if the cut one never reported its end.
+        cut = False
         # A streamed reply runs this once per sentence, and the bubble wants
         # the growing text: join the sentences as roomkit does for AFTER_TTS.
         # Those sentences are filtered already (only their spacing is not
@@ -152,14 +160,32 @@ def _register_vc_assistant_hooks(kit: Any, engine: Any, tts_filter: Any) -> None
             pass
         return HookResult.allow()
 
+    @kit.hook(HookTrigger.ON_BARGE_IN, HookExecution.ASYNC)
+    async def _on_barge_in(event, context):
+        # roomkit runs this before it stops the playback, so before that
+        # playback's AFTER_TTS.  User speech alone is no cut: with barge-in
+        # off, or for an "ok", the assistant goes on speaking.
+        nonlocal cut
+        if not engine._partial_buffers.pop("assistant", None):
+            return  # cut before its first sentence: the chat shows none of it
+        cut = True
+        try:
+            # How much of the reply played: the chat keeps what was said.
+            engine.reply_interrupted.emit(int(getattr(event, "audio_position_ms", -1)))
+        except Exception:
+            pass
+
     @kit.hook(HookTrigger.AFTER_TTS, HookExecution.ASYNC)
     async def _on_tts_done(text, context):
+        nonlocal cut
         engine._partial_buffers.pop("assistant", None)
+        was_cut, cut = cut, False
         if engine._state != EngineState.ACTIVE:
             return
         try:
-            # Finalize the assistant bubble (renders markdown, shows full text)
-            engine.transcription.emit(str(text), "assistant", True, "")
+            if not was_cut:
+                # Finalize the assistant bubble (renders markdown, shows full text)
+                engine.transcription.emit(str(text), "assistant", True, "")
             engine.ai_speaking.emit(False)
         except Exception:
             pass
@@ -295,13 +321,24 @@ def register_realtime_hooks(kit: Any, engine: Any) -> None:
 
     register_audio_hooks(kit, engine)
 
+    # A reply roomkit cut: the provider still sends what it had written of
+    # it (late deltas, then its final transcript, unsaid words included),
+    # which would open a second entry repeating it.  Kept out of the chat
+    # until the user's speech ends: no new reply can start before.
+    cut = False
+
     @kit.hook(HookTrigger.ON_TRANSCRIPTION, HookExecution.SYNC)
     async def _on_transcription(event, context):
         from roomkit import HookResult
 
+        nonlocal cut
         text, role = str(event.text), str(event.role)
         _log.info("TRANSCRIPTION: role=%s final=%s chars=%d", role, event.is_final, len(text))
         _log.debug("TRANSCRIPTION text: role=%s final=%s text=%r", role, event.is_final, text)
+        if role == "assistant" and cut:
+            if event.is_final:
+                cut = False
+            return HookResult.allow()
         _show_realtime_transcript(engine, text, role, final=event.is_final)
         return HookResult.allow()
 
@@ -315,7 +352,30 @@ def register_realtime_hooks(kit: Any, engine: Any) -> None:
         if engine._state != EngineState.ACTIVE:
             return
         role = str(getattr(event, "role", "user") or "user")
+        if role == "assistant" and cut:
+            return
         _show_realtime_transcript(engine, str(event.text), role, final=False)
+
+    # The user's speech cut the reply.  roomkit reports it for a provider
+    # whose interruption it handles; a full-duplex model (GPT-Live) decides
+    # alone, and its reply simply ends.  roomkit 0.97 reports 0 ms played
+    # whatever played: 0 is taken as not measured, and the chat estimates.
+    @kit.hook(HookTrigger.ON_BARGE_IN, HookExecution.ASYNC)
+    async def _on_barge_in(event, context):
+        nonlocal cut
+        # Its final is still to come only while its words are streaming in.
+        cut = bool(engine._partial_buffers.pop("assistant", None))
+        played_ms = int(getattr(event, "audio_position_ms", 0) or 0)
+        try:
+            engine.reply_interrupted.emit(played_ms if played_ms > 0 else -1)
+        except Exception:
+            pass
+
+    @kit.hook(HookTrigger.ON_SPEECH_END, HookExecution.ASYNC)
+    async def _on_realtime_speech_end(event, context):
+        # A cut reply whose final never came leaves the next reply alone.
+        nonlocal cut
+        cut = False
 
 
 def _show_realtime_transcript(engine: Any, text: str, role: str, *, final: bool) -> None:

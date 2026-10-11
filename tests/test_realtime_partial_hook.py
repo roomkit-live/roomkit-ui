@@ -31,6 +31,7 @@ class _FakeEngine(QObject):
     transcription = Signal(str, str, bool, str)
     user_speaking = Signal(bool)
     ai_speaking = Signal(bool)
+    reply_interrupted = Signal(int)
     mic_audio_level = Signal(float)
 
     def __init__(self):
@@ -85,3 +86,86 @@ async def test_partials_are_dropped_outside_active_sessions(qapp):
 
     await partial(_event("early", "assistant"), None)
     assert engine.emitted == []
+
+
+async def test_a_barge_in_cuts_the_reply_in_the_chat(qapp):
+    """Realtime speech alone no longer cuts it there: roomkit's barge-in does."""
+    engine = _FakeEngine()
+    kit = _FakeKit()
+    register_realtime_hooks(kit, engine)
+    cuts = []
+    engine.reply_interrupted.connect(cuts.append)
+
+    barge_in = next(fn for key, fn in kit.hooks.items() if key.lower().endswith("on_barge_in"))
+    await barge_in(SimpleNamespace(interrupted_text="Hi!", audio_position_ms=0), None)
+
+    assert cuts == [-1]  # roomkit 0.97 reports 0 there: the chat estimates it
+
+
+def _hook(kit, name):
+    return next(fn for key, fn in kit.hooks.items() if key.lower().endswith(name))
+
+
+def _final(text, role):
+    return SimpleNamespace(text=text, role=role, is_final=True)
+
+
+async def test_a_measured_cut_says_how_much_played(qapp):
+    engine = _FakeEngine()
+    kit = _FakeKit()
+    register_realtime_hooks(kit, engine)
+    cuts = []
+    engine.reply_interrupted.connect(cuts.append)
+
+    await _hook(kit, "on_barge_in")(SimpleNamespace(audio_position_ms=1200), None)
+
+    assert cuts == [1200]
+
+
+async def test_the_late_words_of_a_cut_reply_open_no_second_entry(qapp):
+    """Gemini: its final, the whole reply, comes after the barge-in."""
+    engine = _FakeEngine()
+    kit = _FakeKit()
+    register_realtime_hooks(kit, engine)
+    partial = _hook(kit, "on_partial_transcription")
+    final = _hook(kit, "on_transcription")
+    await partial(_event("I meant the messages", "assistant"), None)
+
+    await _hook(kit, "on_barge_in")(SimpleNamespace(audio_position_ms=0), None)
+    await partial(_event(" I repeated.", "assistant"), None)
+    await final(_final("I meant the messages I repeated.", "assistant"), None)
+
+    assert engine.emitted == [("I meant the messages", "assistant", False)]
+
+    # The next reply shows again.
+    await final(_final("Sure, can we move on?", "user"), None)
+    await final(_final("Absolutely.", "assistant"), None)
+    assert engine.emitted[-1] == ("Absolutely.", "assistant", True)
+
+
+async def test_a_cut_reply_whose_final_never_comes_leaves_the_next_one_alone(qapp):
+    engine = _FakeEngine()
+    kit = _FakeKit()
+    register_realtime_hooks(kit, engine)
+    await _hook(kit, "on_partial_transcription")(_event("I meant", "assistant"), None)
+    await _hook(kit, "on_barge_in")(SimpleNamespace(audio_position_ms=0), None)
+
+    await _hook(kit, "on_speech_end")(SimpleNamespace(), None)
+    await _hook(kit, "on_partial_transcription")(_event("Absolutely", "assistant"), None)
+
+    assert engine.emitted[-1] == ("Absolutely", "assistant", False)
+
+
+async def test_a_cut_after_the_final_holds_nothing_back(qapp):
+    """OpenAI writes its whole reply before it is spoken: the final is in."""
+    engine = _FakeEngine()
+    kit = _FakeKit()
+    register_realtime_hooks(kit, engine)
+    final = _hook(kit, "on_transcription")
+    await final(_final("It will be sunny tomorrow.", "assistant"), None)
+
+    await _hook(kit, "on_barge_in")(SimpleNamespace(audio_position_ms=0), None)
+    await final(_final("And the day after?", "user"), None)
+    await final(_final("It will rain.", "assistant"), None)
+
+    assert engine.emitted[-1] == ("It will rain.", "assistant", True)

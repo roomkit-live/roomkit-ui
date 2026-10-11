@@ -147,7 +147,6 @@ def labelled_turn(engine: Any, event: Any) -> Any:
             pass
         return HookResult.block("non-primary speaker")
 
-    engine._partial_buffers.pop("assistant", None)
     try:
         engine.transcription.emit(str(event.text), "user", True, key or _UNATTRIBUTED)
     except Exception:

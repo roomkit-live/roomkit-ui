@@ -73,11 +73,15 @@ class ChatView(QScrollArea):
         self._layout.addStretch()  # index 0: pushes content down
         self.setWidget(self._container)
 
+        # The user's turn being heard, and the assistant's reply being said:
+        # one may open while the other still runs (the user speaks over the
+        # reply), and each keeps its own entry.
         self._current_bubble: ChatBubble | None = None
+        self._reply: ChatBubble | None = None
         # The session's nameable voices ("Speaker B") → what they are called.
         self._voice_names: dict[str, str] = {}
         # The last assistant entry, tracked past its final: a graceful
-        # finalize keeps revealing after _current_bubble is released, and
+        # finalize keeps revealing after _reply is released, and
         # a barge-in must be able to snap that reveal short.
         self._last_assistant_bubble: ChatBubble | None = None
         self._loading_label: QLabel | None = None
@@ -179,78 +183,78 @@ class ChatView(QScrollArea):
         Partials (is_final=False) replace the current bubble text.
         For assistant partials, a word-by-word streaming animation is used.
         Finals replace and freeze the bubble (renders markdown for assistant).
+
+        The user's speech does not end the reply being said: with barge-in
+        off, or for an "ok", the voice goes on, and the reply's later words
+        and its final land in its own entry.  Only interrupt_reply() cuts it.
         """
         self._hide_status()
+        if role == "assistant":
+            self._add_reply_text(text, is_final, speaker_name)
+        else:
+            self._add_turn_text(text, role, is_final, speaker_name)
+        self._scroll_to_bottom()
 
-        # Barge-in: user speech landing while the previous assistant entry
-        # is still revealing.  The voice already stopped, so the rolling
-        # text would be theater — snap it complete, marked as cut short.
-        if role in ("user", "other"):
-            last = self._last_assistant_bubble
-            if last is not None and not last.finalized:
-                last.finalize(interrupted=True)
+    def interrupt_reply(self, heard_ms: int = -1) -> None:
+        """roomkit cut the assistant's voice: its reply keeps what was said,
+        marked as cut short, and its next words open a new entry.
 
-        if (
-            self._current_bubble is not None
-            and not self._current_bubble.finalized
-            and self._current_bubble.role == role
-        ):
-            if role == "assistant":
-                # Keep the word reveal rolling — set_text would snap the
-                # whole update into place and kill the pacing.
-                self._current_bubble.update_stream(text)
-            else:
-                self._current_bubble.set_text(text)
+        *heard_ms* is how much of the reply played, -1 when unknown (see
+        ChatBubble.cut_short).  The reply may still be open, or have had its
+        final while its words are still revealing.  A reply fully shown is
+        left as it is.
+        """
+        reply = self._reply or self._last_assistant_bubble
+        self._reply = None
+        if reply is not None and not reply.finalized:
+            reply.cut_short(heard_ms)
+
+    def _add_reply_text(self, text: str, is_final: bool, speaker_name: str) -> None:
+        reply = self._reply
+        if reply is None:
+            # Always stream assistant text — a provider that hands the
+            # full transcript at once (Grok, OpenAI) still rolls out.
+            reply = ChatBubble("", role="assistant", speaker_name=speaker_name)
+            self._insert_bubble(reply)
+            self._reply = self._last_assistant_bubble = reply
+            reply.start_streaming(text)
+            reply.streaming_tick.connect(self._scroll_to_bottom)
+        else:
+            # Keep the word reveal rolling — set_text would snap the
+            # whole update into place and kill the pacing.
+            reply.update_stream(text)
+        if is_final:
+            reply.finalize()
+            self._reply = None
+
+    def _add_turn_text(self, text: str, role: str, is_final: bool, speaker_name: str) -> None:
+        turn = self._current_bubble
+        if turn is not None and turn.role == role:
+            turn.set_text(text)
             # Update speaker label when diarization catches up mid-utterance
             if speaker_name:
-                self._label_bubble(self._current_bubble, speaker_name)
+                self._label_bubble(turn, speaker_name)
         else:
-            # New bubble (finalize any previous in-progress bubble first)
-            if self._current_bubble and not self._current_bubble.finalized:
+            if turn is not None:
                 # Same utterance re-classified by diarization (user↔other):
                 # replace the old bubble instead of keeping both.
-                if self._current_bubble.role in ("user", "other") and role in (
-                    "user",
-                    "other",
-                ):
-                    self._layout.removeWidget(self._current_bubble)
-                    self._current_bubble.deleteLater()
-                    self._current_bubble = None
-                else:
-                    # User speech arriving over an unfinished assistant
-                    # reveal is a barge-in: the voice already stopped, so
-                    # the reveal would be theater — land the full text at
-                    # once, marked as cut short.
-                    self._current_bubble.finalize(
-                        interrupted=self._current_bubble.role == "assistant"
-                        and role in ("user", "other")
-                    )
-            if role == "assistant":
-                # Always stream assistant text — a provider that hands the
-                # full transcript at once (Grok, OpenAI) still rolls out.
-                bubble = ChatBubble("", role=role, speaker_name=speaker_name)
-            else:
-                bubble = ChatBubble(text, role=role)
-                # Only a nameable voice's label is clickable (_label_bubble).
-                bubble.speaker_clicked.connect(lambda b=bubble: self.speaker_clicked.emit(b.voice))
-                self._label_bubble(bubble, speaker_name)
-            # Insert before status_label (last widget) and stretch (second-to-last)
-            idx = self._layout.count() - 2
-            if idx < 0:
-                idx = 0
-            self._layout.insertWidget(idx, bubble)
-            _fade_in(bubble)
-            self._current_bubble = bubble
-            if role == "assistant":
-                self._last_assistant_bubble = bubble
-                bubble.start_streaming(text)
-                bubble.streaming_tick.connect(self._scroll_to_bottom)
-
+                self._layout.removeWidget(turn)
+                turn.deleteLater()
+            turn = ChatBubble(text, role=role)
+            # Only a nameable voice's label is clickable (_label_bubble).
+            turn.speaker_clicked.connect(lambda b=turn: self.speaker_clicked.emit(b.voice))
+            self._label_bubble(turn, speaker_name)
+            self._insert_bubble(turn)
+            self._current_bubble = turn
         if is_final:
-            self._current_bubble.finalize()
+            turn.finalize()
             self._current_bubble = None
 
-        self._scroll_to_bottom()
+    def _insert_bubble(self, bubble: ChatBubble) -> None:
+        # Insert before status_label (last widget) and stretch (second-to-last)
+        idx = max(self._layout.count() - 2, 0)
+        self._layout.insertWidget(idx, bubble)
+        _fade_in(bubble)
 
     def name_voice(self, voice: str, name: str) -> None:
         """A voice the STT tells apart is now called *name*: its turns, past
@@ -329,9 +333,11 @@ class ChatView(QScrollArea):
 
     def _finalize_current_bubble(self) -> None:
         self._hide_status()
-        if self._current_bubble and not self._current_bubble.finalized:
-            self._current_bubble.finalize()
-            self._current_bubble = None
+        for bubble in (self._current_bubble, self._reply):
+            if bubble is not None and not bubble.finalized:
+                bubble.finalize()
+        self._current_bubble = None
+        self._reply = None
 
     def set_loading_status(self, message: str) -> None:
         """Show or update a single loading status label (replaces previous)."""
@@ -422,6 +428,7 @@ class ChatView(QScrollArea):
         self._layout.addStretch()
         self._layout.addWidget(self._status_label)
         self._current_bubble = None
+        self._reply = None
         self._last_assistant_bubble = None
         self._voice_names.clear()
 
@@ -439,6 +446,7 @@ class ChatView(QScrollArea):
                     w.finalize()
                 w.deleteLater()
         self._current_bubble = None
+        self._reply = None
         self._last_assistant_bubble = None  # deleted above, like every bubble
         self._voice_names.clear()
         # Rebuild with empty state centered

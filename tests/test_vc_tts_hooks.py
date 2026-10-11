@@ -4,6 +4,11 @@ turn says so in the chat.
 roomkit runs BEFORE_TTS once per sentence of a streamed reply (and, since
 0.95, for Gradium too), while ChatBubble.update_stream() wants the growing
 text: emitting each sentence alone showed only the one being spoken.
+
+A reply ends when roomkit says so: AFTER_TTS, or ON_BARGE_IN when the
+user's speech cut it.  Speech that does not cut it (barge-in off, an "ok")
+used to end it in the chat while the voice went on, and its AFTER_TTS then
+showed the whole reply a second time.
 """
 
 from types import SimpleNamespace
@@ -38,6 +43,7 @@ class _FakeEngine(QObject):
     transcription = Signal(str, str, bool, str)
     user_speaking = Signal(bool)
     ai_speaking = Signal(bool)
+    reply_interrupted = Signal(int)
     mic_audio_level = Signal(float)
     speaker_identified = Signal(str, float)
     session_notice = Signal(str)
@@ -55,6 +61,8 @@ class _FakeEngine(QObject):
         self.transcription.connect(
             lambda text, role, final, spk: self.emitted.append((text, role, final))
         )
+        self.cuts = []  # how much of each cut reply played (ms)
+        self.reply_interrupted.connect(self.cuts.append)
 
 
 def _hook(kit, name):
@@ -92,18 +100,76 @@ async def test_after_tts_closes_the_reply_so_the_next_one_starts_fresh():
     assert engine.emitted[-1] == ("Second reply.", "assistant", False)
 
 
-async def test_a_user_turn_or_a_tts_error_also_closes_the_reply():
+async def test_a_user_turn_leaves_the_reply_being_spoken_open():
+    """Barge-in off or an "ok": the voice goes on, and so does its bubble."""
     engine, kit = _setup()
     before, user = _hook(kit, "before_tts"), _hook(kit, "on_transcription")
+    after = _hook(kit, "after_tts")
+
+    await before("All right.", None)
+    await user(SimpleNamespace(text="ok thanks"), None)
+    await before("I'm still here.", None)
+    assert engine.emitted[-1] == ("All right. I'm still here.", "assistant", False)
+
+    await after("All right. I'm still here.", None)
+    assert engine.emitted[-1] == ("All right. I'm still here.", "assistant", True)
+    assert engine.cuts == []
+
+
+async def test_a_tts_error_closes_the_reply():
+    engine, kit = _setup()
+    before = _hook(kit, "before_tts")
 
     await before("Cut off.", None)
-    await user(SimpleNamespace(text="wait"), None)
-    await before("New answer.", None)
-    assert engine.emitted[-1] == ("New answer.", "assistant", False)
-
     await kit.events["tts_error"](SimpleNamespace(data={"provider": "gradium"}))
     await before("After the error.", None)
     assert engine.emitted[-1] == ("After the error.", "assistant", False)
+
+
+async def test_a_barge_in_cuts_the_reply_and_its_late_end_shows_nothing_twice():
+    """roomkit still runs AFTER_TTS for the playback it cut, whole text included."""
+    engine, kit = _setup()
+    before, after = _hook(kit, "before_tts"), _hook(kit, "after_tts")
+    barge_in = _hook(kit, "on_barge_in")
+
+    await before("It will be sunny tomorrow.", None)
+    await barge_in(
+        SimpleNamespace(interrupted_text="It will be sunny tomorrow.", audio_position_ms=900), None
+    )
+    assert engine.cuts == [900]  # the chat keeps what 900 ms of voice said
+
+    shown = list(engine.emitted)
+    await after("It will be sunny tomorrow. Then it will rain.", None)
+    assert engine.emitted == shown  # no final: the chat closed that bubble already
+
+    await before("Yes?", None)
+    await after("Yes?", None)
+    assert engine.emitted[-2:] == [("Yes?", "assistant", False), ("Yes?", "assistant", True)]
+
+
+async def test_a_cut_reply_that_never_ends_leaves_the_next_final_alone():
+    engine, kit = _setup()
+    before, after = _hook(kit, "before_tts"), _hook(kit, "after_tts")
+
+    await before("Cut off.", None)
+    await _hook(kit, "on_barge_in")(
+        SimpleNamespace(interrupted_text="Cut off.", audio_position_ms=300), None
+    )
+    await before("Next reply.", None)
+    await after("Next reply.", None)
+
+    assert engine.emitted[-1] == ("Next reply.", "assistant", True)
+
+
+async def test_a_barge_in_before_the_first_sentence_cuts_nothing_in_the_chat():
+    engine, kit = _setup()
+    await _hook(kit, "on_barge_in")(
+        SimpleNamespace(interrupted_text="", audio_position_ms=0), None
+    )
+    await _hook(kit, "after_tts")("Late words.", None)
+
+    assert engine.cuts == []
+    assert engine.emitted[-1] == ("Late words.", "assistant", True)
 
 
 # -- a turn the assistant could not answer -------------------------------------

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from datetime import datetime
 
 from PySide6.QtCore import Qt, QTimer, Signal
@@ -64,6 +65,34 @@ _STREAM_WORD_MS = 230
 _STREAM_CATCHUP_MS = 80
 _STREAM_BACKLOG_WORDS = 12
 
+# How fast a voice goes through text, to tell what a cut reply had said
+# when it was cut: ~16 characters a second (ElevenLabs in French, measured
+# on whole replies).  roomkit reports how long the reply played, not the
+# words: an estimate is all there is, and a word or two off is fine here.
+_SPOKEN_MS_PER_CHAR = 60
+
+
+def _said_in(text: str, heard_ms: int) -> str:
+    """The words of *text* a voice had said after *heard_ms*, ending on a
+    whole word, with "…" when the text goes on.  The first word at least:
+    it showed at once, and an entry of "…" alone says nothing."""
+    heard_chars = heard_ms // _SPOKEN_MS_PER_CHAR
+    if heard_chars >= len(text):
+        return text
+    words: list[str] = []
+    end = 0
+    for word in text.split():
+        end = text.index(word, end) + len(word)
+        if end > heard_chars and words:
+            break
+        words.append(word)
+    return _trail_off(" ".join(words))
+
+
+def _trail_off(said: str) -> str:
+    said = said.rstrip(",;:—–- ")
+    return said if said.endswith((".", "!", "?", "…")) else said + "…"
+
 
 class _SpeakerLabel(QLabel):
     """The speaker's name above a bubble; a plain click on it once it is nameable."""
@@ -112,6 +141,8 @@ class ChatBubble(QFrame):
         # Word-by-word streaming state
         self._stream_words: list[str] = []
         self._stream_index = 0
+        # When the first words showed: the voice started about then.
+        self._stream_started: float | None = None
         self._stream_timer = QTimer(self)
         self._stream_timer.timeout.connect(self._stream_tick)
         self._streaming_connected = False
@@ -327,6 +358,7 @@ class ChatBubble(QFrame):
             self._streaming_connected = True
         self._stream_words = []
         self._stream_index = 0
+        self._stream_started = time.monotonic()
         self.update_stream(full_text)
 
     def update_stream(self, full_text: str) -> None:
@@ -373,9 +405,10 @@ class ChatBubble(QFrame):
         animation is left to finish and the real finalization (markdown
         render, timestamp) happens on its last tick.
 
-        *interrupted* is the exception: on a barge-in the voice already
-        stopped, so a reveal still pacing itself would be theater — the
-        full text lands at once, marked as cut short.
+        *interrupted* is the exception: the voice already stopped, so a
+        reveal still pacing itself would be theater — the text lands at
+        once, marked as cut short (cut_short() first trims it to what was
+        said).
         """
         if interrupted:
             if self._interrupted_label is not None:
@@ -388,6 +421,20 @@ class ChatBubble(QFrame):
                 self._stream_timer.start()
             return
         self._complete_finalize()
+
+    def cut_short(self, heard_ms: int = -1) -> None:
+        """The voice was cut: keep only what it had said, marked as cut short.
+
+        *heard_ms* is how much of the reply played.  At -1 (not measured)
+        the time since its first words showed stands for it: the words
+        revealed do not, since a reveal catching up on a provider's text
+        (Gemini writes ahead of its voice) runs past the voice.
+        """
+        if heard_ms < 0 and self._stream_started is not None:
+            heard_ms = int((time.monotonic() - self._stream_started) * 1000)
+        if heard_ms >= 0:
+            self._raw_text = _said_in(self._raw_text, heard_ms)
+        self.finalize(interrupted=True)
 
     def _refresh_markdown(self) -> None:
         if self._finalized and self._role not in ("user", "other"):

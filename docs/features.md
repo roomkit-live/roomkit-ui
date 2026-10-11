@@ -272,8 +272,10 @@ support, links to the project website and keeps the complete MIT license in a di
 ### UI
 
 Fixed-size (420×700) chat window: the user's turns in a subtle bubble, the assistant's
-text typeset in the column and rolling out with its voice, cut short with an
-"— interrupted" mark on barge-in; markdown; animated VU meter; collapsible session-info
+text typeset in the column and rolling out with its voice, cut back to what had been said
+(estimated from the audio played) with an "— interrupted" mark when roomkit's barge-in
+stops the voice (speech it lets through, with barge-in off or an "ok", leaves the reply
+whole); markdown; animated VU meter; collapsible session-info
 bar with token usage; a full-window loading curtain with a Cancel button while a session
 connects; dark/light themes; synthesized start/stop sounds; a watchdog that nudges a model
 that left the user's speech unanswered. Settings is a resizable workspace with grouped navigation. General contains appearance

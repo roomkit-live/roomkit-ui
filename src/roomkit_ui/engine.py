@@ -108,6 +108,8 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
     speaker_audio_level = Signal(float)  # 0.0-1.0
     user_speaking = Signal(bool)
     ai_speaking = Signal(bool)
+    # roomkit cut the assistant's voice (barge-in): ms of the reply heard, -1 unknown
+    reply_interrupted = Signal(int)
     error_occurred = Signal(str)
     component_missing = Signal(str, str)  # feature key, what the chat says
     tool_use = Signal(str, str)  # tool_name, arguments_json
