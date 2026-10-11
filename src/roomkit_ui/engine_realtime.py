@@ -35,7 +35,7 @@ from roomkit_ui.realtime_providers import (
     realtime_sample_rate,
     transport_audio_profile,
 )
-from roomkit_ui.toolset import ToolSet, tool_summaries
+from roomkit_ui.toolset import ToolSet
 
 logger = logging.getLogger(__name__)
 
@@ -147,24 +147,12 @@ class RealtimeMixin:
 
             self._enter_active()  # type: ignore[attr-defined]
 
-            # Emit structured session info for the UI info bar
-            skill_info: list[dict] = []
-            if skills_registry and skills_registry.skill_count > 0:
-                skill_info = [
-                    {"name": m.name, "description": m.description}
-                    for m in skills_registry.all_metadata()
-                ]
-            info: dict = {
-                "provider": provider_name,
-                "model": media.model,
-                "tools": tool_summaries(tools),
-                "skills": skill_info,
-            }
-            if self._mcp and self._mcp.failed_servers:  # type: ignore[attr-defined]
-                info["failed_servers"] = list(self._mcp.failed_servers)  # type: ignore[attr-defined]
-            self.session_info.emit(info)  # type: ignore[attr-defined]
-            if self._attitude_name:  # type: ignore[attr-defined]
-                self.attitude_changed.emit(self._attitude_name)  # type: ignore[attr-defined]
+            self._emit_session_info(  # type: ignore[attr-defined]
+                provider=provider_name,
+                model=media.model,
+                tools=tools,
+                skills_registry=skills_registry,
+            )
 
         except Exception as e:
             logger.exception("Failed to start voice session")

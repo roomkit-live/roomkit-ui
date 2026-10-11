@@ -33,7 +33,7 @@ from roomkit_ui.engine_tools import ToolMixin
 from roomkit_ui.engine_vc import VoiceChannelMixin
 from roomkit_ui.mcp_config import enabled_mcp_servers
 from roomkit_ui.mcp_manager import MCPManager
-from roomkit_ui.toolset import ToolSet, reachable_mcp_tools
+from roomkit_ui.toolset import ToolSet, reachable_mcp_tools, tool_summaries
 from roomkit_ui.watchdog import SessionWatchdog
 
 logger = logging.getLogger(__name__)
@@ -359,6 +359,29 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
     def _caller_cancelled() -> bool:
         task = asyncio.current_task()
         return task is not None and task.cancelling() > 0
+
+    def _emit_session_info(
+        self, *, provider: str, model: str, tools: list[dict], skills_registry: Any
+    ) -> None:
+        """Tell the UI's info bar what this session runs: provider, model,
+        tools, skills, the MCP servers that failed — and the attitude."""
+        skill_info: list[dict] = []
+        if skills_registry and skills_registry.skill_count > 0:
+            skill_info = [
+                {"name": m.name, "description": m.description}
+                for m in skills_registry.all_metadata()
+            ]
+        info: dict = {
+            "provider": provider,
+            "model": model,
+            "tools": tool_summaries(tools),
+            "skills": skill_info,
+        }
+        if self._mcp and self._mcp.failed_servers:
+            info["failed_servers"] = list(self._mcp.failed_servers)
+        self.session_info.emit(info)
+        if self._attitude_name:
+            self.attitude_changed.emit(self._attitude_name)
 
     def _enter_active(self) -> None:
         """Hand the session to the UI — unless stop() took the start over.

@@ -46,7 +46,7 @@ from roomkit_ui.engine_vc_helpers import (
 from roomkit_ui.features import STT_PROVIDER_FEATURES, require, unavailable_reason
 from roomkit_ui.hooks import register_vc_hooks
 from roomkit_ui.providers import create_ai_provider
-from roomkit_ui.toolset import ToolSet, tool_summaries
+from roomkit_ui.toolset import ToolSet
 from roomkit_ui.tts import create_tts_provider, is_cached_tts, tts_cache_fields
 
 logger = logging.getLogger(__name__)
@@ -255,12 +255,11 @@ class VoiceChannelMixin:
 
             self._enter_active()  # type: ignore[attr-defined]
 
-            # Emit session info
-            self._emit_vc_session_info(
+            self._emit_session_info(  # type: ignore[attr-defined]
+                provider=llm_provider_name,
+                model=model,
                 tools=tools,
                 skills_registry=skills_registry,
-                llm_provider_name=llm_provider_name,
-                model=model,
             )
 
         except Exception as e:
@@ -461,32 +460,6 @@ class VoiceChannelMixin:
         except Exception:
             logger.exception("Failed to load skills")
             return None
-
-    def _emit_vc_session_info(
-        self,
-        *,
-        tools: list[dict],
-        skills_registry: Any,
-        llm_provider_name: str,
-        model: str,
-    ) -> None:
-        skill_info: list[dict] = []
-        if skills_registry and skills_registry.skill_count > 0:
-            skill_info = [
-                {"name": m.name, "description": m.description}
-                for m in skills_registry.all_metadata()
-            ]
-        info: dict = {
-            "provider": llm_provider_name,
-            "model": model,
-            "tools": tool_summaries(tools),
-            "skills": skill_info,
-        }
-        if self._mcp and self._mcp.failed_servers:  # type: ignore[attr-defined]
-            info["failed_servers"] = list(self._mcp.failed_servers)  # type: ignore[attr-defined]
-        self.session_info.emit(info)  # type: ignore[attr-defined]
-        if self._attitude_name:  # type: ignore[attr-defined]
-            self.attitude_changed.emit(self._attitude_name)  # type: ignore[attr-defined]
 
 
 def _build_voice_channel(stt: Any, tts: Any, backend: Any, pipeline: Any, tts_filter: Any) -> Any:

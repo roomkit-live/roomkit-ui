@@ -86,3 +86,38 @@ def test_the_session_prompt_without_an_attitude_is_the_users(qapp):
     engine = Engine()
 
     assert engine._compose_session_prompt({"system_prompt": "Be brief."}) == "Be brief."
+
+
+def test_session_info_reports_tools_skills_and_failed_servers(qapp):
+    from types import SimpleNamespace
+
+    from roomkit_ui.engine import Engine
+
+    engine = Engine()
+    engine._mcp = SimpleNamespace(failed_servers=["broken"])
+    engine._attitude_name = "Pirate"
+    skills = SimpleNamespace(
+        skill_count=1, all_metadata=lambda: [SimpleNamespace(name="pdf", description="Read PDFs")]
+    )
+    infos, attitudes = [], []
+    engine.session_info.connect(infos.append)
+    engine.attitude_changed.connect(attitudes.append)
+
+    engine._emit_session_info(
+        provider="gemini",
+        model="gemini-2.5",
+        tools=[{"name": "now", "description": "Time.\nMore."}],
+        skills_registry=skills,
+    )
+    engine._mcp = None
+
+    assert infos == [
+        {
+            "provider": "gemini",
+            "model": "gemini-2.5",
+            "tools": [{"name": "now", "description": "Time."}],
+            "skills": [{"name": "pdf", "description": "Read PDFs"}],
+            "failed_servers": ["broken"],
+        }
+    ]
+    assert attitudes == ["Pirate"]
