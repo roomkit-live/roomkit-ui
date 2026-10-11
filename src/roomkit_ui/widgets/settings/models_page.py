@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 from PySide6.QtWidgets import (
@@ -12,6 +15,11 @@ from PySide6.QtWidgets import (
 
 from roomkit_ui.theme import colors
 from roomkit_ui.widgets.settings.models_widgets import _ModelRow
+
+logger = logging.getLogger(__name__)
+
+# A model download: given a progress(done, total) callback, fetch the model.
+_Download = Callable[[Callable[[int, int], None]], Awaitable[None]]
 
 
 class _ModelsPage(QWidget):
@@ -343,21 +351,8 @@ class _ModelsPage(QWidget):
         layout.addWidget(spk_frame)
         layout.addStretch()
 
-    def _find_row(self, model_id: str) -> _ModelRow | None:
-        for row in self._model_rows:
-            if row.model.id == model_id:
-                return row
-        return None
-
-    def _download_model(self, model_id: str) -> None:
-        import asyncio
-        import logging
-
-        from roomkit_ui.model_manager import download_model
-
-        row = self._find_row(model_id)
-        if row is None:
-            return
+    def _start_download(self, row: _ModelRow, download: _Download, what: str) -> None:
+        """Run *download* with *row* showing its progress, then its outcome."""
         row.set_resolving()
         loop = asyncio.get_event_loop()
 
@@ -367,13 +362,29 @@ class _ModelsPage(QWidget):
 
         async def _run() -> None:
             try:
-                await download_model(model_id, _progress)
+                await download(_progress)
                 row.set_downloaded()
             except Exception:
-                logging.exception("Model download failed: %s", model_id)
+                logger.exception("%s download failed", what)
                 row.set_error()
 
         loop.create_task(_run())
+
+    def _find_row(self, model_id: str) -> _ModelRow | None:
+        for row in self._model_rows:
+            if row.model.id == model_id:
+                return row
+        return None
+
+    def _download_model(self, model_id: str) -> None:
+        from roomkit_ui.model_manager import download_model
+
+        row = self._find_row(model_id)
+        if row is None:
+            return
+        self._start_download(
+            row, lambda progress: download_model(model_id, progress), f"Model {model_id}"
+        )
 
     def _delete_model(self, model_id: str) -> None:
         from roomkit_ui.model_manager import delete_model
@@ -384,28 +395,10 @@ class _ModelsPage(QWidget):
             row.set_not_downloaded()
 
     def _download_gtcrn(self) -> None:
-        import asyncio
-        import logging
-
         from roomkit_ui.model_manager import download_gtcrn
 
         row = self._gtcrn_row
-        row.set_resolving()
-        loop = asyncio.get_event_loop()
-
-        def _progress(downloaded: int, total: int) -> None:
-            pct = min(int(downloaded * 100 / total), 100) if total > 0 else 0
-            loop.call_soon_threadsafe(row.set_downloading, pct)
-
-        async def _run() -> None:
-            try:
-                await download_gtcrn(_progress)
-                row.set_downloaded()
-            except Exception:
-                logging.exception("GTCRN download failed")
-                row.set_error()
-
-        loop.create_task(_run())
+        self._start_download(row, download_gtcrn, "GTCRN")
 
     def _delete_gtcrn(self) -> None:
         from roomkit_ui.model_manager import delete_gtcrn
@@ -422,28 +415,10 @@ class _ModelsPage(QWidget):
         return None
 
     def _download_espeak(self) -> None:
-        import asyncio
-        import logging
-
         from roomkit_ui.model_manager import download_espeak_ng_data
 
         row = self._espeak_row
-        row.set_resolving()
-        loop = asyncio.get_event_loop()
-
-        def _progress(downloaded: int, total: int) -> None:
-            pct = min(int(downloaded * 100 / total), 100) if total > 0 else 0
-            loop.call_soon_threadsafe(row.set_downloading, pct)
-
-        async def _run() -> None:
-            try:
-                await download_espeak_ng_data(_progress)
-                row.set_downloaded()
-            except Exception:
-                logging.exception("espeak-ng-data download failed")
-                row.set_error()
-
-        loop.create_task(_run())
+        self._start_download(row, download_espeak_ng_data, "espeak-ng-data")
 
     def _delete_espeak(self) -> None:
         from roomkit_ui.model_manager import delete_espeak_ng_data
@@ -452,30 +427,14 @@ class _ModelsPage(QWidget):
         self._espeak_row.set_not_downloaded()
 
     def _download_tts_model(self, model_id: str) -> None:
-        import asyncio
-        import logging
-
         from roomkit_ui.model_manager import download_tts_model
 
         row = self._find_tts_row(model_id)
         if row is None:
             return
-        row.set_resolving()
-        loop = asyncio.get_event_loop()
-
-        def _progress(downloaded: int, total: int) -> None:
-            pct = min(int(downloaded * 100 / total), 100) if total > 0 else 0
-            loop.call_soon_threadsafe(row.set_downloading, pct)
-
-        async def _run() -> None:
-            try:
-                await download_tts_model(model_id, _progress)
-                row.set_downloaded()
-            except Exception:
-                logging.exception("TTS model download failed: %s", model_id)
-                row.set_error()
-
-        loop.create_task(_run())
+        self._start_download(
+            row, lambda progress: download_tts_model(model_id, progress), f"TTS model {model_id}"
+        )
 
     def _delete_tts_model(self, model_id: str) -> None:
         from roomkit_ui.model_manager import delete_tts_model
@@ -494,30 +453,14 @@ class _ModelsPage(QWidget):
         return None
 
     def _download_vad_model(self, model_id: str) -> None:
-        import asyncio
-        import logging
-
         from roomkit_ui.model_manager import download_vad_model
 
         row = self._find_vad_row(model_id)
         if row is None:
             return
-        row.set_resolving()
-        loop = asyncio.get_event_loop()
-
-        def _progress(downloaded: int, total: int) -> None:
-            pct = min(int(downloaded * 100 / total), 100) if total > 0 else 0
-            loop.call_soon_threadsafe(row.set_downloading, pct)
-
-        async def _run() -> None:
-            try:
-                await download_vad_model(model_id, _progress)
-                row.set_downloaded()
-            except Exception:
-                logging.exception("VAD model download failed: %s", model_id)
-                row.set_error()
-
-        loop.create_task(_run())
+        self._start_download(
+            row, lambda progress: download_vad_model(model_id, progress), f"VAD model {model_id}"
+        )
 
     def _delete_vad_model(self, model_id: str) -> None:
         from roomkit_ui.model_manager import delete_vad_model
@@ -530,28 +473,10 @@ class _ModelsPage(QWidget):
     # -- Smart Turn model handlers -------------------------------------------
 
     def _download_smart_turn(self) -> None:
-        import asyncio
-        import logging
-
         from roomkit_ui.model_manager import download_smart_turn
 
         row = self._smart_turn_row
-        row.set_resolving()
-        loop = asyncio.get_event_loop()
-
-        def _progress(downloaded: int, total: int) -> None:
-            pct = min(int(downloaded * 100 / total), 100) if total > 0 else 0
-            loop.call_soon_threadsafe(row.set_downloading, pct)
-
-        async def _run() -> None:
-            try:
-                await download_smart_turn(_progress)
-                row.set_downloaded()
-            except Exception:
-                logging.exception("Smart Turn download failed")
-                row.set_error()
-
-        loop.create_task(_run())
+        self._start_download(row, download_smart_turn, "Smart Turn")
 
     def _delete_smart_turn(self) -> None:
         from roomkit_ui.model_manager import delete_smart_turn
@@ -568,30 +493,16 @@ class _ModelsPage(QWidget):
         return None
 
     def _download_speaker_model(self, model_id: str) -> None:
-        import asyncio
-        import logging
-
         from roomkit_ui.model_manager import download_speaker_model
 
         row = self._find_spk_row(model_id)
         if row is None:
             return
-        row.set_resolving()
-        loop = asyncio.get_event_loop()
-
-        def _progress(downloaded: int, total: int) -> None:
-            pct = min(int(downloaded * 100 / total), 100) if total > 0 else 0
-            loop.call_soon_threadsafe(row.set_downloading, pct)
-
-        async def _run() -> None:
-            try:
-                await download_speaker_model(model_id, _progress)
-                row.set_downloaded()
-            except Exception:
-                logging.exception("Speaker model download failed: %s", model_id)
-                row.set_error()
-
-        loop.create_task(_run())
+        self._start_download(
+            row,
+            lambda progress: download_speaker_model(model_id, progress),
+            f"Speaker model {model_id}",
+        )
 
     def _delete_speaker_model(self, model_id: str) -> None:
         from roomkit_ui.model_manager import delete_speaker_model
