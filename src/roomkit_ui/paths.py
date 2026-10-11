@@ -22,6 +22,10 @@ logger = logging.getLogger(__name__)
 # What older macOS versions kept under ~/.local/share/roomkit-ui.
 _MOVED_ON_MACOS = ("models", "wakeword", "recordings", "debug_audio", "cache")
 
+# Folders whose content the app rebuilds: an old copy next to a new one is
+# dropped, where user data (models, recordings…) stays put and is reported.
+_REBUILT = frozenset({"cache"})
+
 
 def data_dir() -> Path:
     """The root every stored file lives under (not created here)."""
@@ -59,6 +63,11 @@ def _move_legacy(source: Path, dest: Path) -> None:
     if not source.exists():
         return
     if dest.exists():
+        if source.name in _REBUILT:
+            # Said once: left there, it was reported again at every start.
+            shutil.rmtree(source, ignore_errors=True)
+            logger.info("Dropped the old %s: %s is the one in use", source, dest)
+            return
         logger.warning("Not moving %s: %s already exists", source, dest)
         return
     try:

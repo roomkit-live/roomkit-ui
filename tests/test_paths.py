@@ -68,3 +68,20 @@ def test_linux_data_is_never_moved(home, monkeypatch):
     paths.migrate_legacy_mac_data()
 
     assert (_legacy(home) / "models").is_dir()
+
+
+def test_an_old_cache_next_to_the_new_one_is_dropped_not_reported_again(home, monkeypatch):
+    monkeypatch.setattr(sys, "platform", "darwin")
+    legacy = home / ".local" / "share" / "roomkit-ui"
+    (legacy / "cache").mkdir(parents=True)
+    (legacy / "cache" / "old.svg").write_text("x")
+    (legacy / "models").mkdir()
+    new = paths.data_dir()
+    (new / "cache").mkdir(parents=True)
+    (new / "models").mkdir()
+
+    paths.migrate_legacy_mac_data()
+
+    assert not (legacy / "cache").exists()  # rebuilt by the app: nothing lost
+    assert (legacy / "models").exists()  # user data: never dropped
+    assert not (new / "cache" / "old.svg").exists()
