@@ -25,6 +25,7 @@ from roomkit_ui.env_config import parse_env_block
 from roomkit_ui.mcp_config import validate_mcp_http_url
 
 _CONNECT_TIMEOUT = 10  # seconds per connection step, per server
+_MAX_TOOL_PAGES = 1000  # a server paging on past this is not listing anything
 _TOOL_CALL_TIMEOUT = 60  # seconds per tool call
 
 # JSON Schema keys that voice providers (especially Gemini) reject.
@@ -88,6 +89,39 @@ def _clean_schema(obj: Any) -> Any:
     if isinstance(obj, list):
         return [_clean_schema(v) for v in obj]
     return obj
+
+
+async def _list_all_tools(session: Any, name: str) -> list[Any]:
+    """Every page of a server's ``tools/list``.
+
+    The SDK answers one page; a server that pages its listing would lose
+    every tool after the first.  A server that pages on without bringing
+    anything new (an empty page that still carries a cursor, a cursor handed
+    out twice), or past ``_MAX_TOOL_PAGES``, ends the reading with the tools
+    read so far.
+    """
+    from mcp.types import PaginatedRequestParams
+
+    tools: list[Any] = []
+    seen: set[str] = set()
+    cursor: str | None = None
+    for _ in range(_MAX_TOOL_PAGES):
+        params = PaginatedRequestParams(cursor=cursor) if cursor is not None else None
+        page = await session.list_tools(params=params)
+        tools.extend(page.tools)
+        cursor = page.next_cursor
+        if cursor is None:
+            return tools
+        if not page.tools or cursor in seen:
+            logger.warning(
+                "MCP server %r pages its tools without end; keeping %d", name, len(tools)
+            )
+            return tools
+        seen.add(cursor)
+    logger.warning(
+        "MCP server %r: tool listing past %d pages; keeping %d", name, _MAX_TOOL_PAGES, len(tools)
+    )
+    return tools
 
 
 def _parse_stdio_config(cfg: dict[str, Any]) -> tuple[str, list[str], dict[str, str]]:
@@ -170,13 +204,13 @@ class MCPManager:
                 self._connect_one(cfg, stack),
                 timeout=_CONNECT_TIMEOUT,
             )
-            result = await asyncio.wait_for(
-                session.list_tools(),
+            tools = await asyncio.wait_for(
+                _list_all_tools(session, name),
                 timeout=_CONNECT_TIMEOUT,
             )
-            self._register_tools(session, result, name)
+            self._register_tools(session, tools, name)
             connected = True
-            logger.info("MCP server %r: %d tools", name, len(result.tools))
+            logger.info("MCP server %r: %d tools", name, len(tools))
             ready.set()
 
             # Keep context managers alive until close is requested
@@ -205,9 +239,9 @@ class MCPManager:
             await self._safe_close_stack(stack, name)
             logger.info("MCP server %r: stack closed", name)
 
-    def _register_tools(self, session: Any, result: Any, name: str) -> None:
+    def _register_tools(self, session: Any, tools: list[Any], name: str) -> None:
         """Record a server's tools in the shared lookup tables."""
-        for tool in result.tools:
+        for tool in tools:
             if tool.name in self._tool_to_session:
                 logger.warning(
                     "MCP server %r tool %r ignored: name already registered by %r",

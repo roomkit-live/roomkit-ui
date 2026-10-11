@@ -4,7 +4,6 @@ import asyncio
 import json
 import os
 import sys
-from types import SimpleNamespace
 
 import pytest
 from roomkit import ToolFailedError
@@ -141,22 +140,20 @@ def test_register_tools_tracks_sessions_and_apps():
 
     mgr = MCPManager([])
     session = object()
-    result = SimpleNamespace(
-        tools=[
-            Tool(
-                name="plain_tool",
-                description="does things",
-                input_schema={"type": "object", "$schema": "x"},
-            ),
-            Tool(
-                name="app_tool",
-                description="",
-                input_schema={},
-                meta={"ui": {"resourceUri": "ui://widget/main"}},
-            ),
-        ]
-    )
-    mgr._register_tools(session, result, "srv")
+    tools = [
+        Tool(
+            name="plain_tool",
+            description="does things",
+            input_schema={"type": "object", "$schema": "x"},
+        ),
+        Tool(
+            name="app_tool",
+            description="",
+            input_schema={},
+            meta={"ui": {"resourceUri": "ui://widget/main"}},
+        ),
+    ]
+    mgr._register_tools(session, tools, "srv")
 
     assert mgr._tool_to_session["plain_tool"] is session
     assert mgr._tool_to_session["app_tool"] is session
@@ -176,26 +173,22 @@ def test_register_tools_keeps_first_duplicate_tool():
     second_session = object()
     from mcp.types import Tool
 
-    first = SimpleNamespace(
-        tools=[
-            Tool(
-                name="duplicate_tool",
-                description="first",
-                input_schema={},
-                meta={"ui": {"resourceUri": "ui://first/main"}},
-            )
-        ]
-    )
-    second = SimpleNamespace(
-        tools=[
-            Tool(
-                name="duplicate_tool",
-                description="second",
-                input_schema={},
-                meta={"ui": {"resourceUri": "ui://second/main"}},
-            )
-        ]
-    )
+    first = [
+        Tool(
+            name="duplicate_tool",
+            description="first",
+            input_schema={},
+            meta={"ui": {"resourceUri": "ui://first/main"}},
+        )
+    ]
+    second = [
+        Tool(
+            name="duplicate_tool",
+            description="second",
+            input_schema={},
+            meta={"ui": {"resourceUri": "ui://second/main"}},
+        )
+    ]
 
     mgr._register_tools(first_session, first, "srv-a")
     mgr._register_tools(second_session, second, "srv-b")
@@ -205,6 +198,52 @@ def test_register_tools_keeps_first_duplicate_tool():
     assert len(mgr.get_tools()) == 1
     assert mgr.get_tools()[0]["description"] == "first"
     assert mgr._app_tools == {"duplicate_tool": {"uri": "ui://first/main", "server": "srv-a"}}
+
+
+class _PagedSession:
+    """Answers tools/list from scripted pages: (tool names, next cursor) per call."""
+
+    def __init__(self, pages: list[tuple[list[str], str | None]]) -> None:
+        self.pages = pages
+        self.cursors: list[str | None] = []
+
+    async def list_tools(self, *, params=None):
+        from mcp.types import ListToolsResult, Tool
+
+        self.cursors.append(params.cursor if params is not None else None)
+        names, cursor = self.pages[len(self.cursors) - 1]
+        tools = [Tool(name=n, input_schema={}) for n in names]
+        return ListToolsResult(tools=tools, next_cursor=cursor)
+
+
+async def test_every_page_of_a_tool_listing_is_read():
+    from roomkit_ui.mcp_manager import _list_all_tools
+
+    session = _PagedSession([(["a", "b"], "p2"), (["c"], "p3"), (["d"], None)])
+
+    tools = await _list_all_tools(session, "srv")
+
+    assert [t.name for t in tools] == ["a", "b", "c", "d"]
+    assert session.cursors == [None, "p2", "p3"]
+
+
+@pytest.mark.parametrize(
+    "pages",
+    [
+        [(["a"], "p2"), ([], "p3")],  # an empty page that still carries a cursor
+        [(["a"], "p2"), (["b"], "p2")],  # a cursor handed out twice
+    ],
+)
+async def test_a_listing_that_pages_without_end_keeps_what_it_read(pages, caplog):
+    from roomkit_ui.mcp_manager import _list_all_tools
+
+    session = _PagedSession(pages)
+
+    tools = await _list_all_tools(session, "srv")
+
+    assert [t.name for t in tools] == [n for names, _ in pages for n in names]
+    assert len(session.cursors) == 2
+    assert "pages its tools without end" in caplog.text
 
 
 @pytest.mark.asyncio

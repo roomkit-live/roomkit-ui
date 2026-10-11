@@ -191,6 +191,8 @@ Each released section is the source for that version's GitHub release notes.
   dictation); an unparseable hotkey is reported instead of crashing at launch.
 - **Speaker enrolment records on the configured microphone**, not the system default.
 - **MCP stdio servers find `npx`, `uvx` and `node` on a macOS Dock launch.**
+- **An MCP server that pages its tool listing keeps all its tools** — only the first page
+  was read.
 - **CLI tools survive non-UTF-8 output, and a timed-out call no longer hangs on a held
   pipe**; on Windows the process tree is killed.
 - **An MCP App whose session ended while it loaded is dropped** instead of raising on a
