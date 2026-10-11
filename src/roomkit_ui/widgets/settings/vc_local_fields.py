@@ -53,6 +53,45 @@ class VCLocalFields:
         self._vc_local_tools_label = QLabel("")
         form.addRow(self._vc_local_tools_label, self.vc_local_tools)
 
+        self._add_llamacpp_fields(form)
+
+    def _add_llamacpp_fields(self, form: QFormLayout) -> None:
+        """llama.cpp: a GGUF model roomkit downloads, starts and keeps running."""
+        from roomkit_ui.providers.llamacpp import DEFAULT_MODEL
+
+        s = self._settings
+        c = colors()
+        self.vc_llamacpp_model = QLineEdit(s.get("vc_llamacpp_model", ""))
+        self.vc_llamacpp_model.setPlaceholderText(DEFAULT_MODEL)
+        self.vc_llamacpp_model.setToolTip(
+            "A Hugging Face GGUF as repo:quant, or the path of a local .gguf file."
+        )
+        self._vc_llamacpp_browse = QPushButton("Browse…")
+        self._vc_llamacpp_browse.setCursor(Qt.PointingHandCursor)
+        self._vc_llamacpp_browse.setFixedHeight(28)
+        self._vc_llamacpp_browse.clicked.connect(self._browse_gguf)
+        model_row = QHBoxLayout()
+        model_row.setSpacing(6)
+        model_row.addWidget(self.vc_llamacpp_model, 1)
+        model_row.addWidget(self._vc_llamacpp_browse)
+        self._vc_llamacpp_model_label = QLabel("GGUF Model")
+        form.addRow(self._vc_llamacpp_model_label, model_row)
+
+        self.vc_llamacpp_context = QLineEdit(str(s.get("vc_llamacpp_context", "") or ""))
+        self.vc_llamacpp_context.setPlaceholderText("8192 (tokens; tools count against it)")
+        self._vc_llamacpp_context_label = QLabel("Context")
+        form.addRow(self._vc_llamacpp_context_label, self.vc_llamacpp_context)
+
+        self._vc_llamacpp_note = QLabel(
+            "Nothing to install: the first session downloads llama.cpp and the model "
+            "(several GB), then the server stays up between sessions."
+        )
+        self._vc_llamacpp_note.setWordWrap(True)
+        self._vc_llamacpp_note.setStyleSheet(
+            f"font-size: 11px; color: {c['TEXT_SECONDARY']}; background: transparent;"
+        )
+        form.addRow("", self._vc_llamacpp_note)
+
     def add_stt_fields(self, form: QFormLayout) -> None:
         c = colors()
         self.vc_stt_model = QComboBox()
@@ -115,6 +154,16 @@ class VCLocalFields:
         self.vc_local_api_key.setVisible(is_local)
         self._vc_local_tools_label.setVisible(is_local)
         self.vc_local_tools.setVisible(is_local)
+        is_llamacpp = provider == "llamacpp"
+        for widget in (
+            self._vc_llamacpp_model_label,
+            self.vc_llamacpp_model,
+            self._vc_llamacpp_browse,
+            self._vc_llamacpp_context_label,
+            self.vc_llamacpp_context,
+            self._vc_llamacpp_note,
+        ):
+            widget.setVisible(is_llamacpp)
 
     def update_stt_visibility(self, provider: str) -> None:
         is_local = provider == "local"
@@ -178,6 +227,13 @@ class VCLocalFields:
         if path:
             self.vc_tts_ref_audio.setText(path)
 
+    def _browse_gguf(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self._parent, "Select a GGUF Model", "", "GGUF models (*.gguf)"
+        )
+        if path:
+            self.vc_llamacpp_model.setText(path)
+
     # -- Settings --
 
     def get_settings(self) -> dict:
@@ -186,6 +242,8 @@ class VCLocalFields:
             "vc_local_model": self.vc_local_model.text().strip(),
             "vc_local_api_key": self.vc_local_api_key.text().strip(),
             "vc_local_tools": self.vc_local_tools.isChecked(),
+            "vc_llamacpp_model": self.vc_llamacpp_model.text().strip(),
+            "vc_llamacpp_context": self.vc_llamacpp_context.text().strip(),
             "vc_stt_model": self.vc_stt_model.currentData() or "",
             "vc_tts_model": self.vc_tts_model.currentData() or "",
             "vc_tts_ref_audio": self.vc_tts_ref_audio.text().strip(),

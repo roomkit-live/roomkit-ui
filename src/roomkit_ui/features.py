@@ -88,6 +88,10 @@ FEATURES: dict[str, Feature] = {
         "OpenTelemetry export",
         ("opentelemetry.sdk", "opentelemetry.exporter.otlp"),
     ),
+    # roomkit talks to llama-server over the OpenAI API (openai SDK) and
+    # downloads the pinned build with httpx; the binary itself is fetched at
+    # first use, not installed.
+    "llamacpp": Feature("llamacpp", "llama.cpp local LLM (GGUF)", ("openai", "httpx")),
 }
 
 # Provider ids as stored in QSettings → feature key.  A provider absent from a
@@ -97,6 +101,7 @@ AI_PROVIDER_FEATURES: dict[str, str] = {
     "openai": "openai",
     "gemini": "gemini",
     "local": "openai",
+    "llamacpp": "llamacpp",
 }
 
 STT_PROVIDER_FEATURES: dict[str, str] = {

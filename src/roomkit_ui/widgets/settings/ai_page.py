@@ -37,6 +37,7 @@ VC_LLM_PROVIDERS = [
     ("OpenAI", "openai"),
     ("Google Gemini", "gemini"),
     ("Local (vLLM / Ollama)", "local"),
+    ("llama.cpp (local GGUF)", "llamacpp"),
 ]
 
 VC_STT_PROVIDERS: list[tuple[str, str]] = [

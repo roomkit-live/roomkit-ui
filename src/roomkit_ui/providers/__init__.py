@@ -12,6 +12,7 @@ _REGISTRY: dict[str, str] = {
     "openai": "roomkit_ui.providers.openai",
     "gemini": "roomkit_ui.providers.gemini",
     "local": "roomkit_ui.providers.local",
+    "llamacpp": "roomkit_ui.providers.llamacpp",
 }
 
 

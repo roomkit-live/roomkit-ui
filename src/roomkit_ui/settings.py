@@ -209,6 +209,9 @@ _DEFAULTS = {
     "gemini_language_auto": False,  # user transcript may switch language mid-call
     "gemini_language_hints": "",  # comma-separated BCP-47 codes, e.g. "fr-FR, en-US"
     "gemini_custom_vocabulary": "",  # comma-separated names/terms for the user transcript
+    # llama.cpp local LLM (roomkit 0.90+): roomkit downloads llama-server + model
+    "vc_llamacpp_model": "",  # "repo:quant" or a .gguf path (empty = Qwen3-4B Q4_K_M)
+    "vc_llamacpp_context": "",  # context window in tokens (empty = 8192)
 }
 
 

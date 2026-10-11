@@ -3868,6 +3868,10 @@ gemini = [
 gradium = [
     { name = "gradium" },
 ]
+llamacpp = [
+    { name = "httpx" },
+    { name = "openai" },
+]
 local-audio = [
     { name = "numpy" },
     { name = "sounddevice" },
@@ -3925,7 +3929,7 @@ all = [
     { name = "opentelemetry-sdk" },
     { name = "pynput" },
     { name = "pyside6-addons" },
-    { name = "roomkit", extra = ["anthropic", "deepgram", "elevenlabs", "gemini", "gradium", "openai", "realtime-deepgram", "realtime-elevenlabs", "realtime-gemini", "realtime-openai", "sherpa-onnx"] },
+    { name = "roomkit", extra = ["anthropic", "deepgram", "elevenlabs", "gemini", "gradium", "llamacpp", "openai", "realtime-deepgram", "realtime-elevenlabs", "realtime-gemini", "realtime-openai", "sherpa-onnx"] },
     { name = "sherpa-onnx-core" },
 ]
 anthropic = [
@@ -3950,7 +3954,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-qt" },
-    { name = "roomkit", extra = ["anthropic", "deepgram", "elevenlabs", "gemini", "gradium", "openai", "realtime-deepgram", "realtime-elevenlabs", "realtime-gemini", "realtime-openai", "sherpa-onnx"] },
+    { name = "roomkit", extra = ["anthropic", "deepgram", "elevenlabs", "gemini", "gradium", "llamacpp", "openai", "realtime-deepgram", "realtime-elevenlabs", "realtime-gemini", "realtime-openai", "sherpa-onnx"] },
     { name = "ruff" },
     { name = "sherpa-onnx-core" },
 ]
@@ -3967,6 +3971,9 @@ gemini = [
 ]
 gradium = [
     { name = "roomkit", extra = ["gradium"] },
+]
+llamacpp = [
+    { name = "roomkit", extra = ["llamacpp"] },
 ]
 local-voice = [
     { name = "roomkit", extra = ["sherpa-onnx"] },
@@ -4020,6 +4027,7 @@ requires-dist = [
     { name = "roomkit", extras = ["elevenlabs", "realtime-elevenlabs"], marker = "extra == 'elevenlabs'", specifier = ">=0.96.1" },
     { name = "roomkit", extras = ["gemini", "realtime-gemini"], marker = "extra == 'gemini'", specifier = ">=0.96.1" },
     { name = "roomkit", extras = ["gradium"], marker = "extra == 'gradium'", specifier = ">=0.96.1" },
+    { name = "roomkit", extras = ["llamacpp"], marker = "extra == 'llamacpp'", specifier = ">=0.96.1" },
     { name = "roomkit", extras = ["local-audio", "webrtc-aec"], specifier = ">=0.96.1" },
     { name = "roomkit", extras = ["neutts"], marker = "extra == 'neutts'", specifier = ">=0.96.1" },
     { name = "roomkit", extras = ["openai", "realtime-openai"], marker = "extra == 'openai'", specifier = ">=0.96.1" },
@@ -4033,6 +4041,7 @@ requires-dist = [
     { name = "roomkit-ui", extras = ["elevenlabs"], marker = "extra == 'cloud'" },
     { name = "roomkit-ui", extras = ["gemini"], marker = "extra == 'cloud'" },
     { name = "roomkit-ui", extras = ["gradium"], marker = "extra == 'cloud'" },
+    { name = "roomkit-ui", extras = ["llamacpp"], marker = "extra == 'all'" },
     { name = "roomkit-ui", extras = ["local-voice"], marker = "extra == 'all'" },
     { name = "roomkit-ui", extras = ["local-voice"], marker = "extra == 'dictation'" },
     { name = "roomkit-ui", extras = ["local-voice"], marker = "extra == 'wakeword'" },
@@ -4043,7 +4052,7 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6" },
     { name = "sherpa-onnx-core", marker = "extra == 'local-voice'", specifier = ">=1.13" },
 ]
-provides-extras = ["anthropic", "openai", "gemini", "deepgram", "elevenlabs", "gradium", "local-voice", "qwen3-tts", "neutts", "dictation", "mcp-apps", "wakeword", "telemetry", "cloud", "all", "dev"]
+provides-extras = ["anthropic", "openai", "gemini", "deepgram", "elevenlabs", "gradium", "local-voice", "qwen3-tts", "neutts", "llamacpp", "dictation", "mcp-apps", "wakeword", "telemetry", "cloud", "all", "dev"]
 
 [[package]]
 name = "rpds-py"

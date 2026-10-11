@@ -191,3 +191,18 @@ def announce_llm_model(provider: Any, emit_notice) -> None:
             f"{name} is deprecated by its vendor and will stop answering. "
             "Pick another model in Settings → AI Provider → LLM."
         )
+
+
+async def start_local_llm(provider: Any, emit_status) -> None:
+    """Start a model roomkit runs itself before the session opens the mic.
+
+    llama.cpp downloads llama-server and the model the first time, and loads
+    the model at each server start: left to the first turn, the user's first
+    sentence would wait in silence for it — minutes on a first run.  The
+    server outlives the session (providers/llamacpp.py), so later sessions
+    find it running and return at once.
+    """
+    if getattr(provider, "name", "") != "llamacpp":
+        return
+    emit_status("Starting llama.cpp — the first run downloads the model…")
+    await provider.start()

@@ -54,6 +54,11 @@ local-voice = [
 qwen3-tts = ["roomkit[qwen-tts]>=0.96.1"]
 neutts = ["roomkit[neutts]>=0.96.1"]
 
+# A local GGUF model with nothing else to install: roomkit downloads a pinned
+# llama-server build (SHA-256 checked) and the model at first use, and speaks
+# to it over the OpenAI API.  The extra itself is light (openai, httpx).
+llamacpp = ["roomkit[llamacpp]>=0.96.1"]
+
 # ── Desktop features ──────────────────────────────────────────────────────
 # Global hotkey + system-wide dictation. Needs a local STT model to transcribe.
 dictation = ["roomkit-ui[local-voice]", "pynput>=1.7"]
@@ -85,6 +90,7 @@ all = [
     "roomkit-ui[mcp-apps]",
     "roomkit-ui[wakeword]",
     "roomkit-ui[telemetry]",
+    "roomkit-ui[llamacpp]",
 ]
 
 dev = [
