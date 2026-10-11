@@ -126,89 +126,24 @@ def _configure_logging() -> None:
     logging.getLogger("opentelemetry").setLevel(logging.WARNING)
 
 
-def _build_capture_source(settings: dict):
-    """Open the shared microphone, when this roomkit provides one.
-
-    Shared so that a session subscribes to a device already capturing,
-    instead of the listener handing it back and the session reopening it —
-    a gap of a few hundred milliseconds landing exactly while the user is
-    still talking.  Returns None on an install without the primitive, where
-    everything still works minus the replay.
-    """
-    try:
-        from roomkit.voice.capture import LocalMicSource
-    except ImportError:
-        logging.getLogger(__name__).info(
-            "roomkit has no shared capture source — the wake word will open its "
-            "own device and speech before the session will not be replayed"
-        )
-        return None
-
-    from roomkit_ui.engine_realtime import _realtime_sample_rate
-
-    # The source owns the input format and refuses a conflicting one, so it
-    # must match the transport the configured provider will ask for.
-    rate = _realtime_sample_rate(str(settings.get("provider", "gemini")))
-    source = LocalMicSource(
-        input_device=settings.get("input_device"),
-        sample_rate=rate,
-        backlog_seconds=10,
+def build_wake_word(window):
+    """The wake word's controller; ``start()`` arms it from the settings."""
+    from roomkit_ui.wakeword.controller import (
+        WakeWordController,
+        build_capture_source,
+        build_listener,
     )
-    source.start()
-    return source
 
-
-def build_wake_word(window, settings: dict):
-    """Assemble the wake-word listener, or None when it cannot run."""
-    if not settings.get("wakeword_enabled", False):
-        return None
-
-    from roomkit_ui.features import is_available
-    from roomkit_ui.model_catalog import (
-        is_vad_model_downloaded,
-        is_wakeword_encoder_downloaded,
-        vad_model_path,
-        wakeword_encoder_path,
+    return WakeWordController(
+        window._engine,
+        build_source=build_capture_source,
+        build_listener=build_listener,
     )
-    from roomkit_ui.wakeword import load as load_fingerprint
-    from roomkit_ui.wakeword.detector import EmbeddingWakeDetector
-    from roomkit_ui.wakeword.listener import WakeWordListener
-    from roomkit_ui.wakeword.page_sensitivity import apply_sensitivity
-
-    log = logging.getLogger(__name__)
-    if not is_available("wakeword") or not is_vad_model_downloaded("ten-vad"):
-        log.warning("Wake word enabled but its dependencies are missing — skipping")
-        return None
-    if not is_wakeword_encoder_downloaded():
-        log.warning("Wake word enabled but the encoder is not downloaded — skipping")
-        return None
-
-    fingerprint = load_fingerprint()
-    if fingerprint is None or not fingerprint.usable:
-        log.warning("Wake word enabled but no phrase is enrolled — skipping")
-        return None
-
-    apply_sensitivity(fingerprint, str(settings.get("wakeword_sensitivity", "balanced")))
-    detector = EmbeddingWakeDetector(str(wakeword_encoder_path()), fingerprint)
-
-    source = _build_capture_source(settings)
-    if source is not None:
-        window._engine.set_capture_source(source)
-
-    listener = WakeWordListener(
-        detector,
-        str(vad_model_path("ten-vad") / "ten-vad.int8.onnx"),
-        input_device=settings.get("input_device"),
-        source=source,
-    )
-    listener.set_enabled(True)
-    log.info("Wake word armed: %r", fingerprint.label)
-    return listener
 
 
-def _reload_wake_word(listener) -> None:
+def _reload_wake_word(wake) -> None:
     """Apply an enable/disable change made in settings."""
-    listener.set_enabled(bool(load_settings().get("wakeword_enabled", False)))
+    wake.set_enabled(bool(load_settings().get("wakeword_enabled", False)))
 
 
 def main() -> None:
@@ -386,20 +321,22 @@ def main() -> None:
     window.settings_saved.connect(assistant_hotkey.reload)
 
     # -- Wake word --
-    wake = build_wake_word(window, settings)
-    if wake is not None:
-        # Stand down while a session or dictation holds the conversation: left
-        # armed, the listener hears the assistant's own reply and wakes on it.
-        window.session_active_changed.connect(
-            lambda active: wake.suspend("session") if active else wake.resume("session")
-        )
-        stt.recording_changed.connect(
-            lambda rec: wake.suspend("dictation") if rec else wake.resume("dictation")
-        )
-        wake.detected.connect(lambda mark, _d: window.start_from_wake_word(mark))
-        wake.error.connect(tray.on_error)
-        window.settings_saved.connect(lambda: _reload_wake_word(wake))
-        app.aboutToQuit.connect(wake.close)
+    wake = build_wake_word(window)
+    # Stand down while a session or dictation holds the conversation: left
+    # armed, the listener hears the assistant's own reply and wakes on it.
+    window.session_active_changed.connect(
+        lambda active: wake.suspend("session") if active else wake.resume("session")
+    )
+    stt.recording_changed.connect(
+        lambda rec: wake.suspend("dictation") if rec else wake.resume("dictation")
+    )
+    wake.detected.connect(window.start_from_wake_word)
+    wake.error.connect(tray.on_error)
+    window.settings_saved.connect(lambda: _reload_wake_word(wake))
+    # Release the shared microphone on the way out, or the device stays held
+    # until the process is torn down.
+    app.aboutToQuit.connect(wake.close)
+    wake.start(settings)
 
     # Let Ctrl+C quit cleanly instead of being swallowed by the Qt loop.
     # The Qt event loop runs in C, so Python signal handlers never fire
