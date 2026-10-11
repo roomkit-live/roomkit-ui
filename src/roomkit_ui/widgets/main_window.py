@@ -147,6 +147,9 @@ class MainWindow(QMainWindow):
 
     def _on_start(self, capture_since: Any = None) -> None:
         self._chat.clear()
+        # clear() deleted every app widget along with the rest of the chat.
+        self._active_app_widgets.clear()
+        self._pending_app_results.clear()
         try:
             asyncio.ensure_future(self._engine.start(load_settings(), capture_since))
         except Exception as e:
@@ -259,6 +262,8 @@ class MainWindow(QMainWindow):
         mcp = self._engine._mcp  # noqa: SLF001
         if mcp is not None:
             html = await mcp.read_resource(name, resource_uri)
+            if self._session_is_over(mcp):
+                return  # the chat it belonged to is gone
         if html and os.environ.get("DEBUG"):
             # Cache for offline debugging
             import tempfile
@@ -307,6 +312,16 @@ class MainWindow(QMainWindow):
         # Check if a result arrived before the widget was ready
         if name in self._pending_app_results:
             widget.send_tool_result(self._pending_app_results.pop(name))
+
+    def _session_is_over(self, mcp: Any) -> bool:
+        """Whether the session that owned *mcp* has ended (or been replaced).
+
+        Each session builds its own MCP manager, so a different one means a
+        new session started while the caller was awaiting.
+        """
+        if self._engine.state != EngineState.ACTIVE:
+            return True
+        return self._engine._mcp is not mcp  # noqa: SLF001
 
     def _handle_app_tool_request(
         self,
