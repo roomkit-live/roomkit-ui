@@ -130,6 +130,16 @@ def delete_gtcrn() -> None:
 WAKEWORD_ENCODER_ID = "wakeword-encoder"
 WAKEWORD_ENCODER_SIZE = "~12 MB"
 _WAKEWORD_ENCODER_FILENAME = "tiny-encoder.int8.onnx"
+# sherpa-onnx's whisper-tiny export (input "mel", output n_layer_cross_k),
+# which features.WhisperEmbedder is written against.  Pinned to a commit so
+# the digest below stays the file's: an upstream re-export would otherwise
+# fail the check rather than silently change what detection measures.
+WAKEWORD_ENCODER_URL = (
+    "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-tiny/resolve/"
+    "65176e2deb88badc814a94058666cadccc29b61c/tiny-encoder.int8.onnx"
+)
+WAKEWORD_ENCODER_BYTES = 12_937_772
+WAKEWORD_ENCODER_SHA256 = "d24fb083ae3b1041fc24e97971d60e280c9342201fbb67b0ab428a8b4a51a434"
 
 
 def wakeword_encoder_path() -> Path:

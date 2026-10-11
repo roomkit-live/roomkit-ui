@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from PySide6.QtWidgets import (
@@ -18,6 +19,7 @@ from PySide6.QtWidgets import (
 
 from roomkit_ui.features import unavailable_reason
 from roomkit_ui.model_catalog import (
+    WAKEWORD_ENCODER_SIZE,
     is_vad_model_downloaded,
     is_wakeword_encoder_downloaded,
     vad_model_path,
@@ -85,6 +87,10 @@ class _WakeWordPage(QWidget):
 
         buttons = QHBoxLayout()
         buttons.setSpacing(8)
+        self._download_button = QPushButton()
+        self._download_button.clicked.connect(self._download_encoder)
+        self._download_task: asyncio.Task | None = None
+        buttons.addWidget(self._download_button)
         self._setup_button = QPushButton("Set up wake word…")
         self._setup_button.clicked.connect(self._open_wizard)
         buttons.addWidget(self._setup_button)
@@ -135,7 +141,7 @@ class _WakeWordPage(QWidget):
         if not is_vad_model_downloaded(_VAD_MODEL):
             return "The TEN VAD model is missing — download it in AI Models."
         if not is_wakeword_encoder_downloaded():
-            return f"The wake-word encoder is missing. Expected at {wakeword_encoder_path()}"
+            return "The wake-word encoder is not downloaded yet."
         return None
 
     def refresh(self) -> None:
@@ -163,6 +169,15 @@ class _WakeWordPage(QWidget):
             self._enabled.setChecked(False)
 
         self._forget_button.setEnabled(fingerprint is not None)
+        self._refresh_download_button()
+
+    def _refresh_download_button(self) -> None:
+        """Offer the encoder download whenever it is what's missing."""
+        missing = not unavailable_reason("wakeword") and not is_wakeword_encoder_downloaded()
+        self._download_button.setVisible(missing)
+        if self._download_task is None:
+            self._download_button.setEnabled(True)
+            self._download_button.setText(f"Download encoder ({WAKEWORD_ENCODER_SIZE})")
 
     # -- actions -------------------------------------------------------------
 
@@ -181,6 +196,44 @@ class _WakeWordPage(QWidget):
             self._enabled.setChecked(True)
             self._hangup_enabled.setChecked(True)
         self.refresh()
+
+    def _download_encoder(self) -> None:
+        from roomkit_ui.wakeword.encoder_download import download_encoder
+
+        loop = asyncio.get_event_loop()
+        self._download_button.setEnabled(False)
+        self._show_download_progress(0)
+
+        def progress(done: int, total: int) -> None:
+            pct = min(done * 100 // total, 100) if total > 0 else 0
+            loop.call_soon_threadsafe(self._show_download_progress, pct)
+
+        async def run() -> None:
+            try:
+                await download_encoder(progress)
+            except Exception as exc:
+                logger.exception("Wake-word encoder download failed")
+                self._finish_download(f"Download failed: {exc}")
+            else:
+                self._finish_download(None)
+
+        self._download_task = loop.create_task(run())
+
+    def _show_download_progress(self, pct: int) -> None:
+        try:
+            self._download_button.setText(f"Downloading… {pct}%")
+        except RuntimeError:
+            pass  # the dialog closed while the download ran
+
+    def _finish_download(self, error: str | None) -> None:
+        self._download_task = None
+        try:
+            self.refresh()
+            if error:
+                self._status.setText(error)
+                self._download_button.setText("Retry download")
+        except RuntimeError:
+            pass  # the dialog closed while the download ran
 
     def _forget(self) -> None:
         clear_fingerprint()
