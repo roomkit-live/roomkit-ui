@@ -142,3 +142,30 @@ def test_untouched_keys_survive_the_save(keyed_panel):
     saved = load_settings()
     assert saved["openai_api_key"] == "sk-old"
     assert saved["api_key"] == "g-old"
+
+
+# -- voice-channel local models ----------------------------------------------
+
+
+@pytest.fixture
+def all_models_downloaded(monkeypatch):
+    """Pretend every local STT and TTS model is on disk."""
+    import roomkit_ui.model_manager as model_manager
+
+    monkeypatch.setattr(model_manager, "is_model_downloaded", lambda _id: True)
+    monkeypatch.setattr(model_manager, "is_tts_model_downloaded", lambda _id: True)
+    return model_manager
+
+
+def test_vc_models_survive_a_session_in_realtime_mode(qapp, all_models_downloaded):
+    stt = all_models_downloaded.STT_MODELS[-1].id
+    tts = all_models_downloaded.TTS_MODELS[-1].id
+    save_settings({"conversation_mode": "realtime", "vc_stt_model": stt, "vc_tts_model": tts})
+
+    panel = SettingsPanel()  # opens on General: the AI tab is never shown
+    panel.reject()
+    panel.deleteLater()
+
+    saved = load_settings()
+    assert saved["vc_stt_model"] == stt
+    assert saved["vc_tts_model"] == tts

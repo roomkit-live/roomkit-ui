@@ -264,8 +264,9 @@ class _AIPage(QWidget):
         is_realtime = CONVERSATION_MODES[index][1] == "realtime"
         self._realtime.setVisible(is_realtime)
         self._vc_section.setVisible(not is_realtime)
-        if not is_realtime:
-            self.refresh_vc_model_combos()
+        # Realtime mode too: get_settings() reads these combos, and left
+        # empty they saved the voice-channel model choice as "".
+        self.refresh_vc_model_combos()
 
     def _on_vc_provider_changed(self, index: int) -> None:
         prov = VC_LLM_PROVIDERS[index][1]
