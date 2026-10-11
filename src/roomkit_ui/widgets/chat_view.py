@@ -374,6 +374,7 @@ class ChatView(QScrollArea):
                     w.finalize()
                 w.deleteLater()
         self._current_bubble = None
+        self._last_assistant_bubble = None  # deleted above, like every bubble
         # Rebuild with empty state centered
         self._layout.addStretch()
         self._layout.insertWidget(1, self._empty_state)

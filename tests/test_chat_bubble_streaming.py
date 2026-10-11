@@ -8,6 +8,7 @@ final waits for the animation before rendering markdown.
 
 import time
 
+from PySide6.QtCore import QCoreApplication, QEvent
 from PySide6.QtWidgets import QApplication
 
 import roomkit_ui.widgets.chat_bubble as bubble_mod
@@ -94,6 +95,20 @@ def test_barge_in_lands_the_full_text_at_once_with_a_marker(qapp, monkeypatch):
         assert assistant.text() == LONG
         assert assistant._interrupted_label.isVisible() or not assistant.isVisible()
         assert assistant._interrupted_label.isHidden() is False
+    finally:
+        view.deleteLater()
+
+
+def test_speech_after_a_reset_mid_reveal_leaves_the_deleted_bubble_alone(qapp, monkeypatch):
+    """Reset deletes the revealing bubble; a barge-in must not try to snap it."""
+    monkeypatch.setattr(bubble_mod, "_STREAM_WORD_MS", 10_000)  # reveal frozen mid-way
+    view = ChatView()
+    try:
+        view.add_transcription(LONG, "assistant", True)
+        view.reset()
+        QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+
+        view.add_transcription("Attends, autre chose.", "user", True)  # must not raise
     finally:
         view.deleteLater()
 
