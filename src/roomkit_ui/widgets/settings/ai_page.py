@@ -296,14 +296,19 @@ class _AIPage(QWidget):
     # -- Public API (panel.py compatibility) --
 
     def populate_attitude_combo(self, all_names: list[str]) -> None:
+        # The saved attitude seeds the first fill only.  Refills (each visit
+        # to this tab, to list attitudes added meanwhile) keep the user's pick.
+        if self.attitude_combo.count():
+            target = self.attitude_combo.currentText()
+        else:
+            target = self._saved_selected_attitude
         self.attitude_combo.blockSignals(True)
         self.attitude_combo.clear()
         self.attitude_combo.addItem("None")
         for name in all_names:
             self.attitude_combo.addItem(name)
-        saved = self._saved_selected_attitude
-        if saved:
-            idx = self.attitude_combo.findText(saved)
+        if target:
+            idx = self.attitude_combo.findText(target)
             if idx >= 0:
                 self.attitude_combo.setCurrentIndex(idx)
         self.attitude_combo.blockSignals(False)
@@ -323,7 +328,13 @@ class _AIPage(QWidget):
         return "" if text == "None" else text
 
     def refresh_vc_model_combos(self) -> None:
-        self._local.refresh_model_combos(self._local._vc_saved_stt, self._local._vc_saved_tts)
+        # The saved models seed the first fill only.  Refills (to list models
+        # downloaded meanwhile) keep the user's current pick.
+        local = self._local
+        local.refresh_model_combos(
+            local.vc_stt_model.currentData() or local._vc_saved_stt,
+            local.vc_tts_model.currentData() or local._vc_saved_tts,
+        )
         # Re-apply provider visibility (controls model combo vs no-models label)
         self._on_vc_stt_provider_changed(self.vc_stt_provider.currentIndex())
         self._on_vc_tts_provider_changed(self.vc_tts_provider.currentIndex())

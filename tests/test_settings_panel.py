@@ -184,3 +184,64 @@ def test_vc_models_survive_a_session_in_realtime_mode(open_panel, all_models_dow
     saved = load_settings()
     assert saved["vc_stt_model"] == stt
     assert saved["vc_tts_model"] == tts
+
+
+# -- revisiting a tab ----------------------------------------------------------
+
+
+def _leave_and_come_back(panel, tab: int) -> None:
+    panel._sidebar.setCurrentRow(0)
+    panel._sidebar.setCurrentRow(tab)
+
+
+def _pick(combo, data) -> None:
+    combo.setCurrentIndex(combo.findData(data))
+
+
+def test_revisiting_the_ai_tab_keeps_the_picked_attitude(open_panel):
+    save_settings({"selected_attitude": "Professional"})
+    panel = open_panel()
+    combo = panel._ai.attitude_combo
+    panel._sidebar.setCurrentRow(panel._AI_TAB)
+
+    combo.setCurrentIndex(combo.findText("Concise"))
+    _leave_and_come_back(panel, panel._AI_TAB)
+    panel.reject()
+
+    assert load_settings()["selected_attitude"] == "Concise"
+
+
+def test_revisiting_the_ai_tab_keeps_the_picked_vc_models(open_panel, all_models_downloaded):
+    stt_models = all_models_downloaded.STT_MODELS
+    tts_models = all_models_downloaded.TTS_MODELS
+    save_settings(
+        {
+            "conversation_mode": "voice_channel",
+            "vc_stt_model": stt_models[0].id,
+            "vc_tts_model": tts_models[0].id,
+        }
+    )
+    panel = open_panel()
+    panel._sidebar.setCurrentRow(panel._AI_TAB)
+
+    _pick(panel._ai._local.vc_stt_model, stt_models[1].id)
+    _pick(panel._ai._local.vc_tts_model, tts_models[1].id)
+    _leave_and_come_back(panel, panel._AI_TAB)
+    panel.reject()
+
+    saved = load_settings()
+    assert saved["vc_stt_model"] == stt_models[1].id
+    assert saved["vc_tts_model"] == tts_models[1].id
+
+
+def test_revisiting_the_dictation_tab_keeps_the_picked_model(open_panel, all_models_downloaded):
+    stt_models = all_models_downloaded.STT_MODELS
+    save_settings({"stt_provider": "local", "stt_model": stt_models[0].id})
+    panel = open_panel()
+    panel._sidebar.setCurrentRow(panel._DICTATION_TAB)
+
+    _pick(panel._dictation._model_combo, stt_models[1].id)
+    _leave_and_come_back(panel, panel._DICTATION_TAB)
+    panel.reject()
+
+    assert load_settings()["stt_model"] == stt_models[1].id

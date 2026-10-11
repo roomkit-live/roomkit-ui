@@ -159,6 +159,7 @@ class _DictationPage(QWidget):
         """Rebuild the model combo with currently downloaded models."""
         from roomkit_ui.model_manager import STT_MODELS, is_model_downloaded
 
+        picked = self._model_combo.currentData()  # kept over the saved model on a refill
         self._model_combo.blockSignals(True)
         self._model_combo.clear()
         for m in STT_MODELS:
@@ -166,7 +167,7 @@ class _DictationPage(QWidget):
                 self._model_combo.addItem(f"{m.name} ({m.type})", m.id)
 
         # Restore previous selection
-        target = self._saved_model or self._model_combo.itemData(0)
+        target = picked or self._saved_model or self._model_combo.itemData(0)
         for i in range(self._model_combo.count()):
             if self._model_combo.itemData(i) == target:
                 self._model_combo.setCurrentIndex(i)
