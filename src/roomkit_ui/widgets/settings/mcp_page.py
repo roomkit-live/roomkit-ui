@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from shiboken6 import isValid
 
 from roomkit_ui.mcp_config import parse_mcp_servers, validate_mcp_http_url
 from roomkit_ui.theme import colors
@@ -479,25 +480,26 @@ class _MCPPage(QWidget):
             finally:
                 await callback_server.stop()
 
-            self._oauth_status.setText("Token stored")
-            self._oauth_status.setStyleSheet(
-                "font-size: 12px; color: #4caf50; background: transparent;"
-            )
+            self._show_oauth_outcome("Token stored", ok=True)
         except TimeoutError:
-            self._oauth_status.setText("Authorization timed out")
-            self._oauth_status.setStyleSheet(
-                "font-size: 12px; color: #f44336; background: transparent;"
-            )
+            self._show_oauth_outcome("Authorization timed out", ok=False)
         except Exception as exc:
-            self._oauth_status.setText(f"Error: {exc}")
-            self._oauth_status.setStyleSheet(
-                "font-size: 12px; color: #f44336; background: transparent;"
-            )
-        finally:
-            try:
-                self._authorize_btn.setEnabled(True)
-            except Exception:
-                pass
+            self._show_oauth_outcome(f"Error: {exc}", ok=False)
+
+    def _show_oauth_outcome(self, text: str, *, ok: bool) -> None:
+        """Report how the OAuth flow ended, if the page is still there.
+
+        The flow waits up to 320 s on the browser; closing Settings
+        meanwhile destroys this page, and the token is stored regardless.
+        """
+        if not isValid(self):
+            return
+        color = "#4caf50" if ok else "#f44336"
+        self._oauth_status.setText(text)
+        self._oauth_status.setStyleSheet(
+            f"font-size: 12px; color: {color}; background: transparent;"
+        )
+        self._authorize_btn.setEnabled(True)
 
     def _on_clear_token_clicked(self) -> None:
         server_id = self._current_server_id()
