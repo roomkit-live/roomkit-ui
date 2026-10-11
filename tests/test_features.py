@@ -131,14 +131,13 @@ def test_unavailable_reason_is_none_when_installed(monkeypatch):
     assert unavailable_reason("gradium") is None
 
 
-def test_require_raises_with_the_install_command(monkeypatch):
+def test_require_raises_pointing_at_the_components_tab(monkeypatch):
     monkeypatch.setattr("roomkit_ui.features.is_available", lambda key: False)
     monkeypatch.setattr("roomkit_ui.features.sys.frozen", False, raising=False)
     with pytest.raises(FeatureUnavailableError) as excinfo:
         require("gradium")
     message = str(excinfo.value)
-    assert "Gradium" in message
-    assert "pip install 'roomkit-ui[gradium]'" in message
+    assert message == "Gradium is not installed — add it in Settings → Components."
 
 
 def test_frozen_build_does_not_tell_users_to_pip_install(monkeypatch):

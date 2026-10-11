@@ -25,8 +25,9 @@ wake word. Voice Channel only: noise suppression (RNNoise/GTCRN), VAD (TEN/Siler
 speaker diarization, the Smart Turn detector, barge-in modes and TTS filtering. A
 realtime session started with diarization enabled runs without it and says so in the chat.
 
-A missing backend never fails silently: the provider is marked in Settings, and a session
-started with it names the install command in the chat (`features.py`).
+A missing backend never fails silently: the provider is marked in Settings with an
+Install button under it, and a session started with it offers the same Install in the
+chat; Settings → Components lists them all (`features.py`, `components.py`).
 
 ### Realtime providers
 

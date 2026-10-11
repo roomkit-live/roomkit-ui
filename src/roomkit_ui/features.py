@@ -83,7 +83,7 @@ FEATURES: dict[str, Feature] = {
     "dictation": Feature("dictation", "Global-hotkey dictation", ("pynput", "sherpa_onnx")),
     # The global shortcuts alone (dictation's, the conversation's): pynput, and
     # on macOS the AppKit it pulls in.  Local dictation also needs sherpa-onnx.
-    "hotkey": Feature("dictation", "Global hotkeys", ("pynput",)),
+    "hotkey": Feature("dictation", "Global hotkey support", ("pynput",)),
     # sherpa_onnx supplies the VAD that gates the detector; onnxruntime runs
     # the whisper encoder that turns a segment into a comparable embedding.
     "wakeword": Feature("wakeword", "Wake word detection", ("onnxruntime", "sherpa_onnx")),
@@ -216,7 +216,10 @@ def unavailable_reason(key: str) -> str | None:
         # A frozen build bundles its extras; a gap here is a packaging bug, and
         # telling the user to pip install into a .app would not help them.
         return f"{label} is not included in this build."
-    return f"{label} is not installed — run: {install_command(key)}"
+    # Not a pip command: it is wrong in a source checkout (uv sync) and a uv
+    # tool install (no pip); the Components tab gives the one that fits, and
+    # installs it where it can.  --doctor still prints the commands.
+    return f"{label} is not installed — add it in Settings → Components."
 
 
 def require(key: str) -> None:

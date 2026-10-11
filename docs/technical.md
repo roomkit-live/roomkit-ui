@@ -100,15 +100,16 @@ _REGISTRY = {"anthropic": "roomkit_ui.providers.anthropic", ...}
 def create_ai_provider(name: str, settings: dict) -> Any:
     feature = AI_PROVIDER_FEATURES.get(name)
     if feature is not None:
-        require(feature)            # FeatureUnavailableError names the install command
+        require(feature)            # FeatureUnavailableError: what is missing, where to add it
     module = importlib.import_module(_REGISTRY[name])
     return module.create(settings)
 ```
 
 Heavy SDKs (anthropic, google-genai, openai) are only imported when the user actually
 selects that provider. `features.py` maps each provider to an extra and the modules it
-imports; a missing one reaches the chat, the Settings combo and `--doctor` as the command
-that installs it. Extras that pin conflicting `transformers` versions (`qwen3-tts`,
+imports; a missing one reaches the chat and the Settings combo as "<feature> is not
+installed — add it in Settings → Components" (with an Install button), and `--doctor`
+as the command that installs it. Extras that pin conflicting `transformers` versions (`qwen3-tts`,
 `neutts`, `smart-turn`) are listed in `EXCLUSIVE_EXTRAS`, mirroring `[tool.uv].conflicts`.
 
 A missing backend is a state, not a fault: `require()` raises `FeatureUnavailableError`

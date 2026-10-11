@@ -43,7 +43,9 @@ def test_the_refusal_names_the_feature_to_install(missing):
         require("gemini")
 
     assert refused.value.feature == "gemini"
-    assert "pip install 'roomkit-ui[gemini]'" in str(refused.value)
+    assert str(refused.value) == (
+        "Google Gemini is not installed — add it in Settings → Components."
+    )
 
 
 async def test_a_realtime_start_without_its_backend_says_so_without_a_traceback(
@@ -145,5 +147,8 @@ def test_without_pynput_the_hotkeys_say_so_once_and_start_nothing(qapp, missing,
     said = [r for r in caplog.records if r.name == "roomkit_ui.hotkey"]
     assert len(said) == 1
     assert said[0].levelno == logging.INFO
-    assert "pip install 'roomkit-ui[dictation]'" in said[0].getMessage()
+    assert said[0].getMessage() == (
+        "Global hotkeys off: Global hotkey support is not installed — add it in "
+        "Settings → Components."
+    )
     assert all(lst._listener is None and lst._monitor is None for lst in listeners)
