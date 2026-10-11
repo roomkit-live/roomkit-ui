@@ -89,6 +89,7 @@ class MainWindow(QMainWindow):
         # ── Signals ──
         self._controls.start_requested.connect(self._on_start)
         self._controls.stop_requested.connect(self._on_stop)
+        self._loading_overlay.cancel_requested.connect(self._on_stop)
         self._controls.mute_toggled.connect(self._engine.set_mic_muted)
         self._controls.settings_requested.connect(self._open_settings)
         self._controls.reset_requested.connect(self._on_reset)

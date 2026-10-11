@@ -18,11 +18,13 @@ from PySide6.QtCore import (
     QRectF,
     Qt,
     QTimer,
+    Signal,
 )
 from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import (
     QGraphicsOpacityEffect,
     QLabel,
+    QPushButton,
     QVBoxLayout,
     QWidget,
 )
@@ -69,7 +71,14 @@ class _Spinner(QWidget):
 
 
 class LoadingOverlay(QWidget):
-    """Covers its parent while the session loads; fades out on dismiss."""
+    """Covers its parent while the session loads; fades out on dismiss.
+
+    The curtain covers the control bar too, so it carries the way out of a
+    start that hangs (an MCP server that never answers, a slow model load):
+    a Cancel button, emitting ``cancel_requested``.
+    """
+
+    cancel_requested = Signal()
 
     def __init__(self, parent: QWidget) -> None:
         super().__init__(parent)
@@ -84,6 +93,14 @@ class LoadingOverlay(QWidget):
         self._status.setStyleSheet(
             f"color: {c['TEXT_SECONDARY']}; font-size: 13px; background: transparent;"
         )
+        self._cancel = QPushButton("Cancel")
+        self._cancel.setCursor(Qt.PointingHandCursor)
+        self._cancel.setStyleSheet(
+            f"QPushButton {{ color: {c['TEXT_SECONDARY']}; background: transparent;"
+            f" border: 1px solid {c['SEPARATOR']}; border-radius: 6px; padding: 4px 14px; }}"
+            f"QPushButton:hover {{ color: {c['TEXT_PRIMARY']}; }}"
+        )
+        self._cancel.clicked.connect(self.cancel_requested.emit)
 
         layout = QVBoxLayout(self)
         layout.setAlignment(Qt.AlignCenter)
@@ -91,6 +108,7 @@ class LoadingOverlay(QWidget):
         layout.addStretch()
         layout.addWidget(self._spinner, 0, Qt.AlignHCenter)
         layout.addWidget(self._status, 0, Qt.AlignHCenter)
+        layout.addWidget(self._cancel, 0, Qt.AlignHCenter)
         layout.addStretch()
 
         self._fade: QPropertyAnimation | None = None

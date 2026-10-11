@@ -118,6 +118,7 @@ _GLOW_COLORS = {
     "idle": "#30D158",
     "connecting": "#FF9F0A",
     "active": "#FF453A",
+    "stopping": "#FF9F0A",
     "error": "#30D158",
 }
 
@@ -379,6 +380,7 @@ _BTN_COLORS = {
     "idle": ("#30D158", "#28c04e"),
     "connecting": ("#FF9F0A", "#E08F09"),
     "active": ("#FF453A", "#E03E34"),
+    "stopping": ("#FF9F0A", "#E08F09"),
     "error": ("#30D158", "#28c04e"),
 }
 
@@ -441,12 +443,16 @@ class ControlBar(QWidget):
             self._center_btn.stop_pulse()
             self._left_btn.set_mode("reset")
         elif state == EngineState.CONNECTING:
-            self._is_active = False
+            self._is_active = True  # "Cancel" stops the session being built
             self._center_btn.setIcon(svg_icon("stop", "#FFFFFF", 22))
             self._center_btn.setIconSize(self._center_btn.size() * 0.28)
             _set_label(self._center_btn, "Cancel")
             self._center_btn.start_pulse()
             self._left_btn.set_mode("mute")
+        elif state == EngineState.STOPPING:
+            # Ending: a click asks the engine to stop again, which it refuses.
+            self._is_active = True
+            _set_label(self._center_btn, "Ending voice session")
         elif state == EngineState.ACTIVE:
             self._is_active = True
             self._center_btn.setIcon(svg_icon("stop", "#FFFFFF", 22))

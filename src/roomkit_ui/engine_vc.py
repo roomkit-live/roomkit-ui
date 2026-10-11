@@ -105,8 +105,6 @@ class VoiceChannelMixin:
             pass
 
     async def _start_voice_channel(self, settings: dict) -> None:
-        self._set_state(EngineState.CONNECTING)  # type: ignore[attr-defined]
-
         try:
             from roomkit import RoomKit, VoiceChannel
             from roomkit.channels.ai import AIChannel
@@ -265,7 +263,7 @@ class VoiceChannelMixin:
             self._pending_tool_calls = 0  # type: ignore[attr-defined]
             self._watchdog.start()  # type: ignore[attr-defined]
 
-            self._set_state(EngineState.ACTIVE)  # type: ignore[attr-defined]
+            self._enter_active()  # type: ignore[attr-defined]
 
             # Emit session info
             self._emit_vc_session_info(
@@ -277,9 +275,7 @@ class VoiceChannelMixin:
 
         except Exception as e:
             logger.exception("Failed to start voice channel session")
-            self._set_state(EngineState.ERROR)  # type: ignore[attr-defined]
-            self.error_occurred.emit(str(e))  # type: ignore[attr-defined]
-            await self._cleanup()  # type: ignore[attr-defined]
+            await self._fail_start(str(e))  # type: ignore[attr-defined]
 
     def _build_vc_backend(self, settings: dict, aec: Any, output_sample_rate: int) -> Any:
         """The session's LocalAudioBackend, on the shared microphone when it fits.

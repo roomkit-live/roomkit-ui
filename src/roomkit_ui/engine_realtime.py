@@ -54,8 +54,6 @@ class RealtimeMixin:
     _pending_tool_calls: int
 
     async def _start_realtime(self, settings: dict) -> None:
-        self._set_state(EngineState.CONNECTING)  # type: ignore[attr-defined]
-
         try:
             provider_name = settings.get("provider", "gemini")
             base_prompt = settings.get(
@@ -281,7 +279,7 @@ class RealtimeMixin:
             self._pending_tool_calls = 0  # type: ignore[attr-defined]
             self._watchdog.start()  # type: ignore[attr-defined]
 
-            self._set_state(EngineState.ACTIVE)  # type: ignore[attr-defined]
+            self._enter_active()  # type: ignore[attr-defined]
 
             # Emit structured session info for the UI info bar
             skill_info: list[dict] = []
@@ -304,9 +302,7 @@ class RealtimeMixin:
 
         except Exception as e:
             logger.exception("Failed to start voice session")
-            self._set_state(EngineState.ERROR)  # type: ignore[attr-defined]
-            self.error_occurred.emit(str(e))  # type: ignore[attr-defined]
-            await self._cleanup()  # type: ignore[attr-defined]
+            await self._fail_start(str(e))  # type: ignore[attr-defined]
 
     async def _start_session(
         self,

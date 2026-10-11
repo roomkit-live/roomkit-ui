@@ -159,6 +159,8 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         # FDs the loop watched before the session: the app's own sockets,
         # which the end-of-session FD cleanup must leave alone.
         self._fds_before_session: frozenset[int] = frozenset()
+        # The session start in flight, which stop() cancels (see start()).
+        self._start_task: asyncio.Task[None] | None = None
         self._end_conv_handle: asyncio.TimerHandle | None = None
         # Tasks explicitly spawned by the engine.  Avoid sweeping
         # asyncio.all_tasks(): UI/settings/dictation tasks may legitimately
@@ -316,6 +318,8 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         """
         if self._state not in (EngineState.IDLE, EngineState.ERROR):
             return
+        # Claimed before any await: from here a second start() is refused.
+        self._set_state(EngineState.CONNECTING)
         self._session_settings = settings
         self._fds_before_session = registered_fds()
         self._capture_since = capture_since
@@ -331,11 +335,63 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         self._usage_in = 0
         self._usage_out = 0
 
+        # Its own task, so stop() can cancel it wherever it is waiting.
+        task = asyncio.create_task(self._open_session(settings), name="engine_start")
+        self._start_task = task
+        try:
+            await task
+        except asyncio.CancelledError:
+            if not self._caller_cancelled():
+                return  # stop() cancelled the start, and tears it down
+            await self.stop()
+            raise
+        finally:
+            self._start_task = None
+
+    async def _open_session(self, settings: dict) -> None:
         mode = settings.get("conversation_mode", "realtime")
         if mode == "voice_channel":
             await self._start_voice_channel(settings)
         else:
             await self._start_realtime(settings)
+
+    @staticmethod
+    def _caller_cancelled() -> bool:
+        task = asyncio.current_task()
+        return task is not None and task.cancelling() > 0
+
+    def _enter_active(self) -> None:
+        """Hand the session to the UI — unless stop() took the start over.
+
+        stop() cancels the start task, so the start never gets here; this
+        holds if some awaited step swallowed that cancellation.
+        """
+        if self._state != EngineState.CONNECTING:
+            raise asyncio.CancelledError("the session start was stopped")
+        self._set_state(EngineState.ACTIVE)
+
+    async def _fail_start(self, message: str) -> None:
+        """Tear a failed start down, then report it.
+
+        STOPPING holds through the teardown: nothing — Start, Reset, the wake
+        word — can open another session, or run a second teardown, while this
+        one's resources are still being released.  ERROR only once they are.
+        """
+        self._set_state(EngineState.STOPPING)
+        try:
+            await self._cleanup()
+        except Exception:
+            logger.exception("Error during the cleanup of a failed start")
+        self._set_state(EngineState.ERROR)
+        self.error_occurred.emit(message)
+
+    async def _cancel_start(self) -> None:
+        """Cancel a session start still in flight; return once it has unwound."""
+        task = self._start_task
+        if task is None or task.done() or task is asyncio.current_task():
+            return
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
 
     async def _setup_tools(self, settings: dict) -> ToolSet:
         """Connect MCP servers, probe CLI tools, and group both with the built-ins."""
@@ -402,12 +458,15 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
             return
         # Guard re-entrancy immediately — before any await — so a second
         # call (e.g. end_conversation timer + user click) is rejected.
-        self._state = EngineState.STOPPING
+        self._set_state(EngineState.STOPPING)
         # Cancel any pending end_conversation timer to prevent a late fire
         if self._end_conv_handle is not None:
             self._end_conv_handle.cancel()
             self._end_conv_handle = None
         try:
+            # A start still connecting is stopped where it waits, and the
+            # teardown runs once it has unwound, never alongside it.
+            await self._cancel_start()
             await self._cleanup()
         except Exception:
             logger.exception("Error during stop")
