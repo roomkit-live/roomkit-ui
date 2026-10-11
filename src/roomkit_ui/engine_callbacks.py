@@ -1,9 +1,9 @@
-"""Provider / transport callback mixin for the voice engine.
+"""Realtime provider callback mixin for the voice engine.
 
-Every ``on_*`` method here is wired onto a realtime provider or a
-``LocalAudioBackend`` pipeline and must tolerate being invoked after
-the Qt object has been deleted — hence ``_safe_emit``, which guards
-every ``.emit()`` call and logs failures at DEBUG.
+Every ``_on_*`` method here is wired onto a realtime provider and must
+tolerate being invoked after the Qt object has been deleted — hence
+``_safe_emit``, which guards every ``.emit()`` call and logs failures at
+DEBUG.
 """
 
 from __future__ import annotations
@@ -19,21 +19,15 @@ logger = logging.getLogger(__name__)
 
 
 class CallbackMixin:
-    """Provider + transport event handlers for ``Engine``.
+    """Realtime provider event handlers for ``Engine``.
 
     The mixin doesn't own any state — every attribute referenced here
-    (``_state``, ``_mic_muted``, ``_partial_buffers``, etc.) lives on
-    the concrete ``Engine`` class.  The annotations below let mypy
-    resolve those attribute types inside mixin methods.
+    (``_state``, ``_spk_rms_queue``) lives on the concrete ``Engine``
+    class.  The annotations below let mypy resolve those attribute types
+    inside mixin methods.
     """
 
     _state: EngineState
-    _mic_muted: bool
-    _current_speaker_id: str
-    _primary_speaker_mode: bool
-    _primary_speaker_name: str
-    _partial_buffers: dict[str, str]
-    _transport: Any
     _spk_rms_queue: collections.deque[float]
 
     def _safe_emit(self, signal: Any, *args: Any) -> None:
@@ -52,39 +46,6 @@ class CallbackMixin:
         provider.on_response_start(self._on_response_start)
         provider.on_response_end(self._on_response_end)
         provider.on_error(self._on_provider_error)
-
-    def _on_transcription(self, _s: Any, text: str, role: str, is_final: bool) -> None:
-        """Realtime transcription callback.
-
-        Gemini/OpenAI send incremental fragments for partials.
-        Accumulate them so the signal always carries the full text.
-        """
-        try:
-            speaker = self._current_speaker_id if role == "user" else ""  # type: ignore[attr-defined]
-
-            # Primary speaker mode: block non-primary user transcriptions
-            if (
-                role == "user"
-                and self._primary_speaker_mode  # type: ignore[attr-defined]
-                and self._primary_speaker_name  # type: ignore[attr-defined]
-                and speaker != self._primary_speaker_name  # type: ignore[attr-defined]
-            ):
-                if is_final:
-                    self._partial_buffers.pop(role, None)  # type: ignore[attr-defined]
-                    label = speaker if speaker and speaker != "unknown" else "Unknown"
-                    self.transcription.emit(str(text), "other", True, label)  # type: ignore[attr-defined]
-                return
-
-            if is_final:
-                self._partial_buffers.pop(role, None)  # type: ignore[attr-defined]
-                self.transcription.emit(str(text), str(role), True, speaker)  # type: ignore[attr-defined]
-            else:
-                buf = self._partial_buffers.get(role, "")  # type: ignore[attr-defined]
-                buf += text
-                self._partial_buffers[role] = buf  # type: ignore[attr-defined]
-                self.transcription.emit(buf, str(role), False, speaker)  # type: ignore[attr-defined]
-        except Exception:
-            logger.debug("transcription callback failed", exc_info=True)
 
     def _drain_speaker_level(self) -> None:
         """Pop one RMS value per timer tick → matches real playback cadence."""

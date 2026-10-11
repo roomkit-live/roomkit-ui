@@ -110,9 +110,6 @@ class SessionWatchdog(QObject):
     def tool_call_ended(self) -> None:
         self._pending_tool_calls = max(0, self._pending_tool_calls - 1)
 
-    def set_ai_responding(self, responding: bool) -> None:
-        self._ai_responding = responding
-
     # -- internals -----------------------------------------------------------
 
     def _on_ai_speaking(self, speaking: bool) -> None:
