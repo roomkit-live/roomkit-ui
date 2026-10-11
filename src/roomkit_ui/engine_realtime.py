@@ -5,13 +5,16 @@ Deepgram Voice Agent, ElevenLabs Conversational AI, xAI Grok): build the
 provider, wire audio pipeline + transport, connect MCP tools, register
 hooks, and hand off to the UI by populating ``engine._session``.
 
-The 2-step retry (with → without MCP tools) stays intact so providers
-that reject the MCP schema still deliver a working session.
+The 2-step retry (with → without MCP tools) lets a provider that refuses
+the MCP schemas still deliver a working session; it runs on freshly built
+media, and only on such a refusal (``_open_realtime_session``).
 """
 
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
 from roomkit_ui.engine_audio import (
@@ -28,9 +31,24 @@ from roomkit_ui.engine_state import EngineState
 from roomkit_ui.features import REALTIME_PROVIDER_FEATURES, require
 from roomkit_ui.hooks import register_realtime_hooks
 from roomkit_ui.mcp_config import has_enabled_mcp_servers
-from roomkit_ui.toolset import tool_summaries
+from roomkit_ui.toolset import ToolSet, tool_summaries
 
 logger = logging.getLogger(__name__)
+
+_BLOCK_MS = 20
+
+
+@dataclass(frozen=True)
+class _RealtimeMedia:
+    """What one start attempt connects; a failed attempt closes all of it."""
+
+    provider: Any
+    voice: str
+    model: str
+    transport: Any
+    pipeline: Any
+    aec: Any
+    sample_rate: int
 
 
 class RealtimeMixin:
@@ -71,64 +89,17 @@ class RealtimeMixin:
                 self._attitude = attitude
                 if not self._attitude_name:
                     self._attitude_name = settings.get("selected_attitude", "") or attitude
+            # Half-duplex (Deepgram escape hatch): the mic is muted while the
+            # agent speaks, so there is no echo to cancel — no AEC, and its
+            # absence arms the playback gate (see _build_realtime_media).
             aec_mode = settings.get("aec_mode", "webrtc")
-
-            from roomkit import RealtimeVoiceChannel, RoomKit
-            from roomkit.voice.backends.local import LocalAudioBackend
-
-            provider, voice, model = _build_realtime_provider(provider_name, settings)
-            provider_config = _build_provider_config(provider_name, settings)
-
-            sample_rate = _realtime_sample_rate(provider_name)
-            block_ms = 20
-            frame_size = sample_rate * block_ms // 1000
-
-            # User-selected denoisers are voice-channel only: a speech
-            # enhancer on the mic path keeps the *dominant* voice, so during
-            # doubletalk it eats the user's barge-in speech before the
-            # provider's VAD sees it.  (Deepgram gets the mild WebRTC noise
-            # suppressor below, mirroring roomkit's example.)
-            #
-            # Half-duplex (Deepgram escape hatch): the mic is muted while
-            # the agent speaks, so there is no echo to cancel — skip the AEC
-            # and let `mute_mic = aec is None` below arm the playback gate.
             if _deepgram_half_duplex(provider_name, settings):
                 logger.info("Deepgram half-duplex: mic muted during playback, AEC skipped")
                 aec_mode = "none"
-            aec, _ = build_audio_processing(aec_mode, "none", sample_rate, frame_size)
-            notify_missing_aec(aec_mode, aec, self.session_notice.emit)  # type: ignore[attr-defined]
-
-            # AEC bench capture (ROOMKIT_AEC_DUMP=<dir>): realtime-only —
-            # the VC path hands the same AEC instance to the backend, whose
-            # transport-level integration the recorder does not mimic.
-            import os
-
-            dump_dir = os.environ.get("ROOMKIT_AEC_DUMP", "")
-            if aec is not None and dump_dir:
-                from pathlib import Path
-
-                from roomkit_ui.aec_dump import AECDumpRecorder
-
-                aec = AECDumpRecorder(aec, Path(dump_dir).expanduser())
-                logger.warning("AEC dump recording enabled → %s", dump_dir)
             denoise_mode = settings.get("denoise", "none")
             if denoise_mode != "none":
                 logger.info("Denoiser (%s) not applied in realtime mode", denoise_mode)
-            mute_mic = aec is None
-
-            # Provider-specific transport wiring — see _transport_audio_profile.
-            transport_aec, rt_denoiser, prebuffer_ms = _transport_audio_profile(
-                provider_name, aec, sample_rate
-            )
-            if transport_aec is not None:
-                logger.info(
-                    "Transport-level AEC (%s) + webrtc NS, prebuffer=%dms",
-                    provider_name,
-                    prebuffer_ms,
-                )
-
-            input_device = settings.get("input_device")
-            output_device = settings.get("output_device")
+            provider_config = _build_provider_config(provider_name, settings)
 
             # -- Diarization (optional; requires VAD) -----------------------------
             # Realtime only needs a VAD when diarization is requested — build it
@@ -146,73 +117,28 @@ class RealtimeMixin:
                     "a speaker model and a VAD model (Settings → AI Models)."
                 )
 
-            debug_taps = build_debug_taps(settings)
-            recorder, recording_config = build_recorder(settings)
+            # Provider, transport and pipeline are built once per attempt: a
+            # failed attempt's kit.close() closes all three (the transport's
+            # AEC with it), so a retry must not reuse any of them.
+            spare_vad = vad  # the first attempt takes the VAD built above
 
-            pipeline = _build_realtime_pipeline(
-                diarization=diarization,
-                vad=vad,
-                aec=aec,
-                denoiser=rt_denoiser,
-                debug_taps=debug_taps,
-                recorder=recorder,
-                recording_config=recording_config,
-                sample_rate=sample_rate,
-            )
+            def build_media() -> _RealtimeMedia:
+                nonlocal spare_vad
+                attempt_vad, spare_vad = spare_vad, None
+                if attempt_vad is None and vad is not None:
+                    attempt_vad = _build_realtime_vad(settings)
+                return self._build_realtime_media(
+                    settings, provider_name, aec_mode, diarization, attempt_vad
+                )
 
-            # -- Transport -------------------------------------------------------
-            # Pipeline attaches to the RealtimeVoiceChannel (see _start_session),
-            # NOT the transport.  AEC placement is per provider (see
-            # _transport_audio_profile): Gemini/OpenAI keep the pipeline-stage
-            # AEC (transport_aec is None — LocalAudioBackend(aec=...) would
-            # flag NATIVE_AEC and lose the continuous playback reference, the
-            # 0.9.0 barge-in fix), while Deepgram runs it at transport level
-            # like roomkit's examples/realtime_voice_local_deepgram.py, where
-            # NATIVE_AEC correctly makes the pipeline skip its own stage.
-            backend_kwargs: dict[str, Any] = {
-                "input_sample_rate": sample_rate,
-                "output_sample_rate": sample_rate,
-                "block_duration_ms": block_ms,
-                "mute_mic_during_playback": mute_mic,
-                "rt_prebuffer_ms": prebuffer_ms,
-                "input_device": input_device,
-                "output_device": output_device,
-                "aec": transport_aec,
-                "source": usable_capture_source(
-                    getattr(self, "_capture_source", None), sample_rate
-                ),
-            }
-            transport = LocalAudioBackend(**backend_kwargs)
-
-            self._transport = transport  # type: ignore[attr-defined]
-            # A mute pressed while connecting reaches the session once its
-            # capture is live; the channel creates the session in start_session.
-            transport.on_session_ready(self._apply_mic_mute)  # type: ignore[attr-defined]
-
-            # Register speaker change callback on the transport so the engine
-            # can gate audio on non-primary speakers.  The pipeline instance
-            # that actually produces SPEAKER_CHANGE events is owned by the
-            # channel, but the transport forwards pipeline callbacks when
-            # the channel is bound.
-            if pipeline is not None:
-                transport.on_speaker_change(self._on_transport_speaker_change)  # type: ignore[attr-defined]
-
-            aec_label = type(aec).__name__ if aec else "none"
-            logger.info(
-                "Audio pipeline: aec=%s (pipeline stage), rate=%dHz, block=%dms",
-                aec_label,
-                sample_rate,
-                block_ms,
-            )
-
-            self._register_callbacks(provider, transport)  # type: ignore[attr-defined]
+            # Built before the tools: a missing key fails before MCP connects.
+            media = build_media()
+            notify_missing_aec(aec_mode, media.aec, self.session_notice.emit)  # type: ignore[attr-defined]
 
             # -- MCP tools -------------------------------------------------------
             if has_enabled_mcp_servers(settings.get("mcp_servers", "[]")):
                 self.loading_status.emit("Connecting MCP servers…")  # type: ignore[attr-defined]
             toolset = await self._setup_tools(settings)  # type: ignore[attr-defined]
-            tools = toolset.all
-            tool_handler = self._handle_tool_call  # type: ignore[attr-defined]
 
             # Agent Skills — same registry the VC path loads.  The channel
             # resolves delivery per provider: reconfigurable sessions (Gemini,
@@ -220,57 +146,19 @@ class RealtimeMixin:
             # tool; fixed sessions get every body inlined at connect.
             skills_registry = self._load_skills(settings)  # type: ignore[attr-defined]
 
-            all_names = ", ".join(t["name"] for t in tools)
-            logger.info("Tools: %s", all_names)
-
+            logger.info("Tools: %s", ", ".join(t["name"] for t in toolset.all))
             self.loading_status.emit("Connecting to provider…")  # type: ignore[attr-defined]
             if provider_config:
                 logger.debug("provider_config: %s", provider_config)
-            self._session = await self._start_session(  # type: ignore[attr-defined]
-                RoomKit,
-                RealtimeVoiceChannel,
-                provider,
-                transport,
+            media, tools = await self._open_realtime_session(
+                media,
+                build_media,
                 system_prompt,
-                voice,
-                sample_rate,
-                tools,
-                tool_handler,
-                provider_config=provider_config or None,
+                toolset,
                 settings=settings,
-                pipeline=pipeline,
+                provider_config=provider_config or None,
                 skills=skills_registry,
-                tool_options=toolset.channel_options(),
             )
-            if self._session is None and toolset.has_mcp:  # type: ignore[attr-defined]
-                # MCP tools broke the session — retry without them. Only MCP is
-                # shed: its schemas are server-supplied and arbitrary, whereas
-                # built-in and CLI schemas are hand-authored and known-good.
-                logger.warning("Retrying session without MCP tools")
-                self._session = await self._start_session(  # type: ignore[attr-defined]
-                    RoomKit,
-                    RealtimeVoiceChannel,
-                    provider,
-                    transport,
-                    system_prompt,
-                    voice,
-                    sample_rate,
-                    toolset.without_mcp,
-                    tool_handler,
-                    provider_config=provider_config or None,
-                    settings=settings,
-                    pipeline=pipeline,
-                    skills=skills_registry,
-                    tool_options=toolset.channel_options(),
-                )
-                if self._session is not None:  # type: ignore[attr-defined]
-                    self.mcp_status.emit(  # type: ignore[attr-defined]
-                        "MCP tools disabled — incompatible with this provider"
-                    )
-                    tools = toolset.without_mcp
-
-            if self._session is None:  # type: ignore[attr-defined]
-                raise RuntimeError("Failed to start voice session")
 
             register_realtime_hooks(self._kit, self)  # type: ignore[attr-defined]
 
@@ -290,7 +178,7 @@ class RealtimeMixin:
                 ]
             info: dict = {
                 "provider": provider_name,
-                "model": model,
+                "model": media.model,
                 "tools": tool_summaries(tools),
                 "skills": skill_info,
             }
@@ -303,6 +191,157 @@ class RealtimeMixin:
         except Exception as e:
             logger.exception("Failed to start voice session")
             await self._fail_start(str(e))  # type: ignore[attr-defined]
+
+    def _build_realtime_media(
+        self,
+        settings: dict,
+        provider_name: str,
+        aec_mode: str,
+        diarization: Any,
+        vad: Any,
+    ) -> _RealtimeMedia:
+        """Build what one start attempt connects: provider, transport, pipeline.
+
+        Fresh each attempt — the previous attempt's kit.close() closed them.
+        """
+        from roomkit.voice.backends.local import LocalAudioBackend
+
+        provider, voice, model = _build_realtime_provider(provider_name, settings)
+        sample_rate = _realtime_sample_rate(provider_name)
+        frame_size = sample_rate * _BLOCK_MS // 1000
+
+        # User-selected denoisers are voice-channel only: a speech enhancer on
+        # the mic path keeps the *dominant* voice, so during doubletalk it eats
+        # the user's barge-in speech before the provider's VAD sees it.
+        # (Deepgram gets the mild WebRTC noise suppressor below, mirroring
+        # roomkit's example.)
+        aec, _ = build_audio_processing(aec_mode, "none", sample_rate, frame_size)
+        aec = _with_aec_dump(aec)
+        # Provider-specific transport wiring — see _transport_audio_profile.
+        transport_aec, rt_denoiser, prebuffer_ms = _transport_audio_profile(
+            provider_name, aec, sample_rate
+        )
+        if transport_aec is not None:
+            logger.info(
+                "Transport-level AEC (%s) + webrtc NS, prebuffer=%dms",
+                provider_name,
+                prebuffer_ms,
+            )
+        recorder, recording_config = build_recorder(settings)
+        pipeline = _build_realtime_pipeline(
+            diarization=diarization,
+            vad=vad,
+            aec=aec,
+            denoiser=rt_denoiser,
+            debug_taps=build_debug_taps(settings),
+            recorder=recorder,
+            recording_config=recording_config,
+            sample_rate=sample_rate,
+        )
+
+        # The pipeline attaches to the RealtimeVoiceChannel (see _start_session),
+        # NOT the transport.  AEC placement is per provider (see
+        # _transport_audio_profile): Gemini/OpenAI keep the pipeline-stage AEC
+        # (transport_aec is None — LocalAudioBackend(aec=...) would flag
+        # NATIVE_AEC and lose the continuous playback reference, the 0.9.0
+        # barge-in fix), while Deepgram runs it at transport level like
+        # roomkit's examples/realtime_voice_local_deepgram.py, where NATIVE_AEC
+        # correctly makes the pipeline skip its own stage.  No AEC at all arms
+        # the playback gate (half-duplex).
+        transport = LocalAudioBackend(
+            input_sample_rate=sample_rate,
+            output_sample_rate=sample_rate,
+            block_duration_ms=_BLOCK_MS,
+            mute_mic_during_playback=aec is None,
+            rt_prebuffer_ms=prebuffer_ms,
+            input_device=settings.get("input_device"),
+            output_device=settings.get("output_device"),
+            aec=transport_aec,
+            source=usable_capture_source(getattr(self, "_capture_source", None), sample_rate),
+        )
+        self._transport = transport
+        # A mute pressed while connecting reaches the session once its
+        # capture is live; the channel creates the session in start_session.
+        transport.on_session_ready(self._apply_mic_mute)  # type: ignore[attr-defined]
+
+        # Register speaker change callback on the transport so the engine
+        # can gate audio on non-primary speakers.  The pipeline instance
+        # that actually produces SPEAKER_CHANGE events is owned by the
+        # channel, but the transport forwards pipeline callbacks when
+        # the channel is bound.
+        if pipeline is not None:
+            transport.on_speaker_change(self._on_transport_speaker_change)  # type: ignore[attr-defined]
+
+        logger.info(
+            "Audio pipeline: aec=%s (pipeline stage), rate=%dHz, block=%dms",
+            type(aec).__name__ if aec else "none",
+            sample_rate,
+            _BLOCK_MS,
+        )
+        self._register_callbacks(provider, transport)  # type: ignore[attr-defined]
+        return _RealtimeMedia(provider, voice, model, transport, pipeline, aec, sample_rate)
+
+    async def _open_realtime_session(
+        self,
+        media: _RealtimeMedia,
+        build_media: Callable[[], _RealtimeMedia],
+        system_prompt: str,
+        toolset: ToolSet,
+        *,
+        settings: dict,
+        provider_config: dict[str, Any] | None,
+        skills: Any,
+    ) -> tuple[_RealtimeMedia, list[dict]]:
+        """Start the session with every tool — or without MCP, if they were refused.
+
+        Only MCP is shed: its schemas are server-supplied and arbitrary,
+        whereas built-in and CLI schemas are hand-authored and known-good.
+        And only when the provider refused what the session declared
+        (``_refuses_session_config``): a bad key, the network or a quota is
+        the session's real error, which shedding MCP would only hide behind a
+        misleading notice.  If the retry fails too, the first error — the
+        one that explains the session — is the one raised.
+
+        Returns the media of the attempt that started, and its tools.
+        """
+        from roomkit import RealtimeVoiceChannel, RoomKit
+
+        async def attempt(media: _RealtimeMedia, tools: list[dict]) -> None:
+            self._session = await self._start_session(
+                RoomKit,
+                RealtimeVoiceChannel,
+                media.provider,
+                media.transport,
+                system_prompt,
+                media.voice,
+                media.sample_rate,
+                tools,
+                self._handle_tool_call,  # type: ignore[attr-defined]
+                provider_config=provider_config,
+                settings=settings,
+                pipeline=media.pipeline,
+                skills=skills,
+                tool_options=toolset.channel_options(),
+            )
+
+        try:
+            await attempt(media, toolset.all)
+            return media, toolset.all
+        except Exception as exc:
+            if not (toolset.has_mcp and _refuses_session_config(exc)):
+                raise
+            refusal = exc
+        logger.warning("Provider refused the session with MCP tools — retrying without them")
+        media = build_media()
+        try:
+            await attempt(media, toolset.without_mcp)
+        except Exception:
+            logger.exception("Session without MCP tools failed too")
+            raise refusal from None
+        self.mcp_status.emit(  # type: ignore[attr-defined]
+            f"MCP tools disabled — the provider refused them: {_brief(refusal)}"
+        )
+        return media, toolset.without_mcp
 
     async def _start_session(
         self,
@@ -321,7 +360,7 @@ class RealtimeMixin:
         skills: Any = None,
         tool_options: dict[str, Any] | None = None,
     ) -> Any:
-        """Try to create a room and start a realtime session.  Returns None on failure."""
+        """Create the room and start a realtime session; raise what refused it."""
         from roomkit_ui.engine_audio import build_telemetry
         from roomkit_ui.memory import ROOM_ID, build_store, ensure_room, memory_recap
 
@@ -375,14 +414,78 @@ class RealtimeMixin:
                 metadata=metadata or None,
             )
         except Exception:
-            logger.exception("_start_session failed")
+            # Closing the kit closes the channel, and with it the provider and
+            # the transport: an attempt's media never serves another one.
             try:
                 await self._kit.close()  # type: ignore[attr-defined]
             except Exception:
-                pass
+                logger.debug("kit.close() after a failed start failed", exc_info=True)
             self._kit = None  # type: ignore[attr-defined]
             self._channel = None  # type: ignore[attr-defined]
-            return None
+            raise
+
+
+# ---------------------------------------------------------------------------
+# Start failures (module-level — no engine state)
+# ---------------------------------------------------------------------------
+
+# Gemini Live's close code for an invalid argument — "e.g. a tool schema
+# Gemini Live won't accept", in roomkit's providers/gemini/realtime_connection.
+_WS_INVALID_ARGUMENT = 1007
+
+
+def _refuses_session_config(exc: BaseException) -> bool:
+    """Whether a failed start is a refusal of what the session declared.
+
+    roomkit 0.96.1 has no error type for a refused tool schema; a start that
+    fails on one surfaces as:
+
+    * a ValueError — what roomkit raises when it refuses to declare a tool
+      while building the channel (ToolNameCollisionError is one); one from
+      elsewhere costs a second attempt, after which it is raised as is;
+    * Gemini Live closing the setup with 1007, invalid argument (the SDK's
+      APIError carries the code);
+    * Deepgram answering the Settings message, which carries the functions,
+      with an Error ("Deepgram rejected Settings").
+
+    OpenAI and xAI open the socket first and report a bad ``session.update``
+    as a provider error afterwards: no start fails on their tools.  A bad
+    key, the network or a quota is none of these.
+    """
+    for err in (exc, exc.__cause__):
+        if err is None:
+            continue
+        if isinstance(err, ValueError):
+            return True
+        if getattr(err, "code", None) == _WS_INVALID_ARGUMENT:
+            return True
+        if isinstance(err, ConnectionError) and "rejected Settings" in str(err):
+            return True
+    return False
+
+
+def _brief(exc: BaseException, limit: int = 160) -> str:
+    text = str(exc).strip() or type(exc).__name__
+    return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
+def _with_aec_dump(aec: Any) -> Any:
+    """Wrap *aec* in the bench recorder when ROOMKIT_AEC_DUMP=<dir> is set.
+
+    Realtime-only — the VC path hands the same AEC instance to the backend,
+    whose transport-level integration the recorder does not mimic.
+    """
+    import os
+
+    dump_dir = os.environ.get("ROOMKIT_AEC_DUMP", "")
+    if aec is None or not dump_dir:
+        return aec
+    from pathlib import Path
+
+    from roomkit_ui.aec_dump import AECDumpRecorder
+
+    logger.warning("AEC dump recording enabled → %s", dump_dir)
+    return AECDumpRecorder(aec, Path(dump_dir).expanduser())
 
 
 # ---------------------------------------------------------------------------
