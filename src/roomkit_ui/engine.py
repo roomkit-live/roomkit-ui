@@ -276,12 +276,24 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
 
     def set_mic_muted(self, muted: bool) -> None:
         self._mic_muted = muted
-        if self._transport is not None and self._session is not None:
-            try:
-                self._transport.set_input_muted(self._session, muted)
-            except Exception:
-                pass
-        # Voice channel mode uses LocalAudioBackend (no set_input_muted)
+        self._apply_mic_mute(self._session)
+
+    def _apply_mic_mute(self, session: Any) -> None:
+        """Hold *session*'s microphone to the user's mute.
+
+        Both modes capture through a LocalAudioBackend — the realtime
+        transport or the voice channel's backend — and it drops a muted
+        session's frames before anything reads them.  A mute pressed while
+        connecting has no session to reach yet: each start path applies it
+        again as soon as its session exists.
+        """
+        backend = self._transport or self._backend
+        if backend is None or session is None:
+            return
+        try:
+            backend.set_input_muted(session, self._mic_muted)
+        except Exception:
+            logger.debug("set_input_muted failed", exc_info=True)
 
     # -- lifecycle dispatcher ------------------------------------------------
 

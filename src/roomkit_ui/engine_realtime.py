@@ -197,6 +197,9 @@ class RealtimeMixin:
             transport = LocalAudioBackend(**backend_kwargs)
 
             self._transport = transport  # type: ignore[attr-defined]
+            # A mute pressed while connecting reaches the session once its
+            # capture is live; the channel creates the session in start_session.
+            transport.on_session_ready(self._apply_mic_mute)  # type: ignore[attr-defined]
 
             # Register speaker change callback on the transport so the engine
             # can gate audio on non-primary speakers.  The pipeline instance
@@ -373,9 +376,11 @@ class RealtimeMixin:
             if provider_config:
                 metadata["provider_config"] = provider_config
             # The backend replays the shared source from here, so the phrase
-            # spoken before the session existed reaches the provider.
+            # spoken before the session existed reaches the provider — unless
+            # the user muted while connecting: the replay runs before the
+            # session's capture is live, so before the mute can reach it.
             capture_since = getattr(self, "_capture_since", None)
-            if capture_since is not None:
+            if capture_since is not None and not getattr(self, "_mic_muted", False):
                 metadata["capture_since"] = capture_since
             return await self._channel.start_session(  # type: ignore[attr-defined]
                 ROOM_ID,

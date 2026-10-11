@@ -262,10 +262,7 @@ class VoiceChannelMixin:
 
             # 12. Connect and start
             self.loading_status.emit("Starting voice channel…")  # type: ignore[attr-defined]
-            session = await backend.connect(ROOM_ID, "local-user", "voice")
-            self._session = session  # type: ignore[attr-defined]
-            voice.bind_session(session, ROOM_ID, voice_binding)
-            await backend.start_listening(session)
+            await self._listen(backend, voice, voice_binding)
 
             self._spk_rms_queue.clear()  # type: ignore[attr-defined]
             self._spk_timer.start()  # type: ignore[attr-defined]
@@ -287,6 +284,20 @@ class VoiceChannelMixin:
             self._set_state(EngineState.ERROR)  # type: ignore[attr-defined]
             self.error_occurred.emit(str(e))  # type: ignore[attr-defined]
             await self._cleanup()  # type: ignore[attr-defined]
+
+    async def _listen(self, backend: Any, voice: Any, voice_binding: Any) -> None:
+        """Open this session on the backend and start capturing the mic.
+
+        The user's mute is applied before capture starts, so one pressed
+        while the session was connecting holds from the first frame.
+        """
+        from roomkit_ui.memory import ROOM_ID
+
+        session = await backend.connect(ROOM_ID, "local-user", "voice")
+        self._session = session
+        self._apply_mic_mute(session)  # type: ignore[attr-defined]
+        voice.bind_session(session, ROOM_ID, voice_binding)
+        await backend.start_listening(session)
 
     # -- STT ---------------------------------------------------------------
 
