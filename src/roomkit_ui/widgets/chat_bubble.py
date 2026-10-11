@@ -8,7 +8,7 @@ from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QMouseEvent
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout
 
-from roomkit_ui.theme import CHAT_FONT_SIZE_PX, colors
+from roomkit_ui.theme import CHAT_FONT_SIZE_PX, colors, fixed_font_family
 
 
 def _markdown_to_html(text: str, c: dict[str, str]) -> str:
@@ -26,13 +26,13 @@ def _markdown_to_html(text: str, c: dict[str, str]) -> str:
 
     code_bg = c["CODE_BG"]
     accent = c["ACCENT_BLUE"]
+    mono = f"font-family:'{fixed_font_family()}'"
 
     # Inject inline styles — QLabel ignores <style> blocks.
     replacements = {
         "<pre>": f'<pre style="background:{code_bg}; padding:8px 10px;'
-        f' font-family:monospace; font-size:12px; white-space:pre-wrap;">',
-        "<code>": f'<code style="background:{code_bg}; font-family:monospace;'
-        f' font-size:12px; padding:1px 4px;">',
+        f' {mono}; font-size:12px; white-space:pre-wrap;">',
+        "<code>": f'<code style="background:{code_bg}; {mono}; font-size:12px; padding:1px 4px;">',
         "<table>": '<table style="border-collapse:collapse; margin:4px 0;" cellpadding="4">',
         "<th>": '<th style="border-bottom:1px solid; padding:4px 8px; text-align:left;">',
         "<td>": '<td style="padding:4px 8px;">',
@@ -44,7 +44,7 @@ def _markdown_to_html(text: str, c: dict[str, str]) -> str:
     # Strip background from <code> inside <pre> (already has bg)
     body = re.sub(
         r"(<pre[^>]*>)\s*<code[^>]*>",
-        r'\1<code style="font-family:monospace; font-size:12px;">',
+        rf'\1<code style="{mono}; font-size:12px;">',
         body,
     )
 

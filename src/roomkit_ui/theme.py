@@ -64,6 +64,21 @@ _PALETTES = {"dark": DARK, "light": LIGHT}
 CHAT_FONT_SIZE_PX = 14
 
 
+def fixed_font_family() -> str:
+    """The platform's fixed-width font, by the name Qt knows it (Menlo on macOS).
+
+    For code and logs.  "monospace" is a CSS name: Qt on macOS does not know
+    it, looks it up (a font-alias warning) and falls back.  Without a running
+    QGuiApplication Qt cannot say, and the generic name is all there is.
+    """
+    from PySide6.QtGui import QFontDatabase, QGuiApplication
+
+    if QGuiApplication.instance() is None:
+        return "monospace"
+    family: str = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont).family()
+    return family
+
+
 def get_colors(theme: str = "dark") -> dict[str, str]:
     """Return the palette dict for *theme* ('dark' or 'light')."""
     return _PALETTES.get(theme, DARK)

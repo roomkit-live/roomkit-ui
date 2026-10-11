@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
 
 from roomkit_ui.component_installer import installer, restart_app
 from roomkit_ui.components import Component, Installer, components, install_plan
-from roomkit_ui.theme import colors
+from roomkit_ui.theme import colors, fixed_font_family
 
 _INTRO = (
     "Optional parts of RoomKit UI: AI providers, local speech, dictation, MCP App "
@@ -135,7 +135,7 @@ class _ComponentsPage(QWidget):
         self._log = QPlainTextEdit()
         self._log.setReadOnly(True)
         self._log.setMaximumHeight(160)
-        self._log.setStyleSheet("font-family: monospace; font-size: 11px;")
+        self._log.setStyleSheet(f'font-family: "{fixed_font_family()}"; font-size: 11px;')
         layout.addWidget(self._log)
         layout.addStretch()
 

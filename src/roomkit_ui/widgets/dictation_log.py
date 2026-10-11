@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from roomkit_ui.theme import colors
+from roomkit_ui.theme import colors, fixed_font_family
 
 
 class DictationLog(QWidget):
@@ -35,7 +35,7 @@ class DictationLog(QWidget):
         self._log.setReadOnly(True)
         self._log.setStyleSheet(
             f"QTextEdit {{"
-            f"  font-family: monospace; font-size: 12px;"
+            f'  font-family: "{fixed_font_family()}"; font-size: 12px;'
             f"  background-color: {c['BG_PRIMARY']}; color: {c['TEXT_PRIMARY']};"
             f"  border: 1px solid {c['SEPARATOR']}; border-radius: 6px;"
             f"  padding: 6px;"
