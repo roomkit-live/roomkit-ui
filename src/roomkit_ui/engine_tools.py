@@ -252,11 +252,18 @@ class ToolMixin:
         if not text:
             return json.dumps({"error": "No text provided."})
         try:
-            from roomkit_ui.paste import _copy_to_clipboard, _simulate_paste
+            from roomkit_ui.paste import (
+                _copy_to_clipboard,
+                _simulate_paste,
+                paste_failure_message,
+            )
 
             loop = asyncio.get_running_loop()
             await loop.run_in_executor(None, _copy_to_clipboard, text)
-            await loop.run_in_executor(None, _simulate_paste)
+            if not await loop.run_in_executor(None, _simulate_paste):
+                msg = paste_failure_message()
+                logger.warning("paste_text: %s", msg)
+                return json.dumps({"error": msg})
             logger.info("paste_text: pasted %d chars", len(text))
             return json.dumps({"status": "ok", "chars": len(text)})
         except FileNotFoundError as exc:

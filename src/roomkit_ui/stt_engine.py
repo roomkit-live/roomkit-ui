@@ -17,6 +17,7 @@ from roomkit_ui.paste import (
     _copy_to_clipboard,
     _get_frontmost_bundle,
     _simulate_paste,
+    paste_failure_message,
 )
 from roomkit_ui.settings import load_settings
 from roomkit_ui.stt_sessions import DictationSessionMixin
@@ -376,11 +377,7 @@ class STTEngine(DictationSessionMixin, QObject):
                 await loop.run_in_executor(None, _copy_to_clipboard, text)
                 ok = await loop.run_in_executor(None, _simulate_paste)
                 if not ok:
-                    msg = (
-                        "Accessibility permission required for auto-paste. "
-                        "Text copied to clipboard — paste manually with ⌘V.\n"
-                        "Grant access in System Settings → Privacy & Security → Accessibility."
-                    )
+                    msg = paste_failure_message()
                     logger.warning(msg)
                     try:
                         self.error_occurred.emit(msg)
@@ -398,7 +395,8 @@ class STTEngine(DictationSessionMixin, QObject):
                     self.error_occurred.emit(msg)
                 except Exception:
                     pass
-            except subprocess.SubprocessError as exc:
+            except (OSError, subprocess.SubprocessError) as exc:
+                # OSError: the Win32 clipboard refused the text.
                 msg = f"Paste failed: {exc}"
                 logger.error(msg)
                 try:

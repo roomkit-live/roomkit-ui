@@ -3,13 +3,15 @@
 Used by both the dictation pipeline (``stt_engine``) and the voice tool
 handler (``engine_tools._paste_text``).  Kept in its own module so the
 OS-specific shell-outs (pbcopy / wl-copy / xclip, AppleScript /
-xdotool, macOS NSWorkspace) don't muddle the STT session code.
+xdotool, macOS NSWorkspace) don't muddle the STT session code.  Windows
+goes through the Win32 API instead, in ``paste_windows``.
 """
 
 from __future__ import annotations
 
 import logging
 import os
+import re
 import subprocess
 import sys
 
@@ -29,6 +31,10 @@ def _copy_to_clipboard(text: str) -> None:
             check=True,
             timeout=5,
         )
+    elif sys.platform == "win32":
+        from roomkit_ui import paste_windows
+
+        paste_windows.copy_text(text)
     elif _is_wayland():
         subprocess.run(
             ["wl-copy", "--", text],
@@ -44,10 +50,53 @@ def _copy_to_clipboard(text: str) -> None:
         )
 
 
+# WM_CLASS values (instance or class) of X11 terminals, which paste on
+# Ctrl+Shift+V: Ctrl+V there sends a literal ^V.  Compared exactly — a
+# substring test let "st" match nearly every application.
+_TERMINAL_CLASSES = frozenset(
+    {
+        "alacritty",
+        "claude",
+        "foot",
+        "kitty",
+        "konsole",
+        "sakura",
+        "st",
+        "st-256color",
+        "terminator",
+        "tilix",
+        "urxvt",
+        "wezterm",
+        "xterm",
+    }
+)
+
+
+def parse_wm_class(xprop_output: str) -> list[str]:
+    """The quoted values of an ``xprop WM_CLASS`` line, in order.
+
+    ``WM_CLASS(STRING) = "gnome-terminal-server", "Gnome-terminal"`` gives
+    both names; a window without the property gives none.
+    """
+    _, sep, values = xprop_output.partition("=")
+    return re.findall(r'"([^"]*)"', values) if sep else []
+
+
+def is_terminal_class(values: list[str]) -> bool:
+    """Whether any WM_CLASS value names a terminal emulator."""
+    for value in values:
+        # Reverse-DNS classes keep their last part: org.wezfurlong.wezterm.
+        name = value.lower().rsplit(".", 1)[-1]
+        # The suffix covers the *-terminal family (gnome-, xfce4-, mate-,
+        # lx-, q-, deepin-) without listing each one.
+        if name in _TERMINAL_CLASSES or name.endswith("terminal"):
+            return True
+    return False
+
+
 def _is_terminal_focused() -> bool:
     """Check if the focused X11 window is a terminal emulator."""
     try:
-        # Get active window ID
         wid_result = subprocess.run(
             ["xdotool", "getactivewindow"],
             capture_output=True,
@@ -64,26 +113,7 @@ def _is_terminal_focused() -> bool:
             text=True,
             timeout=3,
         )
-        wm_class = result.stdout.strip().lower()
-        terminal_classes = (
-            "terminal",
-            "konsole",
-            "alacritty",
-            "kitty",
-            "xterm",
-            "urxvt",
-            "tilix",
-            "terminator",
-            "gnome-terminal",
-            "xfce4-terminal",
-            "mate-terminal",
-            "sakura",
-            "st",
-            "wezterm",
-            "foot",
-            "claude",
-        )
-        return any(t in wm_class for t in terminal_classes)
+        return is_terminal_class(parse_wm_class(result.stdout))
     except Exception:
         return False
 
@@ -92,54 +122,70 @@ def _simulate_paste() -> bool:
     """Simulate paste keystroke into the focused window.
 
     Terminals typically use Ctrl+Shift+V, while other apps use Ctrl+V.
-    Returns True on success, False if permission is missing.
+    Returns True on success, False when the keystroke was refused — the
+    text is still on the clipboard then (:func:`paste_failure_message`).
     """
     if sys.platform == "darwin":
-        # Use AppleScript via System Events — this is more reliable than
-        # CGEventPost from PyInstaller bundles, where CGEventPost silently
-        # drops events even when Accessibility permission is granted.
-        try:
-            subprocess.run(
-                [
-                    "osascript",
-                    "-e",
-                    'tell application "System Events" to keystroke "v" using command down',
-                ],
-                check=True,
-                timeout=5,
-                capture_output=True,
-            )
-            return True
-        except subprocess.CalledProcessError as exc:
-            logger.warning(
-                "AppleScript paste failed (rc=%d): %s",
-                exc.returncode,
-                exc.stderr.decode(errors="replace").strip(),
-            )
-            return False
-    elif _is_wayland():
-        try:
-            subprocess.run(["wtype", "-M", "ctrl", "v", "-m", "ctrl"], check=True, timeout=5)
-        except subprocess.CalledProcessError as exc:
-            logger.warning("wtype paste failed (rc=%d)", exc.returncode)
-            return False
-    elif _is_terminal_focused():
-        try:
-            subprocess.run(
-                ["xdotool", "key", "--clearmodifiers", "ctrl+shift+v"],
-                check=True,
-                timeout=5,
-            )
-        except subprocess.CalledProcessError as exc:
-            logger.warning("xdotool paste failed (rc=%d)", exc.returncode)
-            return False
-    else:
-        try:
-            subprocess.run(["xdotool", "key", "--clearmodifiers", "ctrl+v"], check=True, timeout=5)
-        except subprocess.CalledProcessError as exc:
-            logger.warning("xdotool paste failed (rc=%d)", exc.returncode)
-            return False
+        return _paste_macos()
+    if sys.platform == "win32":
+        from roomkit_ui import paste_windows
+
+        return paste_windows.send_ctrl_v()
+    if _is_wayland():
+        return _run_paste_command(["wtype", "-M", "ctrl", "v", "-m", "ctrl"])
+    keys = "ctrl+shift+v" if _is_terminal_focused() else "ctrl+v"
+    return _run_paste_command(["xdotool", "key", "--clearmodifiers", keys])
+
+
+def _paste_macos() -> bool:
+    # Use AppleScript via System Events — this is more reliable than
+    # CGEventPost from PyInstaller bundles, where CGEventPost silently
+    # drops events even when Accessibility permission is granted.
+    try:
+        subprocess.run(
+            [
+                "osascript",
+                "-e",
+                'tell application "System Events" to keystroke "v" using command down',
+            ],
+            check=True,
+            timeout=5,
+            capture_output=True,
+        )
+        return True
+    except subprocess.CalledProcessError as exc:
+        logger.warning(
+            "AppleScript paste failed (rc=%d): %s",
+            exc.returncode,
+            exc.stderr.decode(errors="replace").strip(),
+        )
+        return False
+
+
+def _run_paste_command(argv: list[str]) -> bool:
+    try:
+        subprocess.run(argv, check=True, timeout=5)
+    except subprocess.CalledProcessError as exc:
+        logger.warning("%s paste failed (rc=%d)", argv[0], exc.returncode)
+        return False
     return True
+
+
+def paste_failure_message() -> str:
+    """What to tell the user when :func:`_simulate_paste` returned False."""
+    if sys.platform == "darwin":
+        return (
+            "Accessibility permission required for auto-paste. "
+            "Text copied to clipboard — paste manually with ⌘V.\n"
+            "Grant access in System Settings → Privacy & Security → Accessibility."
+        )
+    if sys.platform == "win32":
+        return (
+            "Windows refused the paste keystroke — the focused window may be "
+            "running as administrator. Text copied to clipboard — paste manually "
+            "with Ctrl+V."
+        )
+    return "Auto-paste failed. Text copied to clipboard — paste manually with Ctrl+V."
 
 
 def _get_frontmost_bundle() -> str | None:
