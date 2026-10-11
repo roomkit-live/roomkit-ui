@@ -150,119 +150,78 @@ def _reload_wake_word(wake) -> None:
     wake.resume("settings")
 
 
-def main() -> None:
-    if "--doctor" in sys.argv[1:]:
-        # Which optional backends this install carries, and how to complete it.
-        # Runs before any Qt object exists so it works over SSH and in CI.
-        from roomkit_ui.features import print_report
+def _create_app() -> QApplication:
+    """The QApplication: identity and icon; it outlives its windows.
 
-        print_report()
-        return
-
-    _configure_logging()
-    _logger = logging.getLogger(__name__)
-    if not _has_opengl:
-        _logger.warning(
-            "OpenGL not available — running in software rendering mode. "
-            "MCP App WebViews may be limited."
-        )
-
+    Built before anything reads settings: QSettings finds the user's file
+    through the organization and application names set here.
+    """
     app = QApplication(sys.argv)
     app.setApplicationName("RoomKit UI")
     app.setOrganizationName("RoomKit")
     app.setQuitOnLastWindowClosed(False)
-    settings = load_settings()
-    app.setStyleSheet(get_stylesheet(settings.get("theme", "dark")))
-
     icon_path = Path(__file__).resolve().parent / "assets" / "icon.png"
     if icon_path.exists():
         app.setWindowIcon(QIcon(str(icon_path)))
+    return app
 
-    loop = QEventLoop(app)
-    asyncio.set_event_loop(loop)
 
-    # -- Main voice-chat window --
-    window = MainWindow()
-    window.show()
+def _prewarm_webengine() -> None:
+    """Start the Chromium subprocess before the first MCP App needs it.
 
-    # Pre-start the Chromium subprocess so the first QWebEngineView
-    # creation later doesn't freeze the UI.  Loading about:blank on
-    # a throwaway page triggers the full init path.
-    def _prewarm_webengine() -> None:
+    Creating the first QWebEngineView otherwise freezes the UI; loading a
+    blank page on a throwaway QWebEnginePage runs the full init path.
+    """
+    try:
+        from PySide6.QtWebEngineCore import QWebEnginePage
+
+        page = QWebEnginePage()
+        page.setHtml("")
+        page.loadFinished.connect(page.deleteLater)
+    except (ImportError, RuntimeError) as exc:
+        logging.getLogger(__name__).warning("WebEngine prewarm skipped: %s", exc)
+
+
+def _check_macos_permissions(tray: TrayService) -> None:
+    """Say in the tray when Accessibility is missing — no system popup."""
+    logger = logging.getLogger(__name__)
+    try:
         try:
-            from PySide6.QtWebEngineCore import QWebEnginePage
+            import HIServices  # type: ignore[import-not-found]
 
-            page = QWebEnginePage()
-            page.setHtml("")
-            page.loadFinished.connect(page.deleteLater)
-        except (ImportError, RuntimeError) as exc:
-            _logger.warning("WebEngine prewarm skipped: %s", exc)
+            ax = HIServices.AXIsProcessTrustedWithOptions(
+                {HIServices.kAXTrustedCheckOptionPrompt: False}
+            )
+        except (ImportError, AttributeError):
+            from ApplicationServices import (  # type: ignore[import-not-found]
+                AXIsProcessTrusted,
+            )
 
-    QTimer.singleShot(200, _prewarm_webengine)
+            ax = AXIsProcessTrusted()
 
-    # -- System-wide STT dictation --
-    stt = STTEngine()
-    tray = TrayService()
+        logger.info(
+            "macOS permissions: AXTrusted=%s pid=%d exe=%s", ax, os.getpid(), sys.executable
+        )
+        if not ax:
+            tray._tray.showMessage(
+                "Permissions Required",
+                "Add RoomKit UI in System Settings\n"
+                "→ Privacy & Security → Accessibility\n"
+                "for auto-paste after dictation.",
+                QSystemTrayIcon.MessageIcon.Warning,
+                8000,
+            )
+    except Exception:
+        pass
 
-    # On macOS, silently check permissions and show a tray notification
-    # with clear instructions if anything is missing (no system popups).
-    if sys.platform == "darwin":
 
-        def _check_macos_permissions() -> None:
-            try:
-                _logger = logging.getLogger(__name__)
+def _wire_tray_and_dictation(
+    app: QApplication, window: MainWindow, stt: STTEngine, tray: TrayService
+) -> DictationLog:
+    """Connect the tray, dictation log and sounds to the window and dictation.
 
-                try:
-                    import HIServices  # type: ignore[import-not-found]
-
-                    ax = HIServices.AXIsProcessTrustedWithOptions(
-                        {HIServices.kAXTrustedCheckOptionPrompt: False}
-                    )
-                except (ImportError, AttributeError):
-                    from ApplicationServices import (  # type: ignore[import-not-found]
-                        AXIsProcessTrusted,
-                    )
-
-                    ax = AXIsProcessTrusted()
-
-                _logger.info(
-                    "macOS permissions: AXTrusted=%s pid=%d exe=%s",
-                    ax,
-                    os.getpid(),
-                    sys.executable,
-                )
-
-                if not ax:
-                    tray._tray.showMessage(
-                        "Permissions Required",
-                        "Add RoomKit UI in System Settings\n"
-                        "→ Privacy & Security → Accessibility\n"
-                        "for auto-paste after dictation.",
-                        QSystemTrayIcon.MessageIcon.Warning,
-                        8000,
-                    )
-            except Exception:
-                pass
-
-        QTimer.singleShot(2000, _check_macos_permissions)
-
-    # tray → show/raise main window
-    def _show_window() -> None:
-        window.showNormal()
-        window.raise_()
-        window.activateWindow()
-
-    tray.show_action.triggered.connect(_show_window)
-
-    # hotkey / menu → toggle recording
-    tray.dictate_action.triggered.connect(stt.toggle_recording)
-
-    # Dictation log window
-    dictation_log = DictationLog()
-    tray.log_action.triggered.connect(dictation_log.show)
-    tray.log_action.triggered.connect(dictation_log.raise_)
-
-    # session state → tray icon + notification sounds
+    Returns the dictation log window, which the caller keeps alive.
+    """
     from roomkit_ui.sounds import (
         cleanup as sounds_cleanup,
     )
@@ -273,14 +232,26 @@ def main() -> None:
         play_session_stop,
     )
 
-    app.aboutToQuit.connect(sounds_cleanup)
+    def _show_window() -> None:
+        window.showNormal()
+        window.raise_()
+        window.activateWindow()
 
+    tray.show_action.triggered.connect(_show_window)
+    tray.dictate_action.triggered.connect(stt.toggle_recording)
+
+    dictation_log = DictationLog()
+    tray.log_action.triggered.connect(dictation_log.show)
+    tray.log_action.triggered.connect(dictation_log.raise_)
+
+    # session state → tray icon + notification sounds
+    app.aboutToQuit.connect(sounds_cleanup)
     window.session_active_changed.connect(tray.on_session_changed)
     window.session_active_changed.connect(
         lambda active: play_session_start() if active else play_session_stop()
     )
 
-    # engine → tray status + dictation sounds + log
+    # dictation → tray status + sounds + log, then paste into the focused input
     stt.recording_changed.connect(tray.on_recording_changed)
     stt.recording_changed.connect(
         lambda recording: play_dictation_start() if recording else play_dictation_stop()
@@ -290,19 +261,19 @@ def main() -> None:
     stt.text_ready.connect(dictation_log.on_text_ready)
     stt.error_occurred.connect(tray.on_error)
     stt.error_occurred.connect(dictation_log.on_error)
-
-    # engine → paste into focused input
     stt.text_ready.connect(stt.paste_text)
+    return dictation_log
 
-    # Global hotkey for dictation (always created, reload picks up settings changes)
-    hotkey_str = settings.get("stt_hotkey", "<ctrl>+<shift>+h")
-    hotkey = HotkeyListener(hotkey=hotkey_str)
+
+def _start_hotkeys(
+    settings: dict, window: MainWindow, stt: STTEngine, tray: TrayService
+) -> tuple[HotkeyListener, HotkeyListener]:
+    """Start the dictation and assistant hotkeys; settings saves reload them."""
+    hotkey = HotkeyListener(hotkey=settings.get("stt_hotkey", "<ctrl>+<shift>+h"))
     hotkey.hotkey_pressed.connect(stt.toggle_recording)
 
-    # Global hotkey for assistant session start/stop
-    assistant_hotkey_str = settings.get("assistant_hotkey", "<ctrl>+<shift>+a")
     assistant_hotkey = HotkeyListener(
-        hotkey=assistant_hotkey_str,
+        hotkey=settings.get("assistant_hotkey", "<ctrl>+<shift>+a"),
         enabled_key="assistant_hotkey_enabled",
         hotkey_key="assistant_hotkey",
     )
@@ -320,11 +291,15 @@ def main() -> None:
     if settings.get("assistant_hotkey_enabled", True):
         assistant_hotkey.start()
 
-    # Reload hotkeys when settings are saved
     window.settings_saved.connect(hotkey.reload)
     window.settings_saved.connect(assistant_hotkey.reload)
+    return hotkey, assistant_hotkey
 
-    # -- Wake word --
+
+def _wire_wake_word(
+    app: QApplication, window: MainWindow, stt: STTEngine, tray: TrayService, settings: dict
+):
+    """Arm the wake word and keep it deaf whenever it should not listen."""
     wake = build_wake_word(window)
     # Stand down while a session or dictation holds the conversation: left
     # armed, the listener hears the assistant's own reply and wakes on it.
@@ -344,14 +319,59 @@ def main() -> None:
     # until the process is torn down.
     app.aboutToQuit.connect(wake.close)
     wake.apply(settings)
+    return wake
 
-    # Let Ctrl+C quit cleanly instead of being swallowed by the Qt loop.
-    # The Qt event loop runs in C, so Python signal handlers never fire
-    # unless we periodically give the interpreter control via a timer.
+
+def _quit_on_sigint(app: QApplication) -> QTimer:
+    """Let Ctrl+C quit cleanly instead of being swallowed by the Qt loop.
+
+    The Qt event loop runs in C, so Python signal handlers never fire unless
+    the interpreter periodically gets control — the returned timer does that
+    and must be kept alive.
+    """
     signal.signal(signal.SIGINT, lambda *_: app.quit())
-    _signal_timer = QTimer()
-    _signal_timer.start(200)
-    _signal_timer.timeout.connect(lambda: None)
+    timer = QTimer()
+    timer.start(200)
+    timer.timeout.connect(lambda: None)
+    return timer
+
+
+def main() -> None:
+    if "--doctor" in sys.argv[1:]:
+        # Which optional backends this install carries, and how to complete it.
+        # Runs before any Qt object exists so it works over SSH and in CI.
+        from roomkit_ui.features import print_report
+
+        print_report()
+        return
+
+    _configure_logging()
+    if not _has_opengl:
+        logging.getLogger(__name__).warning(
+            "OpenGL not available — running in software rendering mode. "
+            "MCP App WebViews may be limited."
+        )
+
+    app = _create_app()
+    settings = load_settings()
+    app.setStyleSheet(get_stylesheet(settings.get("theme", "dark")))
+    loop = QEventLoop(app)
+    asyncio.set_event_loop(loop)
+
+    window = MainWindow()
+    window.show()
+    QTimer.singleShot(200, _prewarm_webengine)
+
+    stt = STTEngine()
+    tray = TrayService()
+    if sys.platform == "darwin":
+        QTimer.singleShot(2000, lambda: _check_macos_permissions(tray))
+
+    # Kept referenced for the app's lifetime: Qt connections alone do not.
+    dictation_log = _wire_tray_and_dictation(app, window, stt, tray)  # noqa: F841
+    hotkeys = _start_hotkeys(settings, window, stt, tray)  # noqa: F841
+    wake = _wire_wake_word(app, window, stt, tray, settings)  # noqa: F841
+    sigint_timer = _quit_on_sigint(app)  # noqa: F841
 
     with loop:
         loop.run_forever()
