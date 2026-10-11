@@ -109,7 +109,7 @@ _DEFAULTS = {
     "anthropic_api_key": "",
     "vc_anthropic_model": "claude-sonnet-5-5",
     "vc_openai_model": "gpt-4o",
-    "vc_gemini_model": "gemini-2.0-flash",
+    "vc_gemini_model": "gemini-3.8-flash",
     "vc_stt_provider": "local",  # "local" | "gradium"
     "vc_tts_provider": "piper",  # "piper" | "qwen3" | "neutts" | "gradium" | "elevenlabs"
     "elevenlabs_api_key": "",
@@ -245,6 +245,14 @@ _RETIRED_DEFAULTS: dict[str, tuple[str, str, str]] = {
         "claude-sonnet-5-5",
         "Claude Sonnet 4.5 retires on 2026-11-30: the voice channel now uses "
         "Claude Sonnet 5.5. Pick another model in Settings → AI Provider → LLM.",
+    ),
+    # Absent from roomkit 0.96.1's Gemini catalog, which only drops ids the
+    # vendor shut down (it still lists the deprecated 2.5 Flash-Lite).
+    "vc_gemini_model": (
+        "gemini-2.0-flash",
+        "gemini-3.8-flash",
+        "Gemini 2.0 Flash is no longer offered: the voice channel now uses "
+        "Gemini 3.8 Flash. Pick another model in Settings → AI Provider → LLM.",
     ),
 }
 _NOTICES_GROUP = "notices"

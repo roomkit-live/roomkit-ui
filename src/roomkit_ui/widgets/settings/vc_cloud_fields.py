@@ -193,7 +193,7 @@ class VCCloudFields:
         self.vc_gemini_model = QComboBox()
         self.vc_gemini_model.setEditable(True)
         _populate_editable_models(
-            self.vc_gemini_model, VC_GEMINI_MODELS, s.get("vc_gemini_model", "gemini-2.0-flash")
+            self.vc_gemini_model, VC_GEMINI_MODELS, s.get("vc_gemini_model", "gemini-3.8-flash")
         )
         self._vc_gemini_model_label = QLabel("Model")
         form.addRow(self._vc_gemini_model_label, self.vc_gemini_model)

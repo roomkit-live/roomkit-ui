@@ -16,6 +16,6 @@ def create(settings: dict) -> Any:
     return GeminiAIProvider(
         GeminiConfig(
             api_key=api_key,
-            model=settings.get("vc_gemini_model", "gemini-2.0-flash"),
+            model=settings.get("vc_gemini_model", "gemini-3.8-flash"),
         )
     )

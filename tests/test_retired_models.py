@@ -83,3 +83,14 @@ def test_a_provider_without_a_catalog_is_not_announced():
     notices: list[str] = []
     announce_llm_model(_NoCatalog(), notices.append)
     assert notices == []
+
+
+def test_the_shut_down_gemini_default_moves_to_a_catalog_model():
+    from roomkit.providers.gemini.models import MODELS
+
+    save_settings({"vc_gemini_model": "gemini-2.0-flash"})
+
+    model = load_settings()["vc_gemini_model"]
+    assert model == _DEFAULTS["vc_gemini_model"] == "gemini-3.8-flash"
+    assert model in {m.id for m in MODELS if not m.deprecated}
+    assert any("Gemini 2.0 Flash is no longer offered" in n for n in take_model_notices())
