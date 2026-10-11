@@ -321,7 +321,9 @@ class _AudioDebugPage(QWidget):
         rec_dir_lay.addWidget(rec_browse)
         rec_form.addRow("Output", rec_dir_row)
 
-        rec_hint = QLabel("Records full session audio as WAV files.")
+        rec_hint = QLabel(
+            "Records full session audio as plain, unencrypted WAV files in this folder."
+        )
         rec_hint.setWordWrap(True)
         rec_hint.setStyleSheet(
             f"font-size: 11px; color: {c['TEXT_SECONDARY']};"

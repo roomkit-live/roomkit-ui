@@ -43,7 +43,8 @@ class _SpeakersPage(QWidget):
 
         desc = QLabel(
             "Enable speaker identification to label who is talking in the chat. "
-            "Enroll speakers by recording a 10-second voice sample."
+            "Enroll speakers by recording a 10-second voice sample. "
+            "Voice Channel mode only: realtime sessions run without it."
         )
         desc.setWordWrap(True)
         desc.setStyleSheet(
