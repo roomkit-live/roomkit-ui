@@ -52,6 +52,7 @@ VC_TTS_PROVIDERS: list[tuple[str, str]] = [
     ("NeuTTS (voice clone)", "neutts"),
     ("Gradium", "gradium"),
     ("ElevenLabs", "elevenlabs"),
+    ("Pocket TTS (local, voice clone)", "pocket"),
 ]
 
 

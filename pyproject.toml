@@ -59,6 +59,10 @@ neutts = ["roomkit[neutts]>=0.96.1"]
 # to it over the OpenAI API.  The extra itself is light (openai, httpx).
 llamacpp = ["roomkit[llamacpp]>=0.96.1"]
 
+# Kyutai's Pocket TTS: local, CPU-friendly, voice cloning from a clip.  Outside
+# `all` like the two above: pocket-tts pulls torch (the CUDA build on Linux).
+pocket-tts = ["roomkit[pocket-tts]>=0.96.1"]
+
 # ── Desktop features ──────────────────────────────────────────────────────
 # Global hotkey + system-wide dictation. Needs a local STT model to transcribe.
 dictation = ["roomkit-ui[local-voice]", "pynput>=1.7"]

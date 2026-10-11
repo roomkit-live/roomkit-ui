@@ -92,6 +92,10 @@ FEATURES: dict[str, Feature] = {
     # downloads the pinned build with httpx; the binary itself is fetched at
     # first use, not installed.
     "llamacpp": Feature("llamacpp", "llama.cpp local LLM (GGUF)", ("openai", "httpx")),
+    # roomkit loads the model through both, at warmup.
+    "pocket-tts": Feature(
+        "pocket-tts", "Pocket TTS (local, voice cloning)", ("pocket_tts", "torch")
+    ),
 }
 
 # Provider ids as stored in QSettings → feature key.  A provider absent from a
@@ -116,6 +120,7 @@ TTS_PROVIDER_FEATURES: dict[str, str] = {
     "neutts": "neutts",
     "gradium": "gradium",
     "elevenlabs": "elevenlabs",
+    "pocket": "pocket-tts",
 }
 
 REALTIME_PROVIDER_FEATURES: dict[str, str] = {

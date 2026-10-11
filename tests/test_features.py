@@ -44,8 +44,8 @@ def test_every_feature_names_a_declared_extra(declared_extras):
 def test_aggregate_all_covers_every_installable_feature(declared_extras):
     """``[all]`` must pull every feature except the deliberately excluded ones.
 
-    qwen3-tts and neutts stay out: torch and perth are several GB for two
-    optional voices.  Any *other* omission means a user who installed
+    qwen3-tts, neutts and pocket-tts stay out: torch and perth are several
+    GB for optional voices.  Any *other* omission means a user who installed
     ``roomkit-ui[all]`` still hits a missing backend, which is the exact
     failure this registry exists to prevent.
     """
@@ -63,7 +63,7 @@ def test_aggregate_all_covers_every_installable_feature(declared_extras):
             if req.startswith("roomkit-ui[") and req.endswith("]"):
                 frontier.extend(req[len("roomkit-ui[") : -1].split(","))
 
-    expected = {f.extra for f in FEATURES.values()} - {"qwen3-tts", "neutts"}
+    expected = {f.extra for f in FEATURES.values()} - {"qwen3-tts", "neutts", "pocket-tts"}
     assert expected <= reached, f"not reachable from [all]: {sorted(expected - reached)}"
 
 

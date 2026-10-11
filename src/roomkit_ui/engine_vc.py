@@ -41,7 +41,7 @@ from roomkit_ui.features import STT_PROVIDER_FEATURES, require
 from roomkit_ui.hooks import register_vc_hooks
 from roomkit_ui.providers import create_ai_provider
 from roomkit_ui.toolset import ToolSet, tool_summaries
-from roomkit_ui.tts import create_tts_provider
+from roomkit_ui.tts import create_tts_provider, is_cached_tts, tts_cache_fields
 
 logger = logging.getLogger(__name__)
 
@@ -394,7 +394,7 @@ class VoiceChannelMixin:
                 self.loading_status.emit("Warming up TTS model…")  # type: ignore[attr-defined]
                 await tts.warmup()
             # Cache local TTS providers (ONNX models are expensive to load)
-            if tts_provider_name in ("piper", "qwen3", "neutts"):
+            if is_cached_tts(tts_provider_name):
                 self._set_cached("tts", tts_key, (tts, output_sample_rate))  # type: ignore[attr-defined]
         logger.info("TTS: provider=%s, sample_rate=%d", tts_provider_name, output_sample_rate)
         return tts, output_sample_rate
@@ -483,7 +483,7 @@ def _tts_cache_key(settings: dict, provider: str, model: str, device: str) -> tu
     carries the reference file — path and modification time, so a recording
     replaced in place counts — and its transcript.
     """
-    key: tuple = ("tts", provider, model, device)
+    key: tuple = ("tts", provider, model, device, *tts_cache_fields(provider, settings))
     if provider not in _VOICE_CLONING_TTS:
         return key
     ref_audio = settings.get("vc_tts_ref_audio", "")

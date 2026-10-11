@@ -142,6 +142,40 @@ class VCLocalFields:
         self._vc_ref_text_label = QLabel("Ref Text")
         form.addRow(self._vc_ref_text_label, self.vc_tts_ref_text)
 
+        self._add_pocket_fields(form)
+
+    def _add_pocket_fields(self, form: QFormLayout) -> None:
+        """Pocket TTS: a language model, and a pre-made voice or a clip to clone."""
+        from roomkit_ui.tts.pocket import LANGUAGES
+
+        s = self._settings
+        self.vc_pocket_language = QComboBox()
+        for label, value in LANGUAGES:
+            self.vc_pocket_language.addItem(label, value)
+        index = self.vc_pocket_language.findData(s.get("vc_pocket_language", "english"))
+        self.vc_pocket_language.setCurrentIndex(max(index, 0))
+        self._vc_pocket_language_label = QLabel("Language")
+        form.addRow(self._vc_pocket_language_label, self.vc_pocket_language)
+
+        self.vc_pocket_voice = QLineEdit(s.get("vc_pocket_voice", ""))
+        self.vc_pocket_voice.setPlaceholderText("alba (English), estelle (French), or a clip")
+        self.vc_pocket_voice.setToolTip(
+            "A pre-made Pocket TTS voice (alba, estelle, marius, cosette… — see "
+            "huggingface.co/kyutai/tts-voices), or a short, clean WAV of the voice to "
+            "clone. Cloning needs the gated kyutai/pocket-tts weights: accept their terms "
+            "on Hugging Face, then log in on this machine (hf auth login)."
+        )
+        self._vc_pocket_browse = QPushButton("Browse…")
+        self._vc_pocket_browse.setCursor(Qt.PointingHandCursor)
+        self._vc_pocket_browse.setFixedHeight(28)
+        self._vc_pocket_browse.clicked.connect(self._browse_pocket_clip)
+        voice_row = QHBoxLayout()
+        voice_row.setSpacing(6)
+        voice_row.addWidget(self.vc_pocket_voice, 1)
+        voice_row.addWidget(self._vc_pocket_browse)
+        self._vc_pocket_voice_label = QLabel("Voice")
+        form.addRow(self._vc_pocket_voice_label, voice_row)
+
     # -- Visibility --
 
     def update_llm_visibility(self, provider: str) -> None:
@@ -182,6 +216,15 @@ class VCLocalFields:
         self._vc_ref_audio_browse.setVisible(is_voice_clone)
         self._vc_ref_text_label.setVisible(is_voice_clone)
         self.vc_tts_ref_text.setVisible(is_voice_clone)
+        is_pocket = provider == "pocket"
+        for widget in (
+            self._vc_pocket_language_label,
+            self.vc_pocket_language,
+            self._vc_pocket_voice_label,
+            self.vc_pocket_voice,
+            self._vc_pocket_browse,
+        ):
+            widget.setVisible(is_pocket)
 
     # -- Model combos --
 
@@ -227,6 +270,13 @@ class VCLocalFields:
         if path:
             self.vc_tts_ref_audio.setText(path)
 
+    def _browse_pocket_clip(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self._parent, "Select a Voice to Clone", "", "WAV files (*.wav)"
+        )
+        if path:
+            self.vc_pocket_voice.setText(path)
+
     def _browse_gguf(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
             self._parent, "Select a GGUF Model", "", "GGUF models (*.gguf)"
@@ -248,4 +298,6 @@ class VCLocalFields:
             "vc_tts_model": self.vc_tts_model.currentData() or "",
             "vc_tts_ref_audio": self.vc_tts_ref_audio.text().strip(),
             "vc_tts_ref_text": self.vc_tts_ref_text.text().strip(),
+            "vc_pocket_language": self.vc_pocket_language.currentData() or "english",
+            "vc_pocket_voice": self.vc_pocket_voice.text().strip(),
         }
