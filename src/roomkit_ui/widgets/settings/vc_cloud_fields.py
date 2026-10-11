@@ -47,6 +47,22 @@ ELEVENLABS_MODELS = [
 ]
 
 
+def _select_model(combo: QComboBox, model_id: str) -> None:
+    """Select *model_id* in a fixed model dropdown.
+
+    A saved id the lineup does not carry (a retired model, a hand-pinned
+    one) is inserted at the top and stays selected — falling back to the
+    first item would silently change what the next session runs.
+    """
+    if not model_id:
+        return
+    idx = combo.findData(model_id)
+    if idx < 0:
+        combo.insertItem(0, model_id, model_id)
+        idx = 0
+    combo.setCurrentIndex(idx)
+
+
 class VCCloudFields:
     """Cloud provider fields added to a parent QFormLayout in phases.
 
@@ -73,11 +89,7 @@ class VCCloudFields:
         self.vc_anthropic_model = QComboBox()
         for label, model_id in VC_ANTHROPIC_MODELS:
             self.vc_anthropic_model.addItem(label, model_id)
-        cur = s.get("vc_anthropic_model", VC_ANTHROPIC_MODELS[0][1])
-        for i, (_, mid) in enumerate(VC_ANTHROPIC_MODELS):
-            if mid == cur:
-                self.vc_anthropic_model.setCurrentIndex(i)
-                break
+        _select_model(self.vc_anthropic_model, s.get("vc_anthropic_model", ""))
         self._vc_anthropic_model_label = QLabel("Model")
         form.addRow(self._vc_anthropic_model_label, self.vc_anthropic_model)
 
@@ -152,11 +164,7 @@ class VCCloudFields:
         self.deepgram_model = QComboBox()
         for label, val in DEEPGRAM_MODELS:
             self.deepgram_model.addItem(label, val)
-        saved_dg_model = s.get("deepgram_model", "nova-3")
-        for i, (_, val) in enumerate(DEEPGRAM_MODELS):
-            if val == saved_dg_model:
-                self.deepgram_model.setCurrentIndex(i)
-                break
+        _select_model(self.deepgram_model, s.get("deepgram_model", "nova-3"))
         self._deepgram_model_label = QLabel("Deepgram Model")
         form.addRow(self._deepgram_model_label, self.deepgram_model)
 
@@ -186,11 +194,8 @@ class VCCloudFields:
         self.elevenlabs_model = QComboBox()
         for label, val in ELEVENLABS_MODELS:
             self.elevenlabs_model.addItem(label, val)
-        saved_el_model = s.get("elevenlabs_model", "")
-        for i, (_, val) in enumerate(ELEVENLABS_MODELS):
-            if val == saved_el_model:
-                self.elevenlabs_model.setCurrentIndex(i)
-                break
+        # Empty means eleven_v3, the first item.
+        _select_model(self.elevenlabs_model, s.get("elevenlabs_model", ""))
         self._elevenlabs_model_label = QLabel("Model")
         form.addRow(self._elevenlabs_model_label, self.elevenlabs_model)
 
