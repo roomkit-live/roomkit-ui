@@ -1,1 +1,1 @@
-"""RoomKit UI — Gemini Voice Assistant."""
+"""RoomKit UI — a desktop voice assistant built on roomkit."""
