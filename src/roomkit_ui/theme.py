@@ -52,11 +52,15 @@ LIGHT: dict[str, str] = {
 
 _PALETTES = {"dark": DARK, "light": LIGHT}
 
-# One family and size for everything *said* in the conversation — user and
-# assistant alike.  Deliberately the app's own stack (see the global QSS):
-# a chat set in a different family than the window around it reads as a
-# foreign element, not as elegance.
-CHAT_FONT_FAMILY = '-apple-system, "SF Pro Text", "Helvetica Neue", "Segoe UI", sans-serif'
+# One size for everything *said* in the conversation — user and assistant
+# alike — in the window's own family: a chat set in a different family than
+# the window around it reads as a foreign element, not as elegance.
+#
+# No font-family anywhere: Qt's application font already is the platform's UI
+# font (SF on macOS, Segoe UI on Windows, the desktop's on Linux).  Named, it
+# could only be named wrong — "-apple-system" and "SF Pro Text" are CSS and
+# marketing names Qt does not know: it skipped them for Helvetica Neue, after
+# a font-alias lookup it warned about at every start.
 CHAT_FONT_SIZE_PX = 14
 
 
@@ -141,8 +145,6 @@ def get_stylesheet(theme: str = "dark") -> str:
 QMainWindow, QWidget {{
     background-color: {c["BG_PRIMARY"]};
     color: {c["TEXT_PRIMARY"]};
-    font-family: -apple-system, "SF Pro Text", "Helvetica Neue",
-                 "Segoe UI", sans-serif;
     font-size: 14px;
 }}
 
