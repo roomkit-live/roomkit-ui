@@ -361,9 +361,13 @@ class _ModelsPage(QWidget):
         """
         row.set_resolving()
         loop = asyncio.get_event_loop()
+        # The worker thread's last progress report can land after the
+        # download has returned (seen on Python 3.14): once the outcome is
+        # shown, a late report must not turn the row back into a progress bar.
+        finished = False
 
         def _show_progress(pct: int) -> None:
-            if isValid(row):
+            if not finished and isValid(row):
                 row.set_downloading(pct)
 
         def _progress(downloaded: int, total: int) -> None:
@@ -371,13 +375,16 @@ class _ModelsPage(QWidget):
             loop.call_soon_threadsafe(_show_progress, pct)
 
         async def _run() -> None:
+            nonlocal finished
             try:
                 await download(_progress)
             except Exception:
                 logger.exception("%s download failed", what)
+                finished = True
                 if isValid(row):
                     row.set_error()
                 return
+            finished = True
             if isValid(row):
                 row.set_downloaded()
 
