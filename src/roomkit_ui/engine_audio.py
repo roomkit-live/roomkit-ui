@@ -142,21 +142,32 @@ def build_recorder(settings: dict):
 # ---------------------------------------------------------------------------
 
 
+_AEC_LABELS = {"webrtc": "WebRTC", "1": "WebRTC", "speex": "Speex"}
+
+
 def build_audio_processing(
     aec_mode: str,
     denoise_mode: str,
     sample_rate: int,
     frame_size: int,
 ) -> tuple[Any, Any]:
-    """Build AEC and denoiser providers. Returns (aec, denoiser)."""
+    """Build AEC and denoiser providers. Returns (aec, denoiser).
+
+    An echo canceller that cannot load leaves ``aec`` None rather than failing
+    the session: both modes then mute the mic during playback.  Loading fails
+    with ImportError when the package is missing, and with OSError when its
+    native library is (a frozen bundle without it) or cannot be loaded.
+    """
     aec: Any = None
     if aec_mode in ("webrtc", "1"):
         try:
             from roomkit.voice.pipeline.aec.webrtc import WebRTCAECProvider
 
             aec = WebRTCAECProvider(sample_rate=sample_rate)
-        except ImportError:
-            logger.warning("WebRTC AEC not available — install aec-audio-processing")
+        except (ImportError, OSError):
+            logger.warning(
+                "WebRTC AEC not available — install aec-audio-processing", exc_info=True
+            )
     elif aec_mode == "speex":
         try:
             from roomkit.voice.pipeline.aec.speex import SpeexAECProvider
@@ -166,11 +177,27 @@ def build_audio_processing(
                 filter_length=frame_size * 10,
                 sample_rate=sample_rate,
             )
-        except ImportError:
-            logger.warning("Speex AEC not available — install libspeexdsp")
+        except (ImportError, OSError):
+            logger.warning("Speex AEC not available — install libspeexdsp", exc_info=True)
 
     denoiser = build_denoiser(denoise_mode, sample_rate)
     return aec, denoiser
+
+
+def notify_missing_aec(aec_mode: str, aec: Any, emit_notice: Any) -> None:
+    """Say in the chat when the selected echo canceller did not load.
+
+    The session still runs, half-duplex: without a canceller the mic is muted
+    while the assistant speaks, so the user cannot interrupt it — a change of
+    behaviour the user must be able to see, not only a log line.
+    """
+    label = _AEC_LABELS.get(aec_mode)
+    if aec is not None or label is None:
+        return
+    emit_notice(
+        f"{label} echo cancellation could not be loaded (see the log). The microphone "
+        "is muted while the assistant speaks, so it cannot be interrupted."
+    )
 
 
 def build_denoiser(denoise_mode: str, sample_rate: int) -> Any:

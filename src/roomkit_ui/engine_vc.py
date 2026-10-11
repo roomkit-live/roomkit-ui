@@ -18,6 +18,7 @@ from roomkit_ui.engine_audio import (
     build_debug_taps,
     build_recorder,
     build_telemetry,
+    notify_missing_aec,
     resolve_attitude,
     setup_diarization,
 )
@@ -145,6 +146,7 @@ class VoiceChannelMixin:
             aec, denoiser = build_audio_processing(
                 aec_mode, denoise_mode, input_sample_rate, frame_size
             )
+            notify_missing_aec(aec_mode, aec, self.session_notice.emit)  # type: ignore[attr-defined]
             backend = LocalAudioBackend(
                 input_sample_rate=input_sample_rate,
                 output_sample_rate=output_sample_rate,

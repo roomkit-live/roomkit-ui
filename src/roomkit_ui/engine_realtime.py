@@ -19,6 +19,7 @@ from roomkit_ui.engine_audio import (
     build_audio_processing,
     build_debug_taps,
     build_recorder,
+    notify_missing_aec,
     resolve_attitude,
     setup_diarization,
 )
@@ -96,6 +97,7 @@ class RealtimeMixin:
                 logger.info("Deepgram half-duplex: mic muted during playback, AEC skipped")
                 aec_mode = "none"
             aec, _ = build_audio_processing(aec_mode, "none", sample_rate, frame_size)
+            notify_missing_aec(aec_mode, aec, self.session_notice.emit)  # type: ignore[attr-defined]
 
             # AEC bench capture (ROOMKIT_AEC_DUMP=<dir>): realtime-only —
             # the VC path hands the same AEC instance to the backend, whose
