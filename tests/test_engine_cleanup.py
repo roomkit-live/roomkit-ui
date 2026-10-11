@@ -145,7 +145,8 @@ async def test_cached_tts_is_not_closed(engine):
     engine._channel = ch
     engine._kit = _Kit(rec, ch)
     engine._tts = tts
-    engine._cached_models["tts"] = (("piper", "model"), tts)
+    # _build_tts caches the provider with its output rate.
+    engine._cached_models["tts"] = (("piper", "model"), (tts, 22050))
 
     await _run_cleanup(engine)
 

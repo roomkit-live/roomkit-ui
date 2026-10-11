@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from typing import Any
 
 from roomkit_ui.engine_audio import (
@@ -348,7 +349,7 @@ class VoiceChannelMixin:
         """Build the TTS provider. Returns (tts, output_sample_rate)."""
         tts_provider_name = settings.get("vc_tts_provider", "piper")
         tts_model_id = settings.get("vc_tts_model", "")
-        tts_key = ("tts", tts_provider_name, tts_model_id, inference_device)
+        tts_key = _tts_cache_key(settings, tts_provider_name, tts_model_id, inference_device)
         cached_tts = self._get_cached("tts", tts_key)  # type: ignore[attr-defined]
         if cached_tts is not None:
             tts, output_sample_rate = cached_tts
@@ -431,6 +432,33 @@ class VoiceChannelMixin:
         self.session_info.emit(info)  # type: ignore[attr-defined]
         if self._attitude_name:  # type: ignore[attr-defined]
             self.attitude_changed.emit(self._attitude_name)  # type: ignore[attr-defined]
+
+
+# ---------------------------------------------------------------------------
+# TTS cache key (module-level — no engine state)
+# ---------------------------------------------------------------------------
+
+# Built from a reference recording of the voice to clone (tts/qwen3.py,
+# tts/neutts.py) rather than from a model id alone.
+_VOICE_CLONING_TTS = frozenset({"qwen3", "neutts"})
+
+
+def _tts_cache_key(settings: dict, provider: str, model: str, device: str) -> tuple:
+    """Everything a cached TTS was built from, so a change rebuilds it.
+
+    A voice-cloning TTS speaks with the reference it was built from: its key
+    carries the reference file — path and modification time, so a recording
+    replaced in place counts — and its transcript.
+    """
+    key: tuple = ("tts", provider, model, device)
+    if provider not in _VOICE_CLONING_TTS:
+        return key
+    ref_audio = settings.get("vc_tts_ref_audio", "")
+    try:
+        ref_mtime: int | None = os.stat(ref_audio).st_mtime_ns if ref_audio else None
+    except OSError:
+        ref_mtime = None
+    return (*key, ref_audio, ref_mtime, settings.get("vc_tts_ref_text", ""))
 
 
 # ---------------------------------------------------------------------------
