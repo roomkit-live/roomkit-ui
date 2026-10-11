@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from shiboken6 import isValid
 
 from roomkit_ui.skills_sh_client import SkillsShClient, SkillsShSkill
 from roomkit_ui.theme import colors
@@ -300,7 +301,8 @@ class _SkillsPage(QWidget):
             await self._install_well_known_marketplace_source(skill)
         else:
             raise ValueError("Unsupported skills.sh source type")
-        self._refresh_skills()
+        if isValid(self):  # the Settings dialog may have closed meanwhile
+            self._refresh_skills()
 
     async def _install_git_marketplace_source(
         self,
@@ -341,6 +343,8 @@ class _SkillsPage(QWidget):
             skill_name=skill.skill_id,
             source=skill.source,
         )
+        if not isValid(self):
+            return  # the Settings dialog closed during the download
         path = str(dest)
         if self._matching_local_source_index(path) < 0:
             src: dict = {
@@ -424,6 +428,8 @@ class _SkillsPage(QWidget):
             dest = get_repos_dir() / repo_dir_name(url)
             if dest.exists():
                 ok = await pull_repo(dest)
+                if not isValid(self):
+                    return  # the Settings dialog closed during the pull
                 if ok:
                     self._action_status.setText("Updated successfully")
                     self._action_status.setStyleSheet(
@@ -436,12 +442,16 @@ class _SkillsPage(QWidget):
                     )
             else:
                 await clone_repo(url)
+                if not isValid(self):
+                    return  # the Settings dialog closed during the clone
                 self._action_status.setText("Cloned successfully")
                 self._action_status.setStyleSheet(
                     "font-size: 12px; color: #4caf50; background: transparent;"
                 )
                 self._clone_btn.setText("Update")
         except Exception as exc:
+            if not isValid(self):
+                return
             self._action_status.setText(f"Error: {exc}")
             self._action_status.setStyleSheet(
                 "font-size: 12px; color: #f44336; background: transparent;"

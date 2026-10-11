@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from shiboken6 import isValid
 
 from roomkit_ui.theme import colors
 
@@ -173,7 +174,7 @@ class _EnrollDialog(QDialog):
         loop = asyncio.get_event_loop()
 
         def _progress(pct: float) -> None:
-            loop.call_soon_threadsafe(self._progress.setValue, int(pct * 100))
+            loop.call_soon_threadsafe(self._show_progress, pct)
 
         async def _run() -> None:
             try:
@@ -182,6 +183,8 @@ class _EnrollDialog(QDialog):
                 embeddings = await record_and_extract_multi(
                     self._model_path, duration=10.0, progress=_progress
                 )
+                if not isValid(self):
+                    return  # the Settings dialog closed during the recording
                 self.result_name = name
                 self.result_embeddings = embeddings
                 n = len(embeddings)
@@ -192,6 +195,8 @@ class _EnrollDialog(QDialog):
                 QTimer.singleShot(500, self.accept)
             except Exception as e:
                 logger.exception("Enrollment failed")
+                if not isValid(self):
+                    return
                 self._status.setText(f"Error: {e}")
                 self._status.setStyleSheet(
                     f"font-size: 12px; color: {colors()['ACCENT_RED']}; background: transparent;"
@@ -200,6 +205,10 @@ class _EnrollDialog(QDialog):
                 self._name_input.setEnabled(True)
 
         loop.create_task(_run())
+
+    def _show_progress(self, pct: float) -> None:
+        if isValid(self):  # the recording thread outlives a closed dialog
+            self._progress.setValue(int(pct * 100))
 
 
 class _SpeakerRow(QWidget):

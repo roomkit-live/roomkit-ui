@@ -336,12 +336,13 @@ class _AudioDebugPage(QWidget):
         files_label.setStyleSheet(section_style)
         layout.addWidget(files_label)
 
-        # Shared media player — absent without PySide6-Addons.
+        # Shared media player — absent without PySide6-Addons.  Parented so
+        # it stops and goes away with the Settings dialog.
         self._audio_output: QAudioOutput | None = None
         self._player: QMediaPlayer | None = None
         if _HAS_MULTIMEDIA:
-            self._audio_output = QAudioOutput()
-            self._player = QMediaPlayer()
+            self._audio_output = QAudioOutput(self)
+            self._player = QMediaPlayer(self)
             self._player.setAudioOutput(self._audio_output)
             self._player.playbackStateChanged.connect(self._on_playback_changed)
 

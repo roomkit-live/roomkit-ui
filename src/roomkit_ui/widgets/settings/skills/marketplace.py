@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from shiboken6 import isValid
 
 from roomkit_ui.skills_sh_client import BASE_URL, SkillsShClient, SkillsShSkill
 from roomkit_ui.theme import colors
@@ -43,8 +44,14 @@ class MarketplaceTab(QWidget):
         self._cb_is_source_installed = is_source_installed
         self._loaded = False
         self._results: list[SkillsShSkill] = []
-        self._search_timer: QTimer | None = None
         self._installing_source: str | None = None
+        # One debounce timer, parented: it must not fire into a page the
+        # closed Settings dialog has already destroyed.
+        self._pending_query = ""
+        self._search_timer = QTimer(self)
+        self._search_timer.setSingleShot(True)
+        self._search_timer.setInterval(400)
+        self._search_timer.timeout.connect(lambda: self._do_search(self._pending_query))
 
         c = colors()
 
@@ -106,12 +113,8 @@ class MarketplaceTab(QWidget):
         self._status.setText("Search skills.sh. GitHub and well-known sources can be installed.")
 
     def _on_search_changed(self, text: str) -> None:
-        if self._search_timer:
-            self._search_timer.stop()
-        self._search_timer = QTimer()
-        self._search_timer.setSingleShot(True)
-        self._search_timer.timeout.connect(lambda: self._do_search(text))
-        self._search_timer.start(400)
+        self._pending_query = text
+        self._search_timer.start()  # restarts the debounce if already running
 
     def _do_search(self, query: str) -> None:
         query = query.strip()
@@ -127,12 +130,15 @@ class MarketplaceTab(QWidget):
         try:
             client = SkillsShClient()
             results = await client.search(query, limit=50)
+            if not isValid(self):
+                return  # the Settings dialog closed while the search ran
             self._results = results
             self._render(results)
             self._status.setText(f"{len(results)} results")
         except Exception as exc:
             logger.exception("skills.sh search failed")
-            self._status.setText(f"Search failed: {exc}")
+            if isValid(self):
+                self._status.setText(f"Search failed: {exc}")
 
     def _clear_cards(self) -> None:
         while self._flow.count():
@@ -180,6 +186,8 @@ class MarketplaceTab(QWidget):
             if self._cb_install_source is None:
                 raise RuntimeError("No installer configured")
             await self._cb_install_source(skill)
+            if not isValid(self):
+                return  # the Settings dialog closed during the install
             if card.action_btn:
                 c = colors()
                 card.action_btn.setText("Installed \u2713")
@@ -190,6 +198,8 @@ class MarketplaceTab(QWidget):
                 )
         except Exception as exc:
             logger.exception("Failed to install skills.sh source %s", skill.source)
+            if not isValid(self):
+                return
             if card.action_btn:
                 card.action_btn.setText("Retry")
                 card.action_btn.setEnabled(True)

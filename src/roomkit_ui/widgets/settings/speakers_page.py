@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from shiboken6 import isValid
 
 from roomkit_ui.theme import colors
 from roomkit_ui.widgets.settings.speakers_dialogs import _EnrollDialog, _SpeakerRow
@@ -330,6 +331,8 @@ class _SpeakersPage(QWidget):
                 from roomkit_ui.enrollment import record_and_extract
 
                 embedding = await record_and_extract(model_path, duration=3.0, progress=None)
+                if not isValid(self):
+                    return  # the Settings dialog closed during the recording
 
                 # Compute cosine similarity manually for each enrolled speaker
                 import math
@@ -379,10 +382,12 @@ class _SpeakersPage(QWidget):
                     )
             except Exception as exc:
                 logger.exception("Test recognition failed")
-                self._show_test_result(f"Error: {exc}", "error")
+                if isValid(self):
+                    self._show_test_result(f"Error: {exc}", "error")
             finally:
-                self._test_btn.setEnabled(True)
-                self._test_btn.setText("Test Recognition")
+                if isValid(self):
+                    self._test_btn.setEnabled(True)
+                    self._test_btn.setText("Test Recognition")
 
         loop.create_task(_run())
 

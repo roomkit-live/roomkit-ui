@@ -130,6 +130,9 @@ class MainWindow(QMainWindow):
     def _open_settings(self) -> None:
         dlg = SettingsPanel(self)
         dlg.exec()
+        # Built fresh on every open: without this each closed dialog stays
+        # alive under the window, its pages, players and models included.
+        dlg.deleteLater()
         self.settings_saved.emit()
 
     def _on_reset(self) -> None:
