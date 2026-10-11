@@ -21,9 +21,11 @@ def _pcm(seconds: float) -> bytes:
 
 
 @pytest.fixture
-def enroller(monkeypatch):
+def enroller(monkeypatch, tmp_path, inline_jobs):
     """An enroller whose microphone and encoder are stubbed out."""
-    e = Enroller("/nonexistent/encoder.onnx", "/nonexistent/vad.onnx")
+    encoder = tmp_path / "encoder.onnx"
+    encoder.write_bytes(b"")
+    e = Enroller(str(encoder), "/nonexistent/vad.onnx", jobs=inline_jobs)
     monkeypatch.setattr(e._capture, "start", lambda: True)
     monkeypatch.setattr(e._capture, "stop", lambda: None)
     monkeypatch.setattr(

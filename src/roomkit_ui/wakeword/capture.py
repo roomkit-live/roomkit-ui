@@ -4,16 +4,19 @@ Shared by enrolment and by the permanent listener: both want the same
 thing — whole utterances, not a stream — and the VAD is what makes the
 wake word affordable, since the encoder only runs while someone speaks.
 
-Audio arrives on PortAudio's thread and is handed to Qt through a queue
-drained by a timer.  Running the VAD inside the audio callback would
-risk underruns; running it in the Qt thread keeps every signal emission
-on the thread its receivers live on.
+Audio arrives on PortAudio's (or the shared source's) thread and is
+queued for a worker thread that resamples it and runs the VAD.  Running
+the VAD inside the audio callback would risk underruns, and on the Qt
+thread it took a slice of every 20 ms block from the UI.  What the VAD
+reports is queued back and drained by a timer on the Qt thread, which
+keeps every signal emission on the thread its receivers live on.
 """
 
 from __future__ import annotations
 
 import logging
 import queue
+import threading
 from typing import Any
 
 from PySide6.QtCore import QObject, QTimer, Signal
@@ -31,6 +34,11 @@ _VAD_THRESHOLD = 0.5
 _SILENCE_MS = 500
 _MIN_SPEECH_MS = 250
 _PRE_ROLL_MS = 300
+# How long stop() waits for the VAD thread to finish its current block.
+_JOIN_SECONDS = 1.0
+
+# What the VAD thread reports: ("speech", None), ("level", 0-1), ("segment", pcm)
+Event = tuple[str, Any]
 
 
 class SegmentCapture(QObject):
@@ -70,7 +78,10 @@ class SegmentCapture(QObject):
             self._resampler = StreamResampler(self._capture_rate, SAMPLE_RATE)
         self._vad: Any = None
         self._stream: Any = None
-        self._queue: queue.Queue[bytes] = queue.Queue()
+        # Audio blocks for the VAD thread, and what it heard, for the drain.
+        self._queue: queue.Queue[bytes | None] = queue.Queue()
+        self._events: queue.Queue[Event] = queue.Queue()
+        self._worker: threading.Thread | None = None
         self._draining = False
         self._stop_pending = False
         self._timer = QTimer(self)
@@ -91,11 +102,13 @@ class SegmentCapture(QObject):
             self._vad = self._build_vad()
             if self._resampler is not None:
                 self._resampler.reset()  # no history from a previous run
+            self._start_worker()
             if self._source is not None:
                 # Enqueue and return: the shared source fans out synchronously
                 # on its capture thread, and the VAD is far too slow for that.
+                chunks = self._queue
                 self._subscription = self._source.subscribe(
-                    lambda frame: self._queue.put(frame.data), name="wakeword"
+                    lambda frame: chunks.put(frame.data), name="wakeword"
                 )
             else:
                 self._stream = self._open_stream()
@@ -106,6 +119,19 @@ class SegmentCapture(QObject):
             return False
         self._timer.start()
         return True
+
+    def _start_worker(self) -> None:
+        # Fresh queues per run: a VAD thread that outlived a stop() it could
+        # not join in time must not feed the next run.
+        self._queue = queue.Queue()
+        self._events = queue.Queue()
+        self._worker = threading.Thread(
+            target=self._process_loop,
+            args=(self._queue, self._events),
+            name="wakeword-vad",
+            daemon=True,
+        )
+        self._worker.start()
 
     def mark(self) -> Any:
         """A replay marker on the shared source, or ``None`` without one.
@@ -131,11 +157,7 @@ class SegmentCapture(QObject):
             return
         self._stop_pending = False
         self._teardown()
-        while not self._queue.empty():
-            try:
-                self._queue.get_nowait()
-            except queue.Empty:
-                break
+        self._events = queue.Queue()
 
     def _teardown(self) -> None:
         if self._subscription is not None:
@@ -153,6 +175,10 @@ class SegmentCapture(QObject):
             except Exception:
                 logger.exception("Wake word capture: stream close failed")
             self._stream = None
+        if not self._stop_worker():
+            # Still inside the VAD: closing it under that thread would crash.
+            logger.warning("Wake word VAD thread did not stop in time")
+            self._vad = None
         if self._vad is not None:
             try:
                 self._vad.close()
@@ -179,13 +205,24 @@ class SegmentCapture(QObject):
             )
         )
 
+    def _stop_worker(self) -> bool:
+        """End the VAD thread. False when it is still busy after the wait."""
+        worker, self._worker = self._worker, None
+        if worker is None:
+            return True
+        self._queue.put(None)  # wakes it; anything queued behind is dropped
+        worker.join(_JOIN_SECONDS)
+        return not worker.is_alive()
+
     def _open_stream(self) -> Any:
         import sounddevice as sd
+
+        chunks = self._queue
 
         def on_audio(indata, _frames, _time, status) -> None:
             if status:
                 logger.debug("Wake word capture status: %s", status)
-            self._queue.put(bytes(indata))
+            chunks.put(bytes(indata))
 
         stream = sd.RawInputStream(
             samplerate=self._capture_rate,
@@ -200,16 +237,22 @@ class SegmentCapture(QObject):
 
     # -- processing ----------------------------------------------------------
 
+    def _process_loop(self, chunks: queue.Queue[bytes | None], events: queue.Queue[Event]) -> None:
+        """VAD thread: audio blocks in, speech events out, until the sentinel."""
+        while (chunk := chunks.get()) is not None:
+            for event in self._detect_speech(chunk):
+                events.put(event)
+
     def _drain(self) -> None:
-        """Feed queued audio through the VAD, on the Qt thread."""
+        """Emit what the VAD thread heard, on the Qt thread."""
         self._draining = True
         try:
             for _ in range(64):  # bounded: never monopolise the event loop
                 try:
-                    chunk = self._queue.get_nowait()
+                    event = self._events.get_nowait()
                 except queue.Empty:
                     return
-                self.feed(chunk)
+                self._emit(event)
         finally:
             self._draining = False
             if self._stop_pending:
@@ -230,9 +273,14 @@ class SegmentCapture(QObject):
         return self._resampler.process(pcm)
 
     def feed(self, pcm: bytes) -> None:
-        """Push one block through the VAD (public so it can be driven in tests)."""
+        """Push one block through the VAD and emit at once (drives tests)."""
+        for event in self._detect_speech(pcm):
+            self._emit(event)
+
+    def _detect_speech(self, pcm: bytes) -> list[Event]:
+        """Resample one block and run the VAD over it — off the Qt thread."""
         if self._vad is None:
-            return
+            return []
         pcm = self._to_detection_rate(pcm)
         from roomkit.voice.audio_frame import AudioFrame
         from roomkit.voice.pipeline.vad.base import VADEventType
@@ -241,16 +289,24 @@ class SegmentCapture(QObject):
             event = self._vad.process(AudioFrame(data=pcm, sample_rate=SAMPLE_RATE), "wakeword")
         except Exception:
             logger.exception("Wake word VAD failed — block dropped")
-            return
+            return []
         if event is None:
-            return
-
+            return []
         if event.type == VADEventType.SPEECH_START:
-            self.speech_started.emit()
-        elif event.type == VADEventType.AUDIO_LEVEL and event.level_db is not None:
-            self.level.emit(max(0.0, min(1.0, (event.level_db + 60.0) / 60.0)))
-        elif event.type == VADEventType.SPEECH_END and event.audio_bytes:
+            return [("speech", None)]
+        if event.type == VADEventType.AUDIO_LEVEL and event.level_db is not None:
+            return [("level", max(0.0, min(1.0, (event.level_db + 60.0) / 60.0)))]
+        if event.type == VADEventType.SPEECH_END and event.audio_bytes:
             # audio_bytes carries the whole utterance including the pre-roll,
             # so the start of the phrase is never clipped.
-            audio = event.audio_bytes
-            self.segment.emit(audio, len(audio) / (SAMPLE_RATE * 2))
+            return [("segment", event.audio_bytes)]
+        return []
+
+    def _emit(self, event: Event) -> None:
+        kind, value = event
+        if kind == "speech":
+            self.speech_started.emit()
+        elif kind == "level":
+            self.level.emit(value)
+        elif kind == "segment":
+            self.segment.emit(value, len(value) / (SAMPLE_RATE * 2))

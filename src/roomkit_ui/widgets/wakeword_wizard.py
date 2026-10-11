@@ -26,7 +26,7 @@ from PySide6.QtWidgets import (
 )
 
 from roomkit_ui.theme import colors
-from roomkit_ui.wakeword.detector import EmbeddingWakeDetector
+from roomkit_ui.wakeword.detector import Detection, EmbeddingWakeDetector
 from roomkit_ui.wakeword.enroller import Enroller
 from roomkit_ui.wakeword.fingerprint import Calibration, Fingerprint, save
 
@@ -86,6 +86,7 @@ class WakeWordWizard(QDialog):
         self._enroller.take_accepted.connect(self._on_take_accepted)
         self._enroller.take_rejected.connect(self._on_take_rejected)
         self._enroller.phase_finished.connect(self._on_phase_finished)
+        self._enroller.fingerprint_ready.connect(self._on_fingerprint_ready)
         self._enroller.level.connect(self._on_level)
         self._enroller.error.connect(self._on_error)
 
@@ -240,10 +241,11 @@ class WakeWordWizard(QDialog):
             self._next_button.setText("Record decoys")
             self._status.setText("")
             return
-        self._build_fingerprint()
+        self._status.setText("Measuring your phrase against the decoys…")
+        self._enroller.build_fingerprint()
 
-    def _build_fingerprint(self) -> None:
-        fingerprint, calibration = self._enroller.finish()
+    def _on_fingerprint_ready(self, fingerprint: Fingerprint, calibration: Calibration) -> None:
+        self._status.setText("")
         self._fingerprint = fingerprint
         self._calibration = calibration
         self._detector = EmbeddingWakeDetector(self._encoder_path, fingerprint)
@@ -273,9 +275,13 @@ class WakeWordWizard(QDialog):
         self._enroller.capture.segment.connect(self._on_test_segment)
 
     def _on_test_segment(self, pcm: bytes, _duration: float) -> None:
-        if self._detector is None:
+        detector = self._detector
+        if detector is None:
             return
-        detection = self._detector.detect(pcm)
+        # The encoder and the DTW run on enrolment's worker, which owns it.
+        self._enroller.jobs.submit(lambda: detector.detect(pcm), self._show_test_result)
+
+    def _show_test_result(self, detection: Detection | None) -> None:
         if detection is None:
             return
         if detection.triggered:

@@ -18,7 +18,8 @@ from typing import Any
 from PySide6.QtCore import QObject, Signal
 
 from roomkit_ui.wakeword.capture import SegmentCapture
-from roomkit_ui.wakeword.detector import WakeDetector
+from roomkit_ui.wakeword.detector import Detection, WakeDetector
+from roomkit_ui.wakeword.jobs import JobRunner, SerialWorker
 
 logger = logging.getLogger(__name__)
 
@@ -36,10 +37,13 @@ class WakeWordListener(QObject):
         *,
         input_device: int | None = None,
         source: Any = None,
+        jobs: JobRunner | None = None,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
         self._detector = detector
+        # Encoder + DTW per utterance: off the Qt thread, in the order heard.
+        self._jobs: JobRunner = jobs or SerialWorker("wakeword-detect", self)
         self._capture = SegmentCapture(
             vad_model_path, input_device=input_device, source=source, parent=self
         )
@@ -50,6 +54,9 @@ class WakeWordListener(QObject):
         self._enabled = False
         self._suspended_by: set[str] = set()
         self._mark: Any = None
+        # Bumped whenever it stands down: a verdict on speech heard before
+        # then must not open a session now.
+        self._armed_since = 0
 
     # -- arming --------------------------------------------------------------
 
@@ -80,6 +87,7 @@ class WakeWordListener(QObject):
         elif not should_listen and self._capture.running:
             self._capture.stop()
             self._mark = None
+            self._armed_since += 1
             logger.info(
                 "Wake word stood down (%s)",
                 ", ".join(sorted(self._suspended_by)) or "disabled",
@@ -94,16 +102,25 @@ class WakeWordListener(QObject):
         self._mark = self._capture.mark()
 
     def _on_segment(self, pcm: bytes, _duration: float) -> None:
-        try:
-            detection = self._detector.detect(pcm)
-        except Exception as exc:
-            logger.exception("Wake word detection failed")
-            self.error.emit(str(exc))
-            return
+        # The mark belongs to this utterance: by the time its verdict is back
+        # the user may have started another, with a mark of its own.
+        mark, self._mark = self._mark, None
+        armed = self._armed_since
+        self._jobs.submit(
+            lambda: self._detector.detect(pcm),
+            lambda detection: self._on_verdict(detection, mark, armed),
+            self._on_detection_error,
+        )
+
+    def _on_detection_error(self, exc: Exception) -> None:
+        self.error.emit(str(exc))
+
+    def _on_verdict(self, detection: Detection | None, mark: Any, armed: int) -> None:
+        if armed != self._armed_since or not self.listening:
+            return  # stood down while it was being judged
         if detection is None or not detection.triggered:
             return
 
-        mark, self._mark = self._mark, None
         logger.info(
             "Wake word detected (distance %.4f, threshold %.4f)",
             detection.distance,
@@ -117,4 +134,5 @@ class WakeWordListener(QObject):
     # -- teardown ------------------------------------------------------------
 
     def close(self) -> None:
+        self._jobs.shutdown()
         self._capture.stop()

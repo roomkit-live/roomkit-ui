@@ -60,11 +60,11 @@ def test_deferred_stop_completes_once_the_drain_unwinds(capture):
 def test_drain_clears_its_flag_even_when_a_handler_raises(capture):
     """A raising segment handler must not leave capture unable to stop."""
 
-    def explode(_pcm: bytes) -> None:
+    def explode(_event) -> None:
         raise RuntimeError("handler blew up")
 
-    capture.feed = explode  # type: ignore[method-assign]
-    capture._queue.put(b"\x00\x00" * 160)
+    capture._emit = explode  # type: ignore[method-assign]
+    capture._events.put(("segment", b"\x00\x00" * 160))
 
     with pytest.raises(RuntimeError):
         capture._drain()

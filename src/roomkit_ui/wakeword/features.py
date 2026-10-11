@@ -107,6 +107,10 @@ class WhisperEmbedder:
     def ready(self) -> bool:
         return self._session is not None
 
+    @property
+    def path(self) -> Path:
+        return self._path
+
     def load(self) -> None:
         """Create the ONNX session (idempotent)."""
         if self._session is not None:

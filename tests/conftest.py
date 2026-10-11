@@ -20,3 +20,28 @@ def isolated_qsettings(tmp_path):
     set_secret_store_for_tests(SecretStore(keyring_backend=None))
     yield
     reset_secret_store_for_tests()
+
+
+class InlineJobs:
+    """A wake-word job runner that runs each job at once, on the caller's thread.
+
+    Keeps tests about *what* the listener and enroller decide synchronous;
+    tests about *where* the work runs use the real SerialWorker.
+    """
+
+    def submit(self, job, on_done, on_error=None) -> None:
+        try:
+            result = job()
+        except Exception as exc:
+            if on_error is not None:
+                on_error(exc)
+            return
+        on_done(result)
+
+    def shutdown(self) -> None:
+        pass
+
+
+@pytest.fixture
+def inline_jobs():
+    return InlineJobs()

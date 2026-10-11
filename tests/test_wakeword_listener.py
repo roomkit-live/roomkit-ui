@@ -59,8 +59,8 @@ def source():
 
 
 @pytest.fixture
-def listener(detector, source, monkeypatch):
-    lis = WakeWordListener(detector, "/nonexistent/vad.onnx", source=source)
+def listener(detector, source, monkeypatch, inline_jobs):
+    lis = WakeWordListener(detector, "/nonexistent/vad.onnx", source=source, jobs=inline_jobs)
     monkeypatch.setattr(lis._capture, "_build_vad", lambda: object())
     return lis
 
@@ -174,9 +174,9 @@ def test_detector_failure_surfaces_and_keeps_listening(listener, detector):
 # -- without a shared source -------------------------------------------------
 
 
-def test_mark_is_none_without_a_shared_source(detector, monkeypatch):
+def test_mark_is_none_without_a_shared_source(detector, monkeypatch, inline_jobs):
     """Older roomkit: the session still opens, only the backlog is lost."""
-    lis = WakeWordListener(detector, "/nonexistent/vad.onnx", source=None)
+    lis = WakeWordListener(detector, "/nonexistent/vad.onnx", source=None, jobs=inline_jobs)
     monkeypatch.setattr(lis._capture, "_build_vad", lambda: object())
     monkeypatch.setattr(lis._capture, "_open_stream", lambda: object())
     lis.set_enabled(True)

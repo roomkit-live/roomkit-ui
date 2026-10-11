@@ -18,6 +18,7 @@ from PySide6.QtCore import QObject, Signal
 from roomkit_ui.wakeword.capture import SegmentCapture
 from roomkit_ui.wakeword.features import WhisperEmbedder
 from roomkit_ui.wakeword.fingerprint import Calibration, Fingerprint, calibrate
+from roomkit_ui.wakeword.jobs import JobRunner, SerialWorker
 
 logger = logging.getLogger(__name__)
 
@@ -98,6 +99,7 @@ class Enroller(QObject):
     take_rejected = Signal(str)  # why, in the user's terms
     step_changed = Signal(str, str, int, int)  # prompt, hint, done_in_step, of
     phase_finished = Signal()  # prototypes done, or decoys done
+    fingerprint_ready = Signal(object, object)  # Fingerprint, Calibration
     level = Signal(float)
     error = Signal(str)
 
@@ -108,10 +110,14 @@ class Enroller(QObject):
         *,
         input_device: int | None = None,
         capture_rate: int | None = None,
+        jobs: JobRunner | None = None,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
         self._embedder = WhisperEmbedder(encoder_path)
+        # Loading, embedding and calibrating run here, off the Qt thread, in
+        # order: the encoder is loaded before the first take reaches it.
+        self._jobs: JobRunner = jobs or SerialWorker("wakeword-enrol", self)
         # Recorded at the rate detection captures at (see controller.capture_rate),
         # so takes and live audio reach the encoder through the same conversion.
         self._capture = SegmentCapture(
@@ -127,11 +133,11 @@ class Enroller(QObject):
     def begin(self, label: str) -> bool:
         """Start collecting the phrase itself."""
         self.state = EnrolmentState(label=label)
-        try:
-            self._embedder.load()
-        except (FileNotFoundError, ImportError) as exc:
-            self.error.emit(str(exc))
+        if not self._embedder.path.is_file():
+            self.error.emit(f"Wake-word encoder not found: {self._embedder.path}")
             return False
+        # ~200 ms: queued ahead of every take, so none is embedded before it.
+        self._jobs.submit(self._embedder.load, lambda _: None, self._on_job_error)
         if not self._capture.start():
             return False
         self._announce()
@@ -156,16 +162,21 @@ class Enroller(QObject):
         """The shared microphone capture, still running between phases."""
         return self._capture
 
+    @property
+    def jobs(self) -> JobRunner:
+        """Where the encoder runs — detection on the test step shares it."""
+        return self._jobs
+
     def cancel(self) -> None:
         """Release the microphone. Safe only outside the capture call stack."""
+        self._jobs.shutdown()
         self._capture.stop()
 
     def finish(self) -> tuple[Fingerprint, Calibration]:
-        """Build the calibrated fingerprint.
+        """Build the calibrated fingerprint — a DTW per pair, so not on the Qt thread.
 
-        Does *not* release the microphone: this runs inside the capture
-        timer's call stack, and the wizard goes straight on to the test
-        step.  Call :meth:`cancel` when the dialog closes.
+        Does *not* release the microphone: the wizard goes straight on to
+        the test step.  Call :meth:`cancel` when the dialog closes.
         """
         prototypes = [t.embedding for t in self.state.prototypes]
         decoys = [t.embedding for t in self.state.decoys]
@@ -178,6 +189,17 @@ class Enroller(QObject):
         )
         return fingerprint, cal
 
+    def build_fingerprint(self) -> None:
+        """Run :meth:`finish` on the worker; ``fingerprint_ready`` carries it."""
+        self._jobs.submit(
+            self.finish,
+            lambda built: self.fingerprint_ready.emit(*built),
+            self._on_job_error,
+        )
+
+    def _on_job_error(self, exc: Exception) -> None:
+        self.error.emit(str(exc))
+
     # -- collection ----------------------------------------------------------
 
     def _on_segment(self, pcm: bytes, duration: float) -> None:
@@ -187,12 +209,15 @@ class Enroller(QObject):
         if rejection:
             self.take_rejected.emit(rejection)
             return
-        try:
-            embedding = self._embedder.embed(pcm)
-        except Exception as exc:
-            logger.exception("Wake word enrolment: embedding failed")
-            self.error.emit(str(exc))
-            return
+        self._jobs.submit(
+            lambda: self._embedder.embed(pcm),
+            lambda embedding: self._on_embedded(embedding, duration),
+            self._on_job_error,
+        )
+
+    def _on_embedded(self, embedding: np.ndarray, duration: float) -> None:
+        if self.state.current_step is None:
+            return  # the step filled up while this take was being embedded
         if len(embedding) == 0:
             self.take_rejected.emit("That was too short to use — try again.")
             return
