@@ -32,6 +32,7 @@ from roomkit_ui.engine_vc_helpers import (
     build_deepgram_stt,
     build_gradium_stt,
     build_interruption,
+    build_tts_filter,
     build_turn_detector,
     build_turn_vad,
     log_vc_audio_pipeline,
@@ -111,7 +112,7 @@ class VoiceChannelMixin:
 
     async def _start_voice_channel(self, settings: dict) -> None:
         try:
-            from roomkit import RoomKit, VoiceChannel
+            from roomkit import RoomKit
             from roomkit.channels.ai import AIChannel
             from roomkit.models import RetryPolicy
             from roomkit.voice.pipeline.config import AudioPipelineConfig
@@ -190,18 +191,9 @@ class VoiceChannelMixin:
                 inbound_dsp_threads=DSP_THREADS,
             )
 
-            # 7. VoiceChannel.  close_providers=False: the engine owns the
-            # STT/TTS lifecycle (it reuses cached models across sessions and
-            # closes TTS itself to avoid a double-aclose hang), so close()
-            # must not close them.  The backend is still closed by close().
-            voice = VoiceChannel(
-                "voice",
-                stt=stt,
-                tts=tts,
-                backend=backend,
-                pipeline=pipeline,
-                close_providers=False,
-            )
+            # 7. VoiceChannel
+            tts_filter = build_tts_filter(settings)
+            voice = _build_voice_channel(stt, tts, backend, pipeline, tts_filter)
             self._channel = voice  # type: ignore[attr-defined]
 
             # 7.5. Skills
@@ -259,7 +251,7 @@ class VoiceChannelMixin:
                 category=ChannelCategory.INTELLIGENCE,
                 metadata={"tools": tools},
             )
-            register_vc_hooks(kit, self)
+            register_vc_hooks(kit, self, tts_filter=tts_filter)
             if llm_provider_name == "local":
                 register_local_tool_hint(kit, self.error_occurred.emit)  # type: ignore[attr-defined]
 
@@ -474,6 +466,27 @@ class VoiceChannelMixin:
         self.session_info.emit(info)  # type: ignore[attr-defined]
         if self._attitude_name:  # type: ignore[attr-defined]
             self.attitude_changed.emit(self._attitude_name)  # type: ignore[attr-defined]
+
+
+def _build_voice_channel(stt: Any, tts: Any, backend: Any, pipeline: Any, tts_filter: Any) -> Any:
+    """The session's VoiceChannel.
+
+    close_providers=False: the engine owns the STT/TTS lifecycle (it reuses
+    cached models across sessions and closes TTS itself to avoid a
+    double-aclose hang), so close() must not close them.  The backend is
+    still closed by close().
+    """
+    from roomkit import VoiceChannel
+
+    return VoiceChannel(
+        "voice",
+        stt=stt,
+        tts=tts,
+        backend=backend,
+        pipeline=pipeline,
+        tts_filter=tts_filter,
+        close_providers=False,
+    )
 
 
 # ---------------------------------------------------------------------------

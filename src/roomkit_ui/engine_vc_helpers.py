@@ -141,6 +141,45 @@ def _semantic_interruption(stt_streams: bool) -> Any:
     )
 
 
+def build_tts_filter(settings: dict) -> Any:
+    """What the TTS must not read aloud of a reply, as one roomkit filter chain.
+
+    - Technical text: a JSON object the model wrote instead of calling a tool,
+      a ``(Note: ...)`` to itself, a ``---`` separator.
+    - Bracketed stage directions (``[smiles]``, ``[Respond in French]``) —
+      except on an ElevenLabs model that renders audio tags, where
+      ``[laughs]`` is a cue the voice performs.  Its tags are open-ended, so
+      no keep-list would cover them: brackets all pass there, as roomkit
+      advises for expressive ElevenLabs.
+    - Emoji, which a TTS names or garbles.
+
+    AFTER_TTS gets the filtered text, and the assistant bubble filters what
+    BEFORE_TTS shows it (hooks.py), so the chat reads what is spoken; the
+    stored conversation keeps the text as the model wrote it.
+    """
+    from roomkit.voice.tts.filters import (
+        StripBrackets,
+        StripEmoji,
+        StripTechnicalText,
+        TTSFilterChain,
+    )
+
+    # Technical text first: brackets left around a removed JSON array go next.
+    filters: list[Any] = [StripTechnicalText()]
+    if not _tts_reads_audio_tags(settings):
+        filters.append(StripBrackets())
+    filters.append(StripEmoji())
+    return TTSFilterChain(*filters)
+
+
+def _tts_reads_audio_tags(settings: dict) -> bool:
+    if settings.get("vc_tts_provider") != "elevenlabs":
+        return False
+    from roomkit_ui.tts.elevenlabs import model_id, reads_audio_tags
+
+    return reads_audio_tags(model_id(settings))
+
+
 def build_turn_detector(settings: dict, inference_device: str) -> Any:
     td_name = settings.get("vc_turn_detector", "")
     if td_name != "smart-turn":

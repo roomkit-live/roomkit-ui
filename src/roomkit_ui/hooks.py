@@ -37,8 +37,11 @@ def register_audio_hooks(kit: Any, engine: Any) -> None:
             pass
 
 
-def register_vc_hooks(kit: Any, engine: Any) -> None:
-    """Register framework hooks for VoiceChannel UI callbacks."""
+def register_vc_hooks(kit: Any, engine: Any, *, tts_filter: Any = None) -> None:
+    """Register framework hooks for VoiceChannel UI callbacks.
+
+    *tts_filter* is the channel's: the assistant bubble shows what is spoken.
+    """
     from roomkit.models.enums import HookExecution, HookTrigger
 
     register_audio_hooks(kit, engine)
@@ -126,7 +129,13 @@ def register_vc_hooks(kit: Any, engine: Any) -> None:
             return HookResult.allow()
         # A streamed reply runs this once per sentence, and the bubble wants
         # the growing text: join the sentences as roomkit does for AFTER_TTS.
+        # Those sentences are filtered already (only their spacing is not
+        # tidied); a reply delivered whole (a TTS without streamed input:
+        # Piper, Qwen3, NeuTTS) is filtered only after this hook, so the
+        # bubble filters it the same way.
         sentence = str(text).strip()
+        if tts_filter is not None:
+            sentence = tts_filter(sentence)
         if not sentence:
             return HookResult.allow()
         so_far = engine._partial_buffers.get("assistant", "")
