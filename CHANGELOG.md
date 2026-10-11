@@ -35,6 +35,10 @@ Each released section is the source for that version's GitHub release notes.
   name. The judgments come from OpenAI Decisions, TypeSafe Jev (new `typesafe` extra,
   in `all`) or the conversation model; one that cannot run leaves the assistant
   answering every turn and says so. Off by default: each reply waits for the decision.
+- **The assistant thinks while it listens** (Voice Channel, with a speaking decision) — on
+  the turns it stays quiet, the conversation model keeps a thought of what is said and
+  what the assistant could add; with something worth saying it offers it. Its thoughts
+  go to the log.
 - **Hang up when the conversation goes quiet** — optional, after a set delay (15 s by
   default), never during a tool call or while the assistant speaks; the chat says why
   the session closed.

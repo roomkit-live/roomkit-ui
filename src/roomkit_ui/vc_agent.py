@@ -1,14 +1,17 @@
-"""The Voice Channel agent's turn-taking: whether it speaks on a turn.
+"""The Voice Channel agent's turn-taking: whether it speaks on a turn, and
+what it thinks while it listens.
 
 roomkit 0.96 gives an AIChannel a speak policy: on each turn it would answer,
 the policy says speak, offer (one short sentence of what it could add) or
 stay silent.  ``ClassifierSpeakPolicy`` decides on narrow questions a
 classifier answers in one call (has the speaker finished, put it off, asked
-for quiet, addressed the agent).  This module builds it from the settings.
+for quiet, addressed the agent).  A thinker keeps the agent's thought on the
+turns it stays silent on; back with something worth saying, the policy
+decides again and the agent may offer.  A thinker needs a speak policy.
 
-The policy is an add-on: one that cannot run (backend not installed, no key,
-a model that cannot answer under a schema) leaves the session answering
-every turn, and the chat says why.
+Both are add-ons: one that cannot run (backend not installed, no key, a model
+that cannot answer under a schema) is left out of the session, and the chat
+says why.
 """
 
 from __future__ import annotations
@@ -46,14 +49,14 @@ class VCAgent:
     """What a session's AIChannel is given beyond its model, and what to close."""
 
     speak_policy: Any = None
+    thinker: Any = None
     summary: list[dict] = field(default_factory=list)
     _closables: list[Any] = field(default_factory=list)
 
     def channel_options(self) -> dict[str, Any]:
         """``AIChannel`` keyword arguments; empty when nothing is enabled."""
-        if self.speak_policy is None:
-            return {}
-        return {"speak_policy": self.speak_policy}
+        options = {"speak_policy": self.speak_policy, "thinker": self.thinker}
+        return {name: part for name, part in options.items() if part is not None}
 
     async def close(self) -> None:
         """Close the clients this agent opened (roomkit closes none of them)."""
@@ -74,13 +77,21 @@ def build_vc_agent(settings: dict, ai_provider: Any, notice: Callable[[str], Non
     """The session's agent parts from the settings; *notice* tells the chat
     what was left out and why."""
     agent = VCAgent()
+    _add_speak_policy(agent, settings, ai_provider, notice)
+    _add_thinker(agent, settings, ai_provider, notice)
+    return agent
+
+
+def _add_speak_policy(
+    agent: VCAgent, settings: dict, ai_provider: Any, notice: Callable[[str], None]
+) -> None:
     policy = settings.get("vc_speak_policy", "off")
     if policy not in _CLASSIFIER_BUILDERS:
-        return agent
+        return
     reason = _classifier_unavailable(policy, settings, ai_provider)
     if reason is not None:
         notice(f"The assistant answers every turn: {reason}")
-        return agent
+        return
 
     from roomkit import ClassifierSpeakPolicy
 
@@ -93,7 +104,33 @@ def build_vc_agent(settings: dict, ai_provider: Any, notice: Callable[[str], Non
             "description": f"{_CLASSIFIER_NAMES[policy]}, as {agent_name(settings)}",
         }
     )
-    return agent
+
+
+def _add_thinker(
+    agent: VCAgent, settings: dict, ai_provider: Any, notice: Callable[[str], None]
+) -> None:
+    """The conversation model thinks on the turns the policy leaves silent.
+
+    Without a policy there is no silent turn to think on: the setting waits
+    for one (the Agent tab greys it out), and a policy left out has said why.
+    """
+    if not settings.get("vc_thinker") or agent.speak_policy is None:
+        return
+    if not getattr(ai_provider, "supports_response_schema", False):
+        notice(
+            "The assistant does not think while it listens: the conversation model "
+            "cannot answer under a schema."
+        )
+        return
+
+    from roomkit import LLMThinker
+
+    # The session's provider: the thinker leaves it open on close().
+    agent.thinker = LLMThinker(ai_provider)
+    agent._closables.append(agent.thinker)
+    agent.summary.append(
+        {"name": "Thinks while listening", "description": "the conversation model"}
+    )
 
 
 def _classifier_unavailable(policy: str, settings: dict, ai_provider: Any) -> str | None:

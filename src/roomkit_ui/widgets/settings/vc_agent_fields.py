@@ -1,9 +1,10 @@
-"""Voice Channel Agent tab: whether the assistant decides when to speak."""
+"""Voice Channel Agent tab: whether the assistant decides when to speak, and
+whether it thinks while it listens."""
 
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QComboBox, QFormLayout, QLabel, QLineEdit, QWidget
+from PySide6.QtWidgets import QCheckBox, QComboBox, QFormLayout, QLabel, QLineEdit, QWidget
 
 from roomkit_ui.features import SPEAK_POLICY_FEATURES
 from roomkit_ui.theme import colors
@@ -16,6 +17,12 @@ _SPEAKING_HINT = (
     "listens once asked to (“just listen”) until spoken to by its name. Each reply "
     "waits for the decision: about 0.2 s with Jev, up to half a second with OpenAI, "
     "a second or more with the conversation model."
+)
+
+_THINKER_HINT = (
+    "On the turns it stays quiet, the conversation model keeps a thought of what "
+    "is being said and what the assistant could add; with something worth saying "
+    "it may offer it. One more model call per quiet turn. Needs a speaking decision."
 )
 
 
@@ -69,6 +76,11 @@ class VCAgentPage(QWidget):
 
         form.addRow("", _hint(_SPEAKING_HINT))
 
+        self.thinker = QCheckBox("Think while listening")
+        self.thinker.setChecked(bool(settings.get("vc_thinker", False)))
+        form.addRow("", self.thinker)
+        form.addRow("", _hint(_THINKER_HINT))
+
         self.speak_policy.currentIndexChanged.connect(self._update_visibility)
         self._update_visibility()
 
@@ -85,10 +97,12 @@ class VCAgentPage(QWidget):
         ):
             label.setVisible(shown)
             field.setVisible(shown)
+        self.thinker.setEnabled(policy != "off")
 
     def get_settings(self) -> dict:
         return {
             "vc_speak_policy": self.current_policy(),
             "vc_agent_name": self.agent_name.text().strip(),
+            "vc_thinker": self.thinker.isChecked(),
             "typesafe_api_key": self.typesafe_api_key.text().strip(),
         }

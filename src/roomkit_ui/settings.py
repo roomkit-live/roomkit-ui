@@ -224,6 +224,7 @@ _DEFAULTS = {
     # Voice Channel agent (roomkit 0.96): who decides whether it speaks on a turn
     "vc_speak_policy": "off",  # "off" | "openai" | "jev" | "llm" (vc_agent.py)
     "vc_agent_name": "",  # what people call the assistant (empty = "Assistant")
+    "vc_thinker": False,  # think while listening (needs a speak policy)
     "typesafe_api_key": "",  # secret — keyring, never QSettings
 }
 

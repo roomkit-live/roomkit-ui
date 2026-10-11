@@ -3,7 +3,9 @@
 A speak policy that keeps the assistant quiet leaves the user facing
 silence; the chat says why, in a quiet line.  A policy that failed or missed
 its bound lets the assistant speak (roomkit's fallback): said once, since a
-broken classifier fails every turn the same way.
+broken classifier fails every turn the same way.  The thinker's thoughts go
+to the log only: they are the agent's notes, and what it wants to say
+reaches the chat when the policy lets it speak.
 """
 
 from __future__ import annotations
@@ -44,7 +46,8 @@ def speak_decision_notice(decision: Any, *, asked_again: bool = False) -> str | 
 
 
 def register_agent_hooks(kit: Any, engine: Any) -> None:
-    """Say in the chat what the speak policy decided, when it stays quiet."""
+    """Say in the chat what the speak policy decided, when it stays quiet;
+    log what the thinker thinks."""
     from roomkit.models.enums import HookExecution, HookTrigger
 
     fallback_told = False
@@ -72,3 +75,11 @@ def register_agent_hooks(kit: Any, engine: Any) -> None:
             engine.session_notice.emit(notice)
         except Exception:
             pass
+
+    @kit.hook(HookTrigger.ON_THOUGHT, HookExecution.ASYNC)
+    async def _on_thought(event, context):
+        thought = event.thought
+        took = f"{event.duration_ms} ms" if event.duration_ms is not None else "emptied"
+        logger.info(
+            "Thought (%s): %s | wants to say: %s", took, thought.text, list(thought.want_to_say)
+        )

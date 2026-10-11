@@ -169,7 +169,7 @@ async def test_a_failing_policy_is_said_once_per_session():
         _state=EngineState.ACTIVE, session_notice=SimpleNamespace(emit=said.append)
     )
     register_agent_hooks(kit, engine)
-    (hook,) = kit.hooks.values()
+    hook = next(fn for key, fn in kit.hooks.items() if key.lower().endswith("speak_decision"))
     event = SimpleNamespace(
         decision=SpeakDecision("speak", "fallback"), duration_ms=2000, asked_again=False
     )
@@ -190,6 +190,7 @@ def test_the_agent_tab_saves_its_choices(qapp):
     assert page.get_settings() == {
         "vc_speak_policy": "jev",
         "vc_agent_name": "Nova",
+        "vc_thinker": False,
         "typesafe_api_key": "ts",
     }
     assert not page.typesafe_api_key.isHidden()
@@ -218,3 +219,79 @@ def test_the_info_bar_lists_the_agent(qapp):
     rows = [label.text() for label in bar.findChildren(QLabel)]
     assert any("Decides when to speak" in row and "Jev, as Nova" in row for row in rows)
     bar.deleteLater()
+
+
+def test_the_thinker_thinks_with_the_conversation_model_beside_a_policy():
+    agent, notices = _build(
+        {"vc_speak_policy": "llm", "vc_thinker": True}, MockAIProvider(response_schema=True)
+    )
+
+    assert set(agent.channel_options()) == {"speak_policy", "thinker"}
+    assert [part["name"] for part in agent.summary] == [
+        "Decides when to speak",
+        "Thinks while listening",
+    ]
+    assert notices == []
+
+
+def test_without_a_policy_there_is_nothing_to_think_on():
+    # roomkit refuses a thinker without a speak policy; a policy left out has
+    # already said why, so the thinker adds no second line.
+    for settings in (
+        {"vc_speak_policy": "off", "vc_thinker": True},
+        {"vc_speak_policy": "openai", "openai_api_key": "", "vc_thinker": True},
+    ):
+        agent, notices = _build(settings, MockAIProvider(response_schema=True))
+        assert "thinker" not in agent.channel_options()
+        assert len(notices) <= 1
+
+
+async def test_a_model_without_a_schema_decides_but_does_not_think():
+    agent, notices = _build(
+        {"vc_speak_policy": "openai", "openai_api_key": "sk-test", "vc_thinker": True},
+        MockAIProvider(),
+    )
+
+    assert set(agent.channel_options()) == {"speak_policy"}
+    assert notices == [
+        "The assistant does not think while it listens: the conversation model "
+        "cannot answer under a schema."
+    ]
+    await agent.close()
+
+
+async def test_a_quiet_turn_is_thought_about_and_logged(qapp, caplog):
+    from roomkit.speaking import MockSpeakPolicy, MockThinker, Thought
+
+    thinker = MockThinker([Thought("They plan the meeting.", ("Shall I draft an agenda?",))])
+    vc = await open_session(
+        tts=StreamingInputTTS(),
+        reply=["Sure."],
+        transcripts=["I need to prepare tomorrow's meeting."],
+        ai_options={
+            "speak_policy": MockSpeakPolicy([SpeakDecision("silent", "not addressed")]),
+            "thinker": thinker,
+            "think_wait": 0.2,
+        },
+    )
+    register_agent_hooks(vc.kit, vc.engine)
+    caplog.set_level("INFO", logger="roomkit_ui.agent_hooks")
+
+    await vc.speak()
+    await until(lambda: "Thought (" in caplog.text)
+    await vc.kit.close()
+
+    assert "They plan the meeting." in caplog.text
+    assert "Shall I draft an agenda?" in caplog.text
+    assert vc.ai.contexts == []
+
+
+def test_thinking_waits_for_a_speaking_decision_in_the_tab(qapp):
+    from roomkit_ui.widgets.settings.vc_agent_fields import VCAgentPage
+
+    page = VCAgentPage({"vc_speak_policy": "off", "vc_thinker": True})
+    assert not page.thinker.isEnabled()
+
+    page.speak_policy.setCurrentIndex(3)  # the conversation model
+    assert page.thinker.isEnabled()
+    assert page.get_settings()["vc_thinker"] is True
