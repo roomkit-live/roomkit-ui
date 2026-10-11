@@ -31,6 +31,10 @@ _EXTRA_PATH_DIRS = ("~/.local/bin", "/usr/local/bin", "/opt/homebrew/bin", "~/bi
 # its own and dies in confusing ways.
 _PYI_LIBRARY_VARS = ("LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH", "DYLD_FRAMEWORK_PATH")
 
+# How long to wait, after a kill, for the output pipes to close — and for
+# taskkill to finish. A grandchild the kill missed can hold them open forever.
+_DRAIN_TIMEOUT = 2.0
+
 
 @dataclass(frozen=True)
 class CliResult:
@@ -94,6 +98,9 @@ def run_sync(
     stdin is closed so a CLI that prompts fails fast instead of hanging until
     the timeout. ``start_new_session`` puts the child in its own process group
     so we can kill grandchildren too (``uv run <cli>`` spawns one).
+
+    Output is decoded as UTF-8 with replacement: one stray byte must not turn
+    a result — or a ``--help`` probe at session start — into an exception.
     """
     env = child_env()
     if extra_env:
@@ -104,7 +111,8 @@ def run_sync(
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             stdin=subprocess.DEVNULL,
-            text=True,
+            encoding="utf-8",
+            errors="replace",
             env=env,
             start_new_session=True,
         )
@@ -117,15 +125,40 @@ def run_sync(
         return CliResult(exit_code=proc.returncode, stdout=stdout, stderr=stderr)
     except subprocess.TimeoutExpired:
         _kill(proc)
-        stdout, stderr = proc.communicate()
+        stdout, stderr = _drain(proc)
         return CliResult(
-            exit_code=proc.returncode,
+            exit_code=proc.returncode if proc.returncode is not None else -1,
             stdout=stdout,
             stderr=stderr,
             timed_out=True,
         )
     finally:
         registry.discard(proc)
+
+
+def _drain(proc: subprocess.Popen) -> tuple[str, str]:
+    """Collect what a killed child wrote, without waiting on its grandchildren.
+
+    A grandchild the kill missed — one that left our process group, a node.exe
+    behind a Windows ``.cmd`` shim if ``taskkill`` failed — still holds the
+    output pipes, and reading them to EOF would wait for it to exit. Past
+    ``_DRAIN_TIMEOUT`` the partial output is dropped and the pipes closed.
+    """
+    try:
+        return proc.communicate(timeout=_DRAIN_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        logger.warning("pid %s: a child process still holds its output open", proc.pid)
+    for pipe in (proc.stdout, proc.stderr):
+        try:
+            if pipe is not None:
+                pipe.close()
+        except OSError:
+            pass
+    try:
+        proc.wait(timeout=_DRAIN_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        pass
+    return "", ""
 
 
 def truncate(text: str, limit: int) -> str:
@@ -136,14 +169,16 @@ def truncate(text: str, limit: int) -> str:
 
 
 def _kill(proc: subprocess.Popen) -> None:
-    """Kill *proc*, and the process group around it where there is one.
+    """Kill *proc* and the processes it started.
 
-    ``os.killpg``/``os.getpgid`` are POSIX-only and ``start_new_session`` is
-    ignored on Windows, so there is no group to signal there: a wrapper like
-    ``uv run <cli>`` can leave its own child running. Killing the process we
-    spawned is the most that platform offers here.
+    POSIX: the process group ``start_new_session`` created. Windows has no
+    group to signal (``start_new_session`` is ignored there), so the tree is
+    killed with ``taskkill /T`` — otherwise an npm ``.cmd`` shim's node.exe
+    or ``uv run``'s CLI outlives the kill and keeps the output pipes open.
     """
-    if hasattr(os, "killpg"):
+    if sys.platform == "win32":
+        _kill_windows_tree(proc.pid)
+    elif hasattr(os, "killpg"):
         try:
             os.killpg(os.getpgid(proc.pid), 9)
             return
@@ -153,6 +188,24 @@ def _kill(proc: subprocess.Popen) -> None:
         proc.kill()
     except OSError:
         logger.debug("Could not kill pid %s", proc.pid, exc_info=True)
+
+
+def _kill_windows_tree(pid: int) -> None:
+    """``taskkill /T /F`` *pid* and its descendants. Run before killing *pid*
+    itself: the tree is found through parent ids."""
+    system_root = os.environ.get("SYSTEMROOT", r"C:\Windows")
+    taskkill = os.path.join(system_root, "System32", "taskkill.exe")
+    try:
+        subprocess.run(  # nosec B603 — fixed argv, never shell=True
+            [taskkill, "/T", "/F", "/PID", str(pid)],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=_DRAIN_TIMEOUT,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        logger.debug("taskkill failed for pid %s", pid, exc_info=True)
 
 
 class ProcessRegistry:

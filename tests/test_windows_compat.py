@@ -54,3 +54,20 @@ def test_kill_falls_back_where_the_platform_has_no_process_groups(monkeypatch):
     _kill(proc)
 
     assert proc.wait(timeout=5) != 0
+
+
+def test_kill_takes_the_whole_tree_down_on_windows(monkeypatch):
+    # No process group there: without taskkill /T, the node.exe behind an npm
+    # .cmd shim survives the kill and holds the output pipes open.
+    import roomkit_ui.cli_exec as cli_exec
+
+    proc = subprocess.Popen(resolve_command("sleep") + ["30"])
+    calls = []
+    monkeypatch.setattr(cli_exec.sys, "platform", "win32")
+    monkeypatch.setattr(cli_exec.subprocess, "run", lambda argv, **kw: calls.append(argv))
+
+    _kill(proc)
+
+    assert calls and calls[0][1:] == ["/T", "/F", "/PID", str(proc.pid)]
+    assert calls[0][0].lower().endswith("taskkill.exe")
+    assert proc.wait(timeout=5) != 0

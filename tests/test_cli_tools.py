@@ -1,4 +1,5 @@
 import json
+import sys
 import time
 
 import pytest
@@ -6,7 +7,7 @@ from roomkit import ToolFailedError, ToolRefusedError
 from roomkit.tools.result import is_unknown_tool_answer
 
 from roomkit_ui.cli_exec import ProcessRegistry, resolve_command, run_sync, truncate
-from roomkit_ui.cli_help import parse_subcommands
+from roomkit_ui.cli_help import parse_subcommands, probe_help
 from roomkit_ui.cli_tools import OUTPUT_CAP, CliToolManager
 from roomkit_ui.env_config import invalid_env_lines, parse_env_block
 
@@ -161,6 +162,50 @@ def test_run_sync_reports_a_launch_failure_instead_of_raising():
 
     assert result.exit_code == -1
     assert "Failed to launch" in result.stderr
+
+
+def test_run_sync_survives_output_that_is_not_utf8():
+    # A strict decode raised UnicodeDecodeError — inside probe_help, that
+    # aborted the whole session start.
+    script = "import sys; sys.stdout.buffer.write(b'\\xffok'); sys.stderr.buffer.write(b'\\xfe')"
+    result = run_sync([sys.executable, "-c", script], timeout=10, registry=ProcessRegistry())
+
+    assert result.exit_code == 0
+    assert result.stdout == "�ok"
+    assert result.stderr == "�"
+
+
+async def test_a_help_probe_with_non_utf8_output_still_seeds():
+    script = "import sys; sys.stdout.buffer.write(b'Usage: tool \\xff\\n')"
+    help_text = await probe_help(
+        [sys.executable, "-c", script],
+        display="tool",
+        depth=1,
+        timeout=10,
+        byte_cap=1000,
+        registry=ProcessRegistry(),
+        env={},
+    )
+
+    assert help_text == "Usage: tool �"
+
+
+def test_run_sync_does_not_wait_on_a_grandchild_holding_the_pipe(monkeypatch):
+    # After the kill, a grandchild outside it (a Windows .cmd shim's node.exe,
+    # anything that left our process group) keeps stdout open: an unbounded
+    # second communicate() waited for it forever.
+    monkeypatch.setattr("roomkit_ui.cli_exec._DRAIN_TIMEOUT", 0.5)
+    script = (
+        "import subprocess, sys, time;"
+        "subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(6)'],"
+        " start_new_session=True);"
+        "time.sleep(30)"
+    )
+    started = time.monotonic()
+    result = run_sync([sys.executable, "-c", script], timeout=1, registry=ProcessRegistry())
+
+    assert result.timed_out is True
+    assert time.monotonic() - started < 4
 
 
 def test_truncate_says_it_truncated_rather_than_silently_clipping():
