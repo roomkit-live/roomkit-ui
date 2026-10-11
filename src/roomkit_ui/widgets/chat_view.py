@@ -11,6 +11,7 @@ from PySide6.QtCore import (
     QRectF,
     Qt,
     QTimer,
+    Signal,
 )
 from PySide6.QtGui import QColor, QPixmap
 from PySide6.QtSvg import QSvgRenderer
@@ -55,6 +56,9 @@ def _fade_in(widget: QWidget) -> None:
 class ChatView(QScrollArea):
     """Scrollable chat transcript with iMessage-style bubbles."""
 
+    # A plain click on the name of a voice the STT tells apart ("Speaker B").
+    speaker_clicked = Signal(str)
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWidgetResizable(True)
@@ -70,6 +74,8 @@ class ChatView(QScrollArea):
         self.setWidget(self._container)
 
         self._current_bubble: ChatBubble | None = None
+        # The session's nameable voices ("Speaker B") → what they are called.
+        self._voice_names: dict[str, str] = {}
         # The last assistant entry, tracked past its final: a graceful
         # finalize keeps revealing after _current_bubble is released, and
         # a barge-in must be able to snap that reveal short.
@@ -192,7 +198,7 @@ class ChatView(QScrollArea):
                 self._current_bubble.set_text(text)
             # Update speaker label when diarization catches up mid-utterance
             if speaker_name:
-                self._current_bubble.set_speaker_name(speaker_name)
+                self._label_bubble(self._current_bubble, speaker_name)
         else:
             # New bubble (finalize any previous in-progress bubble first)
             if self._current_bubble and not self._current_bubble.finalized:
@@ -219,7 +225,10 @@ class ChatView(QScrollArea):
                 # full transcript at once (Grok, OpenAI) still rolls out.
                 bubble = ChatBubble("", role=role, speaker_name=speaker_name)
             else:
-                bubble = ChatBubble(text, role=role, speaker_name=speaker_name)
+                bubble = ChatBubble(text, role=role)
+                # Only a nameable voice's label is clickable (_label_bubble).
+                bubble.speaker_clicked.connect(lambda b=bubble: self.speaker_clicked.emit(b.voice))
+                self._label_bubble(bubble, speaker_name)
             # Insert before status_label (last widget) and stretch (second-to-last)
             idx = self._layout.count() - 2
             if idx < 0:
@@ -237,6 +246,35 @@ class ChatView(QScrollArea):
             self._current_bubble = None
 
         self._scroll_to_bottom()
+
+    def name_voice(self, voice: str, name: str) -> None:
+        """A voice the STT tells apart is now called *name*: its turns, past
+        and to come, show it, and a click on it can rename it."""
+        self._voice_names[voice] = name
+        for bubble in self._bubbles():
+            if bubble.voice == voice:
+                self._label_bubble(bubble, voice)
+
+    def voice_name(self, voice: str) -> str:
+        """What a voice is called now: its name, else its label."""
+        return self._voice_names.get(voice, voice)
+
+    def given_names(self) -> list[str]:
+        """The names given to the session's voices, each once."""
+        names = [name for voice, name in self._voice_names.items() if name != voice]
+        return list(dict.fromkeys(names))
+
+    def _label_bubble(self, bubble: ChatBubble, speaker: str) -> None:
+        """Show *speaker* on a user-side bubble: by its name when it is a
+        nameable voice, which a plain click then names."""
+        nameable = speaker in self._voice_names
+        bubble.voice = speaker if nameable else ""
+        bubble.set_speaker_name(self._voice_names.get(speaker, speaker))
+        bubble.set_speaker_clickable(nameable)
+
+    def _bubbles(self) -> list[ChatBubble]:
+        widgets = (self._layout.itemAt(i).widget() for i in range(self._layout.count()))
+        return [w for w in widgets if isinstance(w, ChatBubble)]
 
     def show_listening(self) -> None:
         self._show_status("Listening")
@@ -359,6 +397,7 @@ class ChatView(QScrollArea):
         self._layout.addWidget(self._status_label)
         self._current_bubble = None
         self._last_assistant_bubble = None
+        self._voice_names.clear()
 
     def reset(self) -> None:
         """Clear conversation and show empty state again."""
@@ -375,6 +414,7 @@ class ChatView(QScrollArea):
                 w.deleteLater()
         self._current_bubble = None
         self._last_assistant_bubble = None  # deleted above, like every bubble
+        self._voice_names.clear()
         # Rebuild with empty state centered
         self._layout.addStretch()
         self._layout.insertWidget(1, self._empty_state)

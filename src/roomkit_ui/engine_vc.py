@@ -41,7 +41,12 @@ from roomkit_ui.engine_vc_helpers import (
 from roomkit_ui.features import STT_PROVIDER_FEATURES, require, unavailable_reason
 from roomkit_ui.hooks import register_vc_hooks
 from roomkit_ui.providers import create_ai_provider
-from roomkit_ui.speaker_naming import PRIMARY_UNKNOWN_NOTICE, build_roster
+from roomkit_ui.speaker_naming import (
+    NAMING_NOTICE,
+    PRIMARY_UNKNOWN_NOTICE,
+    build_roster,
+    with_speaker_note,
+)
 from roomkit_ui.toolset import ToolSet
 from roomkit_ui.tts import create_tts_provider, is_cached_tts, tts_cache_fields
 from roomkit_ui.vc_agent import build_vc_agent
@@ -123,8 +128,7 @@ class VoiceChannelMixin:
             stt, stt_provider_name = await self._build_stt(settings, inference_device)
             self._stt = stt
             self._speakers = build_roster(settings)
-            if self._speakers is not None and self._speakers.primary_only:
-                self.session_notice.emit(PRIMARY_UNKNOWN_NOTICE)  # type: ignore[attr-defined]
+            self._announce_speakers()
             tts, output_sample_rate = await self._build_tts(settings, inference_device)
             self._tts = tts  # type: ignore[attr-defined]
 
@@ -257,7 +261,7 @@ class VoiceChannelMixin:
             provider=ai_provider,
             system_prompt=system_prompt,
             tool_handler=self._handle_tool_call,  # type: ignore[attr-defined]
-            config_provider=toolset.turn_config(),
+            config_provider=self._vc_turn_config(toolset),
             skills=skills_registry,
             # Provider SDKs no longer retry (Anthropic stopped in roomkit
             # 0.96); a 429/529 would fail the turn into silence.  Retries
@@ -267,6 +271,22 @@ class VoiceChannelMixin:
             **self._vc_agent.channel_options(),
         )
         return ai_channel, toolset.all, skills_registry
+
+    def _vc_turn_config(self, toolset: ToolSet) -> Any:
+        """Each turn's tools; with voices the STT tells apart, who is who too."""
+        provide = toolset.turn_config()
+        if self._speakers is None:
+            return provide
+        return with_speaker_note(provide, self)
+
+    def _announce_speakers(self) -> None:
+        """Say in the chat how the voices get their names, and what
+        primary-speaker mode holds back until one is known to be the user's."""
+        if self._speakers is None:
+            return
+        self.session_notice.emit(NAMING_NOTICE)  # type: ignore[attr-defined]
+        if self._speakers.primary_only:
+            self.session_notice.emit(PRIMARY_UNKNOWN_NOTICE)  # type: ignore[attr-defined]
 
     async def _load_vc_tools(self, settings: dict, llm_provider_name: str) -> tuple[ToolSet, Any]:
         """The session's tools and skills: none for a local model with

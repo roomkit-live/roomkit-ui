@@ -4,19 +4,27 @@ With speaker identification on and Muse as the STT, Muse labels every turn
 with its voice (``vc_stt.labels_speakers``): no speaker model, no enrolment,
 no pipeline VAD.  The local identification (enrolled voices, sherpa-onnx)
 does not run then.  The session keeps a :class:`SpeakerRoster` on the engine
-(``engine._speakers``); this module is what the hooks do with it.
+(``engine._speakers``); this module is what the hooks, the chat and each
+turn's prompt do with it.
+
+A voice named mid-session keeps its label on the turns said before: the
+names reach the assistant as a note at the end of each turn's system prompt
+(``with_speaker_note``), which ties labels and names together.
 """
 
 from __future__ import annotations
 
 import dataclasses
 import logging
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from roomkit_ui.speaker_roster import SpeakerRoster
 from roomkit_ui.vc_stt import labels_speakers
 
 logger = logging.getLogger(__name__)
+
+NAMING_NOTICE = "Muse tells the voices apart: click a speaker's name to say who it is."
 
 PRIMARY_UNKNOWN_NOTICE = (
     "Listen only to primary speaker is on, and no voice is known to be yours: "
@@ -56,6 +64,9 @@ def labelled_turn(engine: Any, event: Any) -> Any:
         key = heard.key
         if heard.restarted:
             _notify(engine, RESTART_NOTICE)
+        if heard.new:
+            # The chat learns the voice, and that a click can name it.
+            _announce(engine, key, roster.display(key))
 
     if not roster.may_reach_assistant(key):
         try:
@@ -73,6 +84,50 @@ def labelled_turn(engine: Any, event: Any) -> Any:
     if name is None or name == event.sender_name:
         return HookResult.allow()
     return HookResult.modify(dataclasses.replace(event, sender_name=name))
+
+
+def name_voice(engine: Any, key: str, name: str) -> None:
+    """Put *name* on a voice of the session; the chat relabels its turns.
+
+    The turns already said keep the name they were said under: the note in
+    the next turn's prompt tells the assistant who they were.
+    """
+    roster: SpeakerRoster | None = engine._speakers
+    if roster is None or key not in roster.heard():
+        return
+    roster.name(key, name)
+    logger.info("Voice %s named %r", key, roster.display(key))
+    _announce(engine, key, roster.display(key))
+
+
+TurnConfig = Callable[[Any, Any], Awaitable[Any]]
+
+
+def with_speaker_note(provide: TurnConfig, engine: Any) -> TurnConfig:
+    """Wrap a turn's config: the AI channel's prompt, then who is who.
+
+    The prompt is read from the channel each turn, so an attitude set
+    mid-session (``AIChannel.set_system_prompt``) still holds.
+    """
+
+    async def provide_with_note(binding: Any, context: Any) -> Any:
+        config = await provide(binding, context)
+        roster: SpeakerRoster | None = engine._speakers
+        note = roster.prompt_note() if roster is not None else None
+        channel = engine._ai_channel
+        if note is None or channel is None:
+            return config
+        prompt = channel.system_prompt or ""
+        return dataclasses.replace(config, system_prompt=f"{prompt}\n\n{note}".strip())
+
+    return provide_with_note
+
+
+def _announce(engine: Any, key: str, name: str) -> None:
+    try:
+        engine.speaker_named.emit(key, name)
+    except Exception:
+        pass
 
 
 def _notify(engine: Any, notice: str) -> None:

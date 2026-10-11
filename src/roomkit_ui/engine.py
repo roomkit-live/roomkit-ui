@@ -118,6 +118,7 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
     session_info = Signal(dict)  # {provider, model, tools, failed_servers}
     session_cost = Signal(dict)  # {cost_usd: float|None, input_tokens, output_tokens}
     attitude_changed = Signal(str)  # attitude name (empty string = cleared)
+    speaker_named = Signal(str, str)  # voice ("Speaker A"), what it is called now
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -285,6 +286,13 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
     def set_mic_muted(self, muted: bool) -> None:
         self._mic_muted = muted
         self._apply_mic_mute(self._session)
+
+    def name_speaker(self, voice: str, name: str) -> None:
+        """Put *name* on one of the voices the STT tells apart ("Speaker B");
+        an empty name gives it back its label.  No-op outside such a session."""
+        from roomkit_ui.speaker_naming import name_voice
+
+        name_voice(self, voice, name)
 
     def _apply_mic_mute(self, session: Any) -> None:
         """Hold *session*'s microphone to the user's mute.

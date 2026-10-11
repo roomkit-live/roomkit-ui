@@ -21,6 +21,7 @@ from roomkit_ui.widgets.control_bar import ControlBar
 from roomkit_ui.widgets.loading_overlay import LoadingOverlay
 from roomkit_ui.widgets.session_info import SessionInfoBar
 from roomkit_ui.widgets.settings import SettingsPanel
+from roomkit_ui.widgets.voice_name_dialog import ask_voice_name
 from roomkit_ui.widgets.vu_meter import VUMeter
 
 logger = logging.getLogger(__name__)
@@ -110,6 +111,8 @@ class MainWindow(QMainWindow):
         self._engine.session_info.connect(self._on_session_info)
         self._engine.session_cost.connect(self._info_bar.update_cost)
         self._engine.attitude_changed.connect(self._info_bar.set_attitude)
+        self._engine.speaker_named.connect(self._chat.name_voice)
+        self._chat.speaker_clicked.connect(self._ask_voice_name)
 
         # Closes a session nobody is using — armed from settings, and started
         # only once the session is actually active.
@@ -224,6 +227,16 @@ class MainWindow(QMainWindow):
         self, text: str, role: str, is_final: bool, speaker_name: str = ""
     ) -> None:
         self._chat.add_transcription(text, role, is_final, speaker_name)
+
+    def _ask_voice_name(self, voice: str) -> None:
+        """A click on a voice's name in the chat: ask who it is, tell the engine."""
+        from roomkit_ui.speaker_manager import load_speakers
+
+        known = [profile.name for profile in load_speakers()]
+        known += [name for name in self._chat.given_names() if name not in known]
+        name = ask_voice_name(self, voice, self._chat.voice_name(voice), known)
+        if name is not None:
+            self._engine.name_speaker(voice, name)
 
     def _on_user_speaking(self, speaking: bool) -> None:
         if speaking:

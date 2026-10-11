@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtGui import QMouseEvent
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout
 
 from roomkit_ui.theme import CHAT_FONT_FAMILY, CHAT_FONT_SIZE_PX, colors
@@ -63,11 +64,32 @@ _STREAM_CATCHUP_MS = 80
 _STREAM_BACKLOG_WORDS = 12
 
 
+class _SpeakerLabel(QLabel):
+    """The speaker's name above a bubble; a plain click on it once it is nameable."""
+
+    clicked = Signal()
+
+    def __init__(self, text: str) -> None:
+        super().__init__(text)
+        self._clickable = False
+
+    def set_clickable(self, clickable: bool) -> None:
+        self._clickable = clickable
+        self.setCursor(Qt.PointingHandCursor if clickable else Qt.ArrowCursor)
+        self.setToolTip("Click to say who this is" if clickable else "")
+
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:  # noqa: N802 — Qt override
+        if self._clickable and event.button() == Qt.LeftButton:
+            self.clicked.emit()
+        super().mouseReleaseEvent(event)
+
+
 class ChatBubble(QFrame):
     """One chat entry: user/other in a right-hugging grey bubble with a
     timestamp; assistant as a bubble-less, full-column serif paragraph."""
 
     streaming_tick = Signal()
+    speaker_clicked = Signal()
 
     def __init__(
         self,
@@ -79,6 +101,9 @@ class ChatBubble(QFrame):
         super().__init__(parent)
         self._role = role
         self._speaker_name = speaker_name
+        # The voice the turn came from, when the STT tells voices apart
+        # ("Speaker B"): the chat relabels it once it has a name.
+        self.voice = ""
         self._finalized = False
         self._created = datetime.now()
         self._raw_text = text
@@ -219,9 +244,10 @@ class ChatBubble(QFrame):
         outer.setSpacing(0)
 
         # ── Speaker name label (shown above bubble for identified speakers) ──
-        self._speaker_label: QLabel | None = None
+        self._speaker_label: _SpeakerLabel | None = None
         if is_user:
-            self._speaker_label = QLabel(speaker_name or "")
+            self._speaker_label = _SpeakerLabel(speaker_name or "")
+            self._speaker_label.clicked.connect(self.speaker_clicked)
             spk_align = Qt.AlignRight if role == "user" else Qt.AlignLeft
             self._speaker_label.setAlignment(spk_align)
             self._speaker_label.setStyleSheet(
@@ -255,6 +281,10 @@ class ChatBubble(QFrame):
         if self._speaker_label is not None:
             self._speaker_label.setText(name)
             self._speaker_label.setVisible(bool(name))
+
+    def set_speaker_clickable(self, clickable: bool) -> None:
+        if self._speaker_label is not None:
+            self._speaker_label.set_clickable(clickable)
 
     def set_text(self, text: str) -> None:
         self._raw_text = text

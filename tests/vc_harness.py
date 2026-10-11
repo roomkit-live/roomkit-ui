@@ -40,6 +40,7 @@ class FakeEngine(QObject):
     mic_audio_level = Signal(float)
     speaker_identified = Signal(str, float)
     session_notice = Signal(str)
+    speaker_named = Signal(str, str)
 
     def __init__(self) -> None:
         super().__init__()
