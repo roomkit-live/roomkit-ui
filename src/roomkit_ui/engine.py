@@ -177,9 +177,9 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         self._capture_source: Any = None
         self._capture_since: Any = None
 
-        # Session usage/cost accounting (VC mode — realtime APIs report no
-        # usage through roomkit).  _ai_pricing is the active LLM's
-        # ModelPricing, or None for models the offline catalog doesn't carry.
+        # Session usage/cost accounting, both modes.  _ai_pricing is the
+        # active LLM's ModelPricing, or None where the offline catalog has no
+        # price — every realtime model, whose sessions show tokens only.
         self._ai_pricing: Any = None
         self._usage_cost: float = 0.0
         self._usage_in: int = 0
