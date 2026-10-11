@@ -226,6 +226,10 @@ _DEFAULTS = {
     # Local (vLLM / Ollama) model reasoning: off by default, a voice reply
     # must not wait for seconds of hidden thinking
     "vc_local_thinking": False,
+    # Cloud LLM reasoning (engine_vc_helpers.reasoning_options); "" = the model's default
+    "vc_anthropic_thinking": "",  # "" | on | off
+    "vc_anthropic_effort": "",  # "" | low | medium | high | xhigh | max
+    "vc_gemini_thinking": "",  # "" | none (off) | minimal | low | medium | high
     # How long a turn Smart Turn judged unfinished waits for more speech
     "vc_turn_incomplete_wait_ms": "",  # ms (empty = 1500)
     # Voice Channel agent (roomkit 0.96): who decides whether it speaks on a turn

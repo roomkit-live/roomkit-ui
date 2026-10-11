@@ -96,6 +96,48 @@ def _semantic_interruption(stt_streams: bool) -> Any:
     )
 
 
+# The reasoning settings a cloud LLM takes, in roomkit's words (RFC §6.7):
+# ``enable_thinking`` switches reasoning, ``reasoning_effort`` says how much
+# and ``none`` is off.  Empty, in each setting, leaves the model's default.
+CLAUDE_THINKING = ("on", "off")
+CLAUDE_EFFORTS = ("low", "medium", "high", "xhigh", "max")
+GEMINI_THINKING_LEVELS = ("none", "minimal", "low", "medium", "high")
+
+# Thinking counts against max_tokens, and the provider's 1024 would cut a
+# reply off mid-thought.  64k is Anthropic's starting point at xhigh and max.
+_CLAUDE_THINKING_MAX_TOKENS = 16_000
+_CLAUDE_DEEP_MAX_TOKENS = 64_000
+
+
+def reasoning_options(settings: dict, llm_provider: str) -> dict[str, Any]:
+    """The ``AIChannel`` reasoning arguments for the session's LLM.
+
+    Claude takes thinking and effort apart: with thinking off, the effort
+    still sets how much it writes and how readily it calls tools.  Gemini has
+    one level, off included.  roomkit sends each model what it takes, and a
+    model that cannot stop thinking its lowest level for off.  OpenAI gets
+    none: a voice turn always carries tools, and with tools roomkit sends
+    GPT-5.4 and later no reasoning whatever is asked.
+    """
+    options: dict[str, Any] = {}
+    if llm_provider == "anthropic":
+        thinking = settings.get("vc_anthropic_thinking", "")
+        if thinking in CLAUDE_THINKING:
+            options["enable_thinking"] = thinking == "on"
+            if thinking == "on":
+                options["max_tokens"] = _CLAUDE_THINKING_MAX_TOKENS
+        effort = settings.get("vc_anthropic_effort", "")
+        if effort in CLAUDE_EFFORTS:
+            options["reasoning_effort"] = effort
+            if effort in ("xhigh", "max"):
+                options["max_tokens"] = _CLAUDE_DEEP_MAX_TOKENS
+    elif llm_provider == "gemini":
+        level = settings.get("vc_gemini_thinking", "")
+        if level in GEMINI_THINKING_LEVELS:
+            options["reasoning_effort"] = level
+    return options
+
+
 def build_tts_filter(settings: dict) -> Any:
     """What the TTS must not read aloud of a reply, as one roomkit filter chain.
 

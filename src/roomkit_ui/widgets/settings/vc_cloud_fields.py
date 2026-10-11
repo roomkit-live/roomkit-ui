@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QVBoxLayout,
+    QWidget,
 )
 
 from roomkit_ui.widgets.settings.controls import AdvancedSection, SettingsForm
@@ -67,6 +68,83 @@ def _deprecated_label(module_name: str, model_id: str) -> str | None:
         if model.id == model_id and model.deprecated:
             return f"{model.display_name or model.id} (deprecated)"
     return None
+
+
+def _catalog_tags(module_name: str, model_id: str) -> set[str]:
+    """The capability tags a roomkit catalog gives *model_id*; empty if unknown."""
+    try:
+        models = importlib.import_module(module_name).MODELS
+    except Exception:
+        return set()
+    for model in models:
+        if model.id == model_id:
+            return set(model.capabilities)
+    return set()
+
+
+# Values: engine_vc_helpers.CLAUDE_THINKING / CLAUDE_EFFORTS / GEMINI_THINKING_LEVELS.
+CLAUDE_THINKING_OPTIONS = [("Model default", ""), ("On", "on"), ("Off (answers sooner)", "off")]
+CLAUDE_EFFORT_OPTIONS = [
+    ("Model default", ""),
+    ("Low (fastest)", "low"),
+    ("Medium", "medium"),
+    ("High", "high"),
+    ("Extra high", "xhigh"),
+    ("Max (slowest)", "max"),
+]
+GEMINI_THINKING_OPTIONS = [
+    ("Model default", ""),
+    ("Off (fastest)", "none"),
+    ("Minimal", "minimal"),
+    ("Low", "low"),
+    ("Medium", "medium"),
+    ("High", "high"),
+]
+
+_CLAUDE_REASONING_HINT = (
+    "Thinking and a higher effort make Claude slower to start speaking. With thinking "
+    "off, the effort still sets how much it says and how readily it uses tools."
+)
+_GEMINI_REASONING_HINT = "A lower level makes Gemini start speaking sooner."
+
+# What roomkit sends a Claude its catalog tags so (RFC §6.7, roomkit 0.98).
+_CLAUDE_CAVEATS = (
+    ("effort_refused", "This model takes no effort setting."),
+    ("reasoning_floor_low", "This model always thinks: Off runs it at low effort."),
+    ("thinking_off_between_tools", "Off still lets it think between tool calls."),
+    ("thinking_off_effort_high", "With thinking off, Extra high and Max run as High."),
+)
+
+
+def claude_reasoning_note(model_id: str) -> str:
+    """The Claude hint, with what this model does differently (roomkit's catalog)."""
+    tags = _catalog_tags(_ANTHROPIC_CATALOG, model_id)
+    caveats = [caveat for tag, caveat in _CLAUDE_CAVEATS if tag in tags]
+    return " ".join([_CLAUDE_REASONING_HINT, *caveats])
+
+
+def gemini_reasoning_note(model_id: str) -> str:
+    """The Gemini hint, with what this model does differently (roomkit's catalog)."""
+    tags = _catalog_tags(_GEMINI_CATALOG, model_id)
+    if not tags:
+        return _GEMINI_REASONING_HINT
+    if "thinking_level" not in tags:
+        caveat = "This model takes no level: only Off changes how it thinks."
+    elif "thinking_required" in tags:
+        caveat = "This model always thinks: Off runs it at its lowest level."
+    elif "thinking_level_minimal" not in tags:
+        caveat = "Minimal runs as Low on this model."
+    else:
+        return _GEMINI_REASONING_HINT
+    return f"{_GEMINI_REASONING_HINT} {caveat}"
+
+
+def _choice_combo(options: list[tuple[str, str]], saved: str) -> QComboBox:
+    combo = QComboBox()
+    for label, value in options:
+        combo.addItem(label, value)
+    combo.setCurrentIndex(max(combo.findData(saved), 0))
+    return combo
 
 
 VC_ANTHROPIC_MODELS = _catalog_models(_ANTHROPIC_CATALOG) or [
@@ -183,6 +261,56 @@ class VCCloudFields:
         )
         self._vc_gemini_model_label = QLabel("Model")
         form.addRow(self._vc_gemini_model_label, self.vc_gemini_model)
+
+        self._add_reasoning_fields(form)
+
+    def _add_reasoning_fields(self, form: QFormLayout) -> None:
+        """Thinking and effort for Claude, the thinking level for Gemini.
+
+        One block under the model, so search has one place to land.  OpenAI
+        has none: see ``engine_vc_helpers.reasoning_options``.
+        """
+        s = self._settings
+        self.vc_reasoning = QWidget()
+        rows = SettingsForm(self.vc_reasoning)
+
+        self.vc_anthropic_thinking = _choice_combo(
+            CLAUDE_THINKING_OPTIONS, s.get("vc_anthropic_thinking", "")
+        )
+        self._vc_anthropic_thinking_label = QLabel("Thinking")
+        rows.addRow(self._vc_anthropic_thinking_label, self.vc_anthropic_thinking)
+        self.vc_anthropic_effort = _choice_combo(
+            CLAUDE_EFFORT_OPTIONS, s.get("vc_anthropic_effort", "")
+        )
+        self._vc_anthropic_effort_label = QLabel("Effort")
+        rows.addRow(self._vc_anthropic_effort_label, self.vc_anthropic_effort)
+
+        self.vc_gemini_thinking = _choice_combo(
+            GEMINI_THINKING_OPTIONS, s.get("vc_gemini_thinking", "")
+        )
+        self._vc_gemini_thinking_label = QLabel("Thinking level")
+        rows.addRow(self._vc_gemini_thinking_label, self.vc_gemini_thinking)
+
+        self._vc_reasoning_note = QLabel()
+        self._vc_reasoning_note.setWordWrap(True)
+        self._vc_reasoning_note.setObjectName("settingsHint")
+        rows.addRow(self._vc_reasoning_note)
+        form.addRow(self.vc_reasoning)
+
+        self._llm_provider = ""
+        self.vc_anthropic_model.currentIndexChanged.connect(self._update_reasoning_note)
+        self.vc_gemini_model.currentTextChanged.connect(self._update_reasoning_note)
+
+    def _update_reasoning_note(self) -> None:
+        if self._llm_provider == "anthropic":
+            model = self.vc_anthropic_model.currentData() or ""
+            self._vc_reasoning_note.setText(claude_reasoning_note(model))
+            # Disabled, not reset: the pick returns with a model that takes it.
+            takes_effort = "effort_refused" not in _catalog_tags(_ANTHROPIC_CATALOG, model)
+            self.vc_anthropic_effort.setEnabled(takes_effort)
+        elif self._llm_provider == "gemini":
+            model = self.vc_gemini_model.currentText().strip()
+            self._vc_reasoning_note.setText(gemini_reasoning_note(model))
 
     # ── STT ──
 
@@ -355,6 +483,18 @@ class VCCloudFields:
         self.vc_openai_model.setVisible(provider == "openai")
         self._vc_gemini_model_label.setVisible(provider == "gemini")
         self.vc_gemini_model.setVisible(provider == "gemini")
+        self._llm_provider = provider
+        self.vc_reasoning.setVisible(provider in ("anthropic", "gemini"))
+        for widget in (
+            self._vc_anthropic_thinking_label,
+            self.vc_anthropic_thinking,
+            self._vc_anthropic_effort_label,
+            self.vc_anthropic_effort,
+        ):
+            widget.setVisible(provider == "anthropic")
+        self._vc_gemini_thinking_label.setVisible(provider == "gemini")
+        self.vc_gemini_thinking.setVisible(provider == "gemini")
+        self._update_reasoning_note()
 
     def update_stt_visibility(self, provider: str) -> None:
         self.azure.update_stt_visibility(provider)
@@ -391,6 +531,9 @@ class VCCloudFields:
             ),
             "vc_openai_model": self.vc_openai_model.currentText().strip(),
             "vc_gemini_model": self.vc_gemini_model.currentText().strip(),
+            "vc_anthropic_thinking": self.vc_anthropic_thinking.currentData() or "",
+            "vc_anthropic_effort": self.vc_anthropic_effort.currentData() or "",
+            "vc_gemini_thinking": self.vc_gemini_thinking.currentData() or "",
             "gradium_region": self.gradium_region.currentData() or "us",
             "deepgram_model": self.deepgram_model.currentData() or "nova-3",
             "vc_gradium_voice": self.vc_gradium_voice.text().strip(),

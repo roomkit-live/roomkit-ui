@@ -106,6 +106,15 @@ PAGE_SPECS = (
                 unavailable="Select Voice Channel mode to configure reasoning.",
             ),
             SearchTarget(
+                "Thinking & effort",
+                "reasoning effort thinking réflexion raisonnement claude gemini",
+                "voice._cloud.vc_reasoning",
+                (("tabs", 0), ("voice.pipeline_tabs", 1)),
+                fallback="voice.mode_picker",
+                unavailable="Select Voice Channel mode with Claude or Gemini to set "
+                "thinking and effort.",
+            ),
+            SearchTarget(
                 "Speak · TTS",
                 "speech synthesis voix synthèse",
                 "voice.vc_tts_provider",

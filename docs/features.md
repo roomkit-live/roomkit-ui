@@ -63,6 +63,15 @@ kept, never replaced. Agent Skills reach realtime sessions as well as Voice Chan
 - **Local model thinking** — "Model thinking (slower answers)", off by default, for vLLM
   and Ollama: a reasoning model otherwise thinks for seconds before a spoken reply. A model
   that always reasons cannot be switched off; the hint says so.
+- **Thinking and effort** (Think · LLM, Claude and Gemini) — Claude: Thinking (model
+  default / on / off) and Effort (model default, low to max), set apart since effort also
+  shapes the answer with thinking off. Gemini: one thinking level, Off included. They
+  reach roomkit's `AIChannel` as `enable_thinking` / `reasoning_effort`
+  (`engine_vc_helpers.reasoning_options`), and roomkit sends each model what it takes: a
+  model that always thinks runs at its lowest level for Off. On, Extra high and Max raise
+  `max_tokens` (16k, 64k), since thinking counts against it. The note under the fields
+  reads roomkit's catalog for what the selected model does differently. OpenAI has none:
+  a voice turn carries tools, and with tools roomkit sends GPT-5.4 and later no reasoning.
 - **Pocket TTS** — Kyutai's local voice, CPU-friendly, in English, French, German,
   Spanish, Italian, Portuguese and Dutch (larger variants for all but English). By default
   it speaks the speech-recognition language (English when Pocket has no model for it); a

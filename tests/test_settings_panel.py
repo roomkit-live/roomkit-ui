@@ -236,6 +236,30 @@ def test_search_never_changes_conversation_mode_to_reveal_a_setting(panel, qapp)
     assert "Select Voice Channel" in panel._search_notice.text()
 
 
+def test_search_lands_on_claude_thinking_in_the_llm_tab(open_panel, qapp):
+    save_settings({"conversation_mode": "voice_channel", "vc_llm_provider": "anthropic"})
+    panel = open_panel()
+    panel.show()
+    panel._search.setText("effort")
+    panel._search_results.activate_current()
+    qapp.processEvents()
+    voice = panel._conversation.voice
+    assert voice.pipeline_tabs.bar.currentIndex() == 1
+    assert voice._cloud.vc_anthropic_thinking.hasFocus()
+    assert panel._search_notice.text() == "Found: Thinking & effort"
+
+
+def test_search_for_thinking_with_openai_says_where_it_applies(open_panel, qapp):
+    save_settings({"conversation_mode": "voice_channel", "vc_llm_provider": "openai"})
+    panel = open_panel()
+    panel.show()
+    panel._search.setText("thinking")
+    panel._search_results.activate_current()
+    qapp.processEvents()
+    assert panel._conversation.voice.get_settings()["vc_llm_provider"] == "openai"
+    assert "Claude or Gemini" in panel._search_notice.text()
+
+
 def test_search_expands_advanced_voice_detection_when_available(open_panel, monkeypatch, qapp):
     import roomkit_ui.model_manager as models
 

@@ -35,6 +35,7 @@ from roomkit_ui.engine_vc_helpers import (
     build_turn_detector,
     log_vc_audio_pipeline,
     mcp_servers_configured,
+    reasoning_options,
     register_local_tool_hint,
     smart_turn_config,
     start_local_llm,
@@ -268,6 +269,8 @@ class VoiceChannelMixin:
             tools=bool(toolset.all),
         )
 
+        reasoning = reasoning_options(settings, llm_provider_name)
+        logger.info("LLM reasoning: %s", reasoning or "model default")
         ai_channel = AIChannel(
             "ai",
             provider=ai_provider,
@@ -279,6 +282,7 @@ class VoiceChannelMixin:
             # 0.96); a 429/529 would fail the turn into silence.  Retries
             # only run while nothing has been streamed, so none is heard.
             retry_policy=RetryPolicy(max_retries=2, base_delay_seconds=0.5, max_delay_seconds=4.0),
+            **reasoning,
             **toolset.channel_options(),
             **self._vc_agent.channel_options(),
         )
