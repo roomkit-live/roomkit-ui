@@ -152,10 +152,10 @@ async def test_paste_tool_reports_a_refused_keystroke(monkeypatch):
     monkeypatch.setattr(paste, "_copy_to_clipboard", lambda _text: None)
     monkeypatch.setattr(paste, "_simulate_paste", lambda: False)
 
-    result = json.loads(await ToolMixin._paste_text("hello"))
+    from roomkit import ToolFailedError
 
-    assert "error" in result
-    assert "clipboard" in result["error"]
+    with pytest.raises(ToolFailedError, match="clipboard"):
+        await ToolMixin._paste_text("hello")
 
 
 async def test_paste_tool_reports_success(monkeypatch):

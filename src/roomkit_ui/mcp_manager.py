@@ -412,10 +412,16 @@ class MCPManager:
         """Route a tool call to the owning MCP server and return the result.
 
         Matches the 0.7.x unified ``ToolHandler`` signature: ``async
-        (name, arguments) -> str``.
+        (name, arguments) -> str``. A call that ran and failed raises
+        ``ToolFailedError``: Gemini reads any returned body as a success, and
+        only a raised failure reaches it under its ``error`` key.
         """
+        from mcp.shared.exceptions import MCPError
+        from roomkit import ToolFailedError
+
         mcp_session = self._tool_to_session.get(name)
         if mcp_session is None:
+            # roomkit reads this envelope as "not served here", not a result.
             return json.dumps({"error": f"Unknown tool: {name}"})
 
         try:
@@ -423,20 +429,22 @@ class MCPManager:
                 mcp_session.call_tool(name, arguments),
                 timeout=_TOOL_CALL_TIMEOUT,
             )
-            texts: list[str] = []
-            for content in result.content:
-                if hasattr(content, "text"):
-                    texts.append(content.text)
-            output = "\n".join(texts) if texts else ""
-            if result.is_error:  # mcp 2.0 renamed isError → is_error
-                return json.dumps({"error": output})
-            return json.dumps({"result": output})
         except TimeoutError:
             logger.error("MCP tool call %r timed out after %ds", name, _TOOL_CALL_TIMEOUT)
-            return json.dumps({"error": f"Tool call timed out after {_TOOL_CALL_TIMEOUT}s"})
+            raise ToolFailedError(f"Tool call timed out after {_TOOL_CALL_TIMEOUT}s") from None
+        except MCPError as exc:
+            # The server's own words, as an is_error result would carry them.
+            logger.warning("MCP tool call %r failed: %s", name, exc)
+            raise ToolFailedError(exc.message) from exc
         except Exception as exc:
+            # The message can hold anything (a URL, a path): the log keeps it,
+            # the model reads the class only — roomkit's rule for a failure.
             logger.exception("MCP tool call %r failed", name)
-            return json.dumps({"error": str(exc)})
+            raise ToolFailedError(f"The MCP server call failed ({type(exc).__name__})") from exc
+        output = "\n".join(c.text for c in result.content if hasattr(c, "text"))
+        if result.is_error:  # mcp 2.0 renamed isError → is_error
+            raise ToolFailedError(output or f"Tool {name!r} reported an error")
+        return json.dumps({"result": output})
 
     async def handle_app_tool_call(
         self,
@@ -461,4 +469,10 @@ class MCPManager:
                 owner,
             )
             return json.dumps({"error": "Tool is not available to this MCP App"})
-        return await self.handle_tool_call(name, arguments)
+        from roomkit import ToolFailedError
+
+        try:
+            return await self.handle_tool_call(name, arguments)
+        except ToolFailedError as failure:
+            # The app reads the envelope (mcp_app_bridge), not an exception.
+            return json.dumps({"error": failure.message})

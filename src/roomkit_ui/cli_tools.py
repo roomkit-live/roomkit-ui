@@ -180,13 +180,22 @@ class CliToolManager:
         return name in self._specs
 
     async def handle_tool_call(self, name: str, arguments: dict[str, Any]) -> str:
+        """Run the tool's CLI with the model's argv and return its outcome.
+
+        A refused or failed call raises (``ToolRefusedError`` /
+        ``ToolFailedError``): Gemini reads any returned body as a success. A
+        non-zero exit is a result, not a failure — the model reads its stderr.
+        """
+        from roomkit import ToolFailedError, ToolRefusedError
+
         spec = self._specs.get(name)
         if spec is None:
-            return json.dumps({"error": f"Unknown CLI tool: {name}"})
+            # roomkit reads this envelope as "not served here", not a result.
+            return json.dumps({"error": f"Unknown tool: {name}"})
 
         args = arguments.get("args", [])
         if not isinstance(args, list) or not all(isinstance(a, str) for a in args):
-            return json.dumps({"error": "args must be an array of strings"})
+            raise ToolRefusedError("args must be an array of strings")
 
         result = await asyncio.to_thread(
             run_sync,
@@ -197,7 +206,7 @@ class CliToolManager:
         )
         if result.timed_out:
             logger.warning("CLI tool %r timed out after %ss", name, spec.timeout)
-            return json.dumps({"error": f"Command timed out after {spec.timeout}s"})
+            raise ToolFailedError(f"Command timed out after {spec.timeout}s")
 
         # stderr goes back verbatim: CLIs put the correction there
         # ("unknown flag: --foo", "Missing argument 'NAME'"), and that is how

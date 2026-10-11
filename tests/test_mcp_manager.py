@@ -4,6 +4,7 @@ import json
 from types import SimpleNamespace
 
 import pytest
+from roomkit import ToolFailedError
 
 from roomkit_ui.mcp_manager import MCPManager, _clean_schema, _parse_stdio_config
 
@@ -187,4 +188,57 @@ async def test_tool_call_reads_the_20_result_shape():
 
     mgr._tool_to_session = {"ok_tool": _Session(ok), "bad_tool": _Session(bad)}
     assert json.loads(await mgr.handle_tool_call("ok_tool", {})) == {"result": "fine"}
-    assert json.loads(await mgr.handle_tool_call("bad_tool", {})) == {"error": "boom"}
+    # A returned {"error": ...} body reaches Gemini as a success (roomkit 0.95):
+    # a failure has to be raised to be read as one.
+    with pytest.raises(ToolFailedError) as failed:
+        await mgr.handle_tool_call("bad_tool", {})
+    assert failed.value.message == "boom"
+
+
+class _RaisingSession:
+    def __init__(self, exc):
+        self._exc = exc
+
+    async def call_tool(self, name, arguments):
+        raise self._exc
+
+
+@pytest.mark.asyncio
+async def test_tool_call_failures_raise_with_the_words_the_model_may_read():
+    from mcp.shared.exceptions import MCPError
+
+    mgr = MCPManager([])
+    mgr._tool_to_session = {
+        "slow": _RaisingSession(TimeoutError()),
+        "refused": _RaisingSession(MCPError(-32602, "Invalid params: city")),
+        "broken": _RaisingSession(RuntimeError("https://user:pw@host/ is down")),
+    }
+
+    with pytest.raises(ToolFailedError, match="timed out"):
+        await mgr.handle_tool_call("slow", {})
+    with pytest.raises(ToolFailedError) as server_error:
+        await mgr.handle_tool_call("refused", {})
+    assert server_error.value.message == "Invalid params: city"
+    # Anything else: the class, never a message that may carry a secret.
+    with pytest.raises(ToolFailedError) as crash:
+        await mgr.handle_tool_call("broken", {})
+    assert "RuntimeError" in crash.value.message
+    assert "pw" not in crash.value.message
+
+
+@pytest.mark.asyncio
+async def test_unknown_tool_keeps_the_envelope_roomkit_reads_as_unserved():
+    from roomkit.tools.result import is_unknown_tool_answer
+
+    assert is_unknown_tool_answer(await MCPManager([]).handle_tool_call("nope", {}))
+
+
+@pytest.mark.asyncio
+async def test_app_tool_call_gets_a_failure_as_the_envelope_the_bridge_reads():
+    mgr = MCPManager([])
+    mgr._tool_to_server = {"bad_tool": "srv-a"}
+    mgr._tool_to_session = {"bad_tool": _RaisingSession(TimeoutError())}
+
+    out = json.loads(await mgr.handle_app_tool_call("srv-a", "bad_tool", {}))
+
+    assert "timed out" in out["error"]

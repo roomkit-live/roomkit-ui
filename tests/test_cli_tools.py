@@ -1,6 +1,10 @@
 import json
 import time
 
+import pytest
+from roomkit import ToolFailedError, ToolRefusedError
+from roomkit.tools.result import is_unknown_tool_answer
+
 from roomkit_ui.cli_exec import ProcessRegistry, resolve_command, run_sync, truncate
 from roomkit_ui.cli_help import parse_subcommands
 from roomkit_ui.cli_tools import OUTPUT_CAP, CliToolManager
@@ -357,14 +361,17 @@ async def test_handle_tool_call_rejects_non_string_args_without_spawning():
     mgr = CliToolManager([{"name": "ok", "command": "echo", "seed_help": False}])
     await mgr.probe_all()
 
-    assert "error" in json.loads(await mgr.handle_tool_call("ok", {"args": ["a", 42]}))
-    assert "error" in json.loads(await mgr.handle_tool_call("ok", {"args": "not-a-list"}))
+    # Raised, not returned: Gemini reads any returned body as a success.
+    with pytest.raises(ToolRefusedError, match="array of strings"):
+        await mgr.handle_tool_call("ok", {"args": ["a", 42]})
+    with pytest.raises(ToolRefusedError, match="array of strings"):
+        await mgr.handle_tool_call("ok", {"args": "not-a-list"})
 
 
 async def test_handle_tool_call_reports_an_unknown_tool():
     mgr = CliToolManager([])
 
-    assert "error" in json.loads(await mgr.handle_tool_call("nope", {"args": []}))
+    assert is_unknown_tool_answer(await mgr.handle_tool_call("nope", {"args": []}))
 
 
 async def test_handle_tool_call_reports_a_timeout_rather_than_hanging():
@@ -372,9 +379,9 @@ async def test_handle_tool_call_reports_a_timeout_rather_than_hanging():
     await mgr.probe_all()
 
     started = time.monotonic()
-    out = json.loads(await mgr.handle_tool_call("slow", {"args": ["30"]}))
+    with pytest.raises(ToolFailedError, match="timed out"):
+        await mgr.handle_tool_call("slow", {"args": ["30"]})
 
-    assert "timed out" in out["error"]
     assert time.monotonic() - started < 5
 
 

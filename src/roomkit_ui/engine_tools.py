@@ -139,29 +139,51 @@ class ToolMixin:
                 self._watchdog.tool_call_ended()  # type: ignore[attr-defined]
 
         if self._mcp is None:  # type: ignore[attr-defined]
+            # roomkit reads this envelope as "not served here", not a result.
             return '{"error": "Unknown tool"}'
 
-        self._pending_tool_calls += 1  # type: ignore[attr-defined]
-        self._watchdog.tool_call_started()  # type: ignore[attr-defined]
+        return await self._call_mcp_tool(self._mcp, name, arguments, app_info)
+
+    async def _call_mcp_tool(
+        self,
+        mcp: MCPManager,
+        name: str,
+        arguments: dict[str, Any],
+        app_info: dict[str, str] | None,
+    ) -> str:
+        """Run an MCP tool for the model; a failure raises ``ToolFailedError``.
+
+        The app widget shows the outcome either way, so a failure is handed
+        to it as the ``{"error": ...}`` envelope it reads before it is raised.
+        """
+        from roomkit import ToolFailedError
+
+        self._pending_tool_calls += 1
+        self._watchdog.tool_call_started()
         try:
-            result = await self._mcp.handle_tool_call(name, arguments)  # type: ignore[attr-defined]
+            result = await mcp.handle_tool_call(name, arguments)
+        except ToolFailedError as failure:
+            self._show_app_result(app_info, name, json.dumps({"error": failure.message}))
+            raise
         finally:
-            self._pending_tool_calls -= 1  # type: ignore[attr-defined]
-            self._watchdog.tool_call_ended()  # type: ignore[attr-defined]
-        # MCP/anyio can leak orphaned timer callbacks under qasync when a
-        # tool call fails or the server crashes.  Run a lightweight cleanup
-        # after every MCP call to prevent 100% CPU spin loops.
-        # timers_only=True: don't touch FD notifiers during an active session.
-        cleanup_stale_fds(timers_only=True)
-
-        # Notify the UI so the app widget can display the result
-        if app_info is not None:
-            try:
-                self.tool_result_app.emit(name, result)  # type: ignore[attr-defined]
-            except Exception:
-                pass
-
+            self._pending_tool_calls -= 1
+            self._watchdog.tool_call_ended()
+            # MCP/anyio can leak orphaned timer callbacks under qasync when a
+            # tool call fails or the server crashes.  Run a lightweight cleanup
+            # after every MCP call to prevent 100% CPU spin loops.
+            # timers_only=True: don't touch FD notifiers during an active session.
+            cleanup_stale_fds(timers_only=True)
+        self._show_app_result(app_info, name, result)
         return result
+
+    def _show_app_result(self, app_info: dict[str, str] | None, name: str, result: str) -> None:
+        """Hand an MCP App tool's result to its widget; no-op for other tools."""
+        if app_info is None:
+            return
+        try:
+            self.tool_result_app.emit(name, result)  # type: ignore[attr-defined]
+        except Exception:
+            pass
 
     async def _apply_attitude_by_name(self, name: str) -> str:
         """Look up an attitude by name and apply it. Rejects unknown names."""
@@ -250,9 +272,15 @@ class ToolMixin:
 
     @staticmethod
     async def _paste_text(text: str) -> str:
-        """Copy text to clipboard and simulate paste into the focused input."""
+        """Copy text to clipboard and simulate paste into the focused input.
+
+        A refusal or failure raises (``ToolRefusedError`` / ``ToolFailedError``):
+        Gemini reads any returned body as a success.
+        """
+        from roomkit import ToolFailedError, ToolRefusedError
+
         if not text:
-            return json.dumps({"error": "No text provided."})
+            raise ToolRefusedError("No text provided.")
         try:
             from roomkit_ui.paste import (
                 _copy_to_clipboard,
@@ -262,20 +290,22 @@ class ToolMixin:
 
             loop = asyncio.get_running_loop()
             await loop.run_in_executor(None, _copy_to_clipboard, text)
-            if not await loop.run_in_executor(None, _simulate_paste):
-                msg = paste_failure_message()
-                logger.warning("paste_text: %s", msg)
-                return json.dumps({"error": msg})
-            logger.info("paste_text: pasted %d chars", len(text))
-            return json.dumps({"status": "ok", "chars": len(text)})
+            pasted = await loop.run_in_executor(None, _simulate_paste)
         except FileNotFoundError as exc:
             msg = f"Missing helper program: {exc.filename}"
             logger.error("paste_text: %s", msg)
-            return json.dumps({"error": msg})
+            raise ToolFailedError(msg) from exc
         except Exception as exc:
             msg = f"Paste failed: {exc}"
             logger.error("paste_text: %s", msg)
-            return json.dumps({"error": msg})
+            raise ToolFailedError(msg) from exc
+        if not pasted:
+            # The keystroke was refused (e.g. macOS Accessibility not granted).
+            msg = paste_failure_message()
+            logger.warning("paste_text: %s", msg)
+            raise ToolFailedError(msg)
+        logger.info("paste_text: pasted %d chars", len(text))
+        return json.dumps({"status": "ok", "chars": len(text)})
 
     async def handle_app_tool_call(
         self,
