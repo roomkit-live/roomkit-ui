@@ -48,7 +48,7 @@ def test_a_saved_model_in_the_lineup_is_selected_not_duplicated(page_over):
 def test_an_empty_elevenlabs_model_still_means_the_first_item(page_over):
     page = page_over(elevenlabs_model="")
 
-    assert page.get_settings()["elevenlabs_model"] == "eleven_v3"
+    assert page.get_settings()["elevenlabs_model"] == "eleven_v4"
 
 
 # -- lineups come from roomkit's catalogs ---------------------------------------

@@ -89,9 +89,9 @@ GRADIUM_REGIONS = [
 ]
 
 ELEVENLABS_MODELS = [
-    ("v3 (expressive, 70+ langs)", "eleven_v3"),
+    ("v4 (expressive, streams)", "eleven_v4"),
     ("v4 Turbo (expressive, conversational latency)", "eleven_v4_turbo"),
-    ("v4 (expressive)", "eleven_v4"),
+    ("v3 (expressive, 70+ langs, no streaming)", "eleven_v3"),
     ("Multilingual v2 (lifelike)", "eleven_multilingual_v2"),
     ("Flash v2.5 (~75ms, multilingual)", "eleven_flash_v2_5"),
     ("Flash v2 (~75ms, EN only)", "eleven_flash_v2"),
@@ -267,7 +267,7 @@ class VCCloudFields:
         self.elevenlabs_model = QComboBox()
         for label, val in ELEVENLABS_MODELS:
             self.elevenlabs_model.addItem(label, val)
-        # Empty means eleven_v3, the first item.
+        # Empty means eleven_v4, the first item.
         _select_model(self.elevenlabs_model, s.get("elevenlabs_model", ""))
         self._elevenlabs_model_label = QLabel("Model")
         form.addRow(self._elevenlabs_model_label, self.elevenlabs_model)

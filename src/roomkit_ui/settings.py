@@ -93,7 +93,7 @@ _DEFAULTS = {
     "vc_tts_provider": "piper",  # "piper" | "qwen3" | "neutts" | "gradium" | "elevenlabs"
     "elevenlabs_api_key": "",
     "elevenlabs_voice_id": "",  # Empty = Rachel default (21m00Tcm4TlvDq8ikWAM)
-    "elevenlabs_model": "",  # Empty = eleven_v3
+    "elevenlabs_model": "",  # Empty = eleven_v4
     "vc_tts_model": "",
     "vc_tts_ref_audio": "",  # Path to reference WAV for voice cloning
     "vc_tts_ref_text": "",  # Transcript of reference audio
@@ -231,12 +231,13 @@ _RENAMED_KEYS: dict[str, tuple[str, Callable[[Any], Any]]] = {
 }
 
 
-# Defaults the vendor retires: (retired default, its successor, the notice).
-# The Settings dialog saves every field on close, so a stored value equal to
-# a retired default is, almost always, that default and not a deliberate
-# pick.  It moves on with the default, and the chat says so once — a pick
-# that happens to match can be made again.  Dates from roomkit 0.96.1's
-# Anthropic catalog: Sonnet 4.5 deprecated 2026-09-30, retiring 2026-11-30.
+# Defaults that moved on — retired by the vendor, or replaced by a better
+# one: (old default, its successor, the notice).  The Settings dialog saves
+# every field on close, so a stored value equal to an old default is, almost
+# always, that default and not a deliberate pick.  It moves on with the
+# default, and the chat says so once — a pick that happens to match can be
+# made again.  Dates from roomkit 0.96.1's Anthropic catalog: Sonnet 4.5
+# deprecated 2026-09-30, retiring 2026-11-30.
 _RETIRED_DEFAULTS: dict[str, tuple[str, str, str]] = {
     "vc_anthropic_model": (
         "claude-sonnet-4-5-20250929",
@@ -251,6 +252,13 @@ _RETIRED_DEFAULTS: dict[str, tuple[str, str, str]] = {
         "gemini-3.8-flash",
         "Gemini 2.0 Flash is no longer offered: the voice channel now uses "
         "Gemini 3.8 Flash. Pick another model in Settings → AI Provider → LLM.",
+    ),
+    # v3 has no streaming socket: v4 speaks as the reply is written.
+    "elevenlabs_model": (
+        "eleven_v3",
+        "eleven_v4",
+        "ElevenLabs now uses v4, which starts speaking while the reply is written. "
+        "v3 is still in Settings → AI Provider → TTS.",
     ),
 }
 _NOTICES_GROUP = "notices"

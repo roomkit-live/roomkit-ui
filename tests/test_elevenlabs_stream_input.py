@@ -29,8 +29,12 @@ def test_a_model_with_a_socket_streams_by_default(model):
     assert channel.supports_streaming_delivery  # the channel streams the reply to it
 
 
-def test_v3_the_default_model_waits_for_the_whole_reply():
-    assert not _provider(elevenlabs_model="").supports_streaming_input
+def test_v4_the_default_model_streams():
+    assert _provider(elevenlabs_model="").supports_streaming_input
+
+
+def test_v3_waits_for_the_whole_reply():
+    assert not _provider(elevenlabs_model="eleven_v3").supports_streaming_input
 
 
 def test_the_toggle_turns_it_off():

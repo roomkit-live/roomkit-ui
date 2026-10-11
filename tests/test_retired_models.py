@@ -94,3 +94,18 @@ def test_the_shut_down_gemini_default_moves_to_a_catalog_model():
     assert model == _DEFAULTS["vc_gemini_model"] == "gemini-3.8-flash"
     assert model in {m.id for m in MODELS if not m.deprecated}
     assert any("Gemini 2.0 Flash is no longer offered" in n for n in take_model_notices())
+
+
+def test_the_old_elevenlabs_default_moves_to_v4_and_says_so_once():
+    save_settings({"elevenlabs_model": "eleven_v3"})
+
+    assert load_settings()["elevenlabs_model"] == "eleven_v4"
+    notices = take_model_notices()
+    assert any("ElevenLabs now uses v4" in n for n in notices)
+    assert take_model_notices() == []
+
+
+def test_another_elevenlabs_pick_is_kept():
+    save_settings({"elevenlabs_model": "eleven_flash_v2_5"})
+
+    assert load_settings()["elevenlabs_model"] == "eleven_flash_v2_5"

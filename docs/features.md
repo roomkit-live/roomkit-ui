@@ -71,8 +71,8 @@ kept, never replaced. Agent Skills reach realtime sessions as well as Voice Chan
   (the chosen model, else an energy VAD) with an 800 ms end-of-turn silence by default.
 - **ElevenLabs streamed input** — "Stream text to ElevenLabs (lower latency)", on by
   default: each sentence is synthesized as soon as it is written (v4 / v4 Turbo and the
-  v2 / v2.5 models). v3, the default model, has no streaming socket and keeps whole-reply
-  synthesis.
+  v2 / v2.5 models). v4 is the default model; v3 has no streaming socket and keeps
+  whole-reply synthesis.
 - **Barge-in** — Off (the assistant finishes), Any speech interrupts, or Words only:
   roomkit's semantic strategy with its `PhraseBackchannelDetector`, so "ok", "mm-hmm",
   "d'accord" or "merci" let the assistant go on while other words stop it. With a

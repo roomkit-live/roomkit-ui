@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-DEFAULT_MODEL = "eleven_v3"
+# v4: as expressive as v3 (audio tags) and, unlike v3, it streams — each
+# sentence is spoken as soon as the model writes it.
+DEFAULT_MODEL = "eleven_v4"
 
 # The model families that read inline audio tags ([laughs], [whispers]) as
 # delivery cues instead of words — roomkit's _AUDIO_TAG_MODELS.

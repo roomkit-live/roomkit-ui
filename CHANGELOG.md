@@ -65,7 +65,9 @@ Each released section is the source for that version's GitHub release notes.
   model wrote out, its notes to itself and stage directions; on an ElevenLabs model that
   performs audio tags, "[laughs]" still reaches it.
 - **ElevenLabs streamed input** — each sentence is synthesized as soon as it is written
-  (on by default; v4, v4 Turbo, v2 and v2.5). v4 and v4 Turbo join the model list.
+  (on by default; v4, v4 Turbo, v2 and v2.5). v4 and v4 Turbo join the model list, and
+  v4 becomes the default model (v3 has no streaming; a saved v3 default moves to v4 and
+  the chat says so once).
 - **"Model thinking" for local LLMs** (vLLM / Ollama), off by default, so a reasoning
   model no longer thinks for seconds before a spoken reply.
 - **`smart-turn` extra** — the Smart Turn detector's dependencies, outside `all`. Without
