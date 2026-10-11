@@ -24,7 +24,6 @@ from roomkit_ui.engine_audio import (
     build_recorder,
     notify_missing_aec,
     resolve_attitude,
-    setup_diarization,
     usable_capture_source,
 )
 from roomkit_ui.engine_state import EngineState
@@ -36,6 +35,18 @@ from roomkit_ui.toolset import ToolSet, tool_summaries
 logger = logging.getLogger(__name__)
 
 _BLOCK_MS = 20
+
+# Diarization is a voice-channel feature: under roomkit 0.96.1 a realtime
+# session cannot run it.  RealtimeVoiceChannel registers no handler for the
+# pipeline's speaker changes and fires no ON_SPEAKER_CHANGE, so no label ever
+# reached the app; the 16 kHz pipeline the models need was forwarded to the
+# provider as if it were the 24 kHz transport audio; and primary-speaker
+# gating (LocalAudioBackend.set_input_gated) drops frames before the
+# pipeline, so diarization could never hear the primary speaker again.
+REALTIME_DIARIZATION_NOTICE = (
+    "Speaker diarization works in Voice Channel mode only — this realtime "
+    "session runs without speaker labels or primary-speaker mode."
+)
 
 
 @dataclass(frozen=True)
@@ -62,9 +73,6 @@ class RealtimeMixin:
     _attitude: str
     _attitude_name: str
     _base_system_prompt: str
-    _diarization: Any
-    _primary_speaker_mode: bool
-    _primary_speaker_name: str
     _transport: Any
     _kit: Any
     _channel: Any
@@ -101,35 +109,14 @@ class RealtimeMixin:
                 logger.info("Denoiser (%s) not applied in realtime mode", denoise_mode)
             provider_config = _build_provider_config(provider_name, settings)
 
-            # -- Diarization (optional; requires VAD) -----------------------------
-            # Realtime only needs a VAD when diarization is requested — build it
-            # conditionally so non-diarization sessions don't load the model.
-            inference_device = settings.get("inference_device", "cpu")
-            vad = None
-            if settings.get("diarization_enabled") and settings.get("diarization_model"):
-                vad = _build_realtime_vad(settings)
-            diarization = setup_diarization(
-                self, settings, vad_available=vad is not None, inference_device=inference_device
-            )
-            if settings.get("diarization_enabled") and diarization is None:
-                self.session_notice.emit(  # type: ignore[attr-defined]
-                    "Speaker diarization is inactive for this session — it needs both "
-                    "a speaker model and a VAD model (Settings → AI Models)."
-                )
+            if settings.get("diarization_enabled"):
+                self.session_notice.emit(REALTIME_DIARIZATION_NOTICE)  # type: ignore[attr-defined]
 
             # Provider, transport and pipeline are built once per attempt: a
             # failed attempt's kit.close() closes all three (the transport's
             # AEC with it), so a retry must not reuse any of them.
-            spare_vad = vad  # the first attempt takes the VAD built above
-
             def build_media() -> _RealtimeMedia:
-                nonlocal spare_vad
-                attempt_vad, spare_vad = spare_vad, None
-                if attempt_vad is None and vad is not None:
-                    attempt_vad = _build_realtime_vad(settings)
-                return self._build_realtime_media(
-                    settings, provider_name, aec_mode, diarization, attempt_vad
-                )
+                return self._build_realtime_media(settings, provider_name, aec_mode)
 
             # Built before the tools: a missing key fails before MCP connects.
             media = build_media()
@@ -197,8 +184,6 @@ class RealtimeMixin:
         settings: dict,
         provider_name: str,
         aec_mode: str,
-        diarization: Any,
-        vad: Any,
     ) -> _RealtimeMedia:
         """Build what one start attempt connects: provider, transport, pipeline.
 
@@ -229,14 +214,11 @@ class RealtimeMixin:
             )
         recorder, recording_config = build_recorder(settings)
         pipeline = _build_realtime_pipeline(
-            diarization=diarization,
-            vad=vad,
             aec=aec,
             denoiser=rt_denoiser,
             debug_taps=build_debug_taps(settings),
             recorder=recorder,
             recording_config=recording_config,
-            sample_rate=sample_rate,
         )
 
         # The pipeline attaches to the RealtimeVoiceChannel (see _start_session),
@@ -263,14 +245,6 @@ class RealtimeMixin:
         # A mute pressed while connecting reaches the session once its
         # capture is live; the channel creates the session in start_session.
         transport.on_session_ready(self._apply_mic_mute)  # type: ignore[attr-defined]
-
-        # Register speaker change callback on the transport so the engine
-        # can gate audio on non-primary speakers.  The pipeline instance
-        # that actually produces SPEAKER_CHANGE events is owned by the
-        # channel, but the transport forwards pipeline callbacks when
-        # the channel is bound.
-        if pipeline is not None:
-            transport.on_speaker_change(self._on_transport_speaker_change)  # type: ignore[attr-defined]
 
         logger.info(
             "Audio pipeline: aec=%s (pipeline stage), rate=%dHz, block=%dms",
@@ -833,70 +807,26 @@ def _apply_server_vad(provider_config: dict[str, Any], settings: dict, prefix: s
 
 
 # ---------------------------------------------------------------------------
-# Pipeline / VAD helpers (module-level — no engine state)
+# Pipeline helpers (module-level — no engine state)
 # ---------------------------------------------------------------------------
-
-
-def _build_realtime_vad(settings: dict) -> Any:
-    """Build a VAD provider for realtime diarization, or ``None`` if unavailable."""
-    vad_model_id = settings.get("vc_vad_model", "")
-    if not vad_model_id:
-        return None
-
-    from roomkit_ui.model_manager import build_vad_config, is_vad_model_downloaded
-
-    if not is_vad_model_downloaded(vad_model_id):
-        logger.warning("VAD model %s not downloaded — no VAD", vad_model_id)
-        return None
-
-    from roomkit.voice.pipeline.vad.sherpa_onnx import SherpaOnnxVADProvider
-
-    inference_device = settings.get("inference_device", "cpu")
-    vad_config = build_vad_config(vad_model_id, provider=inference_device, settings=settings)
-    logger.info("Realtime VAD: %s", vad_model_id)
-    return SherpaOnnxVADProvider(vad_config)
 
 
 def _build_realtime_pipeline(
     *,
-    diarization: Any,
-    vad: Any,
     aec: Any,
     denoiser: Any = None,
     debug_taps: Any,
     recorder: Any,
     recording_config: Any,
-    sample_rate: int,
 ) -> Any:
     """Assemble the realtime ``AudioPipelineConfig`` (or ``None`` if nothing to do).
 
-    Diarization + VAD get wired together with a transport→16 kHz contract
-    because the VAD / diarization models are 16 kHz-only while most realtime
-    providers stream at 24 kHz (ElevenLabs already runs at 16 kHz — the
-    contract is then a no-op).  Other stages (AEC, debug taps, recorder)
-    attach at the transport's native sample rate.  No denoiser in realtime —
-    see ``_start_realtime``.
+    Every stage runs at the transport's sample rate, which is the rate the
+    provider is told it receives.  No VAD or diarization: see
+    ``REALTIME_DIARIZATION_NOTICE``.  No user denoiser in realtime — see
+    ``_build_realtime_media``.
     """
     from roomkit.voice.pipeline.config import AudioPipelineConfig
-
-    if diarization is not None and vad is not None:
-        from roomkit.voice.pipeline.config import AudioFormat, AudioPipelineContract
-
-        contract = AudioPipelineContract(
-            transport_inbound_format=AudioFormat(sample_rate=sample_rate),
-            internal_format=AudioFormat(sample_rate=16000),
-        )
-        return AudioPipelineConfig(
-            aec=aec,
-            denoiser=denoiser,
-            vad=vad,
-            diarization=diarization,
-            contract=contract,
-            debug_taps=debug_taps,
-            recorder=recorder,
-            recording_config=recording_config,
-            inbound_dsp_threads=DSP_THREADS,
-        )
 
     if aec is not None or denoiser is not None or debug_taps is not None or recorder is not None:
         return AudioPipelineConfig(

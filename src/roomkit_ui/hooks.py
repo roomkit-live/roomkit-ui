@@ -198,8 +198,9 @@ def register_realtime_hooks(kit: Any, engine: Any) -> None:
     """Register framework hooks for RealtimeVoiceChannel.
 
     Includes audio level hooks and ON_TRANSCRIPTION for routing
-    transcriptions to the UI.  Speaker change events are handled
-    directly by the engine via the transport's on_speaker_change callback.
+    transcriptions to the UI.  A realtime session has no speaker source
+    (diarization is voice-channel only, see engine_realtime), so the
+    speaker fields below stay empty there.
     """
     import logging
 
@@ -208,9 +209,6 @@ def register_realtime_hooks(kit: Any, engine: Any) -> None:
     _log = logging.getLogger("roomkit_ui.hooks.realtime")
 
     register_audio_hooks(kit, engine)
-
-    # Speaker change events are handled directly by the engine via
-    # transport.on_speaker_change() — no hook needed here.
 
     @kit.hook(HookTrigger.ON_TRANSCRIPTION, HookExecution.SYNC)
     async def _on_transcription(event, context):

@@ -111,22 +111,3 @@ class CallbackMixin:
         friendly = friendly_error(code, message)
         logger.warning("Provider error: %s: %s → %s", code, message, friendly)
         self._safe_emit(self.error_occurred, friendly)  # type: ignore[attr-defined]
-
-    def _on_transport_speaker_change(self, session: Any, result: Any) -> None:
-        """Handle speaker change events directly from the transport pipeline."""
-        speaker_id = result.speaker_id
-        confidence = result.confidence
-        self._current_speaker_id = speaker_id  # type: ignore[attr-defined]
-        self._safe_emit(self.speaker_identified, speaker_id, confidence)  # type: ignore[attr-defined]
-
-        # Primary speaker gating: gate audio when a *different* enrolled
-        # speaker is positively identified.  Unknown / empty speakers get
-        # benefit of the doubt (diarization hasn't decided yet).
-        if self._primary_speaker_mode and self._primary_speaker_name:  # type: ignore[attr-defined]
-            gate = (
-                bool(speaker_id)
-                and speaker_id != "unknown"
-                and speaker_id != self._primary_speaker_name  # type: ignore[attr-defined]
-            )
-            if self._transport is not None:  # type: ignore[attr-defined]
-                self._transport.set_input_gated(session, gate)  # type: ignore[attr-defined]

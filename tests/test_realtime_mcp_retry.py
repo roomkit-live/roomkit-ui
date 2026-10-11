@@ -142,8 +142,8 @@ async def test_when_the_retry_fails_too_the_first_error_is_raised(engine):
 def test_each_attempt_builds_its_own_provider_transport_and_aec(engine):
     settings = {"provider": "deepgram", "deepgram_api_key": "key", "aec_mode": "webrtc"}
 
-    first = engine._build_realtime_media(settings, "deepgram", "webrtc", None, None)
-    retry = engine._build_realtime_media(settings, "deepgram", "webrtc", None, None)
+    first = engine._build_realtime_media(settings, "deepgram", "webrtc")
+    retry = engine._build_realtime_media(settings, "deepgram", "webrtc")
 
     assert retry.provider is not first.provider
     assert retry.transport is not first.transport
