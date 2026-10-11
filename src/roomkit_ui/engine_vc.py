@@ -53,6 +53,7 @@ class VoiceChannelMixin:
     _attitude: str
     _attitude_name: str
     _base_system_prompt: str
+    _stt: Any
     _tts: Any
     _backend: Any
     _channel: Any
@@ -128,6 +129,7 @@ class VoiceChannelMixin:
 
             # 1-2. STT + TTS providers
             stt, stt_provider_name = await self._build_stt(settings, inference_device)
+            self._stt = stt
             tts, output_sample_rate = await self._build_tts(settings, inference_device)
             self._tts = tts  # type: ignore[attr-defined]
 

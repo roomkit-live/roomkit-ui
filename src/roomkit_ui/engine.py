@@ -127,6 +127,7 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         self._session: Any = None
         self._transport: Any = None
         self._backend: Any = None  # LocalAudioBackend for voice channel mode
+        self._stt: Any = None
         self._tts: Any = None
         self._mcp: MCPManager | None = None
         self._cli: CliToolManager | None = None
@@ -204,6 +205,36 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
     def clear_model_cache(self) -> None:
         """Release all cached models (call on app quit)."""
         self._cached_models.clear()
+
+    def _is_cached_instance(self, model_type: str, provider: Any) -> bool:
+        """Whether *provider* is the instance the cache keeps for the next session."""
+        entry = self._cached_models.get(model_type)
+        if entry is None:
+            return False
+        cached = entry[1]
+        if model_type == "tts":
+            cached = cached[0]  # cached with its output sample rate
+        return cached is provider
+
+    async def _close_session_models(self) -> None:
+        """Close this session's STT and TTS, but never the cached instances.
+
+        The VoiceChannel is built with close_providers=False, so its close()
+        leaves STT/TTS alone (avoids a double aclose, e.g. ElevenLabs's httpx
+        client hang): the engine closes them.  What the cache holds survives
+        for the next session; anything else — a cloud provider, or a local
+        one the cache has since replaced — is this session's to close.
+        """
+        for model_type, provider in (("tts", self._tts), ("stt", self._stt)):
+            if provider is None or self._is_cached_instance(model_type, provider):
+                continue
+            close = getattr(provider, "close", None)
+            if close is None:
+                continue
+            try:
+                await close()
+            except Exception:
+                logger.exception("cleanup: %s.close() failed", model_type)
 
     def _create_owned_task(
         self,
@@ -397,19 +428,7 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
                 logger.info("cleanup: voice session ended")
             except Exception:
                 logger.exception("cleanup: end_session failed")
-        # Close TTS ourselves — the channel was built with close_providers=False
-        # so VoiceChannel.close() won't touch STT/TTS (avoids a double aclose,
-        # e.g. ElevenLabs's httpx client hang).  Skip close for cached TTS
-        # (model survives for the next session).
-        if (
-            self._tts is not None
-            and hasattr(self._tts, "close")
-            and "tts" not in self._cached_models
-        ):
-            try:
-                await self._tts.close()
-            except Exception:
-                logger.exception("cleanup: tts.close() failed")
+        await self._close_session_models()
         # Close roomkit — cancels in-flight streaming tasks; VoiceChannel.close()
         # closes the backend (close_providers only gates STT/TTS).
         if self._kit:
@@ -447,6 +466,7 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         self._kit = None
         self._transport = None
         self._backend = None
+        self._stt = None
         self._tts = None
         self._mcp = None
         self._cli = None

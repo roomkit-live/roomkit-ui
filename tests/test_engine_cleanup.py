@@ -194,3 +194,48 @@ async def test_cleanup_does_not_cancel_unrelated_tasks(engine):
     finally:
         task.cancel()
         await asyncio.gather(task, return_exceptions=True)
+
+
+class _STT:
+    def __init__(self, rec):
+        self._rec = rec
+
+    async def close(self):
+        self._rec.add("stt.close")
+
+
+async def test_a_cloud_tts_is_closed_after_a_cached_local_one(engine):
+    # A Piper session left its TTS in the cache; this ElevenLabs session's TTS
+    # is not that instance and must be closed.
+    rec = _Recorder()
+    ch = _Channel()
+    engine._cached_models["tts"] = (("tts", "piper", "model", "cpu"), (_TTS(rec), 22050))
+    engine._channel = ch
+    engine._kit = _Kit(rec, ch)
+    engine._tts = _TTS(rec)
+
+    await _run_cleanup(engine)
+
+    assert rec.names().count("tts.close") == 1
+
+
+async def test_a_remote_stt_is_closed_and_a_cached_one_kept(engine):
+    rec = _Recorder()
+    ch = _Channel()
+    engine._channel = ch
+    engine._kit = _Kit(rec, ch)
+    engine._stt = _STT(rec)
+
+    await _run_cleanup(engine)
+
+    assert rec.names().count("stt.close") == 1
+    assert engine._stt is None
+
+    cached = _STT(rec)
+    engine._cached_models["stt"] = (("stt", "model", "en", False, "cpu"), cached)
+    engine._kit = _Kit(rec, ch)
+    engine._stt = cached
+
+    await _run_cleanup(engine)
+
+    assert rec.names().count("stt.close") == 1  # the cached one stays open
