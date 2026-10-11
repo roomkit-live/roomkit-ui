@@ -1,6 +1,9 @@
 """Tests for MCP schema cleaning, stdio config parsing, and tool registration."""
 
+import asyncio
 import json
+import os
+import sys
 from types import SimpleNamespace
 
 import pytest
@@ -33,10 +36,10 @@ def test_clean_schema_passes_scalars_through():
 
 
 def test_parse_stdio_simple_command():
-    cmd, args, env = _parse_stdio_config({"command": "uvx mcp-server-fetch"})
-    assert cmd == "uvx"
-    assert args == ["mcp-server-fetch"]
-    assert env is None
+    cmd, args, _ = _parse_stdio_config({"command": "no-such-mcp-server-xyz --stdio"})
+    # Not found: the name is kept so the spawn error names it.
+    assert cmd == "no-such-mcp-server-xyz"
+    assert args == ["--stdio"]
 
 
 def test_parse_stdio_quoted_path_with_spaces():
@@ -46,28 +49,88 @@ def test_parse_stdio_quoted_path_with_spaces():
 
 
 def test_parse_stdio_separate_args_field():
-    cmd, args, _ = _parse_stdio_config({"command": "npx", "args": "-y some-server"})
-    assert cmd == "npx"
+    cmd, args, _ = _parse_stdio_config({"command": "no-such-npx-xyz", "args": "-y some-server"})
+    assert cmd == "no-such-npx-xyz"
     assert args == ["-y", "some-server"]
 
 
 def test_parse_stdio_env_only_includes_explicit_values(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "must-not-leak")
-    monkeypatch.setenv("PATH", "/sensitive/path")
     cfg = {"command": "server", "env": "FOO=bar\nBAZ = qux value "}
     _, _, env = _parse_stdio_config(cfg)
-    assert env is not None
     assert env["FOO"] == "bar"
     assert env["BAZ"] == "qux value"
     assert "OPENAI_API_KEY" not in env
-    assert "PATH" not in env
+    assert set(env) == {"FOO", "BAZ", "PATH"}
 
 
 def test_parse_stdio_empty_command():
-    cmd, args, env = _parse_stdio_config({})
+    cmd, args, _ = _parse_stdio_config({})
     assert cmd == ""
     assert args == []
-    assert env is None
+
+
+def _dock_like_path(monkeypatch, tmp_path):
+    """PATH as a Dock-launched .app sees it; tmp_path/bin is a user-install dir."""
+    user_bin = tmp_path / "bin"
+    user_bin.mkdir()
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+    monkeypatch.setattr("roomkit_ui.cli_exec._EXTRA_PATH_DIRS", (str(user_bin),))
+    return user_bin
+
+
+def test_parse_stdio_resolves_the_command_on_the_user_install_dirs(monkeypatch, tmp_path):
+    user_bin = _dock_like_path(monkeypatch, tmp_path)
+    server = user_bin / "my-mcp-server"
+    server.write_text("#!/bin/sh\n")
+    server.chmod(0o755)
+
+    cmd, args, env = _parse_stdio_config({"command": "my-mcp-server --stdio"})
+
+    assert cmd == str(server)
+    assert args == ["--stdio"]
+    # The child needs it too: `#!/usr/bin/env node` looks node up on PATH.
+    assert str(user_bin) in env["PATH"].split(os.pathsep)
+
+
+def test_parse_stdio_keeps_a_path_the_server_declares(monkeypatch, tmp_path):
+    _dock_like_path(monkeypatch, tmp_path)
+
+    _, _, env = _parse_stdio_config({"command": "server", "env": "PATH=/opt/mine"})
+
+    assert env["PATH"] == "/opt/mine"
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX shebang")
+async def test_a_stdio_server_whose_interpreter_is_a_user_install_connects(monkeypatch, tmp_path):
+    # npx, uvx and `#!/usr/bin/env node` servers failed from a Dock launch.
+    user_bin = _dock_like_path(monkeypatch, tmp_path)
+    interpreter = user_bin / "my-python"
+    interpreter.write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n')
+    interpreter.chmod(0o755)
+    server = user_bin / "time-server"
+    server.write_text(
+        "#!/usr/bin/env my-python\n"
+        "from mcp.server.mcpserver import MCPServer\n"
+        "app = MCPServer('t')\n"
+        "@app.tool()\n"
+        "def now() -> str:\n"
+        "    return 'noon'\n"
+        "app.run('stdio')\n"
+    )
+    server.chmod(0o755)
+    command, args, env = _parse_stdio_config({"command": "time-server"})
+
+    # Spawned as _connect_one does, but entered and exited in this one task.
+    from mcp import ClientSession, StdioServerParameters
+    from mcp.client.stdio import stdio_client
+
+    params = StdioServerParameters(command=command, args=args, env=env)
+    async with stdio_client(params) as (read, write), ClientSession(read, write) as session:
+        await asyncio.wait_for(session.initialize(), timeout=10)
+        tools = await asyncio.wait_for(session.list_tools(), timeout=10)
+
+    assert [t.name for t in tools.tools] == ["now"]
 
 
 def test_register_tools_tracks_sessions_and_apps():

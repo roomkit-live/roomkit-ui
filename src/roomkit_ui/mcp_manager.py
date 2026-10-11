@@ -20,6 +20,7 @@ import sys
 from contextlib import AsyncExitStack
 from typing import Any
 
+from roomkit_ui.cli_exec import resolve_command, search_path
 from roomkit_ui.env_config import parse_env_block
 from roomkit_ui.mcp_config import validate_mcp_http_url
 
@@ -89,20 +90,28 @@ def _clean_schema(obj: Any) -> Any:
     return obj
 
 
-def _parse_stdio_config(cfg: dict[str, Any]) -> tuple[str, list[str], dict[str, str] | None]:
+def _parse_stdio_config(cfg: dict[str, Any]) -> tuple[str, list[str], dict[str, str]]:
     """Parse a stdio server config into (command, args, env).
 
     shlex honours quoting, so executables with spaces in their path
     (e.g. ``"/Applications/My App/server"``) parse as one token.
+
+    A macOS .app launched from the Dock inherits only
+    ``/usr/bin:/bin:/usr/sbin:/sbin``, and the MCP SDK passes that PATH on:
+    ``npx``/``uvx`` were not found, nor was ``node`` for a script starting
+    ``#!/usr/bin/env node``. The command is resolved on ``search_path()``
+    and the child gets that PATH too, unless the server declares its own.
+    The SDK merges *env* over a handful of inherited variables (HOME, USER…),
+    never the whole environment, so no PyInstaller library path leaks in.
     """
     command_parts = shlex.split(cfg.get("command", ""))
-    command = command_parts[0] if command_parts else ""
+    # Not found: keep the name, so the SDK's spawn error names it.
+    resolved = resolve_command(cfg.get("command", ""))
+    command = resolved[0] if resolved else (command_parts[0] if command_parts else "")
     args = cfg.get("args", "")
     arg_list = command_parts[1:] + (shlex.split(args) if args else [])
 
-    # None, not {}: an empty dict would hand the server a bare environment
-    # instead of letting the MCP client inherit the default one.
-    env = parse_env_block(cfg.get("env", "")) or None
+    env = {"PATH": search_path(), **parse_env_block(cfg.get("env", ""))}
     return command, arg_list, env
 
 
