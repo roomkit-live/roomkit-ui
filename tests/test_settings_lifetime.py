@@ -92,3 +92,35 @@ def test_the_audio_player_goes_away_with_the_page(qapp):
 
     assert not shiboken6.isValid(player)
     assert not shiboken6.isValid(output)
+
+
+async def test_a_well_known_skill_installed_after_the_dialog_closed_is_still_registered(
+    qapp, monkeypatch, tmp_path
+):
+    # Settings saves its skill sources when it closes; an install finishing
+    # later used to leave the skill on disk with no source pointing at it.
+    import json
+
+    import roomkit_ui.skill_manager as skill_manager
+    from roomkit_ui.settings import load_setting
+    from roomkit_ui.skills_sh_client import SkillsShClient
+
+    skill = SkillsShSkill(id="docs.example/pdf", skill_id="pdf", name="PDF", source="docs.example")
+    page = _SkillsPage(dict(_DEFAULTS))
+    dest = tmp_path / "well-known" / "docs.example--pdf"
+
+    async def with_install_url(_client, s):
+        return s
+
+    async def install(_url, *, skill_name, source):
+        shiboken6.delete(page)  # Settings closed during the download
+        return dest
+
+    monkeypatch.setattr(SkillsShClient, "with_install_url", with_install_url)
+    monkeypatch.setattr(skill_manager, "install_well_known_skill", install)
+    skill = SkillsShSkill(**{**skill.__dict__, "install_url": "https://docs.example/skill.md"})
+
+    await page._install_well_known_marketplace_source(skill)
+
+    sources = json.loads(load_setting("skill_sources"))
+    assert [s["path"] for s in sources] == [str(dest)]

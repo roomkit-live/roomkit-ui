@@ -571,6 +571,17 @@ def load_settings() -> dict:
     return out
 
 
+def load_setting(key: str) -> Any:
+    """One persisted, non-secret setting — without reading the keyring.
+
+    For code that must update a single value outside the Settings dialog;
+    a secret lives in the keyring and is only read by load_settings().
+    """
+    if key in _SECRET_KEYS:
+        raise ValueError(f"{key} is a secret: read it with load_settings()")
+    return QSettings().value(f"room/{key}", _DEFAULTS[key])
+
+
 def save_settings(settings: dict) -> None:
     """Persist settings to disk."""
     qs = QSettings()

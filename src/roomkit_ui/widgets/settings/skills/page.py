@@ -343,16 +343,19 @@ class _SkillsPage(QWidget):
             skill_name=skill.skill_id,
             source=skill.source,
         )
+        src: dict = {
+            "type": "local",
+            "url": "",
+            "path": str(dest),
+            "label": f"skills.sh · {skill.source}/{skill.skill_id}",
+        }
         if not isValid(self):
-            return  # the Settings dialog closed during the download
-        path = str(dest)
-        if self._matching_local_source_index(path) < 0:
-            src: dict = {
-                "type": "local",
-                "url": "",
-                "path": path,
-                "label": f"skills.sh · {skill.source}/{skill.skill_id}",
-            }
+            # Settings closed during the download and already saved its
+            # sources: record this one directly, or the skill sits on disk
+            # unused.
+            _save_source_after_close(src)
+            return
+        if self._matching_local_source_index(src["path"]) < 0:
             self._sources.append(src)
             self._my_skills_tab.source_list.addItem(source_display(src))
 
@@ -491,3 +494,17 @@ class _SkillsPage(QWidget):
             "skill_sources": self.get_sources_json(),
             "enabled_skills": self.get_enabled_json(),
         }
+
+
+def _save_source_after_close(src: dict) -> None:
+    """Add *src* to the saved skill sources, unless one already has its path."""
+    from roomkit_ui.settings import load_setting, save_settings
+
+    try:
+        sources = json.loads(load_setting("skill_sources") or "[]")
+    except (TypeError, ValueError):
+        sources = []
+    if any(s.get("type") == "local" and s.get("path") == src["path"] for s in sources):
+        return
+    sources.append(src)
+    save_settings({"skill_sources": json.dumps(sources)})
