@@ -181,7 +181,15 @@ Each released section is the source for that version's GitHub release notes.
   stop a session when local speech is missing: they are left out, and the chat says so.
 - **A quieter start without the optional extras** — no ERROR lines for global hotkeys
   without pynput (one info line), no warning for MCP App views without QtWebEngine, and
-  no font-alias warning on macOS: the window and the chat use the platform's UI font.
+  no font-alias warning on macOS: the window and the chat use the platform's UI font,
+  code and logs its fixed-width font. "Not installed" now points to Settings →
+  Components rather than a pip command that was wrong for uv tool and source installs.
+- **An MCP server left blank no longer fails every session** — "Add server" then
+  closing Settings saved an empty entry, launched as "" with a traceback. A blank entry
+  is not saved; one without a command or URL, or whose command cannot run, is one line.
+- **Less noise in the console** — no roomkit warning about the conversation store at
+  every session, no "Not moving … cache" at every start on a Mac that had both caches,
+  and the end-of-session cleanup detail at debug.
 - **Anthropic, Gradium, Qwen3-TTS, NeuTTS and Deepgram transcription work** — v0.2.1
   declared no dependency for them, so they were dead in every install, the binaries
   included. Each now has its extra.
