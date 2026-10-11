@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import collections
 import logging
+from collections.abc import Callable
 from typing import Any
 
 from roomkit_ui.engine_audio import friendly_error
@@ -46,6 +47,38 @@ class CallbackMixin:
         provider.on_response_start(self._on_response_start)
         provider.on_response_end(self._on_response_end)
         provider.on_error(self._on_provider_error)
+        provider.on_usage(self._realtime_usage_handler())
+
+    def _realtime_usage_handler(self) -> Callable[[Any, dict], None]:
+        """A provider's ``on_usage`` callback: each report joins the session totals.
+
+        roomkit relays the provider's reports (RFC §12.4.2): one response's
+        ``input_tokens``/``output_tokens``, beside a breakdown of the
+        provider's own.  They go through the voice channel's accounting, so
+        the info bar shows realtime tokens too — without a cost: realtime
+        catalogs carry no price (audio tokens are priced apart).
+
+        GPT-Live bills session seconds and puts its hosted backend's tokens
+        under ``backend``.  That record stays in the session's usage map
+        until the turn ends, so the next report (the seconds) repeats it:
+        it is counted when it changes, once.
+        """
+        last_backend: dict | None = None
+
+        def on_usage(_session: Any, usage: dict) -> None:
+            nonlocal last_backend
+            if self._state not in (EngineState.ACTIVE, EngineState.CONNECTING):
+                return
+            tokens = _token_counts(usage)
+            backend = usage.get("backend")
+            if isinstance(backend, dict) and backend != last_backend:
+                last_backend = backend
+                backend_tokens = _token_counts(backend)
+                tokens = {key: tokens[key] + backend_tokens[key] for key in tokens}
+            if any(tokens.values()):
+                self._accumulate_usage(tokens)  # type: ignore[attr-defined]
+
+        return on_usage
 
     def _drain_speaker_level(self) -> None:
         """Pop one RMS value per timer tick → matches real playback cadence."""
@@ -72,3 +105,10 @@ class CallbackMixin:
         friendly = friendly_error(code, message)
         logger.warning("Provider error: %s: %s → %s", code, message, friendly)
         self._safe_emit(self.error_occurred, friendly)  # type: ignore[attr-defined]
+
+
+def _token_counts(usage: dict) -> dict[str, int]:
+    """The two totals roomkit fixes, as ints; absent or garbage counts as zero."""
+    from roomkit_ui.engine_vc import _usage_int
+
+    return {key: _usage_int(usage, key) for key in ("input_tokens", "output_tokens")}
