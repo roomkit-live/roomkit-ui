@@ -49,3 +49,57 @@ def test_an_empty_elevenlabs_model_still_means_the_first_item(page_over):
     page = page_over(elevenlabs_model="")
 
     assert page.get_settings()["elevenlabs_model"] == "eleven_v3"
+
+
+# -- lineups come from roomkit's catalogs ---------------------------------------
+
+
+def test_the_claude_lineup_is_the_catalogs_current_models():
+    from roomkit.providers.anthropic.models import MODELS
+
+    ids = [model_id for _label, model_id in VC_ANTHROPIC_MODELS]
+    deprecated = {m.id for m in MODELS if m.deprecated}
+    assert "claude-sonnet-5-5" in ids
+    assert not deprecated & set(ids)
+    # The dated Haiku 4.5 and its alias share a name: one entry, the first listed.
+    assert "claude-haiku-4-5-20251001" in ids
+    assert "claude-haiku-4-5" not in ids
+    assert ("Claude Sonnet 5.5", "claude-sonnet-5-5") in VC_ANTHROPIC_MODELS
+
+
+def test_the_openai_lineup_leaves_out_models_that_refuse_a_voice_turn():
+    from roomkit_ui.widgets.settings.vc_cloud_fields import VC_OPENAI_MODELS
+
+    ids = [model_id for _label, model_id in VC_OPENAI_MODELS]
+    assert "gpt-4o" in ids
+    assert "gpt-5.5" in ids
+    assert "gpt-5.5-pro" not in ids  # Responses API only
+    assert "gpt-6.1-sol" not in ids  # takes no tools on Chat Completions
+    assert "gpt-5" not in ids  # deprecated
+
+
+def test_the_gemini_lineup_leaves_out_deprecated_models():
+    from roomkit_ui.widgets.settings.vc_cloud_fields import VC_GEMINI_MODELS
+
+    ids = [model_id for _label, model_id in VC_GEMINI_MODELS]
+    assert "gemini-3.8-flash" in ids
+    assert "gemini-2.5-pro" not in ids
+
+
+def test_a_saved_deprecated_claude_model_is_kept_and_named_deprecated(page_over):
+    page = page_over(vc_anthropic_model="claude-sonnet-4-20250514")
+    combo = page._cloud.vc_anthropic_model
+
+    assert combo.currentText() == "Claude Sonnet 4 (deprecated)"
+    assert page.get_settings()["vc_anthropic_model"] == "claude-sonnet-4-20250514"
+
+
+def test_editable_lineups_show_ids_and_keep_a_typed_one(page_over):
+    page = page_over(vc_openai_model="ft:gpt-4o:acme", vc_gemini_model="gemini-3.8-flash")
+    cloud = page._cloud
+
+    assert cloud.vc_openai_model.currentText() == "ft:gpt-4o:acme"
+    assert cloud.vc_gemini_model.currentText() == "gemini-3.8-flash"
+    settings = page.get_settings()
+    assert settings["vc_openai_model"] == "ft:gpt-4o:acme"
+    assert settings["vc_gemini_model"] == "gemini-3.8-flash"

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import importlib
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QComboBox,
@@ -15,15 +17,61 @@ from PySide6.QtWidgets import (
 
 from roomkit_ui.theme import colors
 
-VC_ANTHROPIC_MODELS = [
-    ("Sonnet 5.5", "claude-sonnet-5-5"),
-    ("Opus 4.6", "claude-opus-4-6"),
-    ("Sonnet 4.5", "claude-sonnet-4-5-20250929"),
-    ("Sonnet 4", "claude-sonnet-4-20250514"),
-    ("Haiku 4.5", "claude-haiku-4-5-20251001"),
+_ANTHROPIC_CATALOG = "roomkit.providers.anthropic.models"
+_OPENAI_CATALOG = "roomkit.providers.openai.models"
+_GEMINI_CATALOG = "roomkit.providers.gemini.models"
+
+# A voice-channel turn always declares tools (the built-ins at least) and
+# roomkit's OpenAI provider speaks Chat Completions: it refuses every turn on
+# a model its catalog tags Responses-only, and every turn with tools on one
+# tagged chat_tools_refused.  Listing them would offer a model that never
+# answers.
+_OPENAI_REFUSED_TAGS = frozenset({"responses_only", "chat_tools_refused"})
+
+
+def _catalog_models(
+    module_name: str, *, refused_tags: frozenset[str] = frozenset()
+) -> list[tuple[str, str]]:
+    """``(display name, model id)`` for the current models of a roomkit chat catalog.
+
+    The catalogs are pure data (``MODELS: list[ModelInfo]``), no vendor SDK.
+    Deprecated models are left out — a saved one is still kept, see
+    ``_select_model``.  A dated snapshot and its dateless alias share a name;
+    the first listed stands for both.  Empty if the catalog cannot be read.
+    """
+    try:
+        models = importlib.import_module(module_name).MODELS
+    except Exception:
+        return []
+    seen: set[str] = set()
+    options: list[tuple[str, str]] = []
+    for model in models:
+        if model.deprecated or refused_tags & set(model.capabilities):
+            continue
+        label = model.display_name or model.id
+        if label not in seen:
+            seen.add(label)
+            options.append((label, model.id))
+    return options
+
+
+def _deprecated_label(module_name: str, model_id: str) -> str | None:
+    """``"<name> (deprecated)"`` when the catalog flags *model_id*, else None."""
+    try:
+        models = importlib.import_module(module_name).MODELS
+    except Exception:
+        return None
+    for model in models:
+        if model.id == model_id and model.deprecated:
+            return f"{model.display_name or model.id} (deprecated)"
+    return None
+
+
+VC_ANTHROPIC_MODELS = _catalog_models(_ANTHROPIC_CATALOG) or [
+    ("Claude Sonnet 5.5", "claude-sonnet-5-5")
 ]
-VC_OPENAI_MODELS = ["gpt-4o", "gpt-4o-mini"]
-VC_GEMINI_MODELS = ["gemini-2.0-flash", "gemini-2.5-flash"]
+VC_OPENAI_MODELS = _catalog_models(_OPENAI_CATALOG, refused_tags=_OPENAI_REFUSED_TAGS)
+VC_GEMINI_MODELS = _catalog_models(_GEMINI_CATALOG)
 
 DEEPGRAM_MODELS = [
     ("Nova-3", "nova-3"),
@@ -48,20 +96,39 @@ ELEVENLABS_MODELS = [
 ]
 
 
-def _select_model(combo: QComboBox, model_id: str) -> None:
+def _select_model(combo: QComboBox, model_id: str, label: str | None = None) -> None:
     """Select *model_id* in a fixed model dropdown.
 
     A saved id the lineup does not carry (a retired model, a hand-pinned
-    one) is inserted at the top and stays selected — falling back to the
-    first item would silently change what the next session runs.
+    one) is inserted at the top, shown as *label* when given, and stays
+    selected — falling back to the first item would silently change what
+    the next session runs.
     """
     if not model_id:
         return
     idx = combo.findData(model_id)
     if idx < 0:
-        combo.insertItem(0, model_id, model_id)
+        combo.insertItem(0, label or model_id, model_id)
         idx = 0
     combo.setCurrentIndex(idx)
+
+
+def _populate_editable_models(
+    combo: QComboBox, options: list[tuple[str, str]], current: str
+) -> None:
+    """Fill an editable model combo: ids as text, the catalog name as tooltip.
+
+    The text doubles as free input (any id the API takes), so it must be the
+    id itself; a saved id the lineup lacks is shown as it was saved.
+    """
+    for label, model_id in options:
+        combo.addItem(model_id, model_id)
+        combo.setItemData(combo.count() - 1, label, Qt.ToolTipRole)
+    idx = combo.findText(current)
+    if idx >= 0:
+        combo.setCurrentIndex(idx)
+    else:
+        combo.setCurrentText(current)
 
 
 class VCCloudFields:
@@ -90,7 +157,12 @@ class VCCloudFields:
         self.vc_anthropic_model = QComboBox()
         for label, model_id in VC_ANTHROPIC_MODELS:
             self.vc_anthropic_model.addItem(label, model_id)
-        _select_model(self.vc_anthropic_model, s.get("vc_anthropic_model", ""))
+        saved_anthropic = s.get("vc_anthropic_model", "")
+        _select_model(
+            self.vc_anthropic_model,
+            saved_anthropic,
+            _deprecated_label(_ANTHROPIC_CATALOG, saved_anthropic),
+        )
         self._vc_anthropic_model_label = QLabel("Model")
         form.addRow(self._vc_anthropic_model_label, self.vc_anthropic_model)
 
@@ -103,13 +175,9 @@ class VCCloudFields:
 
         self.vc_openai_model = QComboBox()
         self.vc_openai_model.setEditable(True)
-        self.vc_openai_model.addItems(VC_OPENAI_MODELS)
-        cur = s.get("vc_openai_model", VC_OPENAI_MODELS[0])
-        oidx = self.vc_openai_model.findText(cur)
-        if oidx >= 0:
-            self.vc_openai_model.setCurrentIndex(oidx)
-        else:
-            self.vc_openai_model.setCurrentText(cur)
+        _populate_editable_models(
+            self.vc_openai_model, VC_OPENAI_MODELS, s.get("vc_openai_model", "gpt-4o")
+        )
         self._vc_openai_model_label = QLabel("Model")
         form.addRow(self._vc_openai_model_label, self.vc_openai_model)
 
@@ -122,13 +190,9 @@ class VCCloudFields:
 
         self.vc_gemini_model = QComboBox()
         self.vc_gemini_model.setEditable(True)
-        self.vc_gemini_model.addItems(VC_GEMINI_MODELS)
-        cur = s.get("vc_gemini_model", VC_GEMINI_MODELS[0])
-        gidx = self.vc_gemini_model.findText(cur)
-        if gidx >= 0:
-            self.vc_gemini_model.setCurrentIndex(gidx)
-        else:
-            self.vc_gemini_model.setCurrentText(cur)
+        _populate_editable_models(
+            self.vc_gemini_model, VC_GEMINI_MODELS, s.get("vc_gemini_model", "gemini-2.0-flash")
+        )
         self._vc_gemini_model_label = QLabel("Model")
         form.addRow(self._vc_gemini_model_label, self.vc_gemini_model)
 
