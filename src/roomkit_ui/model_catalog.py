@@ -222,9 +222,14 @@ def delete_vad_model(model_id: str) -> None:
 # ---------------------------------------------------------------------------
 
 SMART_TURN_MODEL_ID = "smart-turn-v3"
+# Pinned to a commit, with the sha256 the Hub publishes for that file (its
+# LFS oid, from /api/models/.../paths-info), so the download is checked
+# against more than a HEAD Content-Length.
 SMART_TURN_URL = (
-    "https://huggingface.co/pipecat-ai/smart-turn-v3/resolve/main/smart-turn-v3.2-cpu.onnx"
+    "https://huggingface.co/pipecat-ai/smart-turn-v3/resolve/"
+    "f766f81d3cfdf7737ac64aad813d91bbfd56bf93/smart-turn-v3.2-cpu.onnx"
 )
+SMART_TURN_SHA256 = "2bb026316b14a660486a75b1733cd3fbab8c2fd0314dc9af7be49f8cca967e4f"
 SMART_TURN_SIZE = "~8 MB"
 _SMART_TURN_FILENAME = "smart-turn-v3.2-cpu.onnx"
 
@@ -314,10 +319,18 @@ def is_tts_model_downloaded(model_id: str) -> bool:
     return (d / m.onnx_file).is_file() and (d / "tokens.txt").is_file()
 
 
+# Present while an espeak-ng-data download is under way, removed once every
+# file is in: the files arrive in API order, so phontab alone proves nothing.
+# (A marker of completion instead would disown every install made before it.)
+ESPEAK_NG_INCOMPLETE_MARKER = ".download-incomplete"
+
+
 def is_espeak_ng_downloaded() -> bool:
     """Check whether espeak-ng-data directory exists and has content."""
     d = espeak_ng_data_path()
-    return d.is_dir() and (d / "phontab").is_file()
+    return (
+        d.is_dir() and (d / "phontab").is_file() and not (d / ESPEAK_NG_INCOMPLETE_MARKER).exists()
+    )
 
 
 def delete_tts_model(model_id: str) -> None:

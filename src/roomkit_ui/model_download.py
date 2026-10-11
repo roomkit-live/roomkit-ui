@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import urllib.error
 import urllib.request
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
+from roomkit_ui.download_flight import single_flight
 from roomkit_ui.model_catalog import (
     _GTCRN_FILENAME,
     _MODELS_BY_ID,
@@ -17,12 +20,15 @@ from roomkit_ui.model_catalog import (
     _TTS_MODELS_BY_ID,
     _VAD_MODELS_BY_ID,
     _VAD_REPO_PATHS,
+    ESPEAK_NG_INCOMPLETE_MARKER,
     GTCRN_MODEL_ID,
     GTCRN_URL,
     SMART_TURN_MODEL_ID,
+    SMART_TURN_SHA256,
     SMART_TURN_URL,
     espeak_ng_data_path,
     get_models_dir,
+    is_espeak_ng_downloaded,
     model_path,
     speaker_model_path,
     tts_model_path,
@@ -33,8 +39,16 @@ _RAW_URL = "https://raw.githubusercontent.com/anganyAI/edge-ai-models/main"
 _LFS_BATCH_URL = "https://github.com/anganyAI/edge-ai-models.git/info/lfs/objects/batch"
 _GH_API_URL = "https://api.github.com/repos/anganyAI/edge-ai-models/contents"
 
+# Seconds without a byte (connect, or between reads) before a download fails.
+# Without it a stalled connection left the row "downloading" forever.
+_TIMEOUT = 30.0
+
 # Progress callback: (bytes_downloaded, total_bytes)
 ProgressCallback = Callable[[int, int], None]
+
+
+def _urlopen(req: urllib.request.Request | str) -> Any:
+    return urllib.request.urlopen(req, timeout=_TIMEOUT)  # noqa: S310
 
 
 def _resolve_lfs_pointer(raw_content: bytes) -> tuple[str, int] | None:
@@ -69,7 +83,7 @@ def _lfs_download_url(oid: str, size: int) -> str:
             "Accept": "application/vnd.git-lfs+json",
         },
     )
-    with urllib.request.urlopen(req) as resp:  # noqa: S310
+    with _urlopen(req) as resp:
         data = json.loads(resp.read())
     obj = data["objects"][0]
     if "error" in obj:
@@ -92,13 +106,16 @@ def _download_file(
     Integrity: when *expected_size* is non-zero the byte count must match,
     and when *expected_sha256* is given (the Git LFS OID) the digest must
     match — otherwise the partial file is removed and RuntimeError raised.
+    With no expected size, the response's own Content-Length is held to,
+    so a connection cut short is not taken for a complete file.
     """
     tmp = target.with_suffix(target.suffix + ".part")
     hasher = hashlib.sha256() if expected_sha256 else None
     received = 0
     try:
         req = urllib.request.Request(url)  # noqa: S310
-        with urllib.request.urlopen(req) as resp, open(tmp, "wb") as fp:  # noqa: S310
+        with _urlopen(req) as resp, open(tmp, "wb") as fp:
+            expected_size = expected_size or _declared_length(resp)
             while True:
                 chunk = resp.read(_CHUNK)
                 if not chunk:
@@ -121,6 +138,13 @@ def _download_file(
         raise
 
 
+def _declared_length(resp: Any) -> int:
+    headers = getattr(resp, "headers", None)
+    value = str(headers.get("Content-Length", "") if headers is not None else "")
+    return int(value) if value.isdigit() else 0
+
+
+@single_flight
 def _download_model_sync(
     model_id: str,
     progress: ProgressCallback | None = None,
@@ -145,7 +169,7 @@ def _download_model_sync(
         if target.is_file():
             continue  # already downloaded
         raw_url = f"{_RAW_URL}/{model_id}/v1/{fname}"
-        with urllib.request.urlopen(raw_url) as resp:  # noqa: S310
+        with _urlopen(raw_url) as resp:
             raw_bytes = resp.read()
         lfs = _resolve_lfs_pointer(raw_bytes)
         if lfs is not None:
@@ -177,6 +201,7 @@ def _download_model_sync(
         _download_file(url, target, expected_size=size, on_bytes=_on_bytes, expected_sha256=oid)
 
 
+@single_flight
 def _download_gtcrn_sync(progress: ProgressCallback | None = None) -> None:
     """Download the GTCRN ONNX model (blocking)."""
     dest = get_models_dir() / GTCRN_MODEL_ID
@@ -195,7 +220,7 @@ def _download_gtcrn_sync(progress: ProgressCallback | None = None) -> None:
 
     # HEAD request to get total size for progress reporting
     req = urllib.request.Request(GTCRN_URL, method="HEAD")  # noqa: S310
-    with urllib.request.urlopen(req) as resp:  # noqa: S310
+    with _urlopen(req) as resp:
         total = int(resp.headers.get("Content-Length", 0))
 
     if progress is not None:
@@ -204,6 +229,7 @@ def _download_gtcrn_sync(progress: ProgressCallback | None = None) -> None:
     _download_file(GTCRN_URL, target, expected_size=total, on_bytes=_on_bytes)
 
 
+@single_flight
 def _download_vad_model_sync(
     model_id: str,
     progress: ProgressCallback | None = None,
@@ -222,7 +248,7 @@ def _download_vad_model_sync(
     repo_path = _VAD_REPO_PATHS[model_id]
     raw_url = f"{_RAW_URL}/{repo_path}"
 
-    with urllib.request.urlopen(raw_url) as resp:  # noqa: S310
+    with _urlopen(raw_url) as resp:
         raw_bytes = resp.read()
 
     lfs = _resolve_lfs_pointer(raw_bytes)
@@ -251,6 +277,7 @@ def _download_vad_model_sync(
             progress(total, total)
 
 
+@single_flight
 def _download_smart_turn_sync(progress: ProgressCallback | None = None) -> None:
     """Download the smart-turn ONNX model (blocking)."""
     dest = get_models_dir() / SMART_TURN_MODEL_ID
@@ -268,13 +295,19 @@ def _download_smart_turn_sync(progress: ProgressCallback | None = None) -> None:
             progress(downloaded, total)
 
     req = urllib.request.Request(SMART_TURN_URL, method="HEAD")  # noqa: S310
-    with urllib.request.urlopen(req) as resp:  # noqa: S310
+    with _urlopen(req) as resp:
         total = int(resp.headers.get("Content-Length", 0))
 
     if progress is not None:
         progress(0, total)
 
-    _download_file(SMART_TURN_URL, target, expected_size=total, on_bytes=_on_bytes)
+    _download_file(
+        SMART_TURN_URL,
+        target,
+        expected_size=total,
+        on_bytes=_on_bytes,
+        expected_sha256=SMART_TURN_SHA256,
+    )
 
 
 def _generate_tokens_txt(onnx_json_path: Path, tokens_path: Path) -> None:
@@ -292,6 +325,7 @@ def _generate_tokens_txt(onnx_json_path: Path, tokens_path: Path) -> None:
     tokens_path.write_text("\n".join(lines) + "\n")
 
 
+@single_flight
 def _download_tts_model_sync(
     model_id: str,
     progress: ProgressCallback | None = None,
@@ -313,7 +347,7 @@ def _download_tts_model_sync(
             continue
         raw_url = f"{_RAW_URL}/tts/{model_id}/v1/{fname}"
         try:
-            with urllib.request.urlopen(raw_url) as resp:  # noqa: S310
+            with _urlopen(raw_url) as resp:
                 raw_bytes = resp.read()
         except urllib.error.HTTPError:
             continue  # tokens.txt may not be in repo yet
@@ -356,7 +390,7 @@ def _list_gh_tree(path: str) -> list[dict]:
     url = f"{_GH_API_URL}/{path}"
     req = urllib.request.Request(url)  # noqa: S310
     req.add_header("Accept", "application/vnd.github.v3+json")
-    with urllib.request.urlopen(req) as resp:  # noqa: S310
+    with _urlopen(req) as resp:
         entries = json.loads(resp.read())
     files: list[dict] = []
     for entry in entries:
@@ -367,13 +401,23 @@ def _list_gh_tree(path: str) -> list[dict]:
     return files
 
 
+@single_flight
 def _download_espeak_ng_sync(
     progress: ProgressCallback | None = None,
 ) -> None:
-    """Download espeak-ng-data directory from edge-ai-models (blocking)."""
-    dest = espeak_ng_data_path()
-    if dest.is_dir() and (dest / "phontab").is_file():
+    """Download espeak-ng-data directory from edge-ai-models (blocking).
+
+    The files arrive in API order, phontab among the first, so an
+    incomplete marker is written before the first and removed after the
+    last: a download cut short is not taken for a complete one. A retry
+    keeps only the files that match their git blob id, so it resumes.
+    """
+    if is_espeak_ng_downloaded():
         return
+    dest = espeak_ng_data_path()
+    dest.mkdir(parents=True, exist_ok=True)
+    marker = dest / ESPEAK_NG_INCOMPLETE_MARKER
+    marker.touch()
 
     # Enumerate all files via GitHub API
     entries = _list_gh_tree("tts/espeak-ng-data")
@@ -384,27 +428,45 @@ def _download_espeak_ng_sync(
         progress(0, total_bytes)
 
     for entry in entries:
-        # entry["path"] is like "tts/espeak-ng-data/lang/roa/fr"
-        rel = entry["path"].removeprefix("tts/espeak-ng-data/")
-        target = dest / rel
-        target.parent.mkdir(parents=True, exist_ok=True)
-
-        if target.is_file():
-            downloaded += entry.get("size", 0)
-            if progress is not None:
-                progress(downloaded, total_bytes)
-            continue
-
-        raw_url = entry.get("download_url") or f"{_RAW_URL}/{entry['path']}"
-        with urllib.request.urlopen(raw_url) as resp:  # noqa: S310
-            data = resp.read()
-        target.write_bytes(data)
-
+        _fetch_espeak_file(entry, dest)
         downloaded += entry.get("size", 0)
         if progress is not None:
             progress(downloaded, total_bytes)
 
+    marker.unlink()
 
+
+def _fetch_espeak_file(entry: dict, dest: Path) -> None:
+    """Write one espeak-ng-data file atomically, unless an intact copy is there.
+
+    Checked against the blob id the Contents API lists (``sha``): a file a
+    crash truncated is fetched again instead of kept forever.
+    """
+    # entry["path"] is like "tts/espeak-ng-data/lang/roa/fr"
+    rel = entry["path"].removeprefix("tts/espeak-ng-data/")
+    target = dest / rel
+    expected = entry.get("sha")
+    if target.is_file() and (not expected or _git_blob_sha(target.read_bytes()) == expected):
+        return
+
+    raw_url = entry.get("download_url") or f"{_RAW_URL}/{entry['path']}"
+    with _urlopen(raw_url) as resp:
+        data = resp.read()
+    if expected and _git_blob_sha(data) != expected:
+        raise RuntimeError(f"espeak-ng-data/{rel}: download does not match the repository")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tmp = target.with_name(target.name + ".part")
+    tmp.write_bytes(data)
+    tmp.replace(target)
+
+
+def _git_blob_sha(data: bytes) -> str:
+    """The id git gives *data* as a blob — what the Contents API calls ``sha``."""
+    header = f"blob {len(data)}\0".encode()
+    return hashlib.sha1(header + data, usedforsecurity=False).hexdigest()
+
+
+@single_flight
 def _download_speaker_model_sync(
     model_id: str,
     progress: ProgressCallback | None = None,
@@ -426,7 +488,7 @@ def _download_speaker_model_sync(
 
     # HEAD request for content-length
     req = urllib.request.Request(asset_url, method="HEAD")  # noqa: S310
-    with urllib.request.urlopen(req) as resp:  # noqa: S310
+    with _urlopen(req) as resp:
         total = int(resp.headers.get("Content-Length", 0))
 
     downloaded = 0
