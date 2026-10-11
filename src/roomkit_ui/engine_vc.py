@@ -31,7 +31,7 @@ from roomkit_ui.engine_vc_helpers import (
     build_turn_detector,
     log_vc_audio_pipeline,
     mcp_servers_configured,
-    wrap_local_provider_tool_errors,
+    register_local_tool_hint,
 )
 from roomkit_ui.features import STT_PROVIDER_FEATURES, require
 from roomkit_ui.hooks import register_vc_hooks
@@ -139,8 +139,6 @@ class VoiceChannelMixin:
             ai_provider = create_ai_provider(llm_provider_name, settings)
             model = ai_provider.model_name
             self._ai_pricing = _model_pricing(ai_provider)  # type: ignore[attr-defined]
-            if llm_provider_name == "local":
-                wrap_local_provider_tool_errors(ai_provider, self.error_occurred.emit)  # type: ignore[attr-defined]
 
             # 4-5. Audio backend
             input_sample_rate = 16000
@@ -259,6 +257,8 @@ class VoiceChannelMixin:
                 metadata={"tools": tools},
             )
             register_vc_hooks(kit, self)
+            if llm_provider_name == "local":
+                register_local_tool_hint(kit, self.error_occurred.emit)  # type: ignore[attr-defined]
 
             # 12. Connect and start
             self.loading_status.emit("Starting voice channel…")  # type: ignore[attr-defined]

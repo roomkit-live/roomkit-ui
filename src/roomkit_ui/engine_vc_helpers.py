@@ -61,29 +61,35 @@ def build_deepgram_stt(settings: dict, stt_language: str, emit_status) -> Any:
     return DeepgramSTTProvider(dg_config)
 
 
-def wrap_local_provider_tool_errors(ai_provider: Any, emit_error) -> None:
-    """Wrap a local AI provider's ``generate`` so tool-not-supported errors surface."""
-    _orig_generate = ai_provider.generate
-    _tool_error_emitted = False
+_NO_TOOLS_HINT = (
+    'This model does not support tool use. Disable "Model supports tool use" in '
+    "Settings → AI Provider."
+)
 
-    async def _generate_with_tool_hint(context: Any) -> Any:
-        nonlocal _tool_error_emitted
+
+def register_local_tool_hint(kit: Any, emit_error) -> None:
+    """Point at the setting when a local model refuses the tools it was given.
+
+    The refusal (Ollama: "<model> does not support tools") fails the turn
+    inside the AIChannel's streamed generation, and roomkit hands every such
+    turn failure to the ON_ERROR hooks with the provider's message in
+    ``metadata["error"]``.  Said once per session: every turn fails alike.
+    """
+    from roomkit.models.enums import HookExecution, HookTrigger
+
+    shown = False
+
+    @kit.hook(HookTrigger.ON_ERROR, HookExecution.ASYNC)
+    async def _on_tool_refusal(event: Any, context: Any) -> None:
+        nonlocal shown
+        error = str((getattr(event, "metadata", None) or {}).get("error", ""))
+        if shown or "does not support tools" not in error:
+            return
+        shown = True
         try:
-            return await _orig_generate(context)
-        except Exception as exc:
-            if not _tool_error_emitted and "does not support tools" in str(exc):
-                _tool_error_emitted = True
-                try:
-                    emit_error(
-                        "This model does not support tool use. "
-                        'Disable "Model supports tool use" in '
-                        "Settings → AI Provider."
-                    )
-                except Exception:
-                    logger.debug("emit_error failed (Qt object deleted?)", exc_info=True)
-            raise
-
-    ai_provider.generate = _generate_with_tool_hint  # type: ignore[method-assign]
+            emit_error(_NO_TOOLS_HINT)
+        except Exception:
+            logger.debug("emit_error failed (Qt object deleted?)", exc_info=True)
 
 
 def build_interruption(settings: dict) -> Any:
