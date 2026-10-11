@@ -22,6 +22,47 @@ logger = logging.getLogger(__name__)
 DSP_THREADS: int | None = None
 
 
+# Voice-channel mic rate: what the local VAD, diarization and STT models take.
+VC_INPUT_SAMPLE_RATE = 16000
+
+
+# ---------------------------------------------------------------------------
+# Shared microphone
+# ---------------------------------------------------------------------------
+
+
+def session_input_rate(settings: dict) -> int:
+    """The mic rate a session started with *settings* captures at.
+
+    A shared capture source must be opened at this rate to serve the session
+    — and replay what was said before it, the wake word's phrase.
+    """
+    if settings.get("conversation_mode", "realtime") == "voice_channel":
+        return VC_INPUT_SAMPLE_RATE
+    from roomkit_ui.engine_realtime import _realtime_sample_rate
+
+    return _realtime_sample_rate(str(settings.get("provider", "gemini")))
+
+
+def usable_capture_source(source: Any, sample_rate: int) -> Any:
+    """The shared microphone if it can serve a session at *sample_rate*, else None.
+
+    A shared source owns the input format, and refuses a conflicting one
+    rather than resampling.  Only hand it over when the rates agree;
+    otherwise the session opens its own device and loses the backlog — a
+    worse wake-word experience, not a broken session.
+    """
+    if source is None or source.sample_rate == sample_rate:
+        return source
+    logger.warning(
+        "Shared capture source is %d Hz but this session needs %d Hz — "
+        "opening a dedicated device, pre-session audio will be lost",
+        source.sample_rate,
+        sample_rate,
+    )
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Telemetry
 # ---------------------------------------------------------------------------

@@ -15,6 +15,7 @@ from typing import Any
 
 from roomkit_ui.engine_audio import (
     DSP_THREADS,
+    VC_INPUT_SAMPLE_RATE,
     build_audio_processing,
     build_debug_taps,
     build_recorder,
@@ -22,6 +23,7 @@ from roomkit_ui.engine_audio import (
     notify_missing_aec,
     resolve_attitude,
     setup_diarization,
+    usable_capture_source,
 )
 from roomkit_ui.engine_state import EngineState
 from roomkit_ui.engine_vc_helpers import (
@@ -40,6 +42,8 @@ from roomkit_ui.toolset import ToolSet, tool_summaries
 from roomkit_ui.tts import create_tts_provider
 
 logger = logging.getLogger(__name__)
+
+_BLOCK_MS = 20
 
 
 class VoiceChannelMixin:
@@ -69,6 +73,8 @@ class VoiceChannelMixin:
     _usage_in: int
     _usage_out: int
     _pending_tool_calls: int
+    _capture_source: Any
+    _capture_since: Any
 
     def _accumulate_usage(self, usage: dict) -> None:
         """Add one AI response's token usage to the session totals and emit.
@@ -105,7 +111,6 @@ class VoiceChannelMixin:
             from roomkit import RoomKit, VoiceChannel
             from roomkit.channels.ai import AIChannel
             from roomkit.models import RetryPolicy
-            from roomkit.voice.backends.local import LocalAudioBackend
             from roomkit.voice.pipeline.config import AudioPipelineConfig
 
             base_prompt = settings.get(
@@ -141,22 +146,13 @@ class VoiceChannelMixin:
             self._ai_pricing = _model_pricing(ai_provider)  # type: ignore[attr-defined]
 
             # 4-5. Audio backend
-            input_sample_rate = 16000
-            block_ms = 20
-            frame_size = input_sample_rate * block_ms // 1000
+            input_sample_rate = VC_INPUT_SAMPLE_RATE
+            frame_size = input_sample_rate * _BLOCK_MS // 1000
             aec, denoiser = build_audio_processing(
                 aec_mode, denoise_mode, input_sample_rate, frame_size
             )
             notify_missing_aec(aec_mode, aec, self.session_notice.emit)  # type: ignore[attr-defined]
-            backend = LocalAudioBackend(
-                input_sample_rate=input_sample_rate,
-                output_sample_rate=output_sample_rate,
-                block_duration_ms=block_ms,
-                input_device=settings.get("input_device"),
-                output_device=settings.get("output_device"),
-                aec=aec,
-                mute_mic_during_playback=aec is None,
-            )
+            backend = self._build_vc_backend(settings, aec, output_sample_rate)
             self._backend = backend  # type: ignore[attr-defined]
             log_vc_audio_pipeline(aec, denoiser, input_sample_rate, output_sample_rate)
 
@@ -285,15 +281,39 @@ class VoiceChannelMixin:
             self.error_occurred.emit(str(e))  # type: ignore[attr-defined]
             await self._cleanup()  # type: ignore[attr-defined]
 
+    def _build_vc_backend(self, settings: dict, aec: Any, output_sample_rate: int) -> Any:
+        """The session's LocalAudioBackend, on the shared microphone when it fits.
+
+        Subscribed to the shared source, the session can replay what was
+        said before it existed — the request that followed the wake word.
+        """
+        from roomkit.voice.backends.local import LocalAudioBackend
+
+        return LocalAudioBackend(
+            input_sample_rate=VC_INPUT_SAMPLE_RATE,
+            output_sample_rate=output_sample_rate,
+            block_duration_ms=_BLOCK_MS,
+            input_device=settings.get("input_device"),
+            output_device=settings.get("output_device"),
+            aec=aec,
+            mute_mic_during_playback=aec is None,
+            source=usable_capture_source(self._capture_source, VC_INPUT_SAMPLE_RATE),
+        )
+
     async def _listen(self, backend: Any, voice: Any, voice_binding: Any) -> None:
         """Open this session on the backend and start capturing the mic.
 
-        The user's mute is applied before capture starts, so one pressed
-        while the session was connecting holds from the first frame.
+        With a wake word's replay mark, the backend replays the shared
+        source from there, so the words spoken while the session was being
+        built reach the STT.  The user's mute is applied before capture
+        starts — replay included — so one pressed while the session was
+        connecting holds from the first frame.
         """
         from roomkit_ui.memory import ROOM_ID
 
-        session = await backend.connect(ROOM_ID, "local-user", "voice")
+        mark = self._capture_since
+        metadata = {"capture_since": mark} if mark is not None else None
+        session = await backend.connect(ROOM_ID, "local-user", "voice", metadata=metadata)
         self._session = session
         self._apply_mic_mute(session)  # type: ignore[attr-defined]
         voice.bind_session(session, ROOM_ID, voice_binding)

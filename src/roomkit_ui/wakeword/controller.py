@@ -34,8 +34,8 @@ ListenerFactory = Callable[[dict, Any], Any]
 # session's microphone mid-call.
 _SESSION = "session"
 # What build_capture_source opens the device with — the input device, and
-# the provider whose transport rate the source must match.
-_SOURCE_SETTINGS = ("input_device", "provider")
+# the mode and provider whose session rate the source must match.
+_SOURCE_SETTINGS = ("input_device", "conversation_mode", "provider")
 
 
 class WakeWordController(QObject):
@@ -215,7 +215,8 @@ def capture_rate(settings: dict) -> int:
     """The rate the wake word hears the microphone at.
 
     The shared source owns the input format and refuses a conflicting one,
-    so it runs at the rate the configured provider's transport asks for.
+    so it runs at the rate a session in the configured mode asks for: the
+    provider's transport rate in realtime, 16 kHz in voice-channel mode.
     Enrolment records at this rate too, so its takes are converted to
     16 kHz exactly as detection's audio will be.  Without the shared
     source the listener opens the device at 16 kHz itself.
@@ -225,9 +226,9 @@ def capture_rate(settings: dict) -> int:
     except ImportError:
         return SAMPLE_RATE
 
-    from roomkit_ui.engine_realtime import _realtime_sample_rate
+    from roomkit_ui.engine_audio import session_input_rate
 
-    return _realtime_sample_rate(str(settings.get("provider", "gemini")))
+    return session_input_rate(settings)
 
 
 def build_listener(settings: dict, source: Any) -> Any:

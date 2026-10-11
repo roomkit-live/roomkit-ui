@@ -22,6 +22,7 @@ from roomkit_ui.engine_audio import (
     notify_missing_aec,
     resolve_attitude,
     setup_diarization,
+    usable_capture_source,
 )
 from roomkit_ui.engine_state import EngineState
 from roomkit_ui.features import REALTIME_PROVIDER_FEATURES, require
@@ -179,21 +180,10 @@ class RealtimeMixin:
                 "input_device": input_device,
                 "output_device": output_device,
                 "aec": transport_aec,
+                "source": usable_capture_source(
+                    getattr(self, "_capture_source", None), sample_rate
+                ),
             }
-            # A shared source owns the input format, and refuses a conflicting
-            # one rather than resampling.  Only hand it over when the rates
-            # agree; otherwise this session opens its own device and loses the
-            # backlog — a worse wake-word experience, not a broken session.
-            source = getattr(self, "_capture_source", None)
-            if source is not None and source.sample_rate == sample_rate:
-                backend_kwargs["source"] = source
-            elif source is not None:
-                logger.warning(
-                    "Shared capture source is %d Hz but this provider needs %d Hz — "
-                    "opening a dedicated device, pre-session audio will be lost",
-                    source.sample_rate,
-                    sample_rate,
-                )
             transport = LocalAudioBackend(**backend_kwargs)
 
             self._transport = transport  # type: ignore[attr-defined]
