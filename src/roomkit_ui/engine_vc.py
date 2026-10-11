@@ -14,6 +14,7 @@ import logging
 import os
 from typing import Any
 
+from roomkit_ui.agent_hooks import register_agent_hooks
 from roomkit_ui.engine_audio import (
     DSP_THREADS,
     VC_INPUT_SAMPLE_RATE,
@@ -47,6 +48,7 @@ from roomkit_ui.hooks import register_vc_hooks
 from roomkit_ui.providers import create_ai_provider
 from roomkit_ui.toolset import ToolSet
 from roomkit_ui.tts import create_tts_provider, is_cached_tts, tts_cache_fields
+from roomkit_ui.vc_agent import build_vc_agent
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +84,7 @@ class VoiceChannelMixin:
     _pending_tool_calls: int
     _capture_source: Any
     _capture_since: Any
+    _vc_agent: Any
 
     def _accumulate_usage(self, usage: dict) -> None:
         """Add one AI response's token usage to the session totals and emit.
@@ -181,6 +184,7 @@ class VoiceChannelMixin:
                 model=model,
                 tools=tools,
                 skills_registry=skills_registry,
+                agent=self._vc_agent.summary,
             )
 
         except Exception as e:
@@ -246,6 +250,7 @@ class VoiceChannelMixin:
             if mcp_servers_configured(settings):
                 self.loading_status.emit("Connecting MCP servers…")  # type: ignore[attr-defined]
             toolset = await self._setup_tools(settings)  # type: ignore[attr-defined]
+        self._vc_agent = build_vc_agent(settings, ai_provider, self.session_notice.emit)  # type: ignore[attr-defined]
 
         ai_channel = AIChannel(
             "ai",
@@ -259,6 +264,7 @@ class VoiceChannelMixin:
             # only run while nothing has been streamed, so none is heard.
             retry_policy=RetryPolicy(max_retries=2, base_delay_seconds=0.5, max_delay_seconds=4.0),
             **toolset.channel_options(),
+            **self._vc_agent.channel_options(),
         )
         return ai_channel, toolset.all, skills_registry
 
@@ -288,6 +294,7 @@ class VoiceChannelMixin:
         # (ToolSet.turn_config), in this room and in a background task's.
         await kit.attach_channel(ROOM_ID, "ai", category=ChannelCategory.INTELLIGENCE)
         register_vc_hooks(kit, self, tts_filter=tts_filter)
+        register_agent_hooks(kit, self)
         if llm_provider_name == "local":
             register_local_tool_hint(kit, self.error_occurred.emit)  # type: ignore[attr-defined]
         return voice_binding

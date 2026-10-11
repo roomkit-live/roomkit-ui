@@ -17,6 +17,7 @@ from roomkit_ui.features import (
     EXCLUSIVE_EXTRAS,
     FEATURES,
     REALTIME_PROVIDER_FEATURES,
+    SPEAK_POLICY_FEATURES,
     STT_PROVIDER_FEATURES,
     TTS_PROVIDER_FEATURES,
     TURN_DETECTOR_FEATURES,
@@ -89,6 +90,7 @@ def test_exclusive_extras_mirror_the_uv_conflicts():
         TTS_PROVIDER_FEATURES,
         REALTIME_PROVIDER_FEATURES,
         TURN_DETECTOR_FEATURES,
+        SPEAK_POLICY_FEATURES,
     ],
 )
 def test_provider_maps_point_at_known_features(provider_map):
@@ -98,12 +100,17 @@ def test_provider_maps_point_at_known_features(provider_map):
 
 def test_settings_combos_cover_every_offered_provider():
     """Every provider the UI offers must resolve, or be core-only on purpose."""
+    from roomkit_ui.vc_agent import SPEAK_POLICIES
     from roomkit_ui.widgets.settings.ai_page import (
         VC_LLM_PROVIDERS,
         VC_STT_PROVIDERS,
         VC_TTS_PROVIDERS,
     )
     from roomkit_ui.widgets.settings.realtime_catalogs import PROVIDERS as RT_PROVIDERS
+
+    # The policies that need no backend of their own: none, and the
+    # conversation model the session already requires.
+    assert {v for _label, v in SPEAK_POLICIES} - set(SPEAK_POLICY_FEATURES) == {"off", "llm"}
 
     for entries, mapping in (
         (VC_LLM_PROVIDERS, AI_PROVIDER_FEATURES),

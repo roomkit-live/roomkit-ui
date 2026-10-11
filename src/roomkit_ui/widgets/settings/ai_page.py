@@ -23,6 +23,7 @@ from roomkit_ui.features import (
 from roomkit_ui.theme import colors
 from roomkit_ui.widgets.settings.feature_hints import populate_provider_combo
 from roomkit_ui.widgets.settings.realtime_section import RealtimeSection
+from roomkit_ui.widgets.settings.vc_agent_fields import VCAgentPage
 from roomkit_ui.widgets.settings.vc_cloud_fields import VCCloudFields
 from roomkit_ui.widgets.settings.vc_local_fields import VCLocalFields
 
@@ -130,6 +131,7 @@ class _AIPage(QWidget):
         self._vc_tab_bar.addTab("STT")
         self._vc_tab_bar.addTab("LLM")
         self._vc_tab_bar.addTab("TTS")
+        self._vc_tab_bar.addTab("Agent")
         self._vc_tab_bar.setExpanding(False)
         self._vc_tab_bar.setDocumentMode(True)
         self._vc_tab_bar.setStyleSheet(f"""
@@ -210,6 +212,10 @@ class _AIPage(QWidget):
         self._add_interruption_fields(tts_form, settings)
 
         self._vc_stack.addWidget(tts_page)
+
+        # -- Page 3: Agent (turn-taking) --
+        self._agent = VCAgentPage(settings)
+        self._vc_stack.addWidget(self._agent)
 
         self._vc_tab_bar.currentChanged.connect(self._vc_stack.setCurrentIndex)
         vc_layout.addWidget(self._vc_stack)
@@ -349,7 +355,11 @@ class _AIPage(QWidget):
         """This page's copies of each API key that several tabs edit, by setting key."""
         rt, cloud = self._realtime, self._cloud
         return {
-            "openai_api_key": [rt.openai_api_key, cloud.vc_openai_api_key],
+            "openai_api_key": [
+                rt.openai_api_key,
+                cloud.vc_openai_api_key,
+                self._agent.openai_api_key,
+            ],
             "api_key": [rt.gemini_api_key, cloud.vc_gemini_api_key],
             "deepgram_api_key": [rt.deepgram_api_key, cloud.deepgram_api_key],
             "elevenlabs_api_key": [rt.elevenlabs_api_key, cloud.elevenlabs_api_key],
@@ -382,6 +392,7 @@ class _AIPage(QWidget):
             "vc_tts_provider": VC_TTS_PROVIDERS[self.vc_tts_provider.currentIndex()][1],
             **self._local.get_settings(),
             **self._cloud.get_settings(),
+            **self._agent.get_settings(),
             "system_prompt": self.prompt.toPlainText().strip(),
             "selected_attitude": self.selected_attitude_name(),
         }

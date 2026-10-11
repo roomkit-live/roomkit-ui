@@ -39,6 +39,8 @@ gradium = ["roomkit[gradium]>=0.97.0"]
 # Microsoft Foundry speech: MAI-Transcribe (websocket) and Azure Speech TTS,
 # MAI-Voice included (REST).  No Azure SDK: roomkit speaks the wire protocol.
 azure-speech = ["roomkit[azure-speech]>=0.97.0"]
+# TypeSafe's Jev answers the Voice Channel's speaking decision (~150 ms a call).
+typesafe = ["roomkit[typesafe]>=0.97.0"]
 
 # ── Local inference ───────────────────────────────────────────────────────
 # sherpa-onnx powers local STT, Piper TTS, VAD and speaker diarization.
@@ -97,6 +99,7 @@ cloud = [
     "roomkit-ui[elevenlabs]",
     "roomkit-ui[gradium]",
     "roomkit-ui[azure-speech]",
+    "roomkit-ui[typesafe]",
 ]
 all = [
     "roomkit-ui[cloud]",

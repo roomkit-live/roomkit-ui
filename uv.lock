@@ -3988,6 +3988,9 @@ smart-turn = [
     { name = "onnxruntime" },
     { name = "transformers", version = "5.19.0", source = { registry = "https://pypi.org/simple" } },
 ]
+typesafe = [
+    { name = "typesafe-sdk" },
+]
 webrtc-aec = [
     { name = "aec-audio-processing" },
 ]
@@ -4014,7 +4017,7 @@ all = [
     { name = "opentelemetry-sdk" },
     { name = "pynput" },
     { name = "pyside6-addons" },
-    { name = "roomkit", extra = ["anthropic", "azure-speech", "deepgram", "elevenlabs", "gemini", "gradium", "llamacpp", "openai", "realtime-deepgram", "realtime-elevenlabs", "realtime-gemini", "realtime-openai", "sherpa-onnx"] },
+    { name = "roomkit", extra = ["anthropic", "azure-speech", "deepgram", "elevenlabs", "gemini", "gradium", "llamacpp", "openai", "realtime-deepgram", "realtime-elevenlabs", "realtime-gemini", "realtime-openai", "sherpa-onnx", "typesafe"] },
     { name = "sherpa-onnx-core" },
 ]
 anthropic = [
@@ -4024,7 +4027,7 @@ azure-speech = [
     { name = "roomkit", extra = ["azure-speech"] },
 ]
 cloud = [
-    { name = "roomkit", extra = ["anthropic", "azure-speech", "deepgram", "elevenlabs", "gemini", "gradium", "openai", "realtime-deepgram", "realtime-elevenlabs", "realtime-gemini", "realtime-openai"] },
+    { name = "roomkit", extra = ["anthropic", "azure-speech", "deepgram", "elevenlabs", "gemini", "gradium", "openai", "realtime-deepgram", "realtime-elevenlabs", "realtime-gemini", "realtime-openai", "typesafe"] },
 ]
 deepgram = [
     { name = "roomkit", extra = ["deepgram", "realtime-deepgram"] },
@@ -4042,7 +4045,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-qt" },
-    { name = "roomkit", extra = ["anthropic", "azure-speech", "deepgram", "elevenlabs", "gemini", "gradium", "llamacpp", "openai", "realtime-deepgram", "realtime-elevenlabs", "realtime-gemini", "realtime-openai", "sherpa-onnx"] },
+    { name = "roomkit", extra = ["anthropic", "azure-speech", "deepgram", "elevenlabs", "gemini", "gradium", "llamacpp", "openai", "realtime-deepgram", "realtime-elevenlabs", "realtime-gemini", "realtime-openai", "sherpa-onnx", "typesafe"] },
     { name = "ruff" },
     { name = "sherpa-onnx-core" },
 ]
@@ -4090,6 +4093,9 @@ telemetry = [
     { name = "opentelemetry-exporter-otlp" },
     { name = "opentelemetry-sdk" },
 ]
+typesafe = [
+    { name = "roomkit", extra = ["typesafe"] },
+]
 wakeword = [
     { name = "onnxruntime" },
     { name = "roomkit", extra = ["sherpa-onnx"] },
@@ -4130,6 +4136,7 @@ requires-dist = [
     { name = "roomkit", extras = ["qwen-tts"], marker = "extra == 'qwen3-tts'", specifier = ">=0.97.0" },
     { name = "roomkit", extras = ["sherpa-onnx"], marker = "extra == 'local-voice'", specifier = ">=0.97.0" },
     { name = "roomkit", extras = ["smart-turn"], marker = "extra == 'smart-turn'", specifier = ">=0.97.0" },
+    { name = "roomkit", extras = ["typesafe"], marker = "extra == 'typesafe'", specifier = ">=0.97.0" },
     { name = "roomkit-ui", extras = ["all"], marker = "extra == 'dev'" },
     { name = "roomkit-ui", extras = ["anthropic"], marker = "extra == 'cloud'" },
     { name = "roomkit-ui", extras = ["azure-speech"], marker = "extra == 'cloud'" },
@@ -4146,11 +4153,12 @@ requires-dist = [
     { name = "roomkit-ui", extras = ["mcp-apps"], marker = "extra == 'all'" },
     { name = "roomkit-ui", extras = ["openai"], marker = "extra == 'cloud'" },
     { name = "roomkit-ui", extras = ["telemetry"], marker = "extra == 'all'" },
+    { name = "roomkit-ui", extras = ["typesafe"], marker = "extra == 'cloud'" },
     { name = "roomkit-ui", extras = ["wakeword"], marker = "extra == 'all'" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6" },
     { name = "sherpa-onnx-core", marker = "extra == 'local-voice'", specifier = ">=1.13" },
 ]
-provides-extras = ["anthropic", "openai", "gemini", "deepgram", "elevenlabs", "gradium", "azure-speech", "local-voice", "qwen3-tts", "neutts", "llamacpp", "pocket-tts", "smart-turn", "dictation", "mcp-apps", "wakeword", "telemetry", "cloud", "all", "dev"]
+provides-extras = ["anthropic", "openai", "gemini", "deepgram", "elevenlabs", "gradium", "azure-speech", "typesafe", "local-voice", "qwen3-tts", "neutts", "llamacpp", "pocket-tts", "smart-turn", "dictation", "mcp-apps", "wakeword", "telemetry", "cloud", "all", "dev"]
 
 [[package]]
 name = "rpds-py"
@@ -5192,6 +5200,24 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/a7/a7/e6aecc4b4eb59598829a3b5076a93aff291b4fdaa2ded25efc4e1f4d219c/typer_slim-0.24.0.tar.gz", hash = "sha256:f0ed36127183f52ae6ced2ecb2521789995992c521a46083bfcdbb652d22ad34", size = 4776, upload-time = "2026-02-16T22:08:51.2Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a7/24/5480c20380dfd18cf33d14784096dca45a24eae6102e91d49a718d3b6855/typer_slim-0.24.0-py3-none-any.whl", hash = "sha256:d5d7ee1ee2834d5020c7c616ed5e0d0f29b9a4b1dd283bdebae198ec09778d0e", size = 3394, upload-time = "2026-02-16T22:08:49.92Z" },
+]
+
+[[package]]
+name = "typesafe-sdk"
+version = "0.7.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "httpx2" },
+    { name = "packaging" },
+    { name = "pydantic" },
+    { name = "pydantic-core" },
+    { name = "tenacity" },
+    { name = "truststore", marker = "sys_platform != 'emscripten' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/94/12/3a897e9f424be6f4db0648a955f8fadbe62149d118a03614df897b5a2ec9/typesafe_sdk-0.7.4.tar.gz", hash = "sha256:a20dca217a746db1ac5534ac502de16e1f86a400b4ec09f8594e6221c2bc9558", size = 24388, upload-time = "2026-10-09T15:47:14.978Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a2/49/6cd65684e41e25069f4d12c09cd7e1e3f81477f06acb29bf0d1815e27d1e/typesafe_sdk-0.7.4-py3-none-any.whl", hash = "sha256:61cf3f2fe9da20b68c3d3fe2fb76bbb2f35f8c4a9a65a6b81c43a535d2a53210", size = 37700, upload-time = "2026-10-09T15:47:12.418Z" },
 ]
 
 [[package]]

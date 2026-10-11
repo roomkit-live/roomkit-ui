@@ -106,6 +106,7 @@ FEATURES: dict[str, Feature] = {
     "smart-turn": Feature(
         "smart-turn", "Smart Turn detector", ("numpy", "onnxruntime", "transformers")
     ),
+    "typesafe": Feature("typesafe", "TypeSafe Jev classifier", ("typesafe_sdk",)),
 }
 
 # Provider ids as stored in QSettings → feature key.  A provider absent from a
@@ -144,6 +145,13 @@ REALTIME_PROVIDER_FEATURES: dict[str, str] = {
     # GPT-Live rides the same websocket transport; tiktoken (in the extra)
     # only sizes context appends, and roomkit falls back to bytes without it.
     "openai_live": "openai-realtime",
+}
+
+# Voice-channel speak policies (vc_speak_policy) → the classifier's feature
+# key.  "llm" asks the conversation model, which the session already needs.
+SPEAK_POLICY_FEATURES: dict[str, str] = {
+    "openai": "openai",
+    "jev": "typesafe",
 }
 
 # Voice-channel turn detectors (vc_turn_detector) → feature key.

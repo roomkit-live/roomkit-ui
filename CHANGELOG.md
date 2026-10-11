@@ -28,6 +28,13 @@ Each released section is the source for that version's GitHub release notes.
   Settings → Wake Word. What is said right after the phrase reaches the provider. The
   listener stands down during sessions, dictation and while Settings is open, and the
   microphone is released when the wake word is off. New `wakeword` extra (in `all`).
+- **The assistant decides when to speak** (Voice Channel, Settings → AI → Agent) — on
+  each turn a classifier judges whether you finished, put it off, asked for quiet or
+  spoke to it, and the assistant answers, offers one short sentence or stays quiet; the
+  chat says why it stayed quiet. "Just listen" keeps it listening until spoken to by its
+  name. The judgments come from OpenAI Decisions, TypeSafe Jev (new `typesafe` extra,
+  in `all`) or the conversation model; one that cannot run leaves the assistant
+  answering every turn and says so. Off by default: each reply waits for the decision.
 - **Hang up when the conversation goes quiet** — optional, after a set delay (15 s by
   default), never during a tool call or while the assistant speaks; the chat says why
   the session closed.

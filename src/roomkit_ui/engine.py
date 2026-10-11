@@ -179,6 +179,9 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         # active LLM's ModelPricing, or None where the offline catalog has no
         # price — every realtime model, whose sessions show tokens only.
         self._ai_pricing: Any = None
+        # The Voice Channel agent's parts (speak policy …) and the clients
+        # they opened, closed after the kit (vc_agent.VCAgent).
+        self._vc_agent: Any = None
         self._usage_cost: float = 0.0
         self._usage_in: int = 0
         self._usage_out: int = 0
@@ -359,10 +362,17 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         return task is not None and task.cancelling() > 0
 
     def _emit_session_info(
-        self, *, provider: str, model: str, tools: list[dict], skills_registry: Any
+        self,
+        *,
+        provider: str,
+        model: str,
+        tools: list[dict],
+        skills_registry: Any,
+        agent: list[dict] | None = None,
     ) -> None:
         """Tell the UI's info bar what this session runs: provider, model,
-        tools, skills, the MCP servers that failed — and the attitude."""
+        tools, skills, the agent's turn-taking, the MCP servers that failed —
+        and the attitude."""
         skill_info: list[dict] = []
         if skills_registry and skills_registry.skill_count > 0:
             skill_info = [
@@ -375,6 +385,8 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
             "tools": tool_summaries(tools),
             "skills": skill_info,
         }
+        if agent:
+            info["agent"] = list(agent)
         if self._mcp and self._mcp.failed_servers:
             info["failed_servers"] = list(self._mcp.failed_servers)
         self.session_info.emit(info)
@@ -537,6 +549,7 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         await self._end_voice_session()
         await self._close_session_models()
         await self._close_framework()
+        await self._close_vc_agent()
         # Remove the voice error log handler to prevent handler accumulation.
         logging.getLogger("roomkit.voice").removeHandler(self._log_handler)
         await self._close_tool_sources()
@@ -593,6 +606,12 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         except Exception:
             logger.exception("cleanup: kit.close() failed")
 
+    async def _close_vc_agent(self) -> None:
+        """Close the speak policy's classifier: roomkit leaves it open, and
+        the channel that asked it is closed by now."""
+        if self._vc_agent is not None:
+            await self._vc_agent.close()
+
     async def _close_tool_sources(self) -> None:
         """Disconnect the MCP servers and kill any CLI tool still running."""
         if self._mcp:
@@ -618,6 +637,7 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         """
         self._channel = None
         self._ai_channel = None
+        self._vc_agent = None
         self._session = None
         self._kit = None
         self._transport = None

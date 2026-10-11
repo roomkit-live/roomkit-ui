@@ -147,11 +147,13 @@ async def open_session(
     build_channel: Callable[..., VoiceChannel] | None = None,
     engine: FakeEngine | None = None,
     tts_filter: Any = None,
+    ai_options: dict[str, Any] | None = None,
 ) -> VCSession:
     """A connected voice session whose user turns the TokenAI answers.
 
     *build_channel* is called as ``(stt, tts, backend, pipeline, tts_filter)``
     — the engine's ``_build_voice_channel`` — instead of a plain VoiceChannel.
+    *ai_options* go to the AIChannel (a speak policy, a thinker).
     """
     stt = MockSTTProvider(transcripts=transcripts or ["Hello"])
     backend = MockVoiceBackend()
@@ -162,7 +164,9 @@ async def open_session(
     kit = RoomKit(stt=stt, voice=backend)
     kit.register_channel(channel)
     ai = TokenAI(reply)
-    kit.register_channel(AIChannel("ai", provider=ai, system_prompt="Be brief."))
+    kit.register_channel(
+        AIChannel("ai", provider=ai, system_prompt="Be brief.", **(ai_options or {}))
+    )
     room = await kit.create_room()
     await kit.attach_channel(room.id, "voice")
     await kit.attach_channel(room.id, "ai", category=ChannelCategory.INTELLIGENCE)

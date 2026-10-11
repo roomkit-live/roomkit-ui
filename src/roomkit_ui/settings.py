@@ -31,6 +31,7 @@ _SECRET_KEYS = frozenset(
         "gradium_api_key",
         "xai_api_key",
         "azure_speech_api_key",
+        "typesafe_api_key",
     }
 )
 
@@ -220,6 +221,10 @@ _DEFAULTS = {
     "vc_local_thinking": False,
     # How long a turn Smart Turn judged unfinished waits for more speech
     "vc_turn_incomplete_wait_ms": "",  # ms (empty = 1500)
+    # Voice Channel agent (roomkit 0.96): who decides whether it speaks on a turn
+    "vc_speak_policy": "off",  # "off" | "openai" | "jev" | "llm" (vc_agent.py)
+    "vc_agent_name": "",  # what people call the assistant (empty = "Assistant")
+    "typesafe_api_key": "",  # secret — keyring, never QSettings
 }
 
 # Keys renamed since a release shipped: new key → (old key, old value → new value).

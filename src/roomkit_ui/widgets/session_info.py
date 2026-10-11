@@ -157,6 +157,7 @@ class SessionInfoBar(QWidget):
         tools: list[dict] = info.get("tools", [])
         skills: list[dict] = info.get("skills", [])
         failed: list[str] = info.get("failed_servers", [])
+        agent: list[dict] = info.get("agent", [])
 
         # Shorten model name for display
         display_model = model.split("/")[-1] if "/" in model else model
@@ -197,6 +198,9 @@ class SessionInfoBar(QWidget):
 
         for skill in skills:
             self._add_detail_row("\u2726", skill.get("name", ""), skill.get("description", ""), c)
+
+        for part in agent:
+            self._add_detail_row("\u25c6", part.get("name", ""), part.get("description", ""), c)
 
         self._detail_layout.addStretch()
 
