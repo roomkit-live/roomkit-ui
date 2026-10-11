@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import re
 
 from roomkit_ui.cli_exec import ProcessRegistry, run_sync
@@ -38,6 +39,14 @@ _BOX_EDGE = "│"
 # Rich already drops ANSI when stdout is not a tty.
 _PROBE_ENV = {"COLUMNS": "200"}
 
+# --help probes in flight at once. The byte cap is checked between batches:
+# launching a whole level first spawned ~270 processes for gh at depth 3,
+# nearly all of them past the cap.
+_PROBE_BATCH = 16
+
+# Probe results for the app's lifetime — see probe_help.
+_help_cache: dict[tuple, str] = {}
+
 
 async def probe_help(
     argv: list[str],
@@ -51,9 +60,14 @@ async def probe_help(
 ) -> str:
     """Return concatenated ``--help`` output for *argv* down to *depth* levels.
 
-    Probes each level concurrently and stops once *byte_cap* is spent, which
-    also bounds the spawn count. Returns "" if the CLI has no usable help —
-    the tool stays callable on its description alone.
+    Probes each level in batches of ``_PROBE_BATCH`` and stops once
+    *byte_cap* is spent — checked between batches, so it bounds the spawn
+    count too. Returns "" if the CLI has no usable help — the tool stays
+    callable on its description alone.
+
+    The result is kept for the app's lifetime, keyed by the binary's mtime
+    so an upgraded CLI is probed again: every session start used to re-run
+    every probe.
 
     *env* is the tool's declared environment. It applies here too: a CLI run
     with a variable set must be described by the help text it prints with that
@@ -62,40 +76,98 @@ async def probe_help(
     if depth < 1:
         return ""
 
-    probe_env = {**_PROBE_ENV, **env}
-    root = await _help_text(argv, timeout=timeout, registry=registry, env=probe_env)
+    key = _cache_key(argv, display, depth, byte_cap, env)
+    if key is not None and key in _help_cache:
+        return _help_cache[key]
+    help_text = await _probe(
+        argv,
+        display=display,
+        depth=depth,
+        timeout=timeout,
+        byte_cap=byte_cap,
+        registry=registry,
+        env={**_PROBE_ENV, **env},
+    )
+    # An empty probe may be a timeout this once: try again next session.
+    if key is not None and help_text:
+        _help_cache[key] = help_text
+    return help_text
+
+
+def clear_help_cache() -> None:
+    """Forget every cached ``--help`` probe (tests)."""
+    _help_cache.clear()
+
+
+def _cache_key(
+    argv: list[str], display: str, depth: int, byte_cap: int, env: dict[str, str]
+) -> tuple | None:
+    """What a probe's output depends on; None when the binary cannot be stat'd."""
+    try:
+        mtime = os.stat(argv[0]).st_mtime_ns
+    except (OSError, IndexError):
+        return None
+    return (tuple(argv), display, depth, byte_cap, tuple(sorted(env.items())), mtime)
+
+
+async def _probe(
+    argv: list[str],
+    *,
+    display: str,
+    depth: int,
+    timeout: float,
+    byte_cap: int,
+    registry: ProcessRegistry,
+    env: dict[str, str],
+) -> str:
+    root = await _help_text(argv, timeout=timeout, registry=registry, env=env)
     if not root:
         return ""
 
     chunks = [root]
-    used = len(root)
     # Each level explores the commands the previous level's help text listed.
     frontier: list[tuple[list[str], str]] = [([], root)]
 
     for _ in range(depth - 1):
         targets = [path + [sub] for path, text in frontier for sub in parse_subcommands(text)]
-        if not targets or used >= byte_cap:
+        if not targets or sum(map(len, chunks)) >= byte_cap:
             break
-
-        texts = await asyncio.gather(
-            *(
-                _help_text([*argv, *path], timeout=timeout, registry=registry, env=probe_env)
-                for path in targets
-            )
-        )
         frontier = []
-        for path, text in zip(targets, texts, strict=True):
-            if not text:
-                continue
-            section = f"\n\n$ {display} {' '.join(path)} --help\n{text}"
-            if used + len(section) > byte_cap:
+        for start in range(0, len(targets), _PROBE_BATCH):
+            batch = targets[start : start + _PROBE_BATCH]
+            texts = await asyncio.gather(
+                *(
+                    _help_text([*argv, *path], timeout=timeout, registry=registry, env=env)
+                    for path in batch
+                )
+            )
+            if not _keep_sections(chunks, frontier, batch, texts, display, byte_cap):
                 logger.info("CLI help for %r hit the %d-byte cap", display, byte_cap)
                 return "".join(chunks)
-            chunks.append(section)
-            used += len(section)
-            frontier.append((path, text))
 
     return "".join(chunks)
+
+
+def _keep_sections(
+    chunks: list[str],
+    frontier: list[tuple[list[str], str]],
+    paths: list[list[str]],
+    texts: list[str],
+    display: str,
+    byte_cap: int,
+) -> bool:
+    """Append each probed section in order; False once one would pass the cap."""
+    used = sum(map(len, chunks))
+    for path, text in zip(paths, texts, strict=True):
+        if not text:
+            continue
+        section = f"\n\n$ {display} {' '.join(path)} --help\n{text}"
+        if used + len(section) > byte_cap:
+            return False
+        chunks.append(section)
+        used += len(section)
+        frontier.append((path, text))
+    return True
 
 
 def parse_subcommands(help_text: str) -> list[str]:

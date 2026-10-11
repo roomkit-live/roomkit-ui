@@ -7,9 +7,18 @@ from roomkit import ToolFailedError, ToolRefusedError
 from roomkit.tools.result import is_unknown_tool_answer
 
 from roomkit_ui.cli_exec import ProcessRegistry, resolve_command, run_sync, truncate
-from roomkit_ui.cli_help import parse_subcommands, probe_help
+from roomkit_ui.cli_help import clear_help_cache, parse_subcommands, probe_help
 from roomkit_ui.cli_tools import OUTPUT_CAP, CliToolManager
 from roomkit_ui.env_config import invalid_env_lines, parse_env_block
+
+
+@pytest.fixture(autouse=True)
+def fresh_help_cache():
+    # Probes are cached for the app's lifetime; a test must not get another's.
+    clear_help_cache()
+    yield
+    clear_help_cache()
+
 
 RICH_HELP = """
  Usage: tool [OPTIONS] COMMAND [ARGS]...
