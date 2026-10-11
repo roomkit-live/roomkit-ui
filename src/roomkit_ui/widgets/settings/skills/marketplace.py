@@ -219,7 +219,7 @@ class MarketplaceTab(QWidget):
                 card.action_btn.setStyleSheet(
                     f"QPushButton {{ font-size: 11px; font-weight: 600;"
                     f" background: {c['BG_TERTIARY']}; color: {c['TEXT_SECONDARY']};"
-                    " border: none; border-radius: 6px; padding: 0 12px; }}"
+                    " border: none; border-radius: 6px; padding: 0 12px; }"
                 )
         except Exception as exc:
             logger.exception("Failed to install skills.sh source %s", skill.source)

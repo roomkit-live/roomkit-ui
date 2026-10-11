@@ -127,6 +127,19 @@ async def test_an_install_lands_on_the_card_a_new_search_put_in_place(qapp):
     shiboken6.delete(tab)
 
 
+async def test_the_installed_button_style_is_a_sheet_qt_can_parse(qapp):
+    # A stray "}}" in a plain string makes Qt reject the whole sheet.
+    tab = MarketplaceTab(on_install_source=lambda _skill: asyncio.sleep(0))
+    skill = _skill("pdf")
+    tab._render([skill])
+    tab._install_skill_source(skill, _cards(tab)[0])
+    await _finish_tasks()
+
+    sheet = _cards(tab)[0].action_btn.styleSheet()
+    assert sheet.count("{") == sheet.count("}")
+    shiboken6.delete(tab)
+
+
 async def test_a_failed_install_whose_card_is_gone_reports_in_the_status(qapp):
     async def install(_skill):
         tab._render([])  # the skill dropped out of a newer search
