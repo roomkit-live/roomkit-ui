@@ -50,6 +50,6 @@ def test_the_profile_outlives_its_page_on_teardown():
 
     children = lines["children"].split(",")
     # Children are deleted in the order they were added.
-    assert children.index("QWebEngineProfile") > children.index("_DebugPage")
+    assert children.index("QWebEngineProfile") > children.index("AppPage")
     assert children.index("QWebEngineProfile") > children.index("QWebEngineView")
     assert lines.get("released") == "False"

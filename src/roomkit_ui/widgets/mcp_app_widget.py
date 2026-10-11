@@ -21,9 +21,6 @@ from __future__ import annotations
 
 import logging
 import secrets
-import threading
-from http import HTTPStatus
-from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any
 
 from PySide6.QtCore import QUrl, Signal
@@ -31,20 +28,18 @@ from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QDialog, QFrame, QLabel, QSizePolicy, QVBoxLayout, QWidget
 
 from roomkit_ui.theme import colors
-from roomkit_ui.url_policy import is_public_web_url, safe_url_for_log
+from roomkit_ui.widgets.mcp_app_server import get_http_server, release_content
+from roomkit_ui.widgets.mcp_app_wrapper import WRAPPER_HTML
 
 logger = logging.getLogger(__name__)
 
 # Try importing WebEngine — it's an optional heavy dependency.
 try:
     from PySide6.QtWebChannel import QWebChannel
-    from PySide6.QtWebEngineCore import (
-        QWebEnginePage,
-        QWebEngineProfile,
-        QWebEngineSettings,
-        QWebEngineUrlRequestInterceptor,
-    )
+    from PySide6.QtWebEngineCore import QWebEngineProfile
     from PySide6.QtWebEngineWidgets import QWebEngineView
+
+    from roomkit_ui.widgets.mcp_app_web import AppPage, AppRequestInterceptor, set_web_attribute
 
     _HAS_WEBENGINE = True
 except ImportError:
@@ -56,272 +51,10 @@ except ImportError:
 # properly clipped inside the scroll area.
 _DEFAULT_VIEW_HEIGHT = 350
 
-_APP_CSP = (
-    "default-src 'self' http: https: data: blob:; "
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' http: https: qrc: data: blob:; "
-    "style-src 'self' 'unsafe-inline' http: https: data:; "
-    "img-src 'self' http: https: data: blob:; "
-    "font-src 'self' http: https: data:; "
-    "connect-src 'self' http: https: ws: wss:; "
-    "frame-src 'self' http: https: data: blob:; "
-    "worker-src 'self' blob:; "
-    "object-src 'none'; base-uri 'none'; form-action 'none'"
-)
-
-# ---------------------------------------------------------------------------
-# Lightweight HTTP server for MCP App content
-# ---------------------------------------------------------------------------
-# file:// origins break ES-module width measurement in Chromium
-# (document.documentElement.getBoundingClientRect().width returns 0 under
-# fit-content).  Serving via http://127.0.0.1 avoids this entirely.
-
-
-class _AppHTTPHandler(BaseHTTPRequestHandler):
-    """Serves MCP App HTML from an in-memory dict."""
-
-    def do_GET(self) -> None:  # noqa: N802
-        content = self.server.content_map.get(self.path)  # type: ignore[attr-defined]
-        if content is None:
-            self.send_error(HTTPStatus.NOT_FOUND)
-            return
-        data = content.encode("utf-8")
-        self.send_response(HTTPStatus.OK)
-        self.send_header("Content-Type", "text/html; charset=utf-8")
-        self.send_header("Content-Length", str(len(data)))
-        self.send_header("Content-Security-Policy", _APP_CSP)
-        self.send_header("Referrer-Policy", "no-referrer")
-        self.send_header("X-Content-Type-Options", "nosniff")
-        self.send_header("Cache-Control", "no-store")
-        self.end_headers()
-        self.wfile.write(data)
-
-    def log_message(self, format: str, *args: object) -> None:  # noqa: A002
-        logger.debug("MCPAppHTTP: %s", format % args)
-
-
-class _AppHTTPServer(HTTPServer):
-    """HTTPServer with an attached content_map."""
-
-    content_map: dict[str, str]
-
-    def __init__(self) -> None:
-        super().__init__(("127.0.0.1", 0), _AppHTTPHandler)
-        self.content_map = {}
-
-
-# Module-level singleton — lazily started on first use.
-_http_server: _AppHTTPServer | None = None
-_http_lock = threading.Lock()
-
-
-def _get_http_server() -> _AppHTTPServer:
-    """Return the shared HTTP server, starting it on first call."""
-    global _http_server  # noqa: PLW0603
-    if _http_server is not None:
-        return _http_server
-    with _http_lock:
-        if _http_server is not None:
-            return _http_server
-        srv = _AppHTTPServer()
-        thread = threading.Thread(target=srv.serve_forever, daemon=True)
-        thread.start()
-        _http_server = srv
-        logger.info("MCPAppHTTP: server started on port %d", srv.server_address[1])
-        return srv
-
-
-# ---------------------------------------------------------------------------
-# Wrapper HTML template
-# ---------------------------------------------------------------------------
-
-_WRAPPER_HTML = """\
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<style>
-  * {{ margin: 0; padding: 0; }}
-  html, body {{ width: 100%; height: 100%; overflow: hidden;
-                background: {bg_color}; }}
-  iframe {{ width: 100%; height: 100%; border: none; box-sizing: border-box; }}
-</style>
-<script src="qrc:///qtwebchannel/qwebchannel.js"></script>
-</head>
-<body>
-<iframe id="app" src="{app_url}"></iframe>
-<script>
-(function() {{
-    "use strict";
-    var iframe = document.getElementById("app");
-
-    new QWebChannel(qt.webChannelTransport, function(channel) {{
-        var bridge = channel.objects.bridge;
-        console.log("[mcp-bridge] QWebChannel connected");
-
-        // iframe -> Python: forward postMessage to bridge
-        window.addEventListener("message", function(event) {{
-            if (event.source === iframe.contentWindow) {{
-                var json = (typeof event.data === "string")
-                    ? event.data : JSON.stringify(event.data);
-                bridge.receiveMessage(json);
-            }}
-        }});
-
-        // Python -> iframe: forward bridge messages to iframe
-        bridge.messageToApp.connect(function(jsonStr) {{
-            try {{
-                var data = JSON.parse(jsonStr);
-                iframe.contentWindow.postMessage(data, "*");
-            }} catch(e) {{
-                console.error("[mcp-bridge] bad JSON from host", e);
-            }}
-        }});
-
-        // Measure actual rendered content height in the iframe and
-        // report it so the host widget can fit tightly around the content.
-        var lastH = 0, stable = 0;
-        function measureHeight() {{
-            try {{
-                var doc = iframe.contentDocument;
-                if (!doc || !doc.body) return;
-                var h = doc.body.scrollHeight;
-                if (h > 50 && Math.abs(h - lastH) > 10) {{
-                    lastH = h;
-                    stable = 0;
-                    bridge.receiveMessage(JSON.stringify({{
-                        method: "ui/notifications/size-changed",
-                        params: {{width: iframe.clientWidth, height: h}}
-                    }}));
-                }} else {{
-                    stable++;
-                    if (stable > 20) clearInterval(htid);
-                }}
-            }} catch(e) {{}}
-        }}
-        var htid = setInterval(measureHeight, 500);
-        iframe.addEventListener("load", function() {{
-            setTimeout(measureHeight, 300);
-        }});
-    }});
-}})();
-</script>
-</body>
-</html>
-"""
-
 
 def has_webengine() -> bool:
     """Return True if QWebEngine is importable."""
     return _HAS_WEBENGINE
-
-
-# ---------------------------------------------------------------------------
-# Custom page that forwards JS console to Python logging
-# ---------------------------------------------------------------------------
-if _HAS_WEBENGINE:
-
-    def _set_web_attribute(settings: QWebEngineSettings, name: str, enabled: bool) -> None:
-        attr = getattr(QWebEngineSettings.WebAttribute, name, None)
-        if attr is None:
-            attr = getattr(QWebEngineSettings, name, None)
-        if attr is not None:
-            settings.setAttribute(attr, enabled)
-
-    def _is_allowed_local_url(
-        url: QUrl,
-        allowed_host: str,
-        allowed_port: int,
-        allowed_paths: set[str] | None = None,
-    ) -> bool:
-        if url.scheme().lower() != "http":
-            return False
-        if url.host().lower() != allowed_host or url.port() != allowed_port:
-            return False
-        return allowed_paths is None or url.path() in allowed_paths
-
-    class _MCPAppRequestInterceptor(QWebEngineUrlRequestInterceptor):  # type: ignore[misc]
-        """Blocks embedded MCP Apps from reaching local/private browser targets."""
-
-        def __init__(self, parent: QWidget | None = None) -> None:
-            super().__init__(parent)
-            self._allowed_host = ""
-            self._allowed_port = -1
-
-        def set_allowed_local_server(self, host: str, port: int) -> None:
-            self._allowed_host = host.lower()
-            self._allowed_port = port
-
-        def interceptRequest(self, info: Any) -> None:  # noqa: N802
-            url = info.requestUrl()
-            scheme = url.scheme().lower()
-            url_str = url.toString()
-            allowed = (
-                scheme in {"about", "qrc", "data", "blob"}
-                or _is_allowed_local_url(url, self._allowed_host, self._allowed_port)
-                or is_public_web_url(url_str)
-            )
-            if allowed:
-                return
-            logger.warning("MCPAppWidget: blocked web request to %s", safe_url_for_log(url_str))
-            info.block(True)
-
-    class _DebugPage(QWebEnginePage):  # type: ignore[misc]
-        """QWebEnginePage that logs JS console messages to Python."""
-
-        js_error = Signal(str)  # emits user-visible error text
-
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
-            super().__init__(*args, **kwargs)
-            self._allowed_host = ""
-            self._allowed_port = -1
-            self._allowed_paths: set[str] = set()
-
-        def set_allowed_app_paths(self, host: str, port: int, paths: set[str]) -> None:
-            self._allowed_host = host.lower()
-            self._allowed_port = port
-            self._allowed_paths = set(paths)
-
-        def acceptNavigationRequest(  # noqa: N802
-            self,
-            url: QUrl | str,
-            nav_type: Any,
-            is_main_frame: bool,
-        ) -> bool:
-            qurl = QUrl(url) if isinstance(url, str) else url
-            if qurl.scheme().lower() == "about":
-                return True
-            if _is_allowed_local_url(
-                qurl,
-                self._allowed_host,
-                self._allowed_port,
-                self._allowed_paths,
-            ):
-                return True
-            logger.warning(
-                "MCPAppWidget: blocked navigation to %s",
-                safe_url_for_log(qurl.toString()),
-            )
-            return False
-
-        def javaScriptConsoleMessage(  # noqa: N802
-            self,
-            level: QWebEnginePage.JavaScriptConsoleMessageLevel,
-            message: str,
-            line: int,
-            source: str,
-        ) -> None:
-            lvl: int = level.value  # type: ignore[union-attr]
-            # Only log warnings/errors and short info messages to avoid
-            # flooding the log with minified HTML/JS from MCP Apps.
-            if lvl >= 2:
-                logger.warning("[JS ERR] %s (line %d)", message[:300], line)
-                # Skip benign ResizeObserver warnings
-                if "ResizeObserver" not in message:
-                    self.js_error.emit(message[:200])
-            elif lvl == 1:
-                logger.warning("[JS WARN] %s (line %d)", message[:300], line)
-            elif len(message) < 500:
-                logger.debug("[JS] %s", message[:200])
 
 
 class MCPAppWidget(QFrame):
@@ -344,8 +77,8 @@ class MCPAppWidget(QFrame):
         self._server_name = server_name
         self._bridge: Any = None  # MCPAppBridge (set up only when WebEngine is used)
         self._view: Any = None  # QWebEngineView | None
-        self._page: Any = None  # _DebugPage | None
-        self._request_interceptor: Any = None  # _MCPAppRequestInterceptor | None
+        self._page: Any = None  # AppPage | None
+        self._request_interceptor: Any = None  # AppRequestInterceptor | None
         self._http_paths: list[str] = []  # HTTP paths to clean up
         self._fullscreen_dialog: QDialog | None = None
 
@@ -428,20 +161,20 @@ class MCPAppWidget(QFrame):
 
         profile.setHttpCacheType(QWebEngineProfile.MemoryHttpCache)
         profile.setPersistentCookiesPolicy(QWebEngineProfile.NoPersistentCookies)
-        self._request_interceptor = _MCPAppRequestInterceptor(self)
+        self._request_interceptor = AppRequestInterceptor(self)
         profile.setUrlRequestInterceptor(self._request_interceptor)
-        page = _DebugPage(profile, self)
+        page = AppPage(profile, self)
         self._page = page
         page.js_error.connect(self._on_js_error)
 
         settings = page.settings()
-        _set_web_attribute(settings, "JavascriptEnabled", True)
-        _set_web_attribute(settings, "WebGLEnabled", True)
-        _set_web_attribute(settings, "LocalContentCanAccessRemoteUrls", False)
-        _set_web_attribute(settings, "LocalContentCanAccessFileUrls", False)
-        _set_web_attribute(settings, "JavascriptCanOpenWindows", False)
-        _set_web_attribute(settings, "PluginsEnabled", False)
-        _set_web_attribute(settings, "WebRTCPublicInterfacesOnly", True)
+        set_web_attribute(settings, "JavascriptEnabled", True)
+        set_web_attribute(settings, "WebGLEnabled", True)
+        set_web_attribute(settings, "LocalContentCanAccessRemoteUrls", False)
+        set_web_attribute(settings, "LocalContentCanAccessFileUrls", False)
+        set_web_attribute(settings, "JavascriptCanOpenWindows", False)
+        set_web_attribute(settings, "PluginsEnabled", False)
+        set_web_attribute(settings, "WebRTCPublicInterfacesOnly", True)
 
         # Set page background to match the app theme so the view doesn't
         # flash black while the HTML loads.
@@ -484,7 +217,7 @@ class MCPAppWidget(QFrame):
             return
 
         try:
-            srv = _get_http_server()
+            srv = get_http_server()
             host, port = srv.server_address[:2]
 
             # Unique token so multiple widgets don't collide
@@ -497,7 +230,7 @@ class MCPAppWidget(QFrame):
 
             bg = getattr(self, "_page_bg", "#3A3A3C")
             # app_url is relative — same origin, same directory
-            wrapper_html = _WRAPPER_HTML.format(app_url="app.html", bg_color=bg)
+            wrapper_html = WRAPPER_HTML.format(app_url="app.html", bg_color=bg)
             srv.content_map[wrapper_path] = wrapper_html
 
             self._http_paths = [app_path, wrapper_path]
@@ -610,9 +343,7 @@ class MCPAppWidget(QFrame):
         self._error_label.show()
 
     def _cleanup_http(self) -> None:
-        if _http_server is not None:
-            for path in self._http_paths:
-                _http_server.content_map.pop(path, None)
+        release_content(self._http_paths)
         self._http_paths.clear()
 
     def deleteLater(self) -> None:  # noqa: N802

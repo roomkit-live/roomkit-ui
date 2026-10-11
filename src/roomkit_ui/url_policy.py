@@ -14,7 +14,7 @@ Three ways around a hostname-only check are closed here:
 DNS rebinding (a name that resolves publicly here and privately a moment
 later, when the browser connects) is not closed by a check made before the
 connection; the MCP App view relies on the browser's same-origin policy for
-that (see ``widgets/mcp_app_widget.py``).
+that (see ``widgets/mcp_app_web.py``).
 """
 
 from __future__ import annotations
