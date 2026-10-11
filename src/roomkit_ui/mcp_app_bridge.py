@@ -15,7 +15,7 @@ from typing import Any
 
 from PySide6.QtCore import QObject, Signal, Slot
 
-from roomkit_ui.url_policy import is_public_http_url, safe_url_for_log
+from roomkit_ui.url_policy import public_http_url, safe_url_for_log
 
 logger = logging.getLogger(__name__)
 
@@ -181,16 +181,19 @@ class MCPAppBridge(QObject):
     @staticmethod
     def _handle_open_link(params: dict[str, Any]) -> None:
         url = params.get("uri") or params.get("url", "")
-        if not url:
+        if not url or not isinstance(url, str):
             return
-        if not is_public_http_url(url):
+        # Open what was checked, not what was sent: the two can name
+        # different hosts to different URL parsers.
+        checked = public_http_url(url)
+        if checked is None:
             logger.warning(
                 "MCPAppBridge: blocked open_link URL: %s",
                 safe_url_for_log(url),
             )
             logger.debug("MCPAppBridge: blocked open_link URL: %s", url)
             return
-        webbrowser.open(url)
+        webbrowser.open(checked)
 
     def _handle_display_mode(self, msg_id: str | None, params: dict[str, Any]) -> None:
         mode = params.get("mode", "inline")

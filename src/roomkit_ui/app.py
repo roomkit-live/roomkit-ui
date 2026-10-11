@@ -39,24 +39,19 @@ def _opengl_available() -> bool:
 # LIBGL_ALWAYS_SOFTWARE=1 forces Mesa to use llvmpipe (CPU-based OpenGL)
 # for both Qt Quick and Chromium's WebGL — this keeps WebGL available for
 # MCP Apps (e.g. Excalidraw) while avoiding GPU driver crashes.
-# The Chromium flags tell the embedded browser to allow software WebGL,
-# ignore the GPU blocklist, and disable CORS for MCP App ES-module imports
-# (esm.sh rejects http://127.0.0.1 origins).  Must be set *before* PySide6.
+# The Chromium flags tell the embedded browser to allow software WebGL and
+# ignore the GPU blocklist.  Must be set *before* PySide6.
 _has_opengl = _opengl_available()
 
 os.environ.setdefault("LIBGL_ALWAYS_SOFTWARE", "1")
 
 # Base Chromium flags (always set).
-# SECURITY NOTE: --disable-web-security disables the Same-Origin Policy for
-# all QWebEngineView content.  This is required for MCP App iframes that load
-# ES modules from CDNs (esm.sh rejects http://127.0.0.1 origins).  The flag
-# is process-wide — it cannot be scoped to individual WebViews.  Accept the
-# trade-off because MCP Apps are user-configured and trusted, and the embedded
-# browser never navigates to untrusted pages.
-_chromium_flags = (
-    "--enable-webgl-software-rendering --ignore-gpu-blocklist --disable-vulkan"
-    " --disable-web-security"
-)
+# Never add --disable-web-security: it is process-wide, and with it an MCP
+# App reads any cross-origin response, local and LAN services included
+# (a name like 127.0.0.1.nip.io gets past a hostname check).  The same-origin
+# policy is what keeps that out of reach.  ES-module imports from CDNs work
+# without it — esm.sh answers `Access-Control-Allow-Origin: *`.
+_chromium_flags = "--enable-webgl-software-rendering --ignore-gpu-blocklist --disable-vulkan"
 
 if not _has_opengl:
     # OpenGL is completely broken — tell Chromium to not touch the GPU at all,
