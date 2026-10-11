@@ -273,8 +273,13 @@ class ChatView(QScrollArea):
         bubble.set_speaker_clickable(nameable)
 
     def _bubbles(self) -> list[ChatBubble]:
-        widgets = (self._layout.itemAt(i).widget() for i in range(self._layout.count()))
-        return [w for w in widgets if isinstance(w, ChatBubble)]
+        bubbles: list[ChatBubble] = []
+        for i in range(self._layout.count()):
+            item = self._layout.itemAt(i)
+            widget = item.widget() if item is not None else None
+            if isinstance(widget, ChatBubble):
+                bubbles.append(widget)
+        return bubbles
 
     def show_listening(self) -> None:
         self._show_status("Listening")
