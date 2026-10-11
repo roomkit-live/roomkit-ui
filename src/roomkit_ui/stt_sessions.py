@@ -12,6 +12,7 @@ import asyncio
 import logging
 from typing import Any
 
+from roomkit_ui.engine_audio import local_audio_backend
 from roomkit_ui.features import unavailable_reason
 from roomkit_ui.model_manager import build_stt_config, is_model_downloaded, is_streaming_model
 
@@ -289,13 +290,13 @@ class DictationSessionMixin:
             RoomKit,
             VoiceChannel,
         )
-        from roomkit.voice.backends.local import LocalAudioBackend
         from roomkit.voice.pipeline import AudioPipelineConfig
 
         self._local_provider = stt
         self._batch_mode = batch_mode
 
-        backend = LocalAudioBackend(
+        # The session is opened below, not by attach_channel (auto_connect).
+        backend = local_audio_backend(
             input_sample_rate=16000,
             output_sample_rate=16000,
             channels=1,

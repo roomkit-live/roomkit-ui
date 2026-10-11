@@ -21,6 +21,7 @@ from roomkit_ui.engine_audio import (
     build_audio_processing,
     build_debug_taps,
     build_recorder,
+    local_audio_backend,
     notify_missing_aec,
     notify_missing_denoiser,
     setup_diarization,
@@ -359,9 +360,7 @@ class VoiceChannelMixin:
         Subscribed to the shared source, the session can replay what was
         said before it existed — the request that followed the wake word.
         """
-        from roomkit.voice.backends.local import LocalAudioBackend
-
-        return LocalAudioBackend(
+        return local_audio_backend(
             input_sample_rate=VC_INPUT_SAMPLE_RATE,
             output_sample_rate=output_sample_rate,
             block_duration_ms=_BLOCK_MS,

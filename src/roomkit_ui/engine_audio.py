@@ -72,6 +72,25 @@ def usable_capture_source(source: Any, sample_rate: int) -> Any:
 # ---------------------------------------------------------------------------
 
 
+def local_audio_backend(**kwargs: Any) -> Any:
+    """A LocalAudioBackend that leaves opening its session to the app.
+
+    roomkit's declares ``auto_connect``: attaching its VoiceChannel to a room
+    joins a session and starts the mic.  The app opens its own — with the
+    wake word's replay mark, and the user's mute applied before the first
+    frame — so the automatic one made a second capture, STT stream and
+    playback, and every sentence was heard, answered and spoken twice.
+    """
+    from roomkit.voice.backends.local import LocalAudioBackend
+
+    class _AppSessionBackend(LocalAudioBackend):
+        @property
+        def auto_connect(self) -> bool:
+            return False
+
+    return _AppSessionBackend(**kwargs)
+
+
 def build_telemetry(settings: dict | None):
     """Build a telemetry provider from settings, or ``None`` to use the noop default."""
     if not settings:
