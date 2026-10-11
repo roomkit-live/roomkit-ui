@@ -184,11 +184,14 @@ class RealtimeMixin:
         # (Deepgram gets the mild WebRTC noise suppressor below, mirroring
         # roomkit's example.)
         aec, _ = build_audio_processing(aec_mode, "none", sample_rate, frame_size)
+        aec_name = type(aec).__name__ if aec else "none"
         aec = _with_aec_dump(aec)
         # Provider-specific transport wiring — see transport_audio_profile.
         transport_aec, rt_denoiser, prebuffer_ms = transport_audio_profile(
             provider_name, aec, sample_rate
         )
+        if transport_aec is None:
+            aec = _kept_on(aec)  # the transport already keeps its own on
         if transport_aec is not None or rt_denoiser is not None:
             logger.info(
                 "Transport-level AEC=%s (%s) + webrtc NS, prebuffer=%dms",
@@ -232,8 +235,9 @@ class RealtimeMixin:
         transport.on_session_ready(self._apply_mic_mute)  # type: ignore[attr-defined]
 
         logger.info(
-            "Audio pipeline: aec=%s (pipeline stage), rate=%dHz, block=%dms",
-            type(aec).__name__ if aec else "none",
+            "Audio pipeline: aec=%s (%s), rate=%dHz, block=%dms",
+            aec_name,
+            "transport" if transport_aec is not None else "pipeline stage, kept on",
             sample_rate,
             _BLOCK_MS,
         )
@@ -440,6 +444,39 @@ def _with_aec_dump(aec: Any) -> Any:
 
     logger.warning("AEC dump recording enabled → %s", dump_dir)
     return AECDumpRecorder(aec, Path(dump_dir).expanduser())
+
+
+class _KeptOnAEC:
+    """A pipeline-stage AEC on from the first reply to the session's end.
+
+    roomkit 0.97's pipeline bypasses its AEC at the end of every reply and
+    resumes it at the next.  WebRTC AEC3 resumes misaligned and takes ~5 s
+    to cancel again, long enough for a realtime provider to hear its own
+    voice and cut itself off (an AEC dump replayed: the next reply's first
+    second at -5 then -0 dB, against -34 and -44 dB kept on; the user's
+    voice between replies loses ~1 dB).  ``LocalAudioBackend`` keeps a
+    transport AEC on this way already; the reference runs on, silence
+    included, so nothing is missing.  Teardown still resets the stream.
+    """
+
+    def __init__(self, inner: Any) -> None:
+        self._inner = inner
+
+    def set_stream_active(self, stream: str, active: bool) -> None:
+        if active:
+            self._inner.set_stream_active(stream, True)
+
+    def set_active(self, active: bool) -> None:
+        if active:
+            self._inner.set_active(True)
+
+    def __getattr__(self, item: str) -> Any:
+        return getattr(self._inner, item)
+
+
+def _kept_on(aec: Any) -> Any:
+    """*aec* kept on between replies (``_KeptOnAEC``); None stays None."""
+    return None if aec is None else _KeptOnAEC(aec)
 
 
 # ---------------------------------------------------------------------------
