@@ -34,14 +34,7 @@ logger = logging.getLogger(__name__)
 _VAD_MODEL = "ten-vad"
 _VAD_FILE = "ten-vad.int8.onnx"
 
-# Applied to the threshold the enrolment measured.  Named by what the user
-# experiences, not by the multiplier: measurement showed the difference
-# between "resists close names" and "always answers" is roughly this range.
-SENSITIVITY_FACTORS: dict[str, float] = {
-    "cautious": 0.85,
-    "balanced": 1.0,
-    "responsive": 1.5,
-}
+# The factors live in wakeword.page_sensitivity.FACTORS.
 _SENSITIVITY_LABELS = [
     ("Cautious — rarely wrong, may need repeating", "cautious"),
     ("Balanced", "balanced"),
