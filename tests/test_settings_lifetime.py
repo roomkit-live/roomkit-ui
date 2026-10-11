@@ -12,7 +12,9 @@ import asyncio
 import pytest
 import shiboken6
 
+import roomkit_ui.skill_git as skill_git
 import roomkit_ui.skill_manager as skill_manager
+import roomkit_ui.skill_well_known as skill_well_known
 import roomkit_ui.widgets.settings.skills.marketplace as marketplace_mod
 from roomkit_ui.settings import _DEFAULTS
 from roomkit_ui.skills_sh_client import SkillsShSkill
@@ -54,7 +56,7 @@ async def test_a_clone_finishing_after_the_dialog_closed_is_dropped(qapp, monkey
     async def clone_repo(_url):
         shiboken6.delete(page)  # Settings closed while git ran
 
-    monkeypatch.setattr(skill_manager, "clone_repo", clone_repo)
+    monkeypatch.setattr(skill_git, "clone_repo", clone_repo)
     monkeypatch.setattr(skill_manager, "get_repos_dir", lambda: tmp_path)
 
     await page._run_git_op("https://github.com/acme/skills")  # must not raise
@@ -101,7 +103,6 @@ async def test_a_well_known_skill_installed_after_the_dialog_closed_is_still_reg
     # later used to leave the skill on disk with no source pointing at it.
     import json
 
-    import roomkit_ui.skill_manager as skill_manager
     from roomkit_ui.settings import load_setting
     from roomkit_ui.skills_sh_client import SkillsShClient
 
@@ -117,7 +118,7 @@ async def test_a_well_known_skill_installed_after_the_dialog_closed_is_still_reg
         return dest
 
     monkeypatch.setattr(SkillsShClient, "with_install_url", with_install_url)
-    monkeypatch.setattr(skill_manager, "install_well_known_skill", install)
+    monkeypatch.setattr(skill_well_known, "install_well_known_skill", install)
     skill = SkillsShSkill(**{**skill.__dict__, "install_url": "https://docs.example/skill.md"})
 
     await page._install_well_known_marketplace_source(skill)

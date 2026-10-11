@@ -320,7 +320,8 @@ class _SkillsPage(QWidget):
             self._sources.append(src)
             self._my_skills_tab.source_list.addItem(source_display(src))
 
-        from roomkit_ui.skill_manager import clone_repo, get_repos_dir, pull_repo, repo_dir_name
+        from roomkit_ui.skill_git import clone_repo, pull_repo
+        from roomkit_ui.skill_manager import get_repos_dir, repo_dir_name
 
         dest = get_repos_dir() / repo_dir_name(github_url)
         if dest.exists():
@@ -336,7 +337,7 @@ class _SkillsPage(QWidget):
         if not install_url:
             raise ValueError("skills.sh page does not expose a well-known install URL")
 
-        from roomkit_ui.skill_manager import install_well_known_skill
+        from roomkit_ui.skill_well_known import install_well_known_skill
 
         dest = await install_well_known_skill(
             install_url,
@@ -421,12 +422,8 @@ class _SkillsPage(QWidget):
     async def _run_git_op(self, url: str) -> None:
         """Clone or pull a git repo in the background."""
         try:
-            from roomkit_ui.skill_manager import (
-                clone_repo,
-                get_repos_dir,
-                pull_repo,
-                repo_dir_name,
-            )
+            from roomkit_ui.skill_git import clone_repo, pull_repo
+            from roomkit_ui.skill_manager import get_repos_dir, repo_dir_name
 
             dest = get_repos_dir() / repo_dir_name(url)
             if dest.exists():

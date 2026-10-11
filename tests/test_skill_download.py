@@ -4,6 +4,7 @@ import httpx
 import pytest
 
 import roomkit_ui.skill_manager as sm
+import roomkit_ui.skill_well_known as wk
 from roomkit_ui.skills_sh_client import SkillsShSkill
 
 _SKILL_MD = "---\nname: demo\ndescription: d\n---\n\nDo the thing.\n"
@@ -30,7 +31,7 @@ def _catalog(skill_md_response):
 
 
 async def _install(url, transport):
-    return await sm.install_well_known_skill(
+    return await wk.install_well_known_skill(
         url, skill_name="demo", source="skills.example.com", transport=transport
     )
 
@@ -53,7 +54,7 @@ async def test_a_redirect_to_plain_http_is_refused(skills_root):
 
 
 async def test_an_oversized_file_stops_downloading_at_the_cap(skills_root, monkeypatch):
-    monkeypatch.setattr(sm, "_MAX_WELL_KNOWN_FILE_BYTES", 1_000)
+    monkeypatch.setattr(wk, "_MAX_WELL_KNOWN_FILE_BYTES", 1_000)
     sent = []
 
     async def endless():
@@ -71,7 +72,7 @@ async def test_an_oversized_file_stops_downloading_at_the_cap(skills_root, monke
 
 
 async def test_a_declared_oversized_file_is_refused_before_reading(skills_root, monkeypatch):
-    monkeypatch.setattr(sm, "_MAX_WELL_KNOWN_FILE_BYTES", 1_000)
+    monkeypatch.setattr(wk, "_MAX_WELL_KNOWN_FILE_BYTES", 1_000)
     transport = _catalog(
         lambda _r: httpx.Response(200, content=b"x" * 10, headers={"content-length": "5000"})
     )

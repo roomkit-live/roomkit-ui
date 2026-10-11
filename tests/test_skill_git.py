@@ -5,6 +5,7 @@ import subprocess
 
 import pytest
 
+import roomkit_ui.skill_git as sg
 import roomkit_ui.skill_manager as sm
 
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="needs git")
@@ -72,7 +73,7 @@ def test_repo_dir_name_keeps_one_segment_per_path_part():
 async def test_clone_installs_a_repo(skills_root, tmp_path):
     upstream = _make_repo(tmp_path / "up")
 
-    dest = await sm.clone_repo(upstream.as_uri())
+    dest = await sg.clone_repo(upstream.as_uri())
 
     assert dest.parent == skills_root / "repos"
     assert (dest / "demo" / "SKILL.md").exists()
@@ -81,11 +82,11 @@ async def test_clone_installs_a_repo(skills_root, tmp_path):
 
 async def test_a_failed_reclone_keeps_the_installed_skills(skills_root, tmp_path):
     upstream = _make_repo(tmp_path / "up")
-    dest = await sm.clone_repo(upstream.as_uri())
+    dest = await sg.clone_repo(upstream.as_uri())
     shutil.rmtree(upstream)  # the remote is gone: the next clone fails
 
     with pytest.raises(RuntimeError, match="clone failed"):
-        await sm.clone_repo(upstream.as_uri())
+        await sg.clone_repo(upstream.as_uri())
 
     assert (dest / "demo" / "SKILL.md").exists()
     assert [p.name for p in skills_root.iterdir()] == ["repos"]
@@ -95,7 +96,7 @@ async def test_a_url_starting_with_a_dash_is_not_read_as_an_option(skills_root, 
     marker = tmp_path / "pwned"
 
     with pytest.raises(RuntimeError):
-        await sm.clone_repo(f"--upload-pack=touch {marker}")
+        await sg.clone_repo(f"--upload-pack=touch {marker}")
 
     assert not marker.exists()
 
@@ -112,7 +113,7 @@ async def test_pull_does_not_act_on_an_enclosing_repository(skills_root, tmp_pat
     not_a_clone = enclosing / "skills" / "repos" / "org--repo"
     not_a_clone.mkdir(parents=True)
 
-    ok = await sm.pull_repo(not_a_clone)
+    ok = await sg.pull_repo(not_a_clone)
 
     assert ok is False
     assert not (enclosing / "new.txt").exists()
@@ -120,12 +121,12 @@ async def test_pull_does_not_act_on_an_enclosing_repository(skills_root, tmp_pat
 
 async def test_pull_updates_a_clone(skills_root, tmp_path):
     upstream = _make_repo(tmp_path / "up")
-    dest = await sm.clone_repo(upstream.as_uri())
+    dest = await sg.clone_repo(upstream.as_uri())
     (upstream / "new.txt").write_text("x")
     _git("add", ".", cwd=upstream)
     _git("commit", "-q", "-m", "more", cwd=upstream)
 
-    assert await sm.pull_repo(dest) is True
+    assert await sg.pull_repo(dest) is True
     assert (dest / "new.txt").exists()
 
 
@@ -138,7 +139,7 @@ def test_skill_git_ignores_an_inherited_git_dir(monkeypatch, tmp_path):
 
     work = tmp_path / "work"
     work.mkdir()
-    result = sm._run_git(
+    result = sg._run_git(
         ["-C", str(work), "rev-parse", "--absolute-git-dir"], timeout=10, ceiling=tmp_path
     )
 

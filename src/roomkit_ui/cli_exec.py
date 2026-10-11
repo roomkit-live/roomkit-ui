@@ -5,7 +5,7 @@ manager) need to spawn binaries, so the machinery cannot live in either.
 
 Uses blocking ``subprocess`` on a worker thread rather than
 ``asyncio.create_subprocess_exec`` — the app runs on qasync, and every other
-child-process path here does the same (``skill_manager.clone_repo``,
+child-process path here does the same (``skill_git.clone_repo``,
 ``engine_tools._paste_text``).
 """
 

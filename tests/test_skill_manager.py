@@ -6,6 +6,7 @@ import httpx
 import pytest
 
 import roomkit_ui.skill_manager as sm
+import roomkit_ui.skill_well_known as wk
 
 _SKILL_MD = """---
 name: {name}
@@ -146,7 +147,7 @@ async def test_install_well_known_legacy_skill(skills_root):
             return httpx.Response(200, content=b"print('ok')\n")
         return httpx.Response(404)
 
-    dest = await sm.install_well_known_skill(
+    dest = await wk.install_well_known_skill(
         "https://skills.example.com/catalog",
         skill_name="demo",
         source="skills.example.com",
@@ -187,7 +188,7 @@ async def test_install_well_known_v2_skill_md(skills_root):
             return httpx.Response(200, text=skill_md)
         return httpx.Response(404)
 
-    dest = await sm.install_well_known_skill(
+    dest = await wk.install_well_known_skill(
         "https://skills.example.com",
         skill_name="v2-demo",
         source="skills.example.com",
@@ -218,7 +219,7 @@ async def test_install_well_known_rejects_unsafe_legacy_paths(skills_root):
         return httpx.Response(404)
 
     with pytest.raises(ValueError, match="No valid well-known skills index"):
-        await sm.install_well_known_skill(
+        await wk.install_well_known_skill(
             "https://skills.example.com",
             skill_name="demo",
             source="skills.example.com",
