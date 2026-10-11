@@ -27,6 +27,8 @@ def test_a_declared_tool_survives_a_save_and_reload(page):
     save_settings(page.get_settings())
 
     reloaded = json.loads(load_settings()["cli_tools"])
+    # The id keys the tool's env secrets in the keyring: minted once, kept.
+    assert reloaded[0].pop("id") == page._tools[0]["id"]
     assert reloaded == [
         {
             "enabled": True,

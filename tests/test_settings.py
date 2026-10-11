@@ -225,3 +225,77 @@ def test_mcp_secret_store_entries_migrate_from_server_name_to_id(secure_store):
         '{"access_token":"old-token"}'
     )
     assert secure_store.get_secret("mcp_oauth:srv:tokens") == ""
+
+
+# -- CLI tool env secrets --------------------------------------------------
+
+
+def _cli_tool(env: str, **extra) -> dict:
+    return {"name": "gh", "command": "gh", "env": env, **extra}
+
+
+def _stored_cli_tools() -> list[dict]:
+    return json.loads(QSettings().value("room/cli_tools"))
+
+
+def test_cli_tool_env_secrets_stay_out_of_qsettings_and_come_back(secure_store):
+    save_settings({"cli_tools": json.dumps([_cli_tool("GH_TOKEN=ghp_x\nGH_PAGER=cat")])})
+
+    stored = _stored_cli_tools()
+    tool_id = stored[0]["id"]
+    assert stored[0]["env"] == "GH_TOKEN=\nGH_PAGER=cat"
+    assert "ghp_x" not in json.dumps(stored)
+    assert secure_store.get_secret(f"cli_tool:{tool_id}:env:GH_TOKEN") == "ghp_x"
+
+    hydrated = json.loads(load_settings()["cli_tools"])
+    assert hydrated[0]["id"] == tool_id
+    assert hydrated[0]["env"] == "GH_TOKEN=ghp_x\nGH_PAGER=cat"
+
+
+def test_cli_tool_legacy_plaintext_env_secret_is_migrated(secure_store):
+    QSettings().setValue("room/cli_tools", json.dumps([_cli_tool("GITHUB_PAT=legacy")]))
+
+    hydrated = json.loads(load_settings()["cli_tools"])
+    stored = _stored_cli_tools()
+
+    assert hydrated[0]["env"] == "GITHUB_PAT=legacy"
+    assert stored[0]["env"] == "GITHUB_PAT="
+    assert secure_store.get_secret(f"cli_tool:{stored[0]['id']}:env:GITHUB_PAT") == "legacy"
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "OPENAI_APIKEY=sk-1",
+        "GITHUB_PAT=ghp_1",
+        "AUTH_BEARER=abc",
+        "DB_PWD=hunter2",
+        "DATABASE_URL=postgres://db.local/app",
+        "SENTRY_DSN=https://k@o1.ingest.sentry.io/1",
+        "UPSTREAM=https://user:hunter2@example.test/api",
+        "REMOTE=https://ghp_token@github.com/org/repo.git",
+    ],
+)
+def test_env_secret_detection_covers_names_and_urls_with_credentials(secure_store, line):
+    save_settings({"cli_tools": json.dumps([_cli_tool(line)])})
+
+    key, value = line.split("=", 1)
+    assert _stored_cli_tools()[0]["env"] == f"{key}="
+    assert json.loads(load_settings()["cli_tools"])[0]["env"] == line
+
+
+@pytest.mark.parametrize("line", ["PATH_PREFIX=/opt", "API_URL=https://example.test", "X=1"])
+def test_plain_env_values_stay_in_qsettings(secure_store, line):
+    save_settings({"cli_tools": json.dumps([_cli_tool(line)])})
+
+    assert _stored_cli_tools()[0]["env"] == line
+
+
+def test_emptying_a_secret_env_value_does_not_bring_the_old_one_back(secure_store):
+    tool = _cli_tool("UPSTREAM=https://user:pw@example.test", id="t1")
+    save_settings({"cli_tools": json.dumps([tool])})
+
+    save_settings({"cli_tools": json.dumps([{**tool, "env": "UPSTREAM="}])})
+
+    assert json.loads(load_settings()["cli_tools"])[0]["env"] == "UPSTREAM="
+    assert secure_store.get_secret("cli_tool:t1:env:UPSTREAM") == ""

@@ -6,7 +6,10 @@ import json
 import re
 import sys
 import uuid
+from collections.abc import Callable
+from functools import partial
 from typing import Any
+from urllib.parse import urlsplit
 
 from PySide6.QtCore import QSettings
 
@@ -28,14 +31,24 @@ _SECRET_KEYS = frozenset(
 )
 
 _MCP_SERVER_SECRET_FIELDS = ("oauth_client_secret",)
-_MCP_ENV_SECRET_MARKERS = frozenset(
+# Words of an env var name (split on non-alphanumerics) that mark its value as
+# a credential, for MCP servers and CLI tools alike. A value is also a secret
+# when it is a URL carrying credentials, whatever the name (_is_env_secret).
+_ENV_SECRET_MARKERS = frozenset(
     {
+        "APIKEY",
         "AUTH",
+        "BEARER",
         "CREDENTIAL",
         "CREDENTIALS",
+        "DSN",
         "KEY",
         "PASS",
+        "PASSPHRASE",
+        "PASSWD",
         "PASSWORD",
+        "PAT",
+        "PWD",
         "SECRET",
         "TOKEN",
     }
@@ -206,17 +219,26 @@ def _mcp_server_env_secret_name(server_id: str, key: str) -> str:
     return f"mcp_server:{server_id}:env:{key}"
 
 
+def _mcp_server_env_legacy_names(legacy_ids: list[str], key: str) -> list[str]:
+    return [_mcp_server_env_secret_name(old_id, key) for old_id in legacy_ids]
+
+
+def _cli_tool_env_secret_name(tool_id: str, key: str) -> str:
+    return f"cli_tool:{tool_id}:env:{key}"
+
+
 def _mcp_oauth_secret_name(server_id: str, suffix: str) -> str:
     return f"mcp_oauth:{server_id}:{suffix}"
 
 
-def _ensure_mcp_server_id(server: dict[str, Any]) -> tuple[str, bool]:
-    server_id = str(server.get("id", "") or "").strip()
-    if server_id:
-        return server_id, False
-    server_id = uuid.uuid4().hex
-    server["id"] = server_id
-    return server_id, True
+def _ensure_entry_id(entry: dict[str, Any]) -> tuple[str, bool]:
+    """Return the stable id of an MCP server / CLI tool, minting one if absent."""
+    entry_id = str(entry.get("id", "") or "").strip()
+    if entry_id:
+        return entry_id, False
+    entry_id = uuid.uuid4().hex
+    entry["id"] = entry_id
+    return entry_id, True
 
 
 def _legacy_server_identities(server_id: str, server_name: str) -> list[str]:
@@ -226,9 +248,23 @@ def _legacy_server_identities(server_id: str, server_name: str) -> list[str]:
     return legacy
 
 
-def _is_mcp_env_secret_key(key: str) -> bool:
-    parts = [part for part in re.split(r"[^A-Z0-9]+", key.upper()) if part]
-    return any(part in _MCP_ENV_SECRET_MARKERS for part in parts)
+def _is_env_secret(key: str, value: str = "") -> bool:
+    """Whether an env line holds a credential — by its name, or by its value."""
+    parts = {part for part in re.split(r"[^A-Z0-9]+", key.upper()) if part}
+    if parts & _ENV_SECRET_MARKERS:
+        return True
+    if "DATABASE" in parts and parts & {"URL", "URI"}:
+        return True
+    return _url_has_credentials(value)
+
+
+def _url_has_credentials(value: str) -> bool:
+    """``scheme://user:password@host`` (or a token as the user) is a secret."""
+    try:
+        split = urlsplit(value.strip())
+    except ValueError:
+        return False
+    return bool(split.scheme and split.netloc and (split.username or split.password))
 
 
 def _get_secret_with_legacy(
@@ -248,36 +284,39 @@ def _get_secret_with_legacy(
     return ""
 
 
-def _hydrate_mcp_env(
+def _hydrate_env(
     raw: Any,
     store: SecretStore,
-    server_id: str,
-    server_name: str,
+    secret_name: Callable[[str], str],
+    legacy_names: Callable[[str], list[str]] = lambda _key: [],
 ) -> tuple[str, bool]:
+    """Fill an env block's secret values back in from *store*.
+
+    A secret is stored as ``KEY=`` in QSettings, so every empty value is
+    looked up — the name alone cannot say which ones were secrets, since a
+    URL carrying a password is one whatever it is called. A secret still in
+    plain text is moved to *store*; the returned flag says one was.
+    """
     if not isinstance(raw, str) or not raw.strip():
         return "" if raw is None else str(raw or ""), False
 
     migrated = False
     out: list[str] = []
-    legacy_ids = _legacy_server_identities(server_id, server_name)
     for line in raw.splitlines():
         if "=" not in line:
             out.append(line)
             continue
         key, value = line.split("=", 1)
-        env_key = key.strip()
-        if not env_key or not _is_mcp_env_secret_key(env_key):
+        env_key, value_text = key.strip(), value.strip()
+        if not env_key or (value_text and not _is_env_secret(env_key, value_text)):
             out.append(line)
             continue
 
-        secret_name = _mcp_server_env_secret_name(server_id, env_key)
-        legacy_names = [_mcp_server_env_secret_name(old_id, env_key) for old_id in legacy_ids]
-        stored = _get_secret_with_legacy(store, secret_name, legacy_names)
-        value_text = value.strip()
+        name = secret_name(env_key)
+        stored = _get_secret_with_legacy(store, name, legacy_names(env_key))
         if value_text:
             if not stored:
-                store.set_secret(secret_name, value_text)
-                stored = value_text
+                store.set_secret(name, value_text)
             migrated = True
         elif stored:
             value_text = stored
@@ -286,7 +325,14 @@ def _hydrate_mcp_env(
     return "\n".join(out), migrated
 
 
-def _sanitize_mcp_env(raw: Any, store: SecretStore, server_id: str, *, persist: bool) -> str:
+def _sanitize_env(
+    raw: Any, store: SecretStore, secret_name: Callable[[str], str], *, persist: bool
+) -> str:
+    """Strip an env block's secret values, moving them to *store* if *persist*.
+
+    An emptied value deletes its stored secret, or loading would bring the
+    old one back (``_hydrate_env`` fills every empty value it can).
+    """
     if not isinstance(raw, str) or not raw.strip():
         return "" if raw is None else str(raw or "")
 
@@ -296,18 +342,16 @@ def _sanitize_mcp_env(raw: Any, store: SecretStore, server_id: str, *, persist: 
             out.append(line)
             continue
         key, value = line.split("=", 1)
-        env_key = key.strip()
-        if not env_key or not _is_mcp_env_secret_key(env_key):
+        env_key, value_text = key.strip(), value.strip()
+        if not env_key or (value_text and not _is_env_secret(env_key, value_text)):
             out.append(line)
             continue
 
         if persist:
-            secret_name = _mcp_server_env_secret_name(server_id, env_key)
-            value_text = value.strip()
             if value_text:
-                store.set_secret(secret_name, value_text)
+                store.set_secret(secret_name(env_key), value_text)
             else:
-                store.delete_secret(secret_name)
+                store.delete_secret(secret_name(env_key))
         out.append(f"{env_key}=")
     return "\n".join(out)
 
@@ -340,7 +384,7 @@ def _save_secret_setting(qs: QSettings, store: SecretStore, key: str, value: Any
     qs.remove(f"room/{key}")
 
 
-def _parse_mcp_servers(raw: Any) -> list[Any] | None:
+def _parse_json_list(raw: Any) -> list[Any] | None:
     if isinstance(raw, list):
         return raw
     if not isinstance(raw, str):
@@ -359,7 +403,7 @@ def _hydrate_mcp_server_secrets(raw: Any, qs: QSettings, store: SecretStore) -> 
     The returned JSON still contains the secret values so existing UI and
     connection code can keep consuming one settings dict.
     """
-    servers = _parse_mcp_servers(raw)
+    servers = _parse_json_list(raw)
     if servers is None:
         return raw
 
@@ -367,7 +411,7 @@ def _hydrate_mcp_server_secrets(raw: Any, qs: QSettings, store: SecretStore) -> 
     for server in servers:
         if not isinstance(server, dict):
             continue
-        server_id, created_id = _ensure_mcp_server_id(server)
+        server_id, created_id = _ensure_entry_id(server)
         migrated = migrated or created_id
         server_name = str(server.get("name", "")).strip()
         legacy_ids = _legacy_server_identities(server_id, server_name)
@@ -384,11 +428,11 @@ def _hydrate_mcp_server_secrets(raw: Any, qs: QSettings, store: SecretStore) -> 
                 migrated = True
             elif stored:
                 server[field] = stored
-        hydrated_env, env_migrated = _hydrate_mcp_env(
+        hydrated_env, env_migrated = _hydrate_env(
             server.get("env", ""),
             store,
-            server_id,
-            server_name,
+            partial(_mcp_server_env_secret_name, server_id),
+            partial(_mcp_server_env_legacy_names, legacy_ids),
         )
         if hydrated_env != server.get("env", ""):
             server["env"] = hydrated_env
@@ -409,19 +453,19 @@ def _hydrate_mcp_server_secrets(raw: Any, qs: QSettings, store: SecretStore) -> 
 
 def _sanitize_mcp_servers(raw: Any, store: SecretStore, *, persist: bool) -> Any:
     """Move MCP server secrets into SecretStore and return sanitized JSON."""
-    servers = _parse_mcp_servers(raw)
+    servers = _parse_json_list(raw)
     if servers is None:
         return raw
 
     for server in servers:
         if not isinstance(server, dict):
             continue
-        server_id, _created_id = _ensure_mcp_server_id(server)
+        server_id, _created_id = _ensure_entry_id(server)
         if "env" in server:
-            server["env"] = _sanitize_mcp_env(
+            server["env"] = _sanitize_env(
                 server.get("env", ""),
                 store,
-                server_id,
+                partial(_mcp_server_env_secret_name, server_id),
                 persist=persist,
             )
         for field in _MCP_SERVER_SECRET_FIELDS:
@@ -438,6 +482,53 @@ def _sanitize_mcp_servers(raw: Any, store: SecretStore, *, persist: bool) -> Any
     return json.dumps(servers)
 
 
+def _hydrate_cli_tool_secrets(raw: Any, qs: QSettings, store: SecretStore) -> Any:
+    """Return cli_tools JSON with env secrets filled from SecretStore.
+
+    Same contract as ``_hydrate_mcp_server_secrets``: plaintext secrets left
+    by an older version are moved out of QSettings on the way.
+    """
+    tools = _parse_json_list(raw)
+    if tools is None:
+        return raw
+
+    migrated = False
+    for tool in tools:
+        if not isinstance(tool, dict):
+            continue
+        tool_id, created_id = _ensure_entry_id(tool)
+        env, env_migrated = _hydrate_env(
+            tool.get("env", ""), store, partial(_cli_tool_env_secret_name, tool_id)
+        )
+        if env != tool.get("env", ""):
+            tool["env"] = env
+        migrated = migrated or created_id or env_migrated
+
+    if migrated:
+        qs.setValue("room/cli_tools", _sanitize_cli_tools(json.dumps(tools), store, persist=False))
+        qs.sync()
+    return json.dumps(tools)
+
+
+def _sanitize_cli_tools(raw: Any, store: SecretStore, *, persist: bool) -> Any:
+    """Move CLI tool env secrets into SecretStore and return sanitized JSON."""
+    tools = _parse_json_list(raw)
+    if tools is None:
+        return raw
+
+    for tool in tools:
+        if not isinstance(tool, dict) or "env" not in tool:
+            continue
+        tool_id, _created_id = _ensure_entry_id(tool)
+        tool["env"] = _sanitize_env(
+            tool.get("env", ""),
+            store,
+            partial(_cli_tool_env_secret_name, tool_id),
+            persist=persist,
+        )
+    return json.dumps(tools)
+
+
 def load_settings() -> dict:
     """Load persisted settings, falling back to defaults."""
     qs = QSettings()
@@ -451,6 +542,8 @@ def load_settings() -> dict:
         val = qs.value(f"room/{key}", default)
         if key == "mcp_servers":
             val = _hydrate_mcp_server_secrets(val, qs, store)
+        elif key == "cli_tools":
+            val = _hydrate_cli_tool_secrets(val, qs, store)
         # QSettings returns strings for bools
         if isinstance(default, bool) and isinstance(val, str):
             val = val.lower() in ("true", "1", "yes")
@@ -488,5 +581,7 @@ def save_settings(settings: dict) -> None:
             continue
         if key == "mcp_servers":
             val = _sanitize_mcp_servers(val, store, persist=True)
+        elif key == "cli_tools":
+            val = _sanitize_cli_tools(val, store, persist=True)
         qs.setValue(f"room/{key}", val)
     qs.sync()

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -267,6 +268,9 @@ class _CliToolsPage(QWidget):
 
     def _add_tool(self) -> None:
         tool = {
+            # Keys the tool's env secrets in the keyring (settings.py), so it
+            # must not change when the tool is renamed or saved again.
+            "id": uuid.uuid4().hex,
             "enabled": True,
             "name": "",
             "command": "",
