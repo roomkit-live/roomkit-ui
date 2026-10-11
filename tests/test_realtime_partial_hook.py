@@ -37,11 +37,9 @@ class _FakeEngine(QObject):
         super().__init__()
         self._state = EngineState.ACTIVE
         self._mic_muted = False
-        self._current_speaker_id = ""
         self._primary_speaker_mode = False
         self._primary_speaker_name = ""
         self._partial_buffers = {}
-        self._partial_speakers = {}
         self._spk_rms_queue = []
         self.emitted = []
         self.transcription.connect(
@@ -78,16 +76,6 @@ async def test_assistant_deltas_stream_into_the_chat(qapp):
     await final(SimpleNamespace(text="Salut! Je suis là.", role="assistant", is_final=True), None)
     assert engine.emitted[-1] == ("Salut! Je suis là.", "assistant", True)
     assert "assistant" not in engine._partial_buffers  # buffer cleared by the final
-
-
-async def test_user_partials_carry_the_sticky_speaker(qapp):
-    engine = _FakeEngine()
-    engine._current_speaker_id = "sylvain"
-    partial, _ = _hooks(engine)
-
-    await partial(_event("Bonjour", "user"), None)
-    assert engine.emitted == [("Bonjour", "user", False)]
-    assert engine._partial_speakers["user"] == "sylvain"
 
 
 async def test_partials_are_dropped_outside_active_sessions(qapp):

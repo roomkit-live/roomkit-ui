@@ -278,10 +278,9 @@ def _voice_error_notice(prefix: str, data: dict) -> str:
 def register_realtime_hooks(kit: Any, engine: Any) -> None:
     """Register framework hooks for RealtimeVoiceChannel.
 
-    Includes audio level hooks and ON_TRANSCRIPTION for routing
-    transcriptions to the UI.  A realtime session has no speaker source
-    (diarization is voice-channel only, see engine_realtime), so the
-    speaker fields below stay empty there.
+    Audio levels, and both transcription triggers routed to the chat.  A
+    realtime session has no speaker source (diarization is voice-channel
+    only, see engine_realtime), so its transcripts carry no speaker.
     """
     import logging
 
@@ -295,72 +294,10 @@ def register_realtime_hooks(kit: Any, engine: Any) -> None:
     async def _on_transcription(event, context):
         from roomkit import HookResult
 
-        text = str(event.text)
-        role = str(event.role)
-        is_final = event.is_final
-
-        if role == "user":
-            current = engine._current_speaker_id or ""
-            # Remember the best speaker ID seen during this utterance.
-            # Diarization may reset to "" between the last partial and final,
-            # so we keep the last positively-identified speaker.
-            stored = engine._partial_speakers.get(role, "")
-            if current and current != "unknown":
-                engine._partial_speakers[role] = current
-                speaker = current
-            else:
-                speaker = stored or current
-            if is_final:
-                engine._partial_speakers.pop(role, None)
-        else:
-            speaker = ""
-
-        _log.info(
-            "TRANSCRIPTION: role=%s final=%s speaker=%r chars=%d",
-            role,
-            is_final,
-            speaker,
-            len(text),
-        )
-        _log.debug(
-            "TRANSCRIPTION text: role=%s final=%s speaker=%r text=%r",
-            role,
-            is_final,
-            speaker,
-            text,
-        )
-
-        # Primary speaker mode: only block when positively identified as
-        # a *different* enrolled speaker.  Unknown / empty → benefit of doubt.
-        if (
-            role == "user"
-            and engine._primary_speaker_mode
-            and engine._primary_speaker_name
-            and speaker
-            and speaker != "unknown"
-            and speaker != engine._primary_speaker_name
-        ):
-            _log.info("BLOCKED non-primary speaker %r", speaker)
-            if is_final:
-                engine._partial_buffers.pop(role, None)
-                try:
-                    engine.transcription.emit(text, "other", True, speaker)
-                except Exception:
-                    pass
-            return HookResult.block("non-primary speaker")
-
-        # Accumulate partials (providers send deltas, UI needs full text)
-        try:
-            if is_final:
-                engine._partial_buffers.pop(role, None)
-                engine.transcription.emit(text, role, True, speaker)
-            else:
-                buf = engine._partial_buffers.get(role, "")
-                buf += text
-                engine._partial_buffers[role] = buf
-                engine.transcription.emit(buf, role, False, speaker)
-        except Exception:
-            pass
+        text, role = str(event.text), str(event.role)
+        _log.info("TRANSCRIPTION: role=%s final=%s chars=%d", role, event.is_final, len(text))
+        _log.debug("TRANSCRIPTION text: role=%s final=%s text=%r", role, event.is_final, text)
+        _show_realtime_transcript(engine, text, role, final=event.is_final)
         return HookResult.allow()
 
     # Partial transcriptions travel their own trigger (the channel skips
@@ -370,18 +307,25 @@ def register_realtime_hooks(kit: Any, engine: Any) -> None:
     # the agent spoke and the whole reply appeared at the final.
     @kit.hook(HookTrigger.ON_PARTIAL_TRANSCRIPTION, HookExecution.ASYNC)
     async def _on_partial(event, context):
-        try:
-            if engine._state != EngineState.ACTIVE:
-                return
-            role = str(getattr(event, "role", "user") or "user")
-            speaker = ""
-            if role == "user":
-                current = engine._current_speaker_id or ""
-                if current and current != "unknown":
-                    engine._partial_speakers[role] = current
-                speaker = engine._partial_speakers.get(role, "") or current
-            buf = engine._partial_buffers.get(role, "") + str(event.text)
-            engine._partial_buffers[role] = buf
-            engine.transcription.emit(buf, role, False, speaker)
-        except Exception:
-            pass
+        if engine._state != EngineState.ACTIVE:
+            return
+        role = str(getattr(event, "role", "user") or "user")
+        _show_realtime_transcript(engine, str(event.text), role, final=False)
+
+
+def _show_realtime_transcript(engine: Any, text: str, role: str, *, final: bool) -> None:
+    """Show a realtime transcript in the chat.
+
+    Providers send partials as deltas while the chat wants the text so far:
+    partials accumulate per role, and the final replaces them.
+    """
+    try:
+        if final:
+            engine._partial_buffers.pop(role, None)
+            engine.transcription.emit(text, role, True, "")
+        else:
+            so_far = engine._partial_buffers.get(role, "") + text
+            engine._partial_buffers[role] = so_far
+            engine.transcription.emit(so_far, role, False, "")
+    except Exception:
+        pass

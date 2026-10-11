@@ -46,11 +46,9 @@ class _FakeEngine(QObject):
         super().__init__()
         self._state = EngineState.ACTIVE
         self._mic_muted = False
-        self._current_speaker_id = ""
         self._primary_speaker_mode = False
         self._primary_speaker_name = ""
         self._partial_buffers = {}
-        self._partial_speakers = {}
         self._spk_rms_queue = []
         self.emitted = []
         self.transcription.connect(

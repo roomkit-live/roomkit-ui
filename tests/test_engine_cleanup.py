@@ -161,7 +161,6 @@ async def test_cleanup_nullifies_session_state(engine):
     engine._kit = _Kit(rec, ch)
     engine._transport = object()
     engine._partial_buffers["user"] = "leftover"
-    engine._current_speaker_id = "spk1"
     engine._base_system_prompt = "prompt"
 
     await _run_cleanup(engine)
@@ -171,7 +170,6 @@ async def test_cleanup_nullifies_session_state(engine):
     assert engine._kit is None
     assert engine._transport is None
     assert engine._partial_buffers == {}
-    assert engine._current_speaker_id == ""
     assert engine._base_system_prompt == ""
 
 

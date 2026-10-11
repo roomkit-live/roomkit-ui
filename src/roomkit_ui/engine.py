@@ -144,13 +144,11 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         self._session_settings: dict = {}
         # Diarization state
         self._diarization: Any = None
-        self._current_speaker_id: str = ""
         self._primary_speaker_mode: bool = False
         self._primary_speaker_name: str = ""
         # Realtime partial transcription accumulator: Gemini/OpenAI send
         # incremental fragments, but the UI expects full accumulated text.
         self._partial_buffers: dict[str, str] = {}  # role → accumulated text
-        self._partial_speakers: dict[str, str] = {}  # role → best speaker ID this utterance
         # Model cache: persist heavy ONNX models across sessions to avoid
         # reloading STT / TTS / diarization on every conversation start.
         # Maps type → (cache_key_tuple, provider_instance).
@@ -629,11 +627,9 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         self._mcp = None
         self._cli = None
         self._diarization = None
-        self._current_speaker_id = ""
         self._primary_speaker_mode = False
         self._primary_speaker_name = ""
         self._partial_buffers.clear()
-        self._partial_speakers.clear()
         self._base_system_prompt = ""
 
     async def _finalize_event_loop(self) -> None:
