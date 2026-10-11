@@ -73,6 +73,9 @@ Each released section is the source for that version's GitHub release notes.
   cloning from a clip. New `pocket-tts` extra (outside `all`: it pulls torch).
 - **Azure MAI-Transcribe and MAI-Voice** in the Voice Channel — Microsoft Foundry
   speech, one resource and one key for both. New `azure-speech` extra (in `cloud`).
+- **Meta Muse Voice Transcribe** in the Voice Channel — streaming STT that ends each
+  turn itself; the speech-recognition language becomes a bias, and optional keywords
+  steer it toward names. New `meta-stt` extra (in `cloud`).
 - **Barge-in modes** (Voice Channel) — Off, Any speech, or Words only, where "ok",
   "mm-hmm" or "merci" let the assistant go on and other words stop it. The old checkbox
   migrates.

@@ -111,8 +111,8 @@ src/roomkit_ui/
                            #  speakers, dictation, wakeword, models, mcp, cli_tools, audio_debug, telemetry,
                            #  about, plus skills/ (page, my_skills, marketplace, widgets). AI tab parts:
                            #  realtime_section, realtime_catalogs, realtime_gemini_live, realtime_gpt_live,
-                           #  vc_local_fields, vc_cloud_fields, vc_azure_fields, vc_agent_fields; also models_widgets,
-                           #  speakers_dialogs, feature_hints
+                           #  vc_local_fields, vc_cloud_fields, vc_azure_fields, vc_meta_fields, vc_agent_fields;
+                           #  also models_widgets, speakers_dialogs, feature_hints
 ```
 
 Engine composition: `Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject)` —

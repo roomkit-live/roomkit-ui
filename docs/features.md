@@ -12,7 +12,7 @@ system context in [architecture.md](architecture.md).
 | | Realtime (speech-to-speech) | Voice Channel (STT → LLM → TTS) |
 |---|---|---|
 | Providers | Gemini Live, OpenAI Realtime, OpenAI GPT-Live, Deepgram Voice Agent, ElevenLabs ConvAI, xAI Grok | LLM: Anthropic, OpenAI, Gemini, local (vLLM/Ollama), llama.cpp |
-| STT | provider-native | sherpa-onnx (local), Gradium, Deepgram, Azure MAI-Transcribe |
+| STT | provider-native | sherpa-onnx (local), Gradium, Deepgram, Azure MAI-Transcribe, Meta Muse |
 | TTS | provider-native | Piper and Pocket TTS (local), Qwen3-TTS & NeuTTS (voice clone), Gradium, ElevenLabs, Azure MAI-Voice |
 | Latency | lowest | depends on the three stages |
 | Offline capable | no | yes (local STT + local LLM + Piper or Pocket TTS) |
@@ -69,6 +69,11 @@ kept, never replaced. Agent Skills reach realtime sessions as well as Voice Chan
 - **Azure MAI-Transcribe / MAI-Voice** — Microsoft Foundry speech, one resource and one
   key for both. MAI-Transcribe finds no turns itself, so the session always gets a VAD
   (the chosen model, else an energy VAD) with an 800 ms end-of-turn silence by default.
+- **Meta Muse Voice Transcribe** — streaming STT on Meta's Model API (25 languages,
+  French included). The model ends each turn itself, after about 550 ms of silence,
+  so the session gets no VAD. The speech-recognition language becomes a bias (none
+  set: Muse takes what it hears); a language Muse does not list (Russian) is refused
+  at start. Optional keywords bias it toward names and terms.
 - **ElevenLabs streamed input** — "Stream text to ElevenLabs (lower latency)", on by
   default: each sentence is synthesized as soon as it is written (v4 / v4 Turbo and the
   v2 / v2.5 models). v4 is the default model; v3 has no streaming socket and keeps
@@ -304,7 +309,7 @@ sequenceDiagram
   background task runs cancels it.
 - The pre-built binaries carry Smart Turn but neither Pocket TTS, Qwen3-TTS nor NeuTTS
   (outside the `all` extra); install from source for those.
-- Azure MAI-Transcribe is not offered for dictation.
+- Azure MAI-Transcribe and Meta Muse are not offered for dictation.
 - MCP Apps require QtWebEngine (graceful fallback to a plain tool pill without it).
 - Window size fixed; no chat search/export.
 - French-centric Piper catalog (all three Piper voices are French); Pocket TTS covers six
