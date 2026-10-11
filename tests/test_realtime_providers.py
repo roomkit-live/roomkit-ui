@@ -138,10 +138,12 @@ def test_transport_profile_gemini_keeps_pipeline_aec():
     assert prebuffer == 120
 
 
-def test_transport_profile_deepgram_without_aec_stays_default():
+def test_transport_profile_deepgram_without_aec_keeps_the_aura_prebuffer():
+    # Half-duplex or aec_mode=none drops the AEC recipe, not Aura's bursty
+    # delivery: the playback prebuffer stays at 240 ms.
     from roomkit_ui.engine_realtime import _transport_audio_profile
 
-    assert _transport_audio_profile("deepgram", None, 24000) == (None, None, 120)
+    assert _transport_audio_profile("deepgram", None, 24000) == (None, None, 240)
 
 
 def test_deepgram_non_openai_think_provider_requires_a_model():

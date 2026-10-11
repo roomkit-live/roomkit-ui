@@ -554,16 +554,19 @@ def _transport_audio_profile(
     reference and capture stay sample-synchronous.  Deepgram's turn
     detection cannot tell the agent's echo from the caller, and the example
     documents the endless barge-in loop an open, poorly-aligned mic causes.
-    A WebRTC noise suppressor rides the pipeline and the playback prebuffer
-    grows to absorb Aura's bursty delivery (the mid-response underruns seen
-    in the field logs).  Gemini/OpenAI keep the pipeline-stage AEC,
+    A WebRTC noise suppressor rides the pipeline with it.  The playback
+    prebuffer grows to absorb Aura's bursty delivery (the mid-response
+    underruns seen in the field logs) whatever the AEC: half-duplex mutes
+    the mic, not the bursts.  Gemini/OpenAI keep the pipeline-stage AEC,
     mirroring ``examples/realtime_voice_local_gemini.py``.
     """
-    if provider_name == "deepgram" and aec is not None:
-        from roomkit_ui.engine_audio import build_denoiser
+    if provider_name != "deepgram":
+        return None, None, 120
+    if aec is None:
+        return None, None, 240
+    from roomkit_ui.engine_audio import build_denoiser
 
-        return aec, build_denoiser("webrtc", sample_rate), 240
-    return None, None, 120
+    return aec, build_denoiser("webrtc", sample_rate), 240
 
 
 def _deepgram_speak_stage(settings: dict) -> tuple[str, dict | None, dict | None]:
