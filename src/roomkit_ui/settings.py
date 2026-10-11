@@ -73,11 +73,11 @@ _DEFAULTS = {
     # Audio debug & recording
     "debug_taps_enabled": False,
     "debug_taps_stages": "all",  # "all" or comma-separated: "raw,post_denoiser,..."
-    "debug_output_dir": "",  # empty = ~/.local/share/roomkit-ui/debug_audio/
+    "debug_output_dir": "",  # empty = <data dir>/debug_audio (see paths.py)
     "recording_enabled": False,
     "recording_mode": "both",  # "inbound_only" | "outbound_only" | "both"
     "recording_channels": "stereo",  # "mixed" | "separate" | "stereo"
-    "recording_output_dir": "",  # empty = ~/.local/share/roomkit-ui/recordings/
+    "recording_output_dir": "",  # empty = <data dir>/recordings (see paths.py)
     "theme": "dark",
     "mcp_servers": "[]",
     # JSON array of {enabled, name, command, description, seed_help, help_depth, timeout}

@@ -61,6 +61,7 @@ src/roomkit_ui/
 ├── mcp_auth.py          # OAuth2 for MCP HTTP servers; tokens bound to the server URL
 ├── mcp_app_bridge.py    # MCP Apps JSON-RPC bridge (QWebChannel ↔ iframe)
 ├── url_policy.py        # Public-host policy for MCP App requests and links
+├── paths.py             # The one data dir per platform + the one-time macOS move off ~/.local/share
 ├── stt_engine.py        # Dictation lifecycle (DictationState) + paste
 ├── stt_sessions.py      # Dictation session bring-up per provider — mixin
 ├── hotkey.py            # Global hotkey (NSEvent on macOS, pynput fallback)
@@ -68,7 +69,7 @@ src/roomkit_ui/
 ├── paste_windows.py     # Windows clipboard + Ctrl+V through Win32 SendInput (ctypes)
 ├── tray.py              # System tray icon for dictation
 ├── sounds.py            # Notification sounds for session start/stop
-├── speaker_manager.py   # Speaker profile JSON persistence (~/.local/share/roomkit-ui/speakers)
+├── speaker_manager.py   # Speaker profile JSON persistence (<data dir>/speakers)
 ├── enrollment.py        # Speaker embedding recording/extraction (sherpa-onnx)
 ├── model_catalog.py     # Downloadable local models + on-disk locations
 ├── model_download.py    # Download plumbing: raw GitHub, Git LFS (oid-checked), release assets; 30 s timeouts

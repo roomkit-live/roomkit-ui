@@ -6,6 +6,8 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
+from roomkit_ui.paths import data_dir
+
 
 @dataclass(frozen=True)
 class STTModel:
@@ -67,7 +69,7 @@ _MODELS_BY_ID: dict[str, STTModel] = {m.id: m for m in STT_MODELS}
 
 def get_models_dir() -> Path:
     """Return (and create) the local models storage directory."""
-    p = Path.home() / ".local" / "share" / "roomkit-ui" / "models"
+    p = data_dir() / "models"
     p.mkdir(parents=True, exist_ok=True)
     return p
 

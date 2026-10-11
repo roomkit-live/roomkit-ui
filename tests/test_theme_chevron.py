@@ -1,6 +1,7 @@
 """The combo chevron: without it, editable combos read as plain line edits."""
 
-import roomkit_ui.theme as theme_mod
+import pathlib
+
 from roomkit_ui.theme import get_stylesheet
 
 
@@ -21,7 +22,7 @@ def test_stylesheet_embeds_a_chevron_per_theme(monkeypatch, tmp_path):
 
 
 def test_unwritable_cache_degrades_to_hidden_arrow(monkeypatch):
-    monkeypatch.setattr(theme_mod.Path, "mkdir", _raise_oserror, raising=False)
+    monkeypatch.setattr(pathlib.Path, "mkdir", _raise_oserror)
     monkeypatch.setenv("HOME", "/nonexistent-root-dir-for-test")
 
     qss = get_stylesheet("dark")

@@ -18,7 +18,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -57,11 +56,9 @@ RECALL_TOOL: dict = {
 
 def conversations_db_path() -> Path:
     """Platform data path for the conversation database."""
-    if sys.platform == "darwin":
-        base = Path.home() / "Library" / "Application Support" / "RoomKit UI"
-    else:
-        base = Path.home() / ".local" / "share" / "roomkit-ui"
-    return base / "conversations.db"
+    from roomkit_ui.paths import data_dir
+
+    return data_dir() / "conversations.db"
 
 
 def build_store(settings: dict) -> Any | None:

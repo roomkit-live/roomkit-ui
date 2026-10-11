@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 
 from roomkit_ui.features import unavailable_reason
 from roomkit_ui.icons import svg_icon
+from roomkit_ui.paths import data_dir
 from roomkit_ui.theme import colors
 
 # QtMultimedia lives in PySide6-Addons — see the `mcp-apps` extra.  Without it
@@ -38,8 +39,8 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_DEBUG_DIR = str(Path.home() / ".local/share/roomkit-ui/debug_audio")
-_DEFAULT_RECORDING_DIR = str(Path.home() / ".local/share/roomkit-ui/recordings")
+_DEFAULT_DEBUG_DIR = str(data_dir() / "debug_audio")
+_DEFAULT_RECORDING_DIR = str(data_dir() / "recordings")
 
 _STAGES = [
     ("raw", "Raw (before processing)"),

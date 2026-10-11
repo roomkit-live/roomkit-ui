@@ -25,6 +25,7 @@ from typing import Any
 
 import numpy as np
 
+from roomkit_ui.paths import data_dir
 from roomkit_ui.wakeword.dtw import distance_to_prototypes, dtw_distance
 
 logger = logging.getLogger(__name__)
@@ -132,7 +133,7 @@ def outlier_prototypes(prototypes: list[np.ndarray], durations: list[float]) -> 
 
 def storage_dir() -> Path:
     """Where fingerprints live (created on demand)."""
-    path = Path.home() / ".local" / "share" / "roomkit-ui" / "wakeword"
+    path = data_dir() / "wakeword"
     path.mkdir(parents=True, exist_ok=True)
     return path
 

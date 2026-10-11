@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from PySide6.QtCore import QSettings
+
+from roomkit_ui.paths import data_dir
 
 # ---------------------------------------------------------------------------
 # Color palettes
@@ -94,7 +94,7 @@ def _chevron_url(color: str) -> str:
     hidden rather than shipping a broken ``url()``.
     """
     safe = color.lstrip("#").lower()
-    path = Path.home() / ".local" / "share" / "roomkit-ui" / "cache" / f"chevron-{safe}.svg"
+    path = data_dir() / "cache" / f"chevron-{safe}.svg"
     try:
         if not path.exists():
             path.parent.mkdir(parents=True, exist_ok=True)

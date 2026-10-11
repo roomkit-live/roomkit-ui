@@ -91,6 +91,10 @@ Each released section is the source for that version's GitHub release notes.
   and `smart-turn` pin conflicting `transformers` versions and cannot share an
   environment; they and `pocket-tts` stay out of `all`. PySide6-Essentials replaces
   PySide6: QtWebEngine and QtMultimedia come with `mcp-apps`.
+- **macOS: one data folder** — models, the wake word, recordings and debug audio join
+  skills, speakers and conversations in `~/Library/Application Support/RoomKit UI`. What
+  older versions left in `~/.local/share/roomkit-ui` moves there once at startup; a
+  folder already at its new home is never overwritten.
 - **roomkit `0.24.0` → `0.96.1`**, which brings the new providers, the model and voice
   catalogs, the conversation store and the shared microphone above. The app absorbs its
   behaviour changes: roomkit's own tool-call timeouts give way to the app's (MCP 60 s,

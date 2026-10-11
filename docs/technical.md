@@ -59,15 +59,17 @@ There is no server database. State lives in these places:
    load. Secrets go through `settings_secrets.py` → `SecretStore` (OS keyring first,
    QSettings fallback).
 2. **Conversation history** — `conversations.db`, roomkit's `SQLiteStore`, in the
-   platform data dir (`~/Library/Application Support/RoomKit UI/` on macOS,
-   `~/.local/share/roomkit-ui/` elsewhere), mode 0600.
+   platform data dir (`paths.data_dir()`: `~/Library/Application Support/RoomKit UI/` on
+   macOS, `~/.local/share/roomkit-ui/` elsewhere), mode 0600. Every stored file lives
+   under that one root; older macOS versions kept models, the wake word, recordings and
+   debug audio under `~/.local/share` and move once at startup
+   (`paths.migrate_legacy_mac_data`, never overwriting).
 3. **Speaker profiles** — one JSON file per speaker in the platform data dir
    (`speakers/<name>.json`): name, embeddings (list of float vectors), `is_primary`.
    Skills sources are cloned under the same data dir (`skills/`).
-4. **Model store** — `~/.local/share/roomkit-ui/models/<model-id>/v1/` on every platform;
-   the `v1` segment leaves room for format migrations. The wake-word fingerprint
-   (`wakeword/fingerprint.npz` + `.json`), recordings and debug taps live under
-   `~/.local/share/roomkit-ui/` too.
+4. **Model store** — `models/<model-id>/v1/` in the data dir; the `v1` segment leaves
+   room for format migrations. The wake-word fingerprint (`wakeword/fingerprint.npz` +
+   `.json`), recordings and debug taps live in the data dir too.
 
 ## Key patterns
 

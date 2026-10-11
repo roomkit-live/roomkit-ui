@@ -9,9 +9,10 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
-import sys
 from pathlib import Path
 from urllib.parse import urlparse
+
+from roomkit_ui.paths import data_dir
 
 logger = logging.getLogger(__name__)
 
@@ -27,10 +28,7 @@ _UNSAFE_SEGMENT_CHARS = re.compile(r"[^A-Za-z0-9._-]+")
 
 def get_skills_dir() -> Path:
     """Return the base skills directory, creating it if needed."""
-    if sys.platform == "darwin":
-        base = Path.home() / "Library" / "Application Support" / "RoomKit UI" / "skills"
-    else:
-        base = Path.home() / ".local" / "share" / "roomkit-ui" / "skills"
+    base = data_dir() / "skills"
     base.mkdir(parents=True, exist_ok=True)
     return base
 

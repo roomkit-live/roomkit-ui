@@ -78,6 +78,7 @@ from PySide6.QtWidgets import QApplication, QSystemTrayIcon  # noqa: E402
 from qasync import QEventLoop  # noqa: E402
 
 from roomkit_ui.hotkey import HotkeyListener  # noqa: E402
+from roomkit_ui.paths import migrate_legacy_mac_data  # noqa: E402
 from roomkit_ui.settings import load_settings  # noqa: E402
 from roomkit_ui.stt_engine import STTEngine  # noqa: E402
 from roomkit_ui.theme import get_stylesheet  # noqa: E402
@@ -346,6 +347,9 @@ def main() -> None:
         return
 
     _configure_logging()
+    # Before anything reads a data folder: older macOS versions kept half of
+    # them under ~/.local/share.
+    migrate_legacy_mac_data()
     if not _has_opengl:
         logging.getLogger(__name__).warning(
             "OpenGL not available — running in software rendering mode. "

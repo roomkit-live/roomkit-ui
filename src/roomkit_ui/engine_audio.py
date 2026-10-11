@@ -11,6 +11,8 @@ import json
 import logging
 from typing import Any
 
+from roomkit_ui.paths import data_dir
+
 logger = logging.getLogger(__name__)
 
 # Inbound DSP thread pool: the mic's stage chain (AEC, denoiser, VAD,
@@ -147,7 +149,7 @@ def build_debug_taps(settings: dict):
 
     output_dir = settings.get("debug_output_dir", "").strip()
     if not output_dir:
-        output_dir = str(Path.home() / ".local/share/roomkit-ui/debug_audio")
+        output_dir = str(data_dir() / "debug_audio")
     stages_str = settings.get("debug_taps_stages", "all")
     stages = [s.strip() for s in stages_str.split(",") if s.strip()]
     Path(output_dir).mkdir(parents=True, exist_ok=True)
@@ -180,7 +182,7 @@ def build_recorder(settings: dict):
 
     output_dir = settings.get("recording_output_dir", "").strip()
     if not output_dir:
-        output_dir = str(Path.home() / ".local/share/roomkit-ui/recordings")
+        output_dir = str(data_dir() / "recordings")
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     config = RecordingConfig(
         mode=RecordingMode(settings.get("recording_mode", "both")),

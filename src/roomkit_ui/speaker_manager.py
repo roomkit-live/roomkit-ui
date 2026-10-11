@@ -4,21 +4,18 @@ from __future__ import annotations
 
 import json
 import logging
-import sys
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+
+from roomkit_ui.paths import data_dir
 
 logger = logging.getLogger(__name__)
 
 
 def _speakers_dir() -> Path:
     """Return (and create) the speaker profiles directory."""
-    if sys.platform == "darwin":
-        base = Path.home() / "Library" / "Application Support" / "RoomKit UI"
-    else:
-        base = Path.home() / ".local" / "share" / "roomkit-ui"
-    d = base / "speakers"
+    d = data_dir() / "speakers"
     d.mkdir(parents=True, exist_ok=True)
     return d
 
