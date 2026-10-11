@@ -10,65 +10,40 @@ on:
   workflow_call:
 
 jobs:
-  lint:
-    name: Lint
+  # Lint, security scan and type check share one environment: each needs the
+  # full `uv sync --extra dev` (the locked ruff and bandit, and mypy run
+  # against roomkit's real types), so syncing once beats syncing three times.
+  checks:
+    name: Lint, security, types
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - name: Install uv
         uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
 
       - name: Set up Python
         run: uv python install 3.12
 
-      # The locked ruff, not whatever uvx resolves today: a new release adds
-      # rules and reformats code, and CI would disagree with "uv run ruff".
       - name: Install dependencies
         run: uv sync --extra dev
 
+      # The locked ruff, not whatever uvx resolves today: a new release adds
+      # rules and reformats code, and CI would disagree with "uv run ruff".
       - name: Ruff check
         run: uv run ruff check .
 
       - name: Ruff format check
         run: uv run ruff format --check .
 
-  security:
-    name: Security scan
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-
-      - name: Set up Python
-        run: uv python install 3.12
-
-      - name: Install dependencies
-        run: uv sync --extra dev
-
       - name: Bandit
         run: uv run bandit -r src/ -c pyproject.toml
-
-  typecheck:
-    name: Type check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-
-      - name: Set up Python
-        run: uv python install 3.12
 
       # mypy runs in the project environment. Outside it, roomkit and the
       # backend SDKs resolve to Any (pyproject ignores their missing imports),
       # so no call into them is checked, and numpy is not found at all.
-      - name: Install dependencies
-        run: uv sync --extra dev
-
       - name: Mypy
         run: uv run mypy src/
 
@@ -82,6 +57,8 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
 
       - name: Set up Python
         run: uv python install 3.12
@@ -110,6 +87,8 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
 
       - name: Set up Python
         run: uv python install 3.12
