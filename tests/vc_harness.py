@@ -153,9 +153,8 @@ async def open_session(
     """A connected voice session whose user turns the TokenAI answers."""
     stt = MockSTTProvider(transcripts=transcripts or ["Hello"])
     backend = MockVoiceBackend()
-    config = AudioPipelineConfig(
-        vad=MockVADProvider(events=vad_events or utterance()), **(pipeline or {})
-    )
+    stages = {"vad": MockVADProvider(events=vad_events or utterance()), **(pipeline or {})}
+    config = AudioPipelineConfig(**stages)
     channel = VoiceChannel(
         "voice",
         stt=stt,
