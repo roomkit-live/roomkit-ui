@@ -175,6 +175,13 @@ Each released section is the source for that version's GitHub release notes.
   without it and says so; Voice Channel mode is unchanged.
 
 ### Fixed
+- **Voice Channel: every sentence no longer heard and answered twice** — attaching the
+  voice channel opened a microphone session on its own, next to the app's, so each
+  sentence went through two captures and two STT streams and every reply played twice.
+  Dictation did the same. There is now one session, the app's.
+- **Streaming STT streams close properly** — under the app's event loop, a stream left to
+  drop an echo printed "async generator ignored GeneratorExit" and kept its websocket
+  open; the loop now closes it.
 - **A backend not installed is no longer logged as a crash** — a session started on one
   logged a traceback and an "Engine error"; it now logs one line and says in the chat
   what is missing. The GTCRN denoiser, diarization and a turnless STT's VAD no longer
