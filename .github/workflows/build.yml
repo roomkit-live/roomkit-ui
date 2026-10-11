@@ -15,8 +15,30 @@ jobs:
     permissions:
       contents: read
 
+  # Info.plist takes its version from pyproject.toml, the release and the cask
+  # from the tag: a mismatch ships an app that reports another version than
+  # the one it is released as. Release to PyPI runs the same check.
+  version:
+    name: Check the tag matches the project version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Compare
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          project_version=$(uv version --short)
+          tag_version="${GITHUB_REF_NAME#v}"
+          if [ "$project_version" != "$tag_version" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match pyproject version $project_version"
+            exit 1
+          fi
+
   build:
-    needs: ci
+    needs: [ci, version]
     strategy:
       matrix:
         include:
@@ -330,7 +352,8 @@ jobs:
     name: Update Homebrew cask
     needs: build
     if: startsWith(github.ref, 'refs/tags/')
-    runs-on: ubuntu-latest
+    # macOS, for stapler: see "Require a notarized app".
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -341,16 +364,34 @@ jobs:
           name: RoomKit-UI-macOS
           path: artifact
 
+      # Without the Apple secrets the build only signs ad hoc, and Gatekeeper
+      # refuses that app; a cask user never gets the right-click "Open" a
+      # download offers. Publish the cask only for an app carrying a stapled
+      # notarization ticket. The DMG still goes to the release page.
+      - name: Require a notarized app
+        id: notarized
+        run: |
+          MOUNT=$(mktemp -d)
+          hdiutil attach -nobrowse -readonly -mountpoint "$MOUNT" artifact/RoomKit-UI-macOS.dmg
+          if xcrun stapler validate "$MOUNT/RoomKit UI.app"; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::The macOS app is not notarized — cask not published."
+          fi
+          hdiutil detach "$MOUNT"
+
       - name: Stamp the cask with this release
+        if: steps.notarized.outputs.ok == 'true'
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          SHA=$(sha256sum "artifact/RoomKit-UI-macOS.dmg" | cut -d' ' -f1)
+          SHA=$(shasum -a 256 "artifact/RoomKit-UI-macOS.dmg" | cut -d' ' -f1)
           CASK=packaging/homebrew/roomkit-ui.rb
-          sed -i -E "s|^  version \".*\"$|  version \"${VERSION}\"|" "$CASK"
-          sed -i -E "s|^  sha256 \".*\"$|  sha256 \"${SHA}\"|" "$CASK"
+          sed -i '' -E "s|^  version \".*\"$|  version \"${VERSION}\"|" "$CASK"
+          sed -i '' -E "s|^  sha256 \".*\"$|  sha256 \"${SHA}\"|" "$CASK"
           grep -E '^  (version|sha256) ' "$CASK"
 
       - name: Push to the tap
+        if: steps.notarized.outputs.ok == 'true'
         env:
           TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
