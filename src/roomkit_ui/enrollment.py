@@ -11,10 +11,23 @@ logger = logging.getLogger(__name__)
 ProgressCallback = Callable[[float], None]  # 0.0 – 1.0
 
 
+def _configured_input_device() -> int | None:
+    """The microphone chosen in Settings — the one sessions listen on.
+
+    Enrolling on another device (the system default) would fingerprint a
+    different microphone from the one identification later hears.
+    """
+    from roomkit_ui.settings import load_settings
+
+    device: int | None = load_settings().get("input_device")
+    return device
+
+
 def _record_sync(
     duration: float,
     sample_rate: int,
     progress: ProgressCallback | None,
+    device: int | None = None,
 ) -> bytes:
     """Record *duration* seconds of 16-bit mono PCM (blocking)."""
     import sounddevice as sd
@@ -38,6 +51,7 @@ def _record_sync(
         dtype="int16",
         blocksize=block_size,
         callback=_callback,
+        device=device,
     ):
         import time
 
@@ -71,11 +85,12 @@ async def record_and_extract(
     Returns the embedding vector as a list of floats.
     """
     sample_rate = 16000
+    device = _configured_input_device()
 
     def _run() -> list[float]:
         import sherpa_onnx
 
-        pcm = _record_sync(duration, sample_rate, progress)
+        pcm = _record_sync(duration, sample_rate, progress, device)
 
         config = sherpa_onnx.SpeakerEmbeddingExtractorConfig(
             model=model_path,
@@ -114,13 +129,14 @@ async def record_and_extract_multi(
     Returns a list of embedding vectors (one per segment).
     """
     sample_rate = 16000
+    device = _configured_input_device()
 
     def _run() -> list[list[float]]:
         import array
 
         import sherpa_onnx
 
-        pcm = _record_sync(duration, sample_rate, progress)
+        pcm = _record_sync(duration, sample_rate, progress, device)
 
         config = sherpa_onnx.SpeakerEmbeddingExtractorConfig(
             model=model_path,
