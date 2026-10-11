@@ -113,11 +113,6 @@ class VoiceChannelMixin:
 
     async def _start_voice_channel(self, settings: dict) -> None:
         try:
-            from roomkit import RoomKit
-            from roomkit.channels.ai import AIChannel
-            from roomkit.models import RetryPolicy
-            from roomkit.voice.pipeline.config import AudioPipelineConfig
-
             system_prompt = self._compose_session_prompt(settings)  # type: ignore[attr-defined]
             inference_device = settings.get("inference_device", "cpu")
             aec_mode = settings.get("aec_mode", "webrtc")
@@ -149,34 +144,9 @@ class VoiceChannelMixin:
             self._backend = backend  # type: ignore[attr-defined]
             log_vc_audio_pipeline(aec, denoiser, input_sample_rate, output_sample_rate)
 
-            # 6. VAD (local or turnless STT), diarization, interruption, turn detector
-            vad = self._build_vc_vad(settings, stt_provider_name, inference_device)
-            diarization = setup_diarization(
-                self,
-                settings,
-                vad_available=vad is not None,
-                inference_device=inference_device,
-            )
-            interruption = build_interruption(
-                settings, stt_streams=bool(getattr(stt, "supports_streaming", False))
-            )
-            turn_detector = await self._build_turn_detector(settings, inference_device)
-
-            # 6.5. AudioPipelineConfig
-            debug_taps = build_debug_taps(settings)
-            recorder, recording_config = build_recorder(settings)
-            pipeline = AudioPipelineConfig(
-                aec=aec,
-                denoiser=denoiser,
-                vad=vad,
-                interruption=interruption,
-                diarization=diarization,
-                turn_detector=turn_detector,
-                turn_incomplete_wait_ms=turn_incomplete_wait_ms(settings),
-                debug_taps=debug_taps,
-                recorder=recorder,
-                recording_config=recording_config,
-                inbound_dsp_threads=DSP_THREADS,
+            # 6. VAD, diarization, interruption, turn detector → the pipeline
+            pipeline = await self._build_vc_pipeline(
+                settings, stt, stt_provider_name, inference_device, aec, denoiser
             )
 
             # 7. VoiceChannel
@@ -184,58 +154,16 @@ class VoiceChannelMixin:
             voice = _build_voice_channel(stt, tts, backend, pipeline, tts_filter)
             self._channel = voice  # type: ignore[attr-defined]
 
-            # 7.5. Skills
-            skip_tools = llm_provider_name == "local" and not settings.get("vc_local_tools", True)
-            skills_registry = self._load_skills(settings) if not skip_tools else None
-
-            # 8. Tools — set up first: the AIChannel takes their options
-            toolset = ToolSet(builtin=[], cli=[], mcp=[])
-            if skip_tools:
-                logger.info("Local model tool support disabled — skipping MCP/tools")
-            else:
-                if mcp_servers_configured(settings):
-                    self.loading_status.emit("Connecting MCP servers…")  # type: ignore[attr-defined]
-                toolset = await self._setup_tools(settings)  # type: ignore[attr-defined]
-            tools = toolset.all
-
-            # 9. AIChannel
-            ai_channel = AIChannel(
-                "ai",
-                provider=ai_provider,
-                system_prompt=system_prompt,
-                tool_handler=self._handle_tool_call,  # type: ignore[attr-defined]
-                skills=skills_registry,
-                # Provider SDKs no longer retry (Anthropic stopped in roomkit
-                # 0.96); a 429/529 would fail the turn into silence.  Retries
-                # only run while nothing has been streamed, so none is heard.
-                retry_policy=RetryPolicy(
-                    max_retries=2, base_delay_seconds=0.5, max_delay_seconds=4.0
-                ),
-                **toolset.channel_options(),
+            # 8-9. Skills, tools, then the AIChannel that takes their options
+            ai_channel, tools, skills_registry = await self._build_vc_ai_channel(
+                settings, ai_provider, llm_provider_name, system_prompt
             )
             self._ai_channel = ai_channel  # type: ignore[attr-defined]
 
             # 10-11. Framework + hooks
-            from roomkit_ui.memory import ROOM_ID, ensure_room
-
-            kit, _store = self._build_kit(RoomKit, settings)  # type: ignore[attr-defined]
-            self._kit = kit  # type: ignore[attr-defined]
-            kit.register_channel(voice)
-            kit.register_channel(ai_channel)
-            await ensure_room(kit)
-
-            from roomkit.models.enums import ChannelCategory
-
-            voice_binding = await kit.attach_channel(ROOM_ID, "voice")
-            await kit.attach_channel(
-                ROOM_ID,
-                "ai",
-                category=ChannelCategory.INTELLIGENCE,
-                metadata={"tools": tools},
+            voice_binding = await self._open_vc_room(
+                settings, voice, ai_channel, tools, tts_filter, llm_provider_name
             )
-            register_vc_hooks(kit, self, tts_filter=tts_filter)
-            if llm_provider_name == "local":
-                register_local_tool_hint(kit, self.error_occurred.emit)  # type: ignore[attr-defined]
 
             # 12. Connect and start
             self.loading_status.emit("Starting voice channel…")  # type: ignore[attr-defined]
@@ -258,6 +186,114 @@ class VoiceChannelMixin:
         except Exception as e:
             logger.exception("Failed to start voice channel session")
             await self._fail_start(str(e))  # type: ignore[attr-defined]
+
+    async def _build_vc_pipeline(
+        self,
+        settings: dict,
+        stt: Any,
+        stt_provider_name: str,
+        inference_device: str,
+        aec: Any,
+        denoiser: Any,
+    ) -> Any:
+        """The session's AudioPipelineConfig: VAD (local or turnless STT),
+        diarization, barge-in, turn detector, debug taps and recording."""
+        from roomkit.voice.pipeline.config import AudioPipelineConfig
+
+        vad = self._build_vc_vad(settings, stt_provider_name, inference_device)
+        diarization = setup_diarization(
+            self,
+            settings,
+            vad_available=vad is not None,
+            inference_device=inference_device,
+        )
+        interruption = build_interruption(
+            settings, stt_streams=bool(getattr(stt, "supports_streaming", False))
+        )
+        turn_detector = await self._build_turn_detector(settings, inference_device)
+        recorder, recording_config = build_recorder(settings)
+        return AudioPipelineConfig(
+            aec=aec,
+            denoiser=denoiser,
+            vad=vad,
+            interruption=interruption,
+            diarization=diarization,
+            turn_detector=turn_detector,
+            turn_incomplete_wait_ms=turn_incomplete_wait_ms(settings),
+            debug_taps=build_debug_taps(settings),
+            recorder=recorder,
+            recording_config=recording_config,
+            inbound_dsp_threads=DSP_THREADS,
+        )
+
+    async def _build_vc_ai_channel(
+        self, settings: dict, ai_provider: Any, llm_provider_name: str, system_prompt: str
+    ) -> tuple[Any, list[dict], Any]:
+        """The AIChannel, after the skills and tools it is built with.
+
+        Returns ``(ai_channel, tools, skills_registry)``.  A local model with
+        "supports tool use" off gets neither skills nor tools.
+        """
+        from roomkit.channels.ai import AIChannel
+        from roomkit.models import RetryPolicy
+
+        skip_tools = llm_provider_name == "local" and not settings.get("vc_local_tools", True)
+        skills_registry = self._load_skills(settings) if not skip_tools else None
+        toolset = ToolSet(builtin=[], cli=[], mcp=[])
+        if skip_tools:
+            logger.info("Local model tool support disabled — skipping MCP/tools")
+        else:
+            if mcp_servers_configured(settings):
+                self.loading_status.emit("Connecting MCP servers…")  # type: ignore[attr-defined]
+            toolset = await self._setup_tools(settings)  # type: ignore[attr-defined]
+
+        ai_channel = AIChannel(
+            "ai",
+            provider=ai_provider,
+            system_prompt=system_prompt,
+            tool_handler=self._handle_tool_call,  # type: ignore[attr-defined]
+            skills=skills_registry,
+            # Provider SDKs no longer retry (Anthropic stopped in roomkit
+            # 0.96); a 429/529 would fail the turn into silence.  Retries
+            # only run while nothing has been streamed, so none is heard.
+            retry_policy=RetryPolicy(max_retries=2, base_delay_seconds=0.5, max_delay_seconds=4.0),
+            **toolset.channel_options(),
+        )
+        return ai_channel, toolset.all, skills_registry
+
+    async def _open_vc_room(
+        self,
+        settings: dict,
+        voice: Any,
+        ai_channel: Any,
+        tools: list[dict],
+        tts_filter: Any,
+        llm_provider_name: str,
+    ) -> Any:
+        """Build the kit, attach both channels to the durable room, register
+        the hooks.  Returns the voice channel's binding."""
+        from roomkit import RoomKit
+        from roomkit.models.enums import ChannelCategory
+
+        from roomkit_ui.memory import ROOM_ID, ensure_room
+
+        kit, _store = self._build_kit(RoomKit, settings)  # type: ignore[attr-defined]
+        self._kit = kit  # type: ignore[attr-defined]
+        kit.register_channel(voice)
+        kit.register_channel(ai_channel)
+        await ensure_room(kit)
+
+        voice_binding = await kit.attach_channel(ROOM_ID, "voice")
+        await kit.attach_channel(
+            ROOM_ID,
+            "ai",
+            category=ChannelCategory.INTELLIGENCE,
+            metadata={"tools": tools},
+        )
+        register_vc_hooks(kit, self, tts_filter=tts_filter)
+        if llm_provider_name == "local":
+            register_local_tool_hint(kit, self.error_occurred.emit)  # type: ignore[attr-defined]
+        return voice_binding
 
     def _build_vc_backend(self, settings: dict, aec: Any, output_sample_rate: int) -> Any:
         """The session's LocalAudioBackend, on the shared microphone when it fits.
