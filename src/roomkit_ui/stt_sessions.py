@@ -19,10 +19,13 @@ logger = logging.getLogger(__name__)
 
 
 class DictationSessionMixin:
-    """Provider-specific session builders for ``STTEngine``."""
+    """Provider-specific session builders for ``STTEngine``.
 
-    _recording: bool
-    _busy: bool
+    Each ``_start_*`` returns whether the session is up.  On failure it has
+    already reported why and discarded what it opened; the lifecycle state
+    is the engine's to restore.
+    """
+
     _kit: Any
     _channel: Any
     _session: Any
@@ -35,17 +38,14 @@ class DictationSessionMixin:
     _local_flush_event: asyncio.Event | None
     _batch_mode: bool
 
-    async def _start_openai_recording(self, settings: dict) -> None:
+    async def _start_openai_recording(self, settings: dict) -> bool:
         api_key = settings.get("openai_api_key", "")
         blocker = unavailable_reason("openai-realtime")
         if not blocker and not api_key:
             blocker = "OpenAI API key is required for dictation. Open Settings to enter it."
         if blocker:
-            self.error_occurred.emit(blocker)  # type: ignore[attr-defined]
-            self._recording = False
-            self._busy = False
-            self.recording_changed.emit(False)  # type: ignore[attr-defined]
-            return
+            self._fail_start(blocker)  # type: ignore[attr-defined]
+            return False
 
         try:
             from roomkit import RealtimeVoiceChannel, RoomKit
@@ -118,25 +118,23 @@ class DictationSessionMixin:
                 settings.get("openai_model", "gpt-realtime-2.1"),
                 sample_rate,
             )
+            return True
 
         except Exception as exc:
             logger.exception("Failed to start STT session")
-            self._recording = False
-            self.recording_changed.emit(False)  # type: ignore[attr-defined]
-            self.error_occurred.emit(str(exc))  # type: ignore[attr-defined]
-            await self._cleanup()
-        finally:
-            self._busy = False
+            self._fail_start(str(exc))  # type: ignore[attr-defined]
+            self._discard_session()  # type: ignore[attr-defined]
+            return False
 
     # -- VoiceChannel dictation (shared by local + Deepgram) ------------------
 
-    async def _start_local_recording(self, settings: dict) -> None:
+    async def _start_local_recording(self, settings: dict) -> bool:
         """Sherpa-Onnx STT via VoiceChannel + LocalAudioBackend."""
         built = self._build_local_stt(settings)
         if built is None:
-            return
+            return False
         stt, batch_mode, log_extra = built
-        await self._start_vc_dictation(
+        return await self._start_vc_dictation(
             stt=stt,
             batch_mode=batch_mode,
             log_extra=log_extra,
@@ -145,13 +143,13 @@ class DictationSessionMixin:
             error_context="local",
         )
 
-    async def _start_deepgram_recording(self, settings: dict) -> None:
+    async def _start_deepgram_recording(self, settings: dict) -> bool:
         """Deepgram streaming STT via VoiceChannel + LocalAudioBackend."""
         built = self._build_deepgram_stt(settings)
         if built is None:
-            return
+            return False
         stt, batch_mode, log_extra = built
-        await self._start_vc_dictation(
+        return await self._start_vc_dictation(
             stt=stt,
             batch_mode=batch_mode,
             log_extra=log_extra,
@@ -244,7 +242,7 @@ class DictationSessionMixin:
         settings: dict,
         log_partials: bool,
         error_context: str,
-    ) -> None:
+    ) -> bool:
         """Shared VoiceChannel session bring-up for dictation.
 
         Creates the 16 kHz ``LocalAudioBackend``, wraps the STT provider in
@@ -252,9 +250,8 @@ class DictationSessionMixin:
         the session via ``backend.connect`` → ``bind_session`` →
         ``start_listening``.
 
-        Failures during this phase emit an error signal, run the partial
-        cleanup (``_cleanup_local``) and reset recording state so a retry
-        can start fresh.  The ``finally`` block always drops the busy flag.
+        Failures during this phase emit an error signal and discard the
+        partially opened session so a retry can start fresh.
         """
         try:
             await self._open_vc_dictation_session(
@@ -267,12 +264,10 @@ class DictationSessionMixin:
             )
         except Exception as exc:
             logger.exception("Failed to start %s STT session", error_context)
-            self.error_occurred.emit(str(exc))  # type: ignore[attr-defined]
-            self._cleanup_local()
-            self._recording = False
-            self.recording_changed.emit(False)  # type: ignore[attr-defined]
-        finally:
-            self._busy = False
+            self._fail_start(str(exc))  # type: ignore[attr-defined]
+            self._discard_session()  # type: ignore[attr-defined]
+            return False
+        return True
 
     async def _open_vc_dictation_session(
         self,

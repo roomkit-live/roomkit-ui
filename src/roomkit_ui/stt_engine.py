@@ -6,6 +6,8 @@ import asyncio
 import logging
 import os
 import subprocess
+from dataclasses import dataclass
+from enum import Enum, auto
 from typing import Any
 
 from PySide6.QtCore import QObject, Signal
@@ -23,6 +25,7 @@ from roomkit_ui.stt_sessions import DictationSessionMixin
 # ``from roomkit_ui.stt_engine import _copy_to_clipboard``.  New callers
 # should import from ``roomkit_ui.paste`` directly.
 __all__ = [
+    "DictationState",
     "STTEngine",
     "_activate_bundle",
     "_copy_to_clipboard",
@@ -31,6 +34,46 @@ __all__ = [
 ]
 
 logger = logging.getLogger(__name__)
+
+
+class DictationState(Enum):
+    """Where dictation is in its lifecycle.
+
+    Opening a session takes about a second (the OpenAI websocket) and
+    stopping one up to thirty (a batch flush).  A press that lands inside
+    either transition is remembered and replayed once it settles — never
+    run alongside it, which is how a second session used to leak and a
+    stop used to tear down the session that replaced it.
+    """
+
+    IDLE = auto()
+    STARTING = auto()
+    RECORDING = auto()
+    STOPPING = auto()
+
+
+@dataclass
+class _SessionObjects:
+    """One dictation's roomkit objects, detached from the engine at stop."""
+
+    kit: Any = None
+    channel: Any = None
+    session: Any = None
+    provider: Any = None
+    transport: Any = None
+    local_provider: Any = None
+    local_backend: Any = None
+    local_session: Any = None
+    local_flush_event: asyncio.Event | None = None
+    batch_mode: bool = False
+
+    @property
+    def is_local(self) -> bool:
+        return self.local_provider is not None
+
+    @property
+    def empty(self) -> bool:
+        return not any((self.kit, self.channel, self.session, self.local_backend))
 
 
 class STTEngine(DictationSessionMixin, QObject):
@@ -47,8 +90,9 @@ class STTEngine(DictationSessionMixin, QObject):
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
-        self._recording = False
-        self._busy = False  # guards against overlapping start/stop
+        self._state = DictationState.IDLE
+        # A press received mid-transition, replayed once it settles.
+        self._toggle_pending = False
         self._kit: Any = None
         self._channel: Any = None
         self._session: Any = None
@@ -66,18 +110,28 @@ class STTEngine(DictationSessionMixin, QObject):
 
     @property
     def recording(self) -> bool:
-        return self._recording
+        return self._state in (DictationState.STARTING, DictationState.RECORDING)
 
     def toggle_recording(self) -> None:
         logger.info(
-            "toggle_recording: recording=%s busy=%s",
-            self._recording,
-            self._busy,
+            "toggle_recording: state=%s pending=%s",
+            self._state.name,
+            self._toggle_pending,
         )
-        if self._recording:
+        if self._state is DictationState.IDLE:
+            asyncio.ensure_future(self._start_recording())
+        elif self._state is DictationState.RECORDING:
             asyncio.ensure_future(self._stop_recording())
         else:
-            asyncio.ensure_future(self._start_recording())
+            # Mid-transition: a second press cancels the first.
+            self._toggle_pending = not self._toggle_pending
+
+    def _settle(self, state: DictationState) -> None:
+        """End a transition, then replay a press that arrived during it."""
+        self._state = state
+        if self._toggle_pending:
+            self._toggle_pending = False
+            self.toggle_recording()
 
     # -- transcription callback ------------------------------------------------
 
@@ -92,169 +146,128 @@ class STTEngine(DictationSessionMixin, QObject):
     # -- lifecycle -------------------------------------------------------------
 
     async def _start_recording(self) -> None:
-        if self._recording or self._busy:
-            logger.warning(
-                "_start_recording skipped: recording=%s busy=%s",
-                self._recording,
-                self._busy,
-            )
+        if self._state is not DictationState.IDLE:
+            logger.warning("_start_recording skipped: state=%s", self._state.name)
             return
 
-        self._busy = True
-        self._recording = True
+        self._state = DictationState.STARTING
         self.recording_changed.emit(True)
         self._accumulated_text.clear()
         self._prev_app = _get_frontmost_bundle()
         logger.info("Saved frontmost app: %s", self._prev_app)
 
-        # --- Fake mode: skip roomkit, just use hardcoded text ---
+        started = False
+        try:
+            started = await self._open_session()
+        finally:
+            if started:
+                self._settle(DictationState.RECORDING)
+            else:
+                # Nothing is left to stop: a press made while connecting
+                # would only start a new attempt the user did not ask for.
+                self._discard_session()
+                self._toggle_pending = False
+                self.recording_changed.emit(False)
+                self._settle(DictationState.IDLE)
+
+    async def _open_session(self) -> bool:
+        """Bring up the configured provider. False after reporting why not."""
         if os.environ.get("STT_FAKE"):
             logger.info("STT fake mode — will paste test text on stop")
-            self._busy = False
-            return
+            return True
 
         settings = load_settings()
         stt_provider = settings.get("stt_provider", "openai")
-
         if stt_provider == "local":
-            await self._start_local_recording(settings)
-        elif stt_provider == "deepgram":
-            await self._start_deepgram_recording(settings)
-        else:
-            await self._start_openai_recording(settings)
+            return await self._start_local_recording(settings)
+        if stt_provider == "deepgram":
+            return await self._start_deepgram_recording(settings)
+        return await self._start_openai_recording(settings)
 
     def _fail_start(self, message: str) -> None:
-        """Abort start-recording cleanly (pre-try paths: nothing to clean up).
+        """Report why a session could not be opened.
 
-        Emits the error on the UI signal and restores idle state so the
-        hotkey can trigger again.  Also clears ``self._busy`` because no
-        subsequent ``finally`` will run after a guard-clause return.
+        Only the message: ``_start_recording`` restores the idle state once
+        the provider builder returns.
         """
         self.error_occurred.emit(message)
-        self._recording = False
-        self._busy = False
-        self.recording_changed.emit(False)
 
     async def _stop_recording(self) -> None:
-        if not self._recording:
-            return
-        if self._busy:
-            # Start is still in progress; just flag recording off so it
-            # won't continue once start finishes.
-            self._recording = False
-            self.recording_changed.emit(False)
+        if self._state is not DictationState.RECORDING:
             return
 
-        self._recording = False
+        self._state = DictationState.STOPPING
         self.recording_changed.emit(False)
         logger.info("STT recording stopped")
-
+        # This stop owns these objects from here on: whatever runs while it
+        # waits for the last words, its teardown reaches them and only them.
+        objects = self._take_session()
         try:
-            if os.environ.get("STT_FAKE"):
-                self._accumulated_text.append("Hello, this is a test transcription.")
-            elif self._local_provider is not None:
-                await self._stop_local_recording()
-            else:
-                # Only commit if we don't already have text from VAD —
-                # committing an empty buffer causes a harmless but noisy error.
-                if not self._accumulated_text:
-                    await self._commit_and_wait()
-
-            # Emit / paste the text BEFORE cleanup (cleanup is slow).
-            text = " ".join(self._accumulated_text).strip()
-            if text:
-                logger.info("Emitting text_ready: %d chars", len(text))
-                logger.debug("text_ready payload: %s", text)
-                # Restore focus to the app that was active before recording,
-                # then give it a moment to come forward before pasting.
-                if self._prev_app:
-                    _activate_bundle(self._prev_app)
-                    await asyncio.sleep(0.25)
-                else:
-                    await asyncio.sleep(0.15)
-                self.text_ready.emit(text)
-            else:
-                logger.info("No transcription captured")
+            await self._collect_final_text(objects)
+            await self._deliver_text()
         finally:
-            # Snapshot the objects and clear self._ immediately so a new
-            # recording cycle won't be affected by the background cleanup.
-            if self._local_provider is not None:
-                self._cleanup_local()
-            elif not os.environ.get("STT_FAKE"):
-                snap = (self._kit, self._channel, self._session, self._transport)
-                self._kit = None
-                self._channel = None
-                self._session = None
-                self._provider = None
-                self._transport = None
-                asyncio.ensure_future(self._cleanup_snapshot(*snap))
+            self._dispose(objects)
+            self._settle(DictationState.IDLE)
 
-    async def _stop_local_recording(self) -> None:
+    async def _collect_final_text(self, objects: _SessionObjects) -> None:
+        """Wait for whatever the provider still owes for this dictation."""
+        if os.environ.get("STT_FAKE"):
+            self._accumulated_text.append("Hello, this is a test transcription.")
+        elif objects.is_local:
+            await self._stop_local_recording(objects)
+        elif not self._accumulated_text:
+            # Only commit if we don't already have text from VAD —
+            # committing an empty buffer causes a harmless but noisy error.
+            await self._commit_and_wait(objects)
+
+    async def _deliver_text(self) -> None:
+        """Emit the transcript, after handing focus back to where it goes."""
+        text = " ".join(self._accumulated_text).strip()
+        if not text:
+            logger.info("No transcription captured")
+            return
+        logger.info("Emitting text_ready: %d chars", len(text))
+        logger.debug("text_ready payload: %s", text)
+        # Restore focus to the app that was active before recording,
+        # then give it a moment to come forward before pasting.
+        if self._prev_app:
+            _activate_bundle(self._prev_app)
+            await asyncio.sleep(0.25)
+        else:
+            await asyncio.sleep(0.15)
+        self.text_ready.emit(text)
+
+    async def _stop_local_recording(self, objects: _SessionObjects) -> None:
         """Stop the LocalAudioBackend and wait for final transcriptions."""
-        if self._local_backend and self._local_session:
-            await self._local_backend.stop_listening(self._local_session)
+        backend, session = objects.local_backend, objects.local_session
+        if not (backend and session):
+            return
+        await backend.stop_listening(session)
 
-            if self._batch_mode:
-                # Batch mode: flush accumulated audio through offline STT
-                try:
-                    result = await asyncio.wait_for(
-                        self._channel.flush_stt(self._local_session),
-                        timeout=30.0,
-                    )
-                    if result and result.text and result.text.strip():
-                        logger.info("Batch STT result: %d chars", len(result.text))
-                        logger.debug("Batch STT text: %s", result.text)
-                        self._accumulated_text.append(result.text.strip())
-                except TimeoutError:
-                    logger.warning("Batch STT timed out")
-            else:
-                # Streaming mode: wait for final transcription from hook
-                if self._local_flush_event is not None:
-                    self._local_flush_event.clear()
-                    try:
-                        await asyncio.wait_for(self._local_flush_event.wait(), timeout=3.0)
-                    except TimeoutError:
-                        logger.info("No final transcription received within timeout")
+        if objects.batch_mode:
+            # Batch mode: flush accumulated audio through offline STT
+            try:
+                result = await asyncio.wait_for(
+                    objects.channel.flush_stt(session),
+                    timeout=30.0,
+                )
+                if result and result.text and result.text.strip():
+                    logger.info("Batch STT result: %d chars", len(result.text))
+                    logger.debug("Batch STT text: %s", result.text)
+                    self._accumulated_text.append(result.text.strip())
+            except TimeoutError:
+                logger.warning("Batch STT timed out")
+        elif objects.local_flush_event is not None:
+            # Streaming mode: wait for final transcription from hook
+            objects.local_flush_event.clear()
+            try:
+                await asyncio.wait_for(objects.local_flush_event.wait(), timeout=3.0)
+            except TimeoutError:
+                logger.info("No final transcription received within timeout")
 
-    def _cleanup_local(self) -> None:
-        """Snapshot and clear local STT state, schedule async cleanup."""
-        snap = (self._kit, self._channel, self._local_backend, self._local_session)
-        self._kit = None
-        self._channel = None
-        self._local_provider = None
-        self._local_backend = None
-        self._local_session = None
-        self._local_flush_event = None
-        self._batch_mode = False
-        if any(snap):
-            asyncio.ensure_future(self._cleanup_local_snapshot(*snap))
-
-    async def _cleanup_local_snapshot(
-        self, kit: Any, channel: Any, backend: Any, session: Any
-    ) -> None:
-        """Clean up local STT objects without touching self._."""
-        try:
-            if channel and session:
-                try:
-                    channel.unbind_session(session)
-                except Exception:
-                    pass
-            if backend and session:
-                try:
-                    await backend.disconnect(session)
-                except Exception:
-                    pass
-            if kit:
-                try:
-                    await kit.close()
-                except Exception:
-                    pass
-        except Exception:
-            logger.exception("Error during local STT cleanup")
-
-    async def _commit_and_wait(self) -> None:
+    async def _commit_and_wait(self, objects: _SessionObjects) -> None:
         """Send input_audio_buffer.commit and wait for the transcription."""
-        if self._provider is None or self._session is None:
+        if objects.provider is None or objects.session is None:
             return
 
         self._transcription_event = asyncio.Event()
@@ -264,7 +277,9 @@ class STTEngine(DictationSessionMixin, QObject):
             self._transcription_event.set()
 
         try:
-            await self._provider.send_event(self._session, {"type": "input_audio_buffer.commit"})
+            await objects.provider.send_event(
+                objects.session, {"type": "input_audio_buffer.commit"}
+            )
             logger.info("Sent input_audio_buffer.commit, waiting for transcription...")
         except Exception:
             logger.exception("Error sending audio buffer commit")
@@ -279,41 +294,69 @@ class STTEngine(DictationSessionMixin, QObject):
         finally:
             self._transcription_event = None
 
-    async def _cleanup_snapshot(
-        self,
-        kit: Any,
-        channel: Any,
-        session: Any,
-        transport: Any,
-    ) -> None:
-        """Clean up a previous session's objects without touching self._."""
+    # -- teardown --------------------------------------------------------------
+
+    def _take_session(self) -> _SessionObjects:
+        """Detach the current session's objects so a new one starts clean."""
+        objects = _SessionObjects(
+            kit=self._kit,
+            channel=self._channel,
+            session=self._session,
+            provider=self._provider,
+            transport=self._transport,
+            local_provider=self._local_provider,
+            local_backend=self._local_backend,
+            local_session=self._local_session,
+            local_flush_event=self._local_flush_event,
+            batch_mode=self._batch_mode,
+        )
+        self._kit = self._channel = self._session = None
+        self._provider = self._transport = None
+        self._local_provider = self._local_backend = self._local_session = None
+        self._local_flush_event = None
+        self._batch_mode = False
+        return objects
+
+    def _dispose(self, objects: _SessionObjects) -> None:
+        """Close *objects* in the background — cleanup is slow."""
+        if not objects.empty:
+            asyncio.ensure_future(self._close_session(objects))
+
+    def _discard_session(self) -> None:
+        """Tear down whatever a failed start managed to open."""
+        self._dispose(self._take_session())
+
+    async def _close_session(self, objects: _SessionObjects) -> None:
+        """Clean up a detached session without touching ``self``."""
         try:
-            if channel and session:
+            if objects.is_local:
+                await self._close_local_session(objects)
+            elif objects.channel and objects.session:
                 try:
-                    await channel.end_session(session)
+                    await objects.channel.end_session(objects.session)
                 except Exception:
                     pass
-            if kit:
+            if objects.kit:
                 try:
-                    await kit.close()
+                    await objects.kit.close()
                 except Exception:
                     pass
         except Exception:
             logger.exception("Error during STT cleanup")
 
-    async def _cleanup(self) -> None:
-        """Cleanup using self._ — only used on start failure."""
-        await self._cleanup_snapshot(
-            self._kit,
-            self._channel,
-            self._session,
-            self._transport,
-        )
-        self._kit = None
-        self._channel = None
-        self._session = None
-        self._provider = None
-        self._transport = None
+    @staticmethod
+    async def _close_local_session(objects: _SessionObjects) -> None:
+        channel, backend, session = objects.channel, objects.local_backend, objects.local_session
+        if channel and session:
+            try:
+                channel.unbind_session(session)
+            except Exception:
+                pass
+        if backend and session:
+            try:
+                await backend.disconnect(session)
+            except Exception:
+                pass
 
     # -- paste -----------------------------------------------------------------
 
