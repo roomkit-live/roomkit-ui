@@ -16,12 +16,14 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 # `--extra all` is load-bearing: the base install is core-only, and a bare
-# `uv sync` would bundle an app with no AI backend at all.  It leaves out
-# qwen3-tts, neutts and smart-turn, which pin conflicting transformers
-# versions, and pocket-tts; qwen3-tts, neutts and pocket-tts pull GBs of torch.
+# `uv sync` would bundle an app with no AI backend at all.  smart-turn is
+# added on top (onnxruntime + transformers, no torch); it excludes qwen3-tts
+# and neutts (conflicting transformers pins), which stay out with pocket-tts —
+# the three pull GBs of torch.  transformers loads WhisperFeatureExtractor
+# lazily, hence its modules among the hidden imports below.
 echo "==> Installing dependencies..."
 if command -v uv &>/dev/null; then
-    uv sync --extra all
+    uv sync --extra all --extra smart-turn
     uv pip install pyinstaller
 else
     pip install -e ".[dev]"
@@ -73,6 +75,9 @@ uv run pyinstaller \
     --collect-binaries=onnxruntime \
     --hidden-import=onnxruntime \
     --hidden-import=onnxruntime.capi._pybind_state \
+    --hidden-import=transformers.models.whisper.feature_extraction_whisper \
+    --hidden-import=transformers.feature_extraction_sequence_utils \
+    --hidden-import=transformers.audio_utils \
     --hidden-import=pynput \
     --hidden-import=pynput.keyboard \
     --hidden-import=pynput.keyboard._darwin \

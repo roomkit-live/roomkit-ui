@@ -110,13 +110,13 @@ jobs:
         continue-on-error: true
 
       # `--extra all` is load-bearing: the base install is now core-only, and a
-      # bare `uv sync` would ship a bundle with no providers at all.  It leaves
-      # out qwen3-tts, neutts and smart-turn, which pin conflicting transformers
-      # versions (see [tool.uv].conflicts in pyproject.toml), and pocket-tts;
-      # qwen3-tts, neutts and pocket-tts would add several GB of torch.
+      # bare `uv sync` would ship a bundle with no providers at all.  smart-turn
+      # is added on top (no torch); it excludes qwen3-tts and neutts (conflicting
+      # transformers pins, see [tool.uv].conflicts), which stay out with
+      # pocket-tts — the three would add several GB of torch.
       - name: Install Python dependencies
         run: |
-          uv sync --extra all
+          uv sync --extra all --extra smart-turn
           uv pip install pyinstaller Pillow cairosvg
 
       # Generate app icons from SVG
@@ -173,6 +173,9 @@ jobs:
             --collect-binaries=onnxruntime \
             --hidden-import=onnxruntime \
             --hidden-import=onnxruntime.capi._pybind_state \
+            --hidden-import=transformers.models.whisper.feature_extraction_whisper \
+            --hidden-import=transformers.feature_extraction_sequence_utils \
+            --hidden-import=transformers.audio_utils \
             --hidden-import=pynput \
             --hidden-import=pynput.keyboard \
             --hidden-import=pynput.keyboard._darwin \
@@ -281,6 +284,9 @@ jobs:
             "--collect-binaries=onnxruntime",
             "--hidden-import=onnxruntime",
             "--hidden-import=onnxruntime.capi._pybind_state",
+            "--hidden-import=transformers.models.whisper.feature_extraction_whisper",
+            "--hidden-import=transformers.feature_extraction_sequence_utils",
+            "--hidden-import=transformers.audio_utils",
             "--hidden-import=pynput",
             "--hidden-import=pynput.keyboard",
             "--hidden-import=pynput.keyboard._darwin",
