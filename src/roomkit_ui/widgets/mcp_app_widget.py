@@ -410,12 +410,22 @@ class MCPAppWidget(QFrame):
         self._layout.addWidget(label)
 
     def _setup_webengine(self) -> None:
-        from roomkit_ui.mcp_app_bridge import MCPAppBridge
-
         logger.debug("MCPAppWidget: setting up QWebEngine for %r", self._tool_name)
 
-        # Off-the-record profile (no persistent storage)
-        profile = QWebEngineProfile(self)
+        # Off-the-record profile (no persistent storage), one per widget so no
+        # two MCP Apps share storage — they all live on the same origin.
+        # Parented last: Qt deletes children in the order they were added, and
+        # a profile added before its page went first ("Release of profile
+        # requested but WebEnginePage still not deleted", and possible crashes).
+        profile = QWebEngineProfile()
+        try:
+            self._setup_page_and_view(profile)
+        finally:
+            profile.setParent(self)
+
+    def _setup_page_and_view(self, profile: QWebEngineProfile) -> None:
+        from roomkit_ui.mcp_app_bridge import MCPAppBridge
+
         profile.setHttpCacheType(QWebEngineProfile.MemoryHttpCache)
         profile.setPersistentCookiesPolicy(QWebEngineProfile.NoPersistentCookies)
         self._request_interceptor = _MCPAppRequestInterceptor(self)
