@@ -83,6 +83,57 @@ async def test_recap_formats_roles_dates_and_truncates():
     assert recap.count("\n- ") == 2  # the empty event is dropped
 
 
+def _stored(text, *, channel, metadata, when="2026-08-01 10:00"):
+    return SimpleNamespace(
+        content=SimpleNamespace(body=text),
+        metadata=metadata,
+        source=SimpleNamespace(channel_id=channel),
+        created_at=datetime.strptime(when, "%Y-%m-%d %H:%M").replace(tzinfo=UTC),
+    )
+
+
+async def test_recap_leaves_out_answers_nobody_heard_and_marks_cut_ones():
+    events = [
+        _stored("what's the weather", channel="voice", metadata={}),
+        # The user went on talking before this one played (roomkit 0.89).
+        _stored(
+            "Sunny all day.",
+            channel="ai",
+            metadata={"cancelled": True, "cancellation_reason": "superseded"},
+        ),
+        # Cut off by a barge-in, partly heard.
+        _stored("Tomorrow it will rain in", channel="ai", metadata={"cancelled": True}),
+        # The voice channel's record of what was playing when the user cut in.
+        _stored(
+            "Tomorrow it will rain in the morning.",
+            channel="voice",
+            metadata={"interrupted": True, "answer_channel_id": "ai", "played_ms": 900},
+        ),
+    ]
+
+    recap = await memory_recap(_kit(_FakeStore(events=events)))
+
+    assert "Sunny all day." not in recap
+    assert "user: what's the weather" in recap
+    assert "assistant (interrupted): Tomorrow it will rain in" in recap
+    assert "assistant (interrupted): Tomorrow it will rain in the morning." in recap
+    assert "user: Tomorrow" not in recap
+
+
+async def test_recall_labels_a_cut_answer_as_the_assistant_and_skips_unheard_ones():
+    hits = [
+        _stored(
+            "It will rain.",
+            channel="voice",
+            metadata={"interrupted": True, "answer_channel_id": "ai"},
+        ),
+        _stored("Sunny.", channel="ai", metadata={"cancellation_reason": "superseded"}),
+    ]
+    out = json.loads(await recall_conversations(_kit(_FakeStore(hits=hits)), {"query": "rain"}))
+
+    assert [r["speaker"] for r in out["results"]] == ["assistant (interrupted)"]
+
+
 async def test_recap_empty_history_is_empty_string():
     assert await memory_recap(_kit(_FakeStore())) == ""
 

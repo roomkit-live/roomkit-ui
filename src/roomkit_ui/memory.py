@@ -115,10 +115,19 @@ async def ensure_room(kit: Any) -> None:
         await kit.create_room(room_id=ROOM_ID)
 
 
+def _event_metadata(event: Any) -> dict:
+    return getattr(event, "metadata", None) or {}
+
+
 def _event_role(event: Any) -> str:
-    role = (event.metadata or {}).get("role") if hasattr(event, "metadata") else None
+    metadata = _event_metadata(event)
+    role = metadata.get("role")
     if role:
         return str(role)
+    # A barge-in's record of the agent's cut answer (roomkit, RFC §12.3.13):
+    # the voice channel writes it, but the words are the agent's.
+    if metadata.get("interrupted") is True and metadata.get("answer_channel_id"):
+        return "assistant"
     source = getattr(event, "source", None)
     if source is not None and getattr(source, "channel_id", "") == "ai":
         return "assistant"
@@ -127,6 +136,26 @@ def _event_role(event: Any) -> str:
 
 def _event_text(event: Any) -> str:
     return str(getattr(event.content, "body", "") or "")
+
+
+def _recap_speaker(event: Any) -> str | None:
+    """Who said *event* in the recap, or None when it was never heard.
+
+    roomkit stores an answer the user talked over before it played as
+    ``cancellation_reason == SUPERSEDED`` (0.89): nobody heard it, and its own
+    AI context skips it — so does the recap.  An answer cut off by a barge-in
+    (``cancelled``, or the voice channel's ``interrupted`` record) was partly
+    heard: kept, and said to be cut.
+    """
+    from roomkit import SUPERSEDED
+
+    metadata = _event_metadata(event)
+    if metadata.get("cancellation_reason") == SUPERSEDED:
+        return None
+    role = _event_role(event)
+    if metadata.get("cancelled") is True or metadata.get("interrupted") is True:
+        return f"{role} (interrupted)"
+    return role
 
 
 async def memory_recap(kit: Any, *, limit: int = 14, max_line_chars: int = 200) -> str:
@@ -143,12 +172,13 @@ async def memory_recap(kit: Any, *, limit: int = 14, max_line_chars: int = 200) 
     lines = []
     for event in events:
         text = _event_text(event).strip()
-        if not text:
+        speaker = _recap_speaker(event)
+        if not text or speaker is None:
             continue
         if len(text) > max_line_chars:
             text = text[: max_line_chars - 1] + "…"
         stamp = event.created_at.strftime("%Y-%m-%d %H:%M")
-        lines.append(f"- [{stamp}] {_event_role(event)}: {text}")
+        lines.append(f"- [{stamp}] {speaker}: {text}")
     if not lines:
         return ""
     joined = "\n".join(lines)
@@ -178,10 +208,11 @@ async def recall_conversations(kit: Any, arguments: dict) -> str:
     results = [
         {
             "when": event.created_at.strftime("%Y-%m-%d %H:%M"),
-            "speaker": _event_role(event),
+            "speaker": speaker,
             "text": _event_text(event),
         }
         for event in events
+        if (speaker := _recap_speaker(event)) is not None
     ]
     if not results:
         return json.dumps({"results": [], "note": "No past conversation matches this query."})
