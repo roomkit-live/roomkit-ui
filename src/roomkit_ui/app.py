@@ -173,6 +173,12 @@ def _prewarm_webengine() -> None:
     Creating the first QWebEngineView otherwise freezes the UI; loading a
     blank page on a throwaway QWebEnginePage runs the full init path.
     """
+    from roomkit_ui.features import unavailable_reason
+
+    if unavailable_reason("mcp-apps") is not None:
+        # Not installed: MCP Apps show as plain tool pills, nothing to warm.
+        logging.getLogger(__name__).debug("WebEngine prewarm skipped: no mcp-apps extra")
+        return
     try:
         from PySide6.QtWebEngineCore import QWebEnginePage
 
