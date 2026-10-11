@@ -239,6 +239,6 @@ QT_QPA_PLATFORM=offscreen uv run pytest -q
 | 6 | Repeated stylesheet f-strings (~200 `setStyleSheet` calls) | `widgets/` | Shared style helpers per pattern |
 | 7 | `cleanup.py` depends on qasync name-mangled internals | `cleanup.py` | Re-verify on every qasync upgrade; upstream a fix |
 | 8 | MCP stdio and CLI tool execution trust is user-configured | `mcp_manager.py`, `cli_tools.py` | Consider per-call confirmation for sensitive tools |
-| 9 | Unused mypy override sections (Quartz, sherpa_onnx, sounddevice, qasync now ship types) | `pyproject.toml` | Prune on next config pass |
+| 9 | `ignore_missing_imports` overrides for packages that ship `py.typed` (roomkit, mcp, markdown_it) — moot now that mypy runs in the project environment | `pyproject.toml` | Prune on next config pass |
 | 10 | Realtime sessions cannot run diarization (roomkit 0.96.1 forwards no speaker change from `RealtimeVoiceChannel`) | `engine_realtime.py` | Bring it back once roomkit reports pipeline speaker changes and forwards pipeline audio at the provider's rate |
 | 11 | Frozen builds: roomkit spawns `llama-server` with the app's environment, PyInstaller's library path included | `providers/llamacpp.py` | Fix upstream in roomkit's server spawn |
