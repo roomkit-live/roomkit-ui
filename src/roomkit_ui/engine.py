@@ -545,7 +545,7 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
             try:
                 self._diarization.close()
             except Exception:
-                pass
+                logger.debug("cleanup: diarization close failed", exc_info=True)
         self._forget_session()
         await self._finalize_event_loop()
 

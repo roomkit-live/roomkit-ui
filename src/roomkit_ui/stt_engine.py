@@ -324,12 +324,12 @@ class STTEngine(DictationSessionMixin, QObject):
                 try:
                     await objects.channel.end_session(objects.session)
                 except Exception:
-                    pass
+                    logger.debug("dictation teardown: end_session failed", exc_info=True)
             if objects.kit:
                 try:
                     await objects.kit.close()
                 except Exception:
-                    pass
+                    logger.debug("dictation teardown: kit.close() failed", exc_info=True)
         except Exception:
             logger.exception("Error during STT cleanup")
 
@@ -340,12 +340,12 @@ class STTEngine(DictationSessionMixin, QObject):
             try:
                 channel.unbind_session(session)
             except Exception:
-                pass
+                logger.debug("dictation teardown: unbind_session failed", exc_info=True)
         if backend and session:
             try:
                 await backend.disconnect(session)
             except Exception:
-                pass
+                logger.debug("dictation teardown: backend.disconnect failed", exc_info=True)
 
     # -- paste -----------------------------------------------------------------
 

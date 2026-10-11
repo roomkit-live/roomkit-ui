@@ -235,10 +235,8 @@ QT_QPA_PLATFORM=offscreen uv run pytest -q
 | 2 | GitHub release-asset models publish no digest — size-checked only | `model_download.py` (GTCRN, speaker models) | Pin SHA-256 per asset in the catalog |
 | 3 | SecretStore can fall back to QSettings when no OS keyring backend is available | `secret_store.py`, `settings_secrets.py`, `mcp_auth.py` | Surface backend status in Settings and docs |
 | 4 | Largest modules: `realtime_section.py` (~750 l), `engine.py` (~660 l), `engine_vc.py` (~570 l), `mcp_page.py` (~540 l), `models_page.py` (~530 l), `audio_debug_page.py` (~510 l) | - | Split by responsibility when they next grow |
-| 5 | Silent `except Exception: pass` beyond Qt-emit guards | `stt_engine.py` (dictation teardown), `engine.py` (diarization close) | Log at DEBUG instead of `pass` |
-| 6 | Repeated stylesheet f-strings (~200 `setStyleSheet` calls) | `widgets/` | Shared style helpers per pattern |
-| 7 | `cleanup.py` depends on qasync name-mangled internals | `cleanup.py` | Re-verify on every qasync upgrade; upstream a fix |
-| 8 | MCP stdio and CLI tool execution trust is user-configured | `mcp_manager.py`, `cli_tools.py` | Consider per-call confirmation for sensitive tools |
-| 9 | `ignore_missing_imports` overrides for packages that ship `py.typed` (roomkit, mcp, markdown_it) — moot now that mypy runs in the project environment | `pyproject.toml` | Prune on next config pass |
-| 10 | Realtime sessions cannot run diarization (roomkit 0.96.1 forwards no speaker change from `RealtimeVoiceChannel`) | `engine_realtime.py` | Bring it back once roomkit reports pipeline speaker changes and forwards pipeline audio at the provider's rate |
-| 11 | Frozen builds: roomkit spawns `llama-server` with the app's environment, PyInstaller's library path included | `providers/llamacpp.py` | Fix upstream in roomkit's server spawn |
+| 5 | Repeated stylesheet f-strings (~200 `setStyleSheet` calls) | `widgets/` | Shared style helpers per pattern |
+| 6 | `cleanup.py` depends on qasync name-mangled internals | `cleanup.py` | Re-verify on every qasync upgrade; upstream a fix |
+| 7 | MCP stdio and CLI tool execution trust is user-configured | `mcp_manager.py`, `cli_tools.py` | Consider per-call confirmation for sensitive tools |
+| 8 | Realtime sessions cannot run diarization (roomkit 0.96.1 forwards no speaker change from `RealtimeVoiceChannel`) | `engine_realtime.py` | Bring it back once roomkit reports pipeline speaker changes and forwards pipeline audio at the provider's rate |
+| 9 | Frozen builds: roomkit spawns `llama-server` with the app's environment, PyInstaller's library path included | `providers/llamacpp.py` | Fix upstream in roomkit's server spawn |
