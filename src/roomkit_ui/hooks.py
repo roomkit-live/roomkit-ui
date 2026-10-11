@@ -6,6 +6,7 @@ from typing import Any
 
 from roomkit_ui.engine_state import EngineState
 from roomkit_ui.engine_vc_helpers import LOCAL_TOOL_REFUSAL
+from roomkit_ui.speaker_naming import labelled_turn
 
 
 def register_audio_hooks(kit: Any, engine: Any) -> None:
@@ -69,6 +70,10 @@ def _register_vc_user_hooks(kit: Any, engine: Any) -> None:
     @kit.hook(HookTrigger.ON_TRANSCRIPTION, HookExecution.SYNC)
     async def _on_user_transcription(event, context):
         from roomkit import HookResult
+
+        if engine._speakers is not None:
+            # The STT labels the voices itself (Muse): speaker_naming names them.
+            return labelled_turn(engine, event)
 
         # roomkit passes a TranscriptionEvent (with .text) to VC-mode
         # ON_TRANSCRIPTION hooks, not the raw string it used to hand them.

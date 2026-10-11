@@ -47,6 +47,7 @@ class FakeEngine(QObject):
         self._mic_muted = False
         self._primary_speaker_mode = False
         self._primary_speaker_name = ""
+        self._speakers: Any = None
         self._partial_buffers: dict[str, str] = {}
         self._spk_rms_queue: list[float] = []
         self.chat: list[tuple[str, str, bool, str]] = []

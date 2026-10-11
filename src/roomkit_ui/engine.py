@@ -146,6 +146,8 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         self._diarization: Any = None
         self._primary_speaker_mode: bool = False
         self._primary_speaker_name: str = ""
+        # The voices the STT tells apart (Muse); None when it does not.
+        self._speakers: Any = None
         # Realtime partial transcription accumulator: Gemini/OpenAI send
         # incremental fragments, but the UI expects full accumulated text.
         self._partial_buffers: dict[str, str] = {}  # role → accumulated text
@@ -653,6 +655,7 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         self._diarization = None
         self._primary_speaker_mode = False
         self._primary_speaker_name = ""
+        self._speakers = None
         self._partial_buffers.clear()
         self._base_system_prompt = ""
 

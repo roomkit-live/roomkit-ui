@@ -41,6 +41,7 @@ from roomkit_ui.engine_vc_helpers import (
 from roomkit_ui.features import STT_PROVIDER_FEATURES, require, unavailable_reason
 from roomkit_ui.hooks import register_vc_hooks
 from roomkit_ui.providers import create_ai_provider
+from roomkit_ui.speaker_naming import PRIMARY_UNKNOWN_NOTICE, build_roster
 from roomkit_ui.toolset import ToolSet
 from roomkit_ui.tts import create_tts_provider, is_cached_tts, tts_cache_fields
 from roomkit_ui.vc_agent import build_vc_agent
@@ -81,6 +82,7 @@ class VoiceChannelMixin:
     _capture_source: Any
     _capture_since: Any
     _vc_agent: Any
+    _speakers: Any
 
     def _accumulate_usage(self, usage: dict) -> None:
         """Add one AI response's token usage to the session totals and emit.
@@ -120,6 +122,9 @@ class VoiceChannelMixin:
             # 1-2. STT + TTS providers
             stt, stt_provider_name = await self._build_stt(settings, inference_device)
             self._stt = stt
+            self._speakers = build_roster(settings)
+            if self._speakers is not None and self._speakers.primary_only:
+                self.session_notice.emit(PRIMARY_UNKNOWN_NOTICE)  # type: ignore[attr-defined]
             tts, output_sample_rate = await self._build_tts(settings, inference_device)
             self._tts = tts  # type: ignore[attr-defined]
 
@@ -201,12 +206,15 @@ class VoiceChannelMixin:
         from roomkit.voice.pipeline.config import AudioPipelineConfig
 
         vad = self._build_vc_vad(settings, stt_provider_name, inference_device)
-        diarization = setup_diarization(
-            self,
-            settings,
-            vad_available=vad is not None,
-            inference_device=inference_device,
-        )
+        # An STT that tells the voices apart (Muse) replaces the local stage.
+        diarization = None
+        if self._speakers is None:
+            diarization = setup_diarization(
+                self,
+                settings,
+                vad_available=vad is not None,
+                inference_device=inference_device,
+            )
         interruption = build_interruption(
             settings, stt_streams=bool(getattr(stt, "supports_streaming", False))
         )

@@ -128,11 +128,19 @@ _META_LANGUAGES = {
 }
 
 
+def labels_speakers(settings: dict) -> bool:
+    """Whether the session's STT tells the voices apart: Muse, with speaker
+    identification on (Settings → Speakers)."""
+    return bool(settings.get("diarization_enabled")) and settings.get("vc_stt_provider") == "meta"
+
+
 def build_meta_stt(settings: dict, emit_status: Callable[[str], None]) -> Any:
     """Meta's Muse Voice Transcribe, streaming over Meta's websocket.
 
     The model ends each turn itself (``ENDPOINTING``): a cloud STT gets no
-    pipeline VAD, so the channel streams all the audio to it.  The app's STT
+    pipeline VAD, so the channel streams all the audio to it.  With speaker
+    identification on it also labels each turn's voice (``DIARIZATION``),
+    and a change of voice ends a turn even without a pause.  The app's STT
     language becomes a bias, not a pin, and with none set the model takes
     what it hears; a language Muse does not transcribe is refused here.
     """
@@ -157,11 +165,16 @@ def build_meta_stt(settings: dict, emit_status: Callable[[str], None]) -> Any:
     ]
     config = MetaSTTConfig(
         api_key=api_key,
-        mode="ENDPOINTING",
+        mode="DIARIZATION" if labels_speakers(settings) else "ENDPOINTING",
         language_bias=[bias] if bias else [],
         keywords=[word for word in keywords if word],
     )
-    logger.info("STT: meta, language bias=%s, %d keywords", bias or "none", len(config.keywords))
+    logger.info(
+        "STT: meta, mode=%s, language bias=%s, %d keywords",
+        config.mode,
+        bias or "none",
+        len(config.keywords),
+    )
     return MetaSTTProvider(config)
 
 

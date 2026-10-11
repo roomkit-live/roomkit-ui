@@ -43,8 +43,10 @@ class _SpeakersPage(QWidget):
 
         desc = QLabel(
             "Enable speaker identification to label who is talking in the chat. "
-            "Enroll speakers by recording a 10-second voice sample. "
-            "Voice Channel mode only: realtime sessions run without it."
+            "Voice Channel mode only: realtime sessions run without it. "
+            "With Meta Muse as the STT, Muse tells the voices apart itself, live: "
+            "no speaker model, no enrolment. Otherwise the local model below matches "
+            "each voice to the speakers enrolled with a 10-second sample."
         )
         desc.setWordWrap(True)
         desc.setStyleSheet(

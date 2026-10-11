@@ -48,6 +48,7 @@ class _FakeEngine(QObject):
         self._mic_muted = False
         self._primary_speaker_mode = False
         self._primary_speaker_name = ""
+        self._speakers = None
         self._partial_buffers = {}
         self._spk_rms_queue = []
         self.emitted = []
