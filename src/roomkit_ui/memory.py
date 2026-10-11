@@ -203,18 +203,25 @@ async def memory_recap(kit: Any, *, limit: int = 14, max_line_chars: int = 200) 
 
 
 async def recall_conversations(kit: Any, arguments: dict) -> str:
-    """Handle the recall_conversations tool call. Returns a JSON string."""
+    """Handle the recall_conversations tool call. Returns a JSON string.
+
+    A refusal or failure raises (``ToolRefusedError`` / ``ToolFailedError``)
+    with the words the model should read: Gemini reads any returned body as
+    a success.
+    """
+    from roomkit import ToolFailedError, ToolRefusedError
+
     store = getattr(kit, "store", None) if kit is not None else None
     if store is None or not hasattr(store, "search_events"):
-        return json.dumps({"error": "Conversation memory is not enabled."})
+        raise ToolFailedError("Conversation memory is not enabled.")
     query = str(arguments.get("query", "")).strip()
     if not query:
-        return json.dumps({"error": "A search query is required."})
+        raise ToolRefusedError("A search query is required.")
     try:
         events = await store.search_events(query, room_id=ROOM_ID, limit=8)
-    except Exception:
+    except Exception as exc:
         logger.exception("recall_conversations search failed")
-        return json.dumps({"error": "The conversation search failed."})
+        raise ToolFailedError("The conversation search failed.") from exc
     results = [
         {
             "when": event.created_at.strftime("%Y-%m-%d %H:%M"),

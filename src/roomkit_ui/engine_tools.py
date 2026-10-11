@@ -186,9 +186,16 @@ class ToolMixin:
             pass
 
     async def _apply_attitude_by_name(self, name: str) -> str:
-        """Look up an attitude by name and apply it. Rejects unknown names."""
+        """Look up an attitude by name and apply it.
+
+        A missing or unknown name is refused (``ToolRefusedError``) with the
+        names the model can pick from: Gemini reads any returned body as a
+        success.
+        """
+        from roomkit import ToolRefusedError
+
         if not name:
-            return json.dumps({"error": "Attitude name is required."})
+            raise ToolRefusedError("Attitude name is required.")
 
         # Look up in presets
         from roomkit_ui.constants import ATTITUDE_PRESETS
@@ -202,15 +209,9 @@ class ToolMixin:
             if att.get("name", "").lower() == name.lower():
                 return await self._apply_attitude(att["name"], att.get("text", ""))
 
-        # Not found — return error with available names
         available = [n for n, _ in ATTITUDE_PRESETS]
         available += [att["name"] for att in custom if att.get("name")]
-        return json.dumps(
-            {
-                "error": f"Unknown attitude '{name}'.",
-                "available": available,
-            }
-        )
+        raise ToolRefusedError(f"Unknown attitude '{name}'. Available: {', '.join(available)}.")
 
     def _custom_attitudes(self) -> list[dict]:
         """The user's custom attitudes, from the session's settings snapshot.

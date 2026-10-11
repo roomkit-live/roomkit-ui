@@ -51,8 +51,10 @@ async def test_a_custom_attitude_comes_from_the_session_settings(engine):
     assert engine._attitude == "Talk like a pirate."
 
 
-async def test_an_unknown_attitude_lists_the_custom_ones_too(engine):
-    result = json.loads(await engine._apply_attitude_by_name("Grumpy cat"))
+async def test_an_unknown_attitude_is_refused_listing_the_custom_ones_too(engine):
+    from roomkit import ToolRefusedError
 
-    assert "error" in result
-    assert "Pirate" in result["available"]
+    with pytest.raises(ToolRefusedError, match="Unknown attitude 'Grumpy cat'") as refused:
+        await engine._apply_attitude_by_name("Grumpy cat")
+
+    assert "Pirate" in refused.value.message

@@ -166,13 +166,16 @@ async def test_recall_returns_hits_as_json():
     ]
 
 
-async def test_recall_without_store_or_query_reports_legibly():
-    out = json.loads(await recall_conversations(None, {"query": "x"}))
-    assert "error" in out
-    out = json.loads(await recall_conversations(_kit(object()), {"query": "x"}))
-    assert "error" in out
-    out = json.loads(await recall_conversations(_kit(_FakeStore()), {"query": " "}))
-    assert "error" in out
+async def test_recall_without_store_or_query_raises_what_the_model_reads():
+    # Raised, not returned: Gemini reads any returned body as a success.
+    from roomkit import ToolFailedError, ToolRefusedError
+
+    with pytest.raises(ToolFailedError, match="not enabled"):
+        await recall_conversations(None, {"query": "x"})
+    with pytest.raises(ToolFailedError, match="not enabled"):
+        await recall_conversations(_kit(object()), {"query": "x"})
+    with pytest.raises(ToolRefusedError, match="query is required"):
+        await recall_conversations(_kit(_FakeStore()), {"query": " "})
 
 
 async def test_recall_no_match_says_so():
