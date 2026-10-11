@@ -99,6 +99,7 @@ through an extra, so you install what you use.
 | `elevenlabs` | ElevenLabs Conversational AI and TTS |
 | `gradium` | Gradium STT and TTS |
 | `azure-speech` | Microsoft Foundry speech: Azure MAI-Transcribe (STT) and Azure Speech TTS with MAI-Voice |
+| `typesafe` | TypeSafe's Jev, one of the classifiers that decide when the Voice Channel assistant speaks |
 | `local-voice` | Offline speech: sherpa-onnx STT, Piper TTS, VAD, speaker diarization |
 | `llamacpp` | llama.cpp, a local GGUF model; roomkit fetches `llama-server` and the model at first use |
 | `dictation` | Global-hotkey dictation (implies `local-voice`) |
@@ -108,7 +109,7 @@ through an extra, so you install what you use.
 | `qwen3-tts`, `neutts` | Voice cloning — see the note below |
 | `pocket-tts` | Kyutai's Pocket TTS: local, CPU-friendly, seven languages, voice cloning from a clip |
 | `smart-turn` | Smart Turn detector for the Voice Channel (end-of-turn from the audio) |
-| `cloud` | All seven cloud backends at once (`anthropic` to `azure-speech`) |
+| `cloud` | All eight cloud backends at once (`anthropic` to `typesafe`) |
 | `all` | Everything above except `qwen3-tts`, `neutts`, `pocket-tts` and `smart-turn` |
 
 ```bash

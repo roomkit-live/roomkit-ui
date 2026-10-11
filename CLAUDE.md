@@ -38,6 +38,8 @@ src/roomkit_ui/
 ├── engine_state.py      # EngineState StrEnum — leaf
 ├── engine_vc.py         # Voice Channel start (STT → LLM → TTS) — mixin
 ├── engine_vc_helpers.py # Stateless VC builders: cloud STT, barge-in, TTS filter, Smart Turn, turn VAD, local LLM
+├── vc_agent.py          # VC agent from the Agent tab: speak policy (classifier), thinker, background flag
+├── agent_hooks.py       # VC agent chat lines: quiet turns, background tasks started/ended; running-task count
 ├── engine_realtime.py   # Realtime start: media per attempt, no-MCP retry, channel — mixin
 ├── realtime_providers.py # Realtime builders + config (Gemini, OpenAI, GPT-Live, Deepgram, ElevenLabs, xAI), transport_audio_profile
 ├── engine_audio.py      # Pipeline builders: AEC, denoiser, VAD, diarization, recorder, DSP_THREADS, shared-mic rate
@@ -108,7 +110,7 @@ src/roomkit_ui/
                            #  speakers, dictation, wakeword, models, mcp, cli_tools, audio_debug, telemetry,
                            #  about, plus skills/ (page, my_skills, marketplace, widgets). AI tab parts:
                            #  realtime_section, realtime_catalogs, realtime_gemini_live, realtime_gpt_live,
-                           #  vc_local_fields, vc_cloud_fields, vc_azure_fields; also models_widgets,
+                           #  vc_local_fields, vc_cloud_fields, vc_azure_fields, vc_agent_fields; also models_widgets,
                            #  speakers_dialogs, feature_hints
 ```
 
@@ -148,6 +150,8 @@ Every AI backend lives behind an extra declared in `pyproject.toml` AND mirrored
 - MCP session retry (realtime): retry with `ToolSet.without_mcp` (builtin + CLI) only when the provider refused the session config (`_refuses_session_config`: a ValueError, Gemini Live's 1007, Deepgram's "rejected Settings") — never on a bad key, the network or a quota. Each attempt runs on freshly built media (`_build_realtime_media`): a failed attempt's `kit.close()` closed the provider, the transport and its AEC. Only MCP is shed (server-supplied schemas). Trigger on `ToolSet.has_mcp`, never on a tool-count comparison
 - Every roomkit channel built with tools takes `**toolset.channel_options()`: since 0.95 roomkit bounds each tool call itself (10 s realtime, 30 s AIChannel) and Tool Search hides tools behind `find_tools` once the catalogue is large. The app keeps its own bounds (MCP 60 s, per-CLI-tool timeout) and pins the built-ins. roomkit also refuses a tool name declared twice when it builds a realtime channel, so `_setup_tools` drops MCP tools named like a built-in/CLI tool or outside `[A-Za-z0-9_-]{1,64}` and says so in the chat
 - A tool that fails raises `roomkit.ToolFailedError` (it ran and failed) or `ToolRefusedError` (nothing ran) — since roomkit 0.95 Gemini reads any returned body as a success. Two envelopes stay: `{"error": "Unknown tool"}` (roomkit reads it as "not served here") and the `{"error": ...}` an MCP App widget receives before the engine re-raises
+- The Voice Channel's tools reach the AIChannel through `ToolSet.turn_config()` (its `config_provider`), never the binding's `metadata={"tools": ...}`: a background task runs the agent in a room attached without that metadata. Not the constructor's `tools=` either: it raises when a host tool is named like a skill or Tool Search tool (`list_tools`, `activate_skill`), where a turn config's tools are left out with a warning
+- VC agent add-ons (`vc_agent.py`) never fail a start: one that cannot run is left out and named in the chat. roomkit refuses a thinker without a speak policy, and closes neither the classifier nor the thinker — `Engine._close_vc_agent()` does, after `kit.close()`
 - CLI tool schemas are hand-authored and never pass through `_clean_schema()` — so do NOT add `additionalProperties` to them, nothing would strip it and Gemini rejects it
 - Tool names reaching a provider must be `[A-Za-z0-9_-]{1,64}` — no spaces, no dots. Don't push that rule onto the user: `cli_tools_config.slugify_tool_name()` derives it ("GitHub CLI" → `github_cli`) and the settings page shows the result. A declaration the model never receives must surface in the chat, not only in a log
 - `cli_help.parse_subcommands()` covers Click/Typer, Rich boxes and Cobra (`gh` uses colon-suffixed names across several `* COMMANDS` sections). It is best-effort by design — a CLI with bespoke help (`git`, `brew`) seeds depth 1 and the model explores via `--help` through the tool. Test any parser change against `gh`, `kubectl`, `docker` AND a Rich/Typer CLI: the two ecosystems break each other

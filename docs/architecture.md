@@ -90,8 +90,9 @@ graph TB
 | **Session builders** | `engine_vc_helpers.py`, `realtime_providers.py`, `engine_audio.py` | Stateless builders: VC STT/LLM/barge-in/TTS filter/Smart Turn; realtime provider configs and per-provider audio wiring; AEC/denoiser/VAD/diarization/recorder pipelines |
 | **Tools** | `toolset.py`, `builtin_tools.py`, `cli_tools.py`, `cli_exec.py`, `cli_help.py` | Tool grouping by source, channel options, built-ins, CLI tools seeded from `--help` |
 | **Hooks** | `hooks.py` | RoomKit hook registration: transcriptions, audio levels, per-utterance speaker (VC), primary-speaker gating (VC), turn and voice errors |
+| **VC agent** | `vc_agent.py`, `agent_hooks.py`, `widgets/settings/vc_agent_fields.py` | The Voice Channel agent's speak policy, thinker and background work, built from the Agent tab; their chat lines and the running-task count |
 | **Watchdog** | `watchdog.py` | Detects unanswered speech (8 s, 90 s when tools are pending) and nudges the model |
-| **Idle hang-up** | `idle_hangup.py` | Ends a session once the conversation goes quiet (never mid-tool-call or while the assistant speaks) |
+| **Idle hang-up** | `idle_hangup.py` | Ends a session once the conversation goes quiet (never mid-tool-call, while a background task runs or while the assistant speaks) |
 | **Cleanup** | `cleanup.py` | Purge of orphaned qasync/anyio timers and of the FD notifiers a session registered (prevents 100 % CPU) |
 | **Memory** | `memory.py` | One durable room in a SQLite store (`conversations.db`, mode 0600), a recap for realtime sessions, the `recall_conversations` tool |
 | **Wake word** | `wakeword/`, `widgets/wakeword_wizard.py` | Shared microphone lifetime, VAD-gated capture, whisper-encoder embeddings matched by DTW against an enrolled fingerprint |

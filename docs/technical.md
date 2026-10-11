@@ -29,6 +29,7 @@ src/roomkit_ui/
 ├── app.py, features.py         # Startup (graphics env, --doctor, qasync); optional-backend registry
 ├── engine.py, engine_state.py  # Engine shell: start task / stop, state machine, model cache, teardown
 ├── engine_vc.py, engine_vc_helpers.py          # Voice Channel mode (mixin + stateless builders)
+├── vc_agent.py, agent_hooks.py                 # VC agent: speak policy, thinker, background work + chat lines
 ├── engine_realtime.py, realtime_providers.py   # Realtime mode (mixin + provider builders, audio wiring)
 ├── engine_audio.py             # Pipeline builders: AEC, denoise, VAD, diarization, recording, DSP pool
 ├── engine_callbacks.py, engine_tools.py, toolset.py, builtin_tools.py   # Callbacks, tool dispatch
@@ -116,6 +117,24 @@ takes `toolset.channel_options()`, which turns off roomkit's own per-call timeou
 bounds MCP calls at 60 s and each CLI tool at its own timeout) and pins the built-ins
 against Tool Search. A failed call raises `roomkit.ToolFailedError` or `ToolRefusedError`,
 which every provider reads as a failure — Gemini reads any returned body as a success.
+
+The Voice Channel's AIChannel gets its tools from `ToolSet.turn_config()`, its
+`config_provider`, not from the room binding's metadata: the metadata reaches only the room
+it was attached with, and a background task runs the agent in a room of its own. The
+constructor's `tools=` would reach every room too, but it refuses the channel when a host
+tool is named like one the channel serves itself (skills, Tool Search); a turn config's
+tools are left out with a warning instead.
+
+### Voice Channel agent
+
+`vc_agent.build_vc_agent()` turns the Agent tab's settings into the AIChannel's
+`speak_policy` (`ClassifierSpeakPolicy` on `OpenAIClassifier`, `JevClassifier` or
+`LLMClassifier`) and `thinker` (`LLMThinker` on the conversation model), and a `background`
+flag the engine turns into `kit.setup_background(ai_channel)`. roomkit closes neither the
+classifier nor the thinker: `Engine._close_vc_agent()` does, after the kit.
+`agent_hooks.py` turns `ON_SPEAK_DECISION`, `ON_TASK_DELEGATED` and `ON_TASK_COMPLETED`
+into chat lines and logs `ON_THOUGHT`; it keeps `Engine._background_tasks`, which the idle
+hang-up waits on.
 
 ### No private-API reaches
 

@@ -91,6 +91,32 @@ kept, never replaced. Agent Skills reach realtime sessions as well as Voice Chan
   or STT failure, and a local model without tool support each show a line in the chat. A
   transient provider refusal is retried twice before that.
 
+### Voice Channel agent (Settings → AI → Voice Channel → Agent)
+
+Three add-ons, all off by default. One that cannot run is left out of the session and the
+chat says why; none fails the start.
+
+- **Deciding when to speak** — roomkit's `ClassifierSpeakPolicy`: on each turn one
+  classifier call judges whether the speaker finished, put it off, asked for quiet or
+  spoke to the assistant, and the assistant answers, offers one short sentence, or stays
+  quiet. A quiet turn shows "Stayed quiet — <why>" in the chat. "Just listen" keeps it
+  listening until spoken to by its name (the tab's Name field, "Assistant" by default).
+  The judgments come from OpenAI Decisions (the OpenAI key), TypeSafe Jev (`typesafe`
+  extra and key) or the conversation model (one that answers under a JSON schema). Every
+  reply waits for the decision; a classifier that fails or misses roomkit's 2 s bound lets
+  the assistant answer, said once in the chat.
+- **Thinking while listening** — needs a speaking decision. On the turns the assistant
+  stays quiet, the conversation model rewrites its thought (what is said, what it could
+  add); with something worth saying it may offer it. Thoughts go to the log only.
+- **Background work** — the assistant gets roomkit's `work_in_background` tool: a long
+  request runs as a task, in a room of its own, with the same model and tools, while the
+  conversation goes on; the result comes back as a turn it speaks. The chat shows when a
+  task starts and how it ended, and the idle hang-up waits for running tasks. Needs a model
+  given tools (not a local model set without tool use).
+
+The session's cost counts the background task's turns (they are AI responses), not the
+classifier's or the thinker's calls.
+
 ### Wake word
 
 Settings → Wake Word. Detection runs locally and continuously; nothing leaves the
@@ -273,6 +299,9 @@ sequenceDiagram
 - Realtime mode requires a cloud provider; no local speech-to-speech.
 - Realtime sessions run without speaker diarization (primary-speaker gating drops the
   audio before the pipeline that would diarize it).
+- The Voice Channel agent's add-ons (speaking decision, thinking, background work) are
+  Voice Channel only: a realtime model takes its own turns. A session ended while a
+  background task runs cancels it.
 - The pre-built binaries carry Smart Turn but neither Pocket TTS, Qwen3-TTS nor NeuTTS
   (outside the `all` extra); install from source for those.
 - Azure MAI-Transcribe is not offered for dictation.
