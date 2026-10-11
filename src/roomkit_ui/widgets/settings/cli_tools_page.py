@@ -34,6 +34,7 @@ from roomkit_ui.theme import colors
 
 _OK_COLOR = "#4caf50"
 _ERR_COLOR = "#f44336"
+_WARN_COLOR = "#ff9800"
 
 
 class _CliToolsPage(QWidget):
@@ -73,6 +74,7 @@ class _CliToolsPage(QWidget):
             f"font-size: 13px; color: {c['TEXT_SECONDARY']}; background: transparent;"
         )
         list_layout.addWidget(desc)
+        list_layout.addWidget(self._grant_warning())
 
         self._tool_list = QListWidget()
         self._tool_list.setStyleSheet(
@@ -215,6 +217,27 @@ class _CliToolsPage(QWidget):
         self._seed_help_check.toggled.connect(self._sync_to_model)
         self._help_depth_spin.valueChanged.connect(self._sync_to_model)
         self._timeout_spin.valueChanged.connect(self._sync_to_model)
+
+    @staticmethod
+    def _grant_warning() -> QLabel:
+        """What declaring a CLI grants, said before anyone declares one.
+
+        The argv is never run through a shell, but the CLI itself can run
+        code: ``git -c alias.x='!sh -c …' x``, ``docker run``,
+        ``kubectl exec``, ``npm exec``. And the arguments come from the
+        model, which reads text it did not write (MCP results, skills).
+        """
+        label = QLabel(
+            "⚠ A declared CLI runs with your permissions and any arguments the "
+            "assistant chooses — nothing asks you first. Many CLIs can run "
+            "arbitrary code (git aliases, docker run, kubectl exec, npm exec), "
+            "and what the assistant reads from MCP tools or skills can steer it. "
+            "Declare only CLIs you would let it use freely, and give tokens in "
+            "Env the least access that works."
+        )
+        label.setWordWrap(True)
+        label.setStyleSheet(f"font-size: 12px; color: {_WARN_COLOR}; background: transparent;")
+        return label
 
     # -- navigation ----------------------------------------------------------
 

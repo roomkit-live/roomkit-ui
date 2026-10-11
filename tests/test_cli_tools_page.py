@@ -7,6 +7,7 @@ kept in memory — so the live sync and the settings slice are the contract.
 import json
 
 import pytest
+from PySide6.QtWidgets import QLabel
 
 from roomkit_ui.settings import load_settings, save_settings
 from roomkit_ui.widgets.settings.cli_tools_page import _CliToolsPage
@@ -137,3 +138,11 @@ def test_help_depth_hides_when_seeding_is_off(page):
 
     assert page._tools[0]["seed_help"] is False
     assert not page._help_depth_spin.isVisible()
+
+
+def test_the_page_says_what_declaring_a_cli_grants(page):
+    # The argv never meets a shell, but the CLI itself can run code, and the
+    # model choosing its arguments reads text it did not write.
+    texts = [label.text() for label in page.findChildren(QLabel)]
+
+    assert any("any arguments the assistant chooses" in t for t in texts)
