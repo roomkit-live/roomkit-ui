@@ -31,7 +31,7 @@ class _FakeKit:
 
 def _engine(sent):
     signal = SimpleNamespace(emit=lambda *args: sent.append(args))
-    return SimpleNamespace(speaker_identified=signal, _current_speaker_id="")
+    return SimpleNamespace(speaker_identified=signal)
 
 
 def _speaker_hook(engine):
@@ -58,7 +58,6 @@ async def test_a_change_without_a_score_emits_zero_confidence():
     await _speaker_hook(engine)(_event("Alice", None, source="stt"), None)
 
     assert sent == [("Alice", 0.0)]
-    assert engine._current_speaker_id == "Alice"
 
 
 async def test_a_scored_change_keeps_its_confidence():

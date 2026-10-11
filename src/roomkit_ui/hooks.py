@@ -53,36 +53,27 @@ def register_vc_hooks(kit: Any, engine: Any, *, tts_filter: Any = None) -> None:
             # A diarizing STT's label carries no score (roomkit 0.92): None,
             # which the float signal cannot carry.
             confidence = getattr(event, "confidence", None)
-            engine._current_speaker_id = speaker_id
             engine.speaker_identified.emit(speaker_id, float(confidence or 0.0))
         except Exception:
             pass
 
+    # Who said an utterance comes with its transcription: the channel runs
+    # with pipeline_speakers whenever diarization is on, and names the voice
+    # the diarization stage heard the longest over that utterance.
     @kit.hook(HookTrigger.ON_TRANSCRIPTION, HookExecution.SYNC)
     async def _on_user_transcription(event, context):
         from roomkit import HookResult
 
         # roomkit passes a TranscriptionEvent (with .text) to VC-mode
         # ON_TRANSCRIPTION hooks, not the raw string it used to hand them.
-        text = event.text
-
-        # Sticky speaker: use the best ID seen during this utterance so that
-        # a single low-score diarization segment doesn't flip to "unknown".
-        current = engine._current_speaker_id or ""
-        stored = engine._partial_speakers.get("user", "")
-        speaker = current if current and current != "unknown" else stored or current
-        engine._partial_speakers.pop("user", None)
+        text = str(event.text)
+        speaker = _utterance_speaker(event)
 
         # Primary speaker mode: only the primary speaker triggers the AI.
         # Everyone else (other enrolled speakers AND unknown voices) is blocked.
-        if (
-            engine._primary_speaker_mode
-            and engine._primary_speaker_name
-            and speaker != engine._primary_speaker_name
-        ):
-            label = speaker if speaker and speaker != "unknown" else "Unknown"
+        if not _primary_may_speak(engine, event):
             try:
-                engine.transcription.emit(str(text), "other", True, label)
+                engine.transcription.emit(text, "other", True, speaker or _UNKNOWN)
             except Exception:
                 pass
             return HookResult.block("non-primary speaker")
@@ -90,20 +81,16 @@ def register_vc_hooks(kit: Any, engine: Any, *, tts_filter: Any = None) -> None:
         # A new user turn: the next assistant sentence opens a new reply.
         engine._partial_buffers.pop("assistant", None)
         try:
-            engine.transcription.emit(str(text), "user", True, speaker)
+            engine.transcription.emit(text, "user", True, speaker)
         except Exception:
             pass
-        return HookResult.allow()
+        return _named_after_the_voice(event)
 
     @kit.hook(HookTrigger.ON_PARTIAL_TRANSCRIPTION, HookExecution.ASYNC)
     async def _on_partial_transcription(event, context):
+        # The speaker is known once the utterance ends: its final names it.
         try:
-            current = engine._current_speaker_id or ""
-            # Remember the best speaker ID seen during this utterance.
-            if current and current != "unknown":
-                engine._partial_speakers["user"] = current
-            speaker = engine._partial_speakers.get("user", "") or current
-            engine.transcription.emit(str(event.text), "user", False, speaker)
+            engine.transcription.emit(str(event.text), "user", False, "")
         except Exception:
             pass
 
@@ -204,6 +191,54 @@ def register_vc_hooks(kit: Any, engine: Any, *, tts_filter: Any = None) -> None:
             engine.session_notice.emit(_turn_error_notice(error))
         except Exception:
             pass
+
+
+_UNKNOWN = "Unknown"
+
+
+def _utterance_speaker(event: Any) -> str:
+    """Who said a voice-channel utterance, for the chat.
+
+    The enrolled name the diarization stage matched; "Unknown" for a voice it
+    matched to nobody (roomkit then names the sender "Unknown speaker"); ""
+    without diarization.
+    """
+    label = getattr(event, "speaker", None)
+    if label:
+        return str(label)
+    return _UNKNOWN if getattr(event, "sender_name", None) else ""
+
+
+def _primary_may_speak(engine: Any, event: Any) -> bool:
+    """Whether primary-speaker mode lets this utterance reach the assistant.
+
+    Only an utterance attributed to the primary speaker does.  roomkit carries
+    a name as its speaker label, which drops a leading "Speaker" word: the
+    primary's name is compared the same way.
+    """
+    if not (engine._primary_speaker_mode and engine._primary_speaker_name):
+        return True
+    from roomkit.voice.base import speaker_label
+
+    label = getattr(event, "speaker", None)
+    return label is not None and label == speaker_label(engine._primary_speaker_name)
+
+
+def _named_after_the_voice(event: Any) -> Any:
+    """Let the utterance through under the enrolled name of its voice.
+
+    roomkit names a pipeline speaker "Speaker <label>"; the room message, the
+    AI's "Name: text" attribution when several people speak, and the stored
+    conversation get "Alice" instead.
+    """
+    import dataclasses
+
+    from roomkit import HookResult
+
+    label = getattr(event, "speaker", None)
+    if not label or getattr(event, "sender_name", None) == label:
+        return HookResult.allow()
+    return HookResult.modify(dataclasses.replace(event, sender_name=label))
 
 
 def _turn_error_notice(error: str) -> str:

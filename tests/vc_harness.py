@@ -146,24 +146,21 @@ async def open_session(
     transcripts: list[str] | None = None,
     vad_events: list[VADEvent | None] | None = None,
     pipeline: dict[str, Any] | None = None,
-    voice: dict[str, Any] | None = None,
+    build_channel: Callable[..., VoiceChannel] | None = None,
     engine: FakeEngine | None = None,
     tts_filter: Any = None,
 ) -> VCSession:
-    """A connected voice session whose user turns the TokenAI answers."""
+    """A connected voice session whose user turns the TokenAI answers.
+
+    *build_channel* is called as ``(stt, tts, backend, pipeline, tts_filter)``
+    — the engine's ``_build_voice_channel`` — instead of a plain VoiceChannel.
+    """
     stt = MockSTTProvider(transcripts=transcripts or ["Hello"])
     backend = MockVoiceBackend()
     stages = {"vad": MockVADProvider(events=vad_events or utterance()), **(pipeline or {})}
     config = AudioPipelineConfig(**stages)
-    channel = VoiceChannel(
-        "voice",
-        stt=stt,
-        tts=tts,
-        backend=backend,
-        pipeline=config,
-        tts_filter=tts_filter,
-        **(voice or {}),
-    )
+    build = build_channel or _plain_channel
+    channel = build(stt, tts, backend, config, tts_filter)
     kit = RoomKit(stt=stt, voice=backend)
     kit.register_channel(channel)
     ai = TokenAI(reply)
@@ -175,6 +172,14 @@ async def open_session(
     register_vc_hooks(kit, engine, tts_filter=tts_filter)
     session = await kit.join(room.id, "voice", participant_id="user-1")
     return VCSession(kit, channel, backend, session, engine, ai)
+
+
+def _plain_channel(
+    stt: Any, tts: Any, backend: Any, pipeline: AudioPipelineConfig, tts_filter: Any
+) -> VoiceChannel:
+    return VoiceChannel(
+        "voice", stt=stt, tts=tts, backend=backend, pipeline=pipeline, tts_filter=tts_filter
+    )
 
 
 async def until(predicate: Callable[[], bool], timeout: float = 3.0) -> None:

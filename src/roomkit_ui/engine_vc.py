@@ -511,6 +511,10 @@ def _build_voice_channel(stt: Any, tts: Any, backend: Any, pipeline: Any, tts_fi
     cached models across sessions and closes TTS itself to avoid a
     double-aclose hang), so close() must not close them.  The backend is
     still closed by close().
+
+    pipeline_speakers with diarization: each transcription carries the voice
+    heard the longest over its own utterance (``speaker`` / ``sender_name``).
+    roomkit refuses it without a diarization stage, which needs the VAD.
     """
     from roomkit import VoiceChannel
 
@@ -522,6 +526,7 @@ def _build_voice_channel(stt: Any, tts: Any, backend: Any, pipeline: Any, tts_fi
         pipeline=pipeline,
         tts_filter=tts_filter,
         close_providers=False,
+        pipeline_speakers=pipeline.diarization is not None,
     )
 
 

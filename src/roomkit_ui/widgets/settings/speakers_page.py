@@ -118,7 +118,8 @@ class _SpeakersPage(QWidget):
 
         primary_desc = QLabel(
             "When enabled, only the primary speaker's voice triggers AI responses. "
-            "Other speakers' words are shown but not sent to the assistant."
+            "Other speakers' words are shown but not sent to the assistant, and so are "
+            "those of a voice nobody enrolled. Each utterance is judged on its own voice."
         )
         primary_desc.setWordWrap(True)
         primary_desc.setStyleSheet(
