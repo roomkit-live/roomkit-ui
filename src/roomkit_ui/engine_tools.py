@@ -39,6 +39,9 @@ def compose_attitude_prompt(base_prompt: str, attitude_description: str) -> str:
     return base
 
 
+_DEFAULT_SYSTEM_PROMPT = "You are a friendly voice assistant. Be concise and helpful."
+
+
 class ToolMixin:
     """Tool / attitude / paste handlers for ``Engine``.
 
@@ -62,6 +65,24 @@ class ToolMixin:
     _ai_channel: Any
     _channel: Any
     _session: Any
+
+    def _compose_session_prompt(self, settings: dict) -> str:
+        """The session's system prompt: the user's, plus the attitude section.
+
+        The user's base prompt is kept apart so set_attitude can rebuild the
+        full prompt mid-session (AIChannel.set_system_prompt in the voice
+        channel, reconfigure_session in realtime) without stripping the old
+        attitude out of it.
+        """
+        from roomkit_ui.engine_audio import resolve_attitude
+
+        self._base_system_prompt = settings.get("system_prompt", _DEFAULT_SYSTEM_PROMPT)
+        attitude = self._attitude or resolve_attitude(settings)
+        if attitude:
+            self._attitude = attitude
+            if not self._attitude_name:
+                self._attitude_name = settings.get("selected_attitude", "") or attitude
+        return compose_attitude_prompt(self._base_system_prompt, attitude)
 
     async def _handle_tool_call(
         self,

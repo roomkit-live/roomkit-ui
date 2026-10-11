@@ -58,3 +58,31 @@ async def test_an_unknown_attitude_is_refused_listing_the_custom_ones_too(engine
         await engine._apply_attitude_by_name("Grumpy cat")
 
     assert "Pirate" in refused.value.message
+
+
+# -- the session prompt, shared by both modes ---------------------------------
+
+
+def test_the_session_prompt_appends_the_selected_attitude(qapp):
+    from roomkit_ui.engine import Engine
+
+    engine = Engine()
+    prompt = engine._compose_session_prompt(
+        {
+            "system_prompt": "Be brief.",
+            "selected_attitude": "Pirate",
+            "custom_attitudes": json.dumps([{"name": "Pirate", "text": "Arr."}]),
+        }
+    )
+
+    assert prompt == "Be brief.\n\n# Attitude\nArr."
+    assert engine._base_system_prompt == "Be brief."
+    assert engine._attitude_name == "Pirate"
+
+
+def test_the_session_prompt_without_an_attitude_is_the_users(qapp):
+    from roomkit_ui.engine import Engine
+
+    engine = Engine()
+
+    assert engine._compose_session_prompt({"system_prompt": "Be brief."}) == "Be brief."

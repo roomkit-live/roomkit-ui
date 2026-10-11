@@ -22,7 +22,6 @@ from roomkit_ui.engine_audio import (
     build_recorder,
     build_telemetry,
     notify_missing_aec,
-    resolve_attitude,
     setup_diarization,
     usable_capture_source,
 )
@@ -120,21 +119,7 @@ class VoiceChannelMixin:
             from roomkit.models import RetryPolicy
             from roomkit.voice.pipeline.config import AudioPipelineConfig
 
-            base_prompt = settings.get(
-                "system_prompt",
-                "You are a friendly voice assistant. Be concise and helpful.",
-            )
-            # Cache the user's base prompt (without attitude) so the
-            # set_attitude tool can rebuild the full prompt and push it via
-            # AIChannel.set_system_prompt without reaching in to strip it.
-            self._base_system_prompt = base_prompt
-            system_prompt = base_prompt
-            attitude = self._attitude or resolve_attitude(settings)
-            if attitude:
-                system_prompt = f"{system_prompt}\n\n# Attitude\n{attitude}"
-                self._attitude = attitude
-                if not self._attitude_name:
-                    self._attitude_name = settings.get("selected_attitude", "") or attitude
+            system_prompt = self._compose_session_prompt(settings)  # type: ignore[attr-defined]
             inference_device = settings.get("inference_device", "cpu")
             aec_mode = settings.get("aec_mode", "webrtc")
             denoise_mode = settings.get("denoise", "none")

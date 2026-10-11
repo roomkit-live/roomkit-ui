@@ -23,7 +23,6 @@ from roomkit_ui.engine_audio import (
     build_debug_taps,
     build_recorder,
     notify_missing_aec,
-    resolve_attitude,
     usable_capture_source,
 )
 from roomkit_ui.engine_state import EngineState
@@ -88,21 +87,7 @@ class RealtimeMixin:
     async def _start_realtime(self, settings: dict) -> None:
         try:
             provider_name = settings.get("provider", "gemini")
-            base_prompt = settings.get(
-                "system_prompt",
-                "You are a friendly voice assistant. Be concise and helpful.",
-            )
-            # Cache the user's base prompt (without attitude) so the
-            # set_attitude tool can recompute the full prompt and push it
-            # via RealtimeVoiceChannel.reconfigure_session() mid-session.
-            self._base_system_prompt = base_prompt  # type: ignore[attr-defined]
-            system_prompt = base_prompt
-            attitude = self._attitude or resolve_attitude(settings)
-            if attitude:
-                system_prompt = f"{system_prompt}\n\n# Attitude\n{attitude}"
-                self._attitude = attitude
-                if not self._attitude_name:
-                    self._attitude_name = settings.get("selected_attitude", "") or attitude
+            system_prompt = self._compose_session_prompt(settings)  # type: ignore[attr-defined]
             # Half-duplex (Deepgram escape hatch): the mic is muted while the
             # agent speaks, so there is no echo to cancel — no AEC, and its
             # absence arms the playback gate (see _build_realtime_media).
