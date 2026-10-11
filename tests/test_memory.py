@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import json
+import os
+import stat
+import sys
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
 
+from roomkit_ui import memory
 from roomkit_ui.memory import (
     ROOM_ID,
     build_store,
@@ -59,7 +63,8 @@ def test_memory_disabled_by_setting():
     assert memory_active({"conversation_memory": False}) is False
 
 
-def test_memory_availability_follows_roomkit():
+def test_memory_availability_follows_roomkit(tmp_path, monkeypatch):
+    monkeypatch.setattr(memory, "conversations_db_path", lambda: tmp_path / "c.db")
     assert memory_active({}) is _sqlite_available()
     store = build_store({})
     assert (store is not None) is _sqlite_available()
@@ -122,3 +127,44 @@ async def test_ensure_room_survives_two_kit_lifecycles(tmp_path):
     room2 = await kit2.store.get_room(ROOM_ID)
     assert room2.created_at == room.created_at
     await kit2.close()
+
+
+def _mode(path) -> int:
+    return stat.S_IMODE(os.stat(path).st_mode)
+
+
+@pytest.mark.skipif(not _sqlite_available(), reason="installed roomkit has no SQLiteStore")
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX permission bits")
+async def test_the_history_is_created_readable_by_its_owner_only(tmp_path, monkeypatch):
+    from roomkit import RoomKit
+
+    db = tmp_path / "data" / "conversations.db"
+    monkeypatch.setattr(memory, "conversations_db_path", lambda: db)
+    old_umask = os.umask(0o022)  # the usual default: world-readable files
+    try:
+        kit = RoomKit(store=build_store({}))
+        await ensure_room(kit)  # opens the database, writes through the WAL
+        # SQLite removes -wal / -shm when the last connection closes.
+        modes = {p.name: _mode(p) for p in db.parent.iterdir()}
+        await kit.close()
+    finally:
+        os.umask(old_umask)
+
+    assert set(modes) == {"conversations.db", "conversations.db-wal", "conversations.db-shm"}
+    assert set(modes.values()) == {0o600}
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX permission bits")
+def test_an_existing_history_is_tightened_in_place(tmp_path, monkeypatch):
+    db = tmp_path / "conversations.db"
+    wal = tmp_path / "conversations.db-wal"
+    for file in (db, wal):
+        file.write_bytes(b"history")
+        os.chmod(file, 0o644)
+    monkeypatch.setattr(memory, "conversations_db_path", lambda: db)
+
+    build_store({})
+
+    assert _mode(db) == 0o600
+    assert _mode(wal) == 0o600
+    assert db.read_bytes() == b"history"  # tightened, not recreated

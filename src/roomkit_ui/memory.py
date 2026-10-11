@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -68,7 +69,29 @@ def build_store(settings: dict) -> Any | None:
     except ImportError:
         logger.info("roomkit has no SQLiteStore — conversation memory disabled")
         return None
-    return SQLiteStore(conversations_db_path())
+    path = conversations_db_path()
+    _restrict_to_owner(path)
+    return SQLiteStore(path)
+
+
+def _restrict_to_owner(path: Path) -> None:
+    """Make the conversation history readable by its owner only (0600).
+
+    Everything said in every session lands in this file; with the default
+    umask SQLite creates it world-readable.  The database is created here,
+    empty, before SQLite opens it — SQLite gives its -wal and -shm files the
+    database's mode — and a history from before this fix is tightened in
+    place, side files included.
+    """
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(path, os.O_CREAT | os.O_WRONLY, 0o600)
+        os.close(fd)
+        for file in (path, path.with_name(f"{path.name}-wal"), path.with_name(f"{path.name}-shm")):
+            if file.exists():
+                os.chmod(file, 0o600)
+    except OSError:
+        logger.warning("Could not restrict access to %s", path, exc_info=True)
 
 
 def memory_active(settings: dict) -> bool:
