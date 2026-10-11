@@ -187,6 +187,13 @@ def missing_modules(key: str) -> tuple[str, ...]:
     return tuple(m for m in FEATURES[key].probes if not _module_present(m))
 
 
+def refresh() -> None:
+    """Forget what was probed: a component installed while the app runs."""
+    _module_present.cache_clear()
+    missing_modules.cache_clear()
+    importlib.invalidate_caches()
+
+
 def is_available(key: str) -> bool:
     """Whether every module the feature needs is importable."""
     return not missing_modules(key)

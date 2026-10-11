@@ -24,6 +24,7 @@ from roomkit_ui.widgets.settings.ai_page import _AIPage
 from roomkit_ui.widgets.settings.attitudes_page import _AttitudesPage
 from roomkit_ui.widgets.settings.audio_debug_page import _AudioDebugPage
 from roomkit_ui.widgets.settings.cli_tools_page import _CliToolsPage
+from roomkit_ui.widgets.settings.components_page import _ComponentsPage
 from roomkit_ui.widgets.settings.dictation_page import _DictationPage
 from roomkit_ui.widgets.settings.general_page import _GeneralPage
 from roomkit_ui.widgets.settings.mcp_page import _MCPPage
@@ -86,6 +87,7 @@ class SettingsPanel(QDialog):
             "CLI Tools",
             "Audio Debug",
             "Telemetry",
+            "Components",
             "About",
         ):
             item = QListWidgetItem(label)
@@ -106,6 +108,7 @@ class SettingsPanel(QDialog):
         self._cli_tools = _CliToolsPage(settings)
         self._audio_debug = _AudioDebugPage(settings)
         self._telemetry = _TelemetryPage(settings)
+        self._components = _ComponentsPage(settings)
         self._about = _AboutPage()
         self._pages = (
             self._general,
@@ -120,6 +123,7 @@ class SettingsPanel(QDialog):
             self._cli_tools,
             self._audio_debug,
             self._telemetry,
+            self._components,
             self._about,
         )
 
