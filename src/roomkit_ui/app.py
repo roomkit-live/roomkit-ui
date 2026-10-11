@@ -209,9 +209,9 @@ def main() -> None:
     if "--doctor" in sys.argv[1:]:
         # Which optional backends this install carries, and how to complete it.
         # Runs before any Qt object exists so it works over SSH and in CI.
-        from roomkit_ui.features import format_report
+        from roomkit_ui.features import print_report
 
-        print(format_report())  # noqa: T201 — this is the command's output
+        print_report()
         return
 
     _logger = logging.getLogger(__name__)

@@ -12,7 +12,7 @@ the two in sync.
 
 Call sites use :func:`require` (raises with an actionable message) or
 :func:`unavailable_reason` (returns it, for greying a widget out).
-``roomkit-ui --doctor`` prints :func:`format_report`.
+``roomkit-ui --doctor`` runs :func:`print_report`.
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ import importlib.util
 import sys
 from dataclasses import dataclass
 from functools import cache
+from typing import TextIO
 
 DISTRIBUTION = "roomkit-ui"
 
@@ -177,8 +178,33 @@ def _version(distribution: str) -> str:
         return "unknown"
 
 
-def format_report() -> str:
-    """Render the ``--doctor`` report: environment, then feature by feature."""
+def print_report(stream: TextIO | None = None) -> None:
+    """Write the ``--doctor`` report to *stream*, stdout by default.
+
+    A Windows pipe, or ``--doctor > file`` on Windows, is cp1252, which has no
+    ✓ or ✗: print() would raise UnicodeEncodeError.  The marks fall back to
+    ASCII where the stream cannot carry them, and any other character it
+    cannot (an accented interpreter path) is replaced.
+    """
+    if stream is None:
+        stream = sys.stdout
+    if stream is None:  # a windowed build has no console
+        return
+    encoding = getattr(stream, "encoding", None) or "utf-8"
+    try:
+        "✓✗".encode(encoding)
+        marks = ("✓", "✗")
+    except UnicodeEncodeError:
+        marks = ("ok", "--")
+    report = format_report(marks)
+    print(report.encode(encoding, "replace").decode(encoding), file=stream)  # noqa: T201
+
+
+def format_report(marks: tuple[str, str] = ("✓", "✗")) -> str:
+    """Render the ``--doctor`` report: environment, then feature by feature.
+
+    *marks* flag a feature as available and missing, in that order.
+    """
     lines = [
         f"roomkit-ui {_version('roomkit-ui')}  (roomkit {_version('roomkit')})",
         f"Python {sys.version.split()[0]} on {sys.platform}"
@@ -190,7 +216,7 @@ def format_report() -> str:
     missing: list[str] = []
     for key, feature in FEATURES.items():
         absent = missing_modules(key)
-        mark = "✗" if absent else "✓"
+        mark = marks[1] if absent else marks[0]
         line = f"  {mark} {feature.label.ljust(width)}"
         if absent:
             line += f"  missing: {', '.join(absent)}"

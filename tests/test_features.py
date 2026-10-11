@@ -6,6 +6,7 @@ the registry is checked against ``pyproject.toml`` here, and every provider a
 settings combo offers is checked to map onto a declared feature.
 """
 
+import io
 import tomllib
 from pathlib import Path
 
@@ -21,6 +22,7 @@ from roomkit_ui.features import (
     format_report,
     install_command,
     is_available,
+    print_report,
     require,
     unavailable_reason,
 )
@@ -135,3 +137,31 @@ def test_report_lists_every_feature():
     report = format_report()
     for feature in FEATURES.values():
         assert feature.label in report
+
+
+def _report_on(monkeypatch, encoding: str) -> str:
+    """Print the report to a stream in *encoding*, with one feature missing."""
+    monkeypatch.setattr(
+        "roomkit_ui.features.missing_modules",
+        lambda key: ("gradium",) if key == "gradium" else (),
+    )
+    raw = io.BytesIO()
+    stream = io.TextIOWrapper(raw, encoding=encoding)  # errors="strict", like stdout
+    print_report(stream)
+    stream.flush()
+    return raw.getvalue().decode(encoding)
+
+
+def test_report_survives_a_cp1252_stream(monkeypatch):
+    """A Windows pipe or `--doctor > file` is cp1252, which has no ✓ or ✗."""
+    report = _report_on(monkeypatch, "cp1252")
+    assert f"  -- {FEATURES['gradium'].label}" in report
+    assert f"  ok {FEATURES['anthropic'].label}" in report
+    for feature in FEATURES.values():
+        assert feature.label in report
+
+
+def test_report_keeps_its_marks_where_the_stream_carries_them(monkeypatch):
+    report = _report_on(monkeypatch, "utf-8")
+    assert f"  ✗ {FEATURES['gradium'].label}" in report
+    assert f"  ✓ {FEATURES['anthropic'].label}" in report
