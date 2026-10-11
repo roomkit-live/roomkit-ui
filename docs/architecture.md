@@ -84,7 +84,7 @@ graph TB
 | Component | Files | Responsibility |
 |---|---|---|
 | **App bootstrap** | `app.py` | Graphics environment decided before PySide6 loads (Linux-only OpenGL probe, Chromium flags), `--doctor`, QApplication + qasync loop, logging, hotkeys, tray, wake word |
-| **Optional backends** | `features.py` | Extras ↔ import probes ↔ install commands; a missing backend becomes an install command in the chat, in Settings and in `--doctor` |
+| **Optional backends** | `features.py`, `components.py`, `component_installer.py`, `widgets/install_offer.py` | Extras ↔ import probes ↔ install commands; a missing backend is reported, not raised as a fault, and offered for install: Settings → Components, under the combo that picks it, in the chat after a failed start. The app installs only its own extras, pinned to its version, and only where it may (not a source checkout, not a frozen build) |
 | **Engine shell** | `engine.py`, `engine_state.py` | Session lifecycle (`start` as its own task, `stop` cancels it), state machine (`idle/connecting/active/stopping/error`), model caching across sessions, kit build, ordered teardown |
 | **Engine mixins** | `engine_vc.py`, `engine_realtime.py`, `engine_tools.py`, `engine_callbacks.py` | Mode-specific session builders, tool dispatch, provider→Qt callbacks. Mixins hold no state — all attributes live on `Engine` |
 | **Session builders** | `engine_vc_helpers.py`, `vc_stt.py`, `realtime_providers.py`, `engine_audio.py` | Stateless builders: VC STT (and the turn VAD a turnless one needs)/LLM/barge-in/TTS filter/Smart Turn; realtime provider configs and per-provider audio wiring; AEC/denoiser/VAD/diarization/recorder pipelines |
@@ -103,7 +103,7 @@ graph TB
 | **Models** | `model_catalog.py`, `model_download.py`, `model_manager.py`, `download_flight.py` | Download/manage local STT/TTS/VAD/speaker/denoiser/turn models (GitHub LFS resolution, one download per model) |
 | **Settings & secrets** | `settings.py`, `settings_secrets.py`, `secret_store.py` | QSettings persistence; API keys and secret env values in the OS keyring |
 | **Providers** | `providers/`, `tts/` | Lazy factory registries for LLM providers and TTS backends |
-| **Widgets** | `widgets/` | Main window, chat, VU meter, control bar, loading overlay, 13-tab settings dialog |
+| **Widgets** | `widgets/` | Main window, chat, VU meter, control bar, loading overlay, 14-tab settings dialog |
 
 ## Data flow
 

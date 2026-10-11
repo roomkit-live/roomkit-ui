@@ -244,7 +244,7 @@ text typeset in the column and rolling out with its voice, cut short with an
 "— interrupted" mark on barge-in; markdown; animated VU meter; collapsible session-info
 bar with token usage; a full-window loading curtain with a Cancel button while a session
 connects; dark/light themes; synthesized start/stop sounds; a watchdog that nudges a model
-that left the user's speech unanswered. The Settings dialog (13 tabs) has no Save button:
+that left the user's speech unanswered. The Settings dialog (14 tabs) has no Save button:
 it saves whenever it closes.
 
 ## User roles & permissions

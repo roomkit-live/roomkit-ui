@@ -34,6 +34,8 @@ src/roomkit_ui/
 ├── app.py               # Startup: graphics env (before PySide6), --doctor, QApplication + qasync, tray, hotkeys, wake word
 ├── constants.py         # UI-independent constants (attitude presets, …)
 ├── features.py          # Optional-backend registry: extras ↔ import probes ↔ install commands, EXCLUSIVE_EXTRAS, --doctor
+├── components.py        # One extra = one component; install_plan(): app runs uv/pip, checkout gets `uv sync`, frozen nothing — leaf
+├── component_installer.py # The app's one installer (QProcess, no shell), restart_app()
 ├── engine.py            # Engine shell: start task / stop, state machine, model cache, kit build, ordered teardown
 ├── engine_state.py      # EngineState StrEnum — leaf
 ├── engine_vc.py         # Voice Channel start (STT → LLM → TTS) — mixin
@@ -110,9 +112,10 @@ src/roomkit_ui/
     ├── dictation_log.py   # Dictation event log window
     ├── wakeword_wizard.py # Guided wake-word enrolment
     ├── voice_name_dialog.py # "Who is this?" when a voice's name is clicked in the chat
-    └── settings/          # 13-tab dialog (panel.py), one <tab>_page.py per tab: general, ai, attitudes,
+    ├── install_offer.py   # "<X> is not installed. [Install]" under a provider combo and in the chat
+    └── settings/          # 14-tab dialog (panel.py), one <tab>_page.py per tab: general, ai, attitudes,
                            #  speakers, dictation, wakeword, models, mcp, cli_tools, audio_debug, telemetry,
-                           #  about, plus skills/ (page, my_skills, marketplace, widgets). AI tab parts:
+                           #  components, about, plus skills/ (page, my_skills, marketplace, widgets). AI tab parts:
                            #  realtime_section, realtime_catalogs, realtime_gemini_live, realtime_gpt_live,
                            #  vc_local_fields, vc_cloud_fields, vc_azure_fields, vc_meta_fields, vc_agent_fields;
                            #  also models_widgets, speakers_dialogs, speakers_muse, feature_hints
@@ -168,6 +171,8 @@ Every AI backend lives behind an extra declared in `pyproject.toml` AND mirrored
 - llama.cpp: roomkit spawns `llama-server` with a copy of the app's environment, PyInstaller's library path included; since 0.97.0 roomkit sets the host's own loader path back for it (`cli_exec` does the same for CLI tools). The server runs on its own thread and loop (`providers/llamacpp.py`) so it survives sessions and the end-of-session FD cleanup
 
 ### Packaging
+- A backend this install lacks is a state, not a fault: code that needs one calls `features.require(key)` (or checks `unavailable_reason`) BEFORE importing it, so it raises `FeatureUnavailableError` (which carries the feature key), never a raw ImportError. A session start catches it apart: one warning line, no traceback, `component_missing` → the chat's Install offer. An optional pipeline stage (denoiser, diarization, a VAD model) is left out with a chat notice instead of failing the start
+- Installing a component (`components.py`, `component_installer.py`): only the app's own extras, pinned to the running version, argv without a shell; the app runs it only in a plain environment (pip, pipx, uv tool). A source checkout gets the `uv sync --inexact --extra` command (pip there would be undone by the next `uv sync`), a frozen build nothing. After an install `features.refresh()` drops the probe caches
 - Adding a backend means three edits, not one: the extra in `pyproject.toml`, the `Feature` in `features.py`, and the provider→feature entry in the matching `*_FEATURES` map. An extra that conflicts with another also goes in `[tool.uv].conflicts` AND `EXCLUSIVE_EXTRAS`. Probe what the code path *imports*, not what the extra installs — the realtime providers ride a raw websocket and never touch the vendor SDK, so requiring it would block a session that works
 - `RoomKit UI.spec` is gitignored and *regenerated* by every build — it is PyInstaller's output, not its input. The real flag lists live in `scripts/build_app.sh` and `.github/workflows/build.yml` (Unix + Windows steps); `tests/test_build_flags.py` fails when the three differ, so a flag goes in all three (`tiktoken_ext.openai_public` for GPT-Live, `--collect-binaries=aec_audio_processing`, which a Linux release once lost). All use `--collect-submodules=roomkit,roomkit_ui` because the backends load through string-keyed registries static analysis cannot follow
 - `uv sync` with no extra installs the core, which has no AI backend at all. Anything that builds or ships the app must use `--extra all --extra smart-turn` (the builds add Smart Turn, whose transformers modules are hidden imports) — so frozen builds carry neither Pocket TTS, Qwen3-TTS nor NeuTTS

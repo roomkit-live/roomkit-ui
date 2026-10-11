@@ -17,6 +17,12 @@ Each released section is the source for that version's GitHub release notes.
   included) and without touching a running app's log. Settings marks a provider whose
   backend is missing, and a session started with one names the install command in the
   chat.
+- **Install optional backends from the app** — Settings → Components lists every
+  optional backend, whether this install has it, and installs it (pip, pipx and uv tool
+  installs: uv when it is there, else pip, pinned to the running version), with its
+  output live, Cancel, and Restart when one needs it. A provider marked "not installed"
+  and a session that could not start offer the same Install. A source checkout gets the
+  `uv sync --inexact --extra …` command to copy; a frozen build installs nothing.
 - **PyPI and Homebrew** — a version tag publishes the wheel to PyPI (Trusted Publishing)
   and, for a notarized macOS build only, a cask:
   `brew install --cask roomkit-live/tap/roomkit-ui`.
@@ -169,6 +175,13 @@ Each released section is the source for that version's GitHub release notes.
   without it and says so; Voice Channel mode is unchanged.
 
 ### Fixed
+- **A backend not installed is no longer logged as a crash** — a session started on one
+  logged a traceback and an "Engine error"; it now logs one line and says in the chat
+  what is missing. The GTCRN denoiser, diarization and a turnless STT's VAD no longer
+  stop a session when local speech is missing: they are left out, and the chat says so.
+- **A quieter start without the optional extras** — no ERROR lines for global hotkeys
+  without pynput (one info line), no warning for MCP App views without QtWebEngine, and
+  no font-alias warning on macOS: the window and the chat use the platform's UI font.
 - **Anthropic, Gradium, Qwen3-TTS, NeuTTS and Deepgram transcription work** — v0.2.1
   declared no dependency for them, so they were dead in every install, the binaries
   included. Each now has its extra.

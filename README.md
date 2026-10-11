@@ -134,8 +134,10 @@ roomkit-ui --doctor
 ```
 
 The app never fails silently on a missing backend: unavailable providers are
-marked in Settings, and starting a session with one names the install command
-in the chat.
+marked in Settings, and starting a session with one says so in the chat. In a pip,
+pipx or uv tool install, **Settings → Components** installs them (as does the
+Install button next to a provider marked "not installed", or in the chat); in a
+source checkout it gives the `uv sync --inexact --extra …` command to run.
 
 ### GPU acceleration (optional)
 
@@ -222,7 +224,7 @@ src/roomkit_ui/
 ├── providers/, tts/            # LLM and TTS factories (lazy registries)
 ├── wakeword/                   # Wake word: capture, detection, enrolment
 └── widgets/                    # Main window, chat, MCP App views, wake-word wizard,
-                                #  13-tab settings dialog
+                                #  14-tab settings dialog
 ```
 
 Every module is described in the Architecture section of [CLAUDE.md](CLAUDE.md).

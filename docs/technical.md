@@ -46,7 +46,7 @@ src/roomkit_ui/
 ├── tts/                        # TTS factories: piper, pocket, qwen3, neutts, gradium, elevenlabs, azure
 ├── wakeword/                   # Wake word: controller, listener, capture, detection, enrolment
 └── widgets/                    # Main window, chat, MCP App views, loading overlay, wake-word wizard,
-                                #  settings/ (13-tab dialog)
+                                #  settings/ (14-tab dialog)
 ```
 
 The Architecture section of [CLAUDE.md](../CLAUDE.md) describes every module.
@@ -110,6 +110,16 @@ selects that provider. `features.py` maps each provider to an extra and the modu
 imports; a missing one reaches the chat, the Settings combo and `--doctor` as the command
 that installs it. Extras that pin conflicting `transformers` versions (`qwen3-tts`,
 `neutts`, `smart-turn`) are listed in `EXCLUSIVE_EXTRAS`, mirroring `[tool.uv].conflicts`.
+
+A missing backend is a state, not a fault: `require()` raises `FeatureUnavailableError`
+(with the feature key) before anything imports it, and a session start reports it as
+`component_missing` without a traceback. `components.py` groups the features by extra and
+says how this install takes one (`install_plan`): in a plain environment the app runs
+`uv pip install --python <this interpreter> 'roomkit-ui[<extra>]==<version>'` (or this
+environment's pip) through `component_installer.py`, one install at a time for the whole
+app; a source checkout gets `uv sync --inexact --extra <extra>`; a frozen build nothing.
+Settings → Components, the line under a combo whose choice is missing
+(`widgets/install_offer.py`) and the chat after a failed start all use it.
 
 ### Tool calls
 
