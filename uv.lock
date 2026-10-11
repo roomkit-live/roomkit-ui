@@ -3891,6 +3891,10 @@ wheels = [
 anthropic = [
     { name = "anthropic" },
 ]
+azure-speech = [
+    { name = "httpx" },
+    { name = "websockets" },
+]
 deepgram = [
     { name = "deepgram-sdk" },
 ]
@@ -3968,14 +3972,17 @@ all = [
     { name = "opentelemetry-sdk" },
     { name = "pynput" },
     { name = "pyside6-addons" },
-    { name = "roomkit", extra = ["anthropic", "deepgram", "elevenlabs", "gemini", "gradium", "llamacpp", "openai", "realtime-deepgram", "realtime-elevenlabs", "realtime-gemini", "realtime-openai", "sherpa-onnx"] },
+    { name = "roomkit", extra = ["anthropic", "azure-speech", "deepgram", "elevenlabs", "gemini", "gradium", "llamacpp", "openai", "realtime-deepgram", "realtime-elevenlabs", "realtime-gemini", "realtime-openai", "sherpa-onnx"] },
     { name = "sherpa-onnx-core" },
 ]
 anthropic = [
     { name = "roomkit", extra = ["anthropic"] },
 ]
+azure-speech = [
+    { name = "roomkit", extra = ["azure-speech"] },
+]
 cloud = [
-    { name = "roomkit", extra = ["anthropic", "deepgram", "elevenlabs", "gemini", "gradium", "openai", "realtime-deepgram", "realtime-elevenlabs", "realtime-gemini", "realtime-openai"] },
+    { name = "roomkit", extra = ["anthropic", "azure-speech", "deepgram", "elevenlabs", "gemini", "gradium", "openai", "realtime-deepgram", "realtime-elevenlabs", "realtime-gemini", "realtime-openai"] },
 ]
 deepgram = [
     { name = "roomkit", extra = ["deepgram", "realtime-deepgram"] },
@@ -3993,7 +4000,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-qt" },
-    { name = "roomkit", extra = ["anthropic", "deepgram", "elevenlabs", "gemini", "gradium", "llamacpp", "openai", "realtime-deepgram", "realtime-elevenlabs", "realtime-gemini", "realtime-openai", "sherpa-onnx"] },
+    { name = "roomkit", extra = ["anthropic", "azure-speech", "deepgram", "elevenlabs", "gemini", "gradium", "llamacpp", "openai", "realtime-deepgram", "realtime-elevenlabs", "realtime-gemini", "realtime-openai", "sherpa-onnx"] },
     { name = "ruff" },
     { name = "sherpa-onnx-core" },
 ]
@@ -4065,6 +4072,7 @@ requires-dist = [
     { name = "pytest-qt", marker = "extra == 'dev'", specifier = ">=4.4" },
     { name = "qasync", specifier = ">=0.27" },
     { name = "roomkit", extras = ["anthropic"], marker = "extra == 'anthropic'", specifier = ">=0.96.1" },
+    { name = "roomkit", extras = ["azure-speech"], marker = "extra == 'azure-speech'", specifier = ">=0.96.1" },
     { name = "roomkit", extras = ["deepgram", "realtime-deepgram"], marker = "extra == 'deepgram'", specifier = ">=0.96.1" },
     { name = "roomkit", extras = ["elevenlabs", "realtime-elevenlabs"], marker = "extra == 'elevenlabs'", specifier = ">=0.96.1" },
     { name = "roomkit", extras = ["gemini", "realtime-gemini"], marker = "extra == 'gemini'", specifier = ">=0.96.1" },
@@ -4078,6 +4086,7 @@ requires-dist = [
     { name = "roomkit", extras = ["sherpa-onnx"], marker = "extra == 'local-voice'", specifier = ">=0.96.1" },
     { name = "roomkit-ui", extras = ["all"], marker = "extra == 'dev'" },
     { name = "roomkit-ui", extras = ["anthropic"], marker = "extra == 'cloud'" },
+    { name = "roomkit-ui", extras = ["azure-speech"], marker = "extra == 'cloud'" },
     { name = "roomkit-ui", extras = ["cloud"], marker = "extra == 'all'" },
     { name = "roomkit-ui", extras = ["deepgram"], marker = "extra == 'cloud'" },
     { name = "roomkit-ui", extras = ["dictation"], marker = "extra == 'all'" },
@@ -4095,7 +4104,7 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6" },
     { name = "sherpa-onnx-core", marker = "extra == 'local-voice'", specifier = ">=1.13" },
 ]
-provides-extras = ["anthropic", "openai", "gemini", "deepgram", "elevenlabs", "gradium", "local-voice", "qwen3-tts", "neutts", "llamacpp", "pocket-tts", "dictation", "mcp-apps", "wakeword", "telemetry", "cloud", "all", "dev"]
+provides-extras = ["anthropic", "openai", "gemini", "deepgram", "elevenlabs", "gradium", "azure-speech", "local-voice", "qwen3-tts", "neutts", "llamacpp", "pocket-tts", "dictation", "mcp-apps", "wakeword", "telemetry", "cloud", "all", "dev"]
 
 [[package]]
 name = "rpds-py"

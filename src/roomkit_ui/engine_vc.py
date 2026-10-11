@@ -28,14 +28,17 @@ from roomkit_ui.engine_audio import (
 from roomkit_ui.engine_state import EngineState
 from roomkit_ui.engine_vc_helpers import (
     announce_llm_model,
+    build_azure_mai_stt,
     build_deepgram_stt,
     build_gradium_stt,
     build_interruption,
     build_turn_detector,
+    build_turn_vad,
     log_vc_audio_pipeline,
     mcp_servers_configured,
     register_local_tool_hint,
     start_local_llm,
+    stt_needs_turn_vad,
 )
 from roomkit_ui.features import STT_PROVIDER_FEATURES, require
 from roomkit_ui.hooks import register_vc_hooks
@@ -158,7 +161,7 @@ class VoiceChannelMixin:
             self._backend = backend  # type: ignore[attr-defined]
             log_vc_audio_pipeline(aec, denoiser, input_sample_rate, output_sample_rate)
 
-            # 6. VAD (local STT only), diarization, interruption, turn detector
+            # 6. VAD (local or turnless STT), diarization, interruption, turn detector
             vad = self._build_vc_vad(settings, stt_provider_name, inference_device)
             diarization = setup_diarization(
                 self,
@@ -333,6 +336,8 @@ class VoiceChannelMixin:
             stt = build_gradium_stt(settings, stt_language, self.loading_status.emit)  # type: ignore[attr-defined]
         elif stt_provider_name == "deepgram":
             stt = build_deepgram_stt(settings, stt_language, self.loading_status.emit)  # type: ignore[attr-defined]
+        elif stt_provider_name == "azure_mai":
+            stt = build_azure_mai_stt(settings, self.loading_status.emit)  # type: ignore[attr-defined]
         else:
             stt = await self._build_local_stt(settings, stt_language, inference_device)
 
@@ -403,7 +408,9 @@ class VoiceChannelMixin:
 
     @staticmethod
     def _build_vc_vad(settings: dict, stt_provider_name: str, inference_device: str) -> Any:
-        """Build a VAD provider. Only enabled when using local STT."""
+        """Build a VAD provider: for local STT, or for a cloud STT that finds no turns."""
+        if stt_needs_turn_vad(stt_provider_name):
+            return build_turn_vad(settings, inference_device)
         vad_model_id = settings.get("vc_vad_model", "") if stt_provider_name == "local" else ""
         if not vad_model_id:
             return None

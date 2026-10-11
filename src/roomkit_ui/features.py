@@ -96,6 +96,10 @@ FEATURES: dict[str, Feature] = {
     "pocket-tts": Feature(
         "pocket-tts", "Pocket TTS (local, voice cloning)", ("pocket_tts", "torch")
     ),
+    # One extra, two code paths with different needs: MAI-Transcribe streams
+    # over a websocket, Azure Speech TTS posts SSML with httpx (a core dep).
+    "azure-stt": Feature("azure-speech", "Azure MAI-Transcribe", ("websockets",)),
+    "azure-tts": Feature("azure-speech", "Azure Speech TTS (MAI-Voice)", ("httpx",)),
 }
 
 # Provider ids as stored in QSettings → feature key.  A provider absent from a
@@ -112,6 +116,7 @@ STT_PROVIDER_FEATURES: dict[str, str] = {
     "local": "local-voice",
     "gradium": "gradium",
     "deepgram": "deepgram",
+    "azure_mai": "azure-stt",
 }
 
 TTS_PROVIDER_FEATURES: dict[str, str] = {
@@ -121,6 +126,7 @@ TTS_PROVIDER_FEATURES: dict[str, str] = {
     "gradium": "gradium",
     "elevenlabs": "elevenlabs",
     "pocket": "pocket-tts",
+    "azure": "azure-tts",
 }
 
 REALTIME_PROVIDER_FEATURES: dict[str, str] = {

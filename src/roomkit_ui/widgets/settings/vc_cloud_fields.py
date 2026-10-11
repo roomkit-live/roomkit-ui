@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 )
 
 from roomkit_ui.theme import colors
+from roomkit_ui.widgets.settings.vc_azure_fields import AzureSpeechFields
 
 _ANTHROPIC_CATALOG = "roomkit.providers.anthropic.models"
 _OPENAI_CATALOG = "roomkit.providers.openai.models"
@@ -141,6 +142,7 @@ class VCCloudFields:
 
     def __init__(self, settings: dict) -> None:
         self._settings = settings
+        self.azure = AzureSpeechFields(settings)
 
     # ── LLM ──
 
@@ -233,10 +235,13 @@ class VCCloudFields:
         self._deepgram_model_label = QLabel("Deepgram Model")
         form.addRow(self._deepgram_model_label, self.deepgram_model)
 
+        self.azure.add_stt_rows(form)
+
     # ── TTS ──
 
     def add_tts_fields(self, form: QFormLayout) -> None:
         s = self._settings
+        self.azure.add_tts_rows(form)
 
         # Gradium voice
         self.vc_gradium_voice = QLineEdit(s.get("vc_gradium_voice", ""))
@@ -399,6 +404,7 @@ class VCCloudFields:
         self.vc_gemini_model.setVisible(provider == "gemini")
 
     def update_stt_visibility(self, provider: str) -> None:
+        self.azure.update_stt_visibility(provider)
         is_deepgram = provider == "deepgram"
         self._deepgram_key_label.setVisible(is_deepgram)
         self.deepgram_api_key.setVisible(is_deepgram)
@@ -406,6 +412,7 @@ class VCCloudFields:
         self.deepgram_model.setVisible(is_deepgram)
 
     def update_tts_visibility(self, provider: str) -> None:
+        self.azure.update_tts_visibility(provider)
         is_gradium = provider == "gradium"
         is_elevenlabs = provider == "elevenlabs"
         self._vc_gradium_voice_label.setVisible(is_gradium)
@@ -464,4 +471,5 @@ class VCCloudFields:
             "gradium_temperature": self.gradium_temperature.text().strip(),
             "gradium_cfg_coef": self.gradium_cfg_coef.text().strip(),
             "gradium_rewrite_rules": self.gradium_rewrite_rules.text().strip(),
+            **self.azure.get_settings(),
         }

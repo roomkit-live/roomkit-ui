@@ -44,6 +44,7 @@ VC_STT_PROVIDERS: list[tuple[str, str]] = [
     ("Local (sherpa-onnx)", "local"),
     ("Gradium", "gradium"),
     ("Deepgram", "deepgram"),
+    ("Azure MAI-Transcribe", "azure_mai"),
 ]
 
 VC_TTS_PROVIDERS: list[tuple[str, str]] = [
@@ -53,6 +54,7 @@ VC_TTS_PROVIDERS: list[tuple[str, str]] = [
     ("Gradium", "gradium"),
     ("ElevenLabs", "elevenlabs"),
     ("Pocket TTS (local, voice clone)", "pocket"),
+    ("Azure MAI-Voice", "azure"),
 ]
 
 
@@ -323,6 +325,7 @@ class _AIPage(QWidget):
             "api_key": [rt.gemini_api_key, cloud.vc_gemini_api_key],
             "deepgram_api_key": [rt.deepgram_api_key, cloud.deepgram_api_key],
             "elevenlabs_api_key": [rt.elevenlabs_api_key, cloud.elevenlabs_api_key],
+            "azure_speech_api_key": [cloud.azure.stt_key, cloud.azure.tts_key],
         }
 
     def selected_attitude_name(self) -> str:

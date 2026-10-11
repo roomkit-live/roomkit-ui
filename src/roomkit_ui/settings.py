@@ -27,6 +27,7 @@ _SECRET_KEYS = frozenset(
         "deepgram_api_key",
         "gradium_api_key",
         "xai_api_key",
+        "azure_speech_api_key",
     }
 )
 
@@ -215,6 +216,14 @@ _DEFAULTS = {
     # Pocket TTS (roomkit 0.90+, Kyutai): one language per model, voice by name or clip
     "vc_pocket_language": "english",  # english | french | ... | french_24l (see tts/pocket.py)
     "vc_pocket_voice": "",  # pre-made voice or a clip to clone (empty = alba / estelle)
+    # Azure / Microsoft Foundry speech (roomkit 0.96, public preview): one resource,
+    # one key for MAI-Transcribe (endpoint) and Azure Speech TTS (region)
+    "azure_speech_api_key": "",  # secret — keyring, never QSettings
+    "azure_mai_endpoint": "",  # https://<resource>.services.ai.azure.com
+    "azure_mai_deployment": "",  # empty = MAI-Transcribe-2-Streaming
+    "azure_speech_region": "",  # e.g. swedencentral
+    "azure_tts_voice": "",  # empty = en-US-Harper:MAI-Voice-2.1-Flash
+    "azure_tts_rate": "",  # SSML prosody rate: +15%, 1.2, fast (empty = the voice's own)
 }
 
 

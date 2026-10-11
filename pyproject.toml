@@ -36,6 +36,9 @@ gemini = ["roomkit[gemini,realtime-gemini]>=0.96.1"]
 deepgram = ["roomkit[deepgram,realtime-deepgram]>=0.96.1"]
 elevenlabs = ["roomkit[elevenlabs,realtime-elevenlabs]>=0.96.1"]
 gradium = ["roomkit[gradium]>=0.96.1"]
+# Microsoft Foundry speech: MAI-Transcribe (websocket) and Azure Speech TTS,
+# MAI-Voice included (REST).  No Azure SDK: roomkit speaks the wire protocol.
+azure-speech = ["roomkit[azure-speech]>=0.96.1"]
 
 # ── Local inference ───────────────────────────────────────────────────────
 # sherpa-onnx powers local STT, Piper TTS, VAD and speaker diarization.
@@ -86,6 +89,7 @@ cloud = [
     "roomkit-ui[deepgram]",
     "roomkit-ui[elevenlabs]",
     "roomkit-ui[gradium]",
+    "roomkit-ui[azure-speech]",
 ]
 all = [
     "roomkit-ui[cloud]",
