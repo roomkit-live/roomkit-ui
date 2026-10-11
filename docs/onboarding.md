@@ -103,7 +103,7 @@ add logic that is testable without Qt, add a pytest target with it (see
 | You want to… | Look at |
 |---|---|
 | Understand the system | [architecture.md](architecture.md) |
-| Change a session mode / provider | `engine_vc.py`, `engine_vc_helpers.py`, `engine_realtime.py`, `realtime_providers.py`, `providers/`, `tts/` |
+| Change a session mode / provider | `engine_vc.py`, `engine_vc_helpers.py`, `vc_stt.py`, `engine_realtime.py`, `realtime_providers.py`, `providers/`, `tts/` |
 | Add an optional backend | `pyproject.toml` extras, `features.py` |
 | Add a tool | `builtin_tools.py` (builtin), or declare a CLI tool / MCP server in Settings |
 | Touch teardown/cleanup | `engine.py:_cleanup`, `cleanup.py` |

@@ -28,7 +28,7 @@ System context lives in [architecture.md](architecture.md); feature-to-code mapp
 src/roomkit_ui/
 ├── app.py, features.py         # Startup (graphics env, --doctor, qasync); optional-backend registry
 ├── engine.py, engine_state.py  # Engine shell: start task / stop, state machine, model cache, teardown
-├── engine_vc.py, engine_vc_helpers.py          # Voice Channel mode (mixin + stateless builders)
+├── engine_vc.py, engine_vc_helpers.py, vc_stt.py  # Voice Channel mode (mixin + stateless builders)
 ├── vc_agent.py, agent_hooks.py                 # VC agent: speak policy, thinker, background work + chat lines
 ├── engine_realtime.py, realtime_providers.py   # Realtime mode (mixin + provider builders, audio wiring)
 ├── engine_audio.py             # Pipeline builders: AEC, denoise, VAD, diarization, recording, DSP pool
@@ -79,8 +79,8 @@ There is no server database. State lives in these places:
 `Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject)` — mixins
 contribute behavior only; every attribute lives on `Engine`. This keeps Qt signal
 definitions in one QObject while splitting the two session modes into separate files.
-Stateless builders sit beside them (`engine_vc_helpers.py`, `realtime_providers.py`,
-`engine_audio.py`).
+Stateless builders sit beside them (`engine_vc_helpers.py`, `vc_stt.py`,
+`realtime_providers.py`, `engine_audio.py`).
 
 ### Session lifecycle
 

@@ -28,19 +28,14 @@ from roomkit_ui.engine_audio import (
 from roomkit_ui.engine_state import EngineState
 from roomkit_ui.engine_vc_helpers import (
     announce_llm_model,
-    build_azure_mai_stt,
-    build_deepgram_stt,
-    build_gradium_stt,
     build_interruption,
     build_tts_filter,
     build_turn_detector,
-    build_turn_vad,
     log_vc_audio_pipeline,
     mcp_servers_configured,
     register_local_tool_hint,
     smart_turn_config,
     start_local_llm,
-    stt_needs_turn_vad,
     turn_incomplete_wait_ms,
 )
 from roomkit_ui.features import STT_PROVIDER_FEATURES, require, unavailable_reason
@@ -49,6 +44,7 @@ from roomkit_ui.providers import create_ai_provider
 from roomkit_ui.toolset import ToolSet
 from roomkit_ui.tts import create_tts_provider, is_cached_tts, tts_cache_fields
 from roomkit_ui.vc_agent import build_vc_agent
+from roomkit_ui.vc_stt import CLOUD_STT_BUILDERS, build_turn_vad, stt_needs_turn_vad
 
 logger = logging.getLogger(__name__)
 
@@ -360,12 +356,9 @@ class VoiceChannelMixin:
         if feature is not None:
             require(feature)
 
-        if stt_provider_name == "gradium":
-            stt = build_gradium_stt(settings, stt_language, self.loading_status.emit)  # type: ignore[attr-defined]
-        elif stt_provider_name == "deepgram":
-            stt = build_deepgram_stt(settings, stt_language, self.loading_status.emit)  # type: ignore[attr-defined]
-        elif stt_provider_name == "azure_mai":
-            stt = build_azure_mai_stt(settings, self.loading_status.emit)  # type: ignore[attr-defined]
+        build_cloud_stt = CLOUD_STT_BUILDERS.get(stt_provider_name)
+        if build_cloud_stt is not None:
+            stt = build_cloud_stt(settings, self.loading_status.emit)  # type: ignore[attr-defined]
         else:
             stt = await self._build_local_stt(settings, stt_language, inference_device)
 

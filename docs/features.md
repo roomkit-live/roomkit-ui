@@ -17,7 +17,7 @@ system context in [architecture.md](architecture.md).
 | Latency | lowest | depends on the three stages |
 | Offline capable | no | yes (local STT + local LLM + Piper or Pocket TTS) |
 | Usage shown | tokens | tokens + cost estimate (catalog pricing) |
-| Code | `engine_realtime.py`, `realtime_providers.py` | `engine_vc.py`, `engine_vc_helpers.py` |
+| Code | `engine_realtime.py`, `realtime_providers.py` | `engine_vc.py`, `engine_vc_helpers.py`, `vc_stt.py` |
 
 Both modes share: echo cancellation (WebRTC/Speex), barge-in interruption, optional WAV
 recording, MCP + CLI + built-in tools, skills, attitudes, conversation memory, and the

@@ -6,10 +6,10 @@ from PySide6.QtCore import QSettings
 
 import roomkit_ui.settings as settings_mod
 from roomkit_ui.engine_vc import VoiceChannelMixin
-from roomkit_ui.engine_vc_helpers import build_azure_mai_stt, build_turn_vad, stt_needs_turn_vad
 from roomkit_ui.secret_store import SecretStore
 from roomkit_ui.settings import _DEFAULTS, load_settings, save_settings
 from roomkit_ui.tts import azure as azure_tts
+from roomkit_ui.vc_stt import build_azure_mai_stt, build_turn_vad, stt_needs_turn_vad
 from roomkit_ui.widgets.settings.ai_page import VC_STT_PROVIDERS, VC_TTS_PROVIDERS, _AIPage
 
 ENDPOINT = "https://acme.services.ai.azure.com"

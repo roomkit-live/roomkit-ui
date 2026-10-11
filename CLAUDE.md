@@ -37,7 +37,8 @@ src/roomkit_ui/
 ├── engine.py            # Engine shell: start task / stop, state machine, model cache, kit build, ordered teardown
 ├── engine_state.py      # EngineState StrEnum — leaf
 ├── engine_vc.py         # Voice Channel start (STT → LLM → TTS) — mixin
-├── engine_vc_helpers.py # Stateless VC builders: cloud STT, barge-in, TTS filter, Smart Turn, turn VAD, local LLM
+├── engine_vc_helpers.py # Stateless VC builders: barge-in, TTS filter, Smart Turn, local LLM
+├── vc_stt.py            # VC cloud STT builders (dispatch table) + the turn VAD a turnless STT needs
 ├── vc_agent.py          # VC agent from the Agent tab: speak policy (classifier), thinker, background flag
 ├── agent_hooks.py       # VC agent chat lines: quiet turns, background tasks started/ended; running-task count
 ├── engine_realtime.py   # Realtime start: media per attempt, no-MCP retry, channel — mixin
