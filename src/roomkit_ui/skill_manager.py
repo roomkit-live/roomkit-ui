@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import re
 import shutil
@@ -229,8 +230,8 @@ def _is_subpath(base: Path, candidate: Path) -> bool:
 
 def _candidate_well_known_indexes(install_url: str) -> list[tuple[str, str, str]]:
     parsed = urlparse(install_url)
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-        raise ValueError("well-known install URL must be http(s)")
+    if parsed.scheme != "https" or not parsed.netloc:
+        raise ValueError("well-known install URL must be https")
 
     root = f"{parsed.scheme}://{parsed.netloc}"
     base_path = parsed.path.rstrip("/")
@@ -335,11 +336,11 @@ async def _fetch_well_known_entries(
 ) -> list[dict]:
     for index_url, base_url, well_known_path in _candidate_well_known_indexes(install_url):
         try:
-            resp = await client.get(index_url)
-            if not resp.is_success:
+            body = await _get_capped(client, index_url, path="index.json", total={"bytes": 0})
+            if body is None:
                 continue
             entries = _normalize_well_known_index(
-                resp.json(),
+                json.loads(body),
                 index_url=index_url,
                 base_url=base_url,
                 well_known_path=well_known_path,
@@ -379,22 +380,37 @@ def _select_well_known_entry(
     raise ValueError("The well-known index contains multiple skills; a skill name is required")
 
 
-def _checked_response_bytes(resp: httpx.Response, *, path: str, total: dict[str, int]) -> bytes:
-    content_length = resp.headers.get("content-length")
-    if content_length:
-        try:
-            length = int(content_length)
-        except ValueError:
-            length = 0
-        if length > _MAX_WELL_KNOWN_FILE_BYTES:
+async def _get_capped(
+    client: httpx.AsyncClient, url: str, *, path: str, total: dict[str, int]
+) -> bytes | None:
+    """GET *url*, reading at most the per-file and per-skill caps.
+
+    Streamed: the caps stop the download, not just the result — reading
+    ``resp.content`` first held a body of any size in memory before the
+    size check ran. Returns None when the server answers with an error.
+    """
+    async with client.stream("GET", url) as resp:
+        if not resp.is_success:
+            return None
+        declared = resp.headers.get("content-length", "")
+        if declared.isdigit() and int(declared) > _MAX_WELL_KNOWN_FILE_BYTES:
             raise ValueError(f"well-known file is too large: {path}")
-    content = resp.content
-    if len(content) > _MAX_WELL_KNOWN_FILE_BYTES:
-        raise ValueError(f"well-known file is too large: {path}")
-    total["bytes"] += len(content)
-    if total["bytes"] > _MAX_WELL_KNOWN_TOTAL_BYTES:
-        raise ValueError("well-known skill exceeds the maximum download size")
-    return content
+        body = bytearray()
+        async for chunk in resp.aiter_bytes():
+            body += chunk
+            if len(body) > _MAX_WELL_KNOWN_FILE_BYTES:
+                raise ValueError(f"well-known file is too large: {path}")
+            if total["bytes"] + len(body) > _MAX_WELL_KNOWN_TOTAL_BYTES:
+                raise ValueError("well-known skill exceeds the maximum download size")
+    total["bytes"] += len(body)
+    return bytes(body)
+
+
+async def _require_https(request: httpx.Request) -> None:
+    """Refuse any plain-http hop, redirects included: nothing here is signed
+    but a v0.2 artifact, so TLS is what keeps a skill's text unmodified."""
+    if request.url.scheme != "https":
+        raise ValueError(f"well-known skills are only fetched over https: {request.url}")
 
 
 def _validate_skill_md(content: bytes) -> None:
@@ -416,13 +432,13 @@ async def _fetch_legacy_well_known_files(
     for file_path in entry["files"]:
         file_url = f"{skill_base_url}/{quote(file_path, safe='/')}"
         try:
-            resp = await client.get(file_url)
-            if not resp.is_success:
+            content = await _get_capped(client, file_url, path=file_path, total=total)
+            if content is None:
                 if file_path.lower() == "skill.md":
                     raise ValueError("well-known SKILL.md could not be downloaded")
                 logger.debug("Skipping missing well-known file %s", file_url)
                 continue
-            files[file_path] = _checked_response_bytes(resp, path=file_path, total=total)
+            files[file_path] = content
         except Exception:
             if file_path.lower() == "skill.md":
                 raise
@@ -441,11 +457,9 @@ async def _fetch_v2_well_known_files(
     if entry["type"] != "skill-md":
         raise ValueError("well-known archive artifacts are not supported yet")
 
-    resp = await client.get(entry["artifact_url"])
-    if not resp.is_success:
+    content = await _get_capped(client, entry["artifact_url"], path="SKILL.md", total={"bytes": 0})
+    if content is None:
         raise ValueError("well-known skill artifact could not be downloaded")
-    total = {"bytes": 0}
-    content = _checked_response_bytes(resp, path="SKILL.md", total=total)
     digest = f"sha256:{hashlib.sha256(content).hexdigest()}"
     if digest != entry["digest"]:
         raise ValueError("well-known skill artifact digest mismatch")
@@ -470,6 +484,7 @@ async def install_well_known_skill(
         timeout=_WELL_KNOWN_TIMEOUT,
         follow_redirects=True,
         transport=transport,
+        event_hooks={"request": [_require_https]},
     ) as client:
         entries = await _fetch_well_known_entries(client, install_url)
         if not entries:

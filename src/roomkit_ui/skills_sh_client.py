@@ -75,7 +75,7 @@ class SkillsShSkill:
             source=source,
             installs=installs,
             is_duplicate=bool(item.get("isDuplicate", False)),
-            install_url=_valid_http_url(item.get("installUrl") or item.get("install_url")),
+            install_url=_valid_https_url(item.get("installUrl") or item.get("install_url")),
         )
 
 
@@ -130,14 +130,17 @@ class SkillsShClient:
         return replace(skill, install_url=install_url)
 
 
-def _valid_http_url(value: object) -> str | None:
+def _valid_https_url(value: object) -> str | None:
+    """*value* if it is an https URL. A skill's install URL is where its text
+    is downloaded from, unsigned for the legacy well-known format — over
+    plain http, anyone on the path could rewrite the instructions."""
     if not isinstance(value, str):
         return None
     value = value.strip()
     if not value:
         return None
     parsed = urlparse(value)
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+    if parsed.scheme != "https" or not parsed.netloc:
         return None
     return value
 
@@ -147,5 +150,5 @@ def _extract_install_url(page_html: str) -> str | None:
     html = unescape(page_html)
     match = _INSTALL_CMD_RE.search(html)
     if match:
-        return _valid_http_url(match.group(1))
+        return _valid_https_url(match.group(1))
     return None
