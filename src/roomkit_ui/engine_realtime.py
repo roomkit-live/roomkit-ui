@@ -35,6 +35,7 @@ from roomkit_ui.toolset import ToolSet, tool_summaries
 logger = logging.getLogger(__name__)
 
 _BLOCK_MS = 20
+_GEMINI_DEFAULT_MODEL = "gemini-2.5-flash-native-audio-preview-12-2025"
 
 # Diarization is a voice-channel feature: under roomkit 0.96.1 a realtime
 # session cannot run it.  RealtimeVoiceChannel registers no handler for the
@@ -508,7 +509,7 @@ def _build_realtime_provider(provider_name: str, settings: dict) -> tuple[Any, s
     api_key = settings.get("api_key", "")
     if not api_key:
         raise ValueError("Google API key is required. Open Settings to enter it.")
-    model = settings.get("model", "gemini-2.5-flash-native-audio-preview-12-2025")
+    model = settings.get("model", _GEMINI_DEFAULT_MODEL)
     voice = settings.get("voice", "Aoede")
     from roomkit.providers.gemini.realtime import GeminiLiveProvider
 
@@ -719,30 +720,7 @@ def _build_provider_config(provider_name: str, settings: dict) -> dict[str, Any]
     """Assemble provider-specific advanced settings (VAD, proactive audio, etc.)."""
     provider_config: dict[str, Any] = {}
     if provider_name == "gemini":
-        lang = settings.get("gemini_language", "")
-        if lang:
-            provider_config["language"] = lang
-        if settings.get("gemini_no_interruption"):
-            provider_config["no_interruption"] = True
-        # enable_affective_dialog: not yet supported by the Gemini API
-        # (serialized under generation_config, rejected with 1007).
-        # Uncomment when the API adds support.
-        # if settings.get("gemini_affective_dialog"):
-        #     provider_config["enable_affective_dialog"] = True
-        if settings.get("gemini_proactive_audio"):
-            provider_config["proactive_audio"] = True
-        start_sens = settings.get("gemini_start_sensitivity", "")
-        if start_sens:
-            provider_config["start_of_speech_sensitivity"] = start_sens
-        end_sens = settings.get("gemini_end_sensitivity", "")
-        if end_sens:
-            provider_config["end_of_speech_sensitivity"] = end_sens
-        silence_ms = settings.get("gemini_silence_duration_ms", "")
-        if silence_ms:
-            try:
-                provider_config["silence_duration_ms"] = int(silence_ms)
-            except (ValueError, TypeError):
-                pass
+        provider_config = _gemini_provider_config(settings)
     elif provider_name == "openai":
         td_type = settings.get("openai_turn_detection", "server_vad")
         if td_type in ("server_vad", "semantic_vad"):
@@ -776,6 +754,78 @@ def _build_provider_config(provider_name: str, settings: dict) -> dict[str, Any]
         # three tuning keys (no semantic VAD, no disabling).
         _apply_server_vad(provider_config, settings, "xai")
     return provider_config
+
+
+def _gemini_provider_config(settings: dict) -> dict[str, Any]:
+    """Gemini Live's provider_config: speech language, turn taking, and the
+    options that depend on the model's generation."""
+    provider_config: dict[str, Any] = {}
+    lang = settings.get("gemini_language", "")
+    if lang:
+        provider_config["language"] = lang
+    if settings.get("gemini_no_interruption"):
+        provider_config["no_interruption"] = True
+    # enable_affective_dialog: not yet supported by the Gemini API
+    # (serialized under generation_config, rejected with 1007), and removed
+    # from it with the 3.8 family.  Uncomment if a model brings it back.
+    # if settings.get("gemini_affective_dialog"):
+    #     provider_config["enable_affective_dialog"] = True
+    start_sens = settings.get("gemini_start_sensitivity", "")
+    if start_sens:
+        provider_config["start_of_speech_sensitivity"] = start_sens
+    end_sens = settings.get("gemini_end_sensitivity", "")
+    if end_sens:
+        provider_config["end_of_speech_sensitivity"] = end_sens
+    silence_ms = settings.get("gemini_silence_duration_ms", "")
+    if silence_ms:
+        try:
+            provider_config["silence_duration_ms"] = int(silence_ms)
+        except (ValueError, TypeError):
+            pass
+    _apply_gemini_generation(provider_config, settings)
+    return provider_config
+
+
+def _apply_gemini_generation(provider_config: dict[str, Any], settings: dict) -> None:
+    """Add what the session's Gemini Live model accepts, per roomkit's profile.
+
+    Gemini 3.8 Live changed the contract (roomkit 0.79): proactive audio is
+    permanent (stating it is refused) and affective dialog is gone, while
+    ``gemini-3.8-live-extended-thinking`` takes a thinking level and the
+    3.8 family a transcription block.  roomkit drops a refused field with a
+    warning in the log; filtering here keeps a setting from being a silent
+    no-op on one model and sent on another.
+    """
+    from roomkit.providers.gemini.realtime_models import PRE_38_PROFILE, live_model_profile
+
+    profile = live_model_profile(settings.get("model", "") or _GEMINI_DEFAULT_MODEL)
+    if settings.get("gemini_proactive_audio") and profile.proactivity:
+        provider_config["proactive_audio"] = True
+    level = (settings.get("gemini_thinking_level", "") or "").upper()
+    if level and profile.thinking_level:
+        provider_config["thinking_level"] = level
+    if profile is not PRE_38_PROFILE:
+        transcription = _gemini_transcription(settings)
+        if transcription:
+            provider_config["transcription"] = transcription
+
+
+def _gemini_transcription(settings: dict) -> dict[str, Any]:
+    """The 3.8 transcription block: how the server hears the user's speech."""
+    block: dict[str, Any] = {}
+    if settings.get("gemini_language_auto"):
+        block["language_auto"] = True
+    hints = _comma_list(settings.get("gemini_language_hints", ""))
+    if hints:
+        block["language_hints"] = hints
+    vocabulary = _comma_list(settings.get("gemini_custom_vocabulary", ""))
+    if vocabulary:
+        block["custom_vocabulary"] = vocabulary
+    return block
+
+
+def _comma_list(raw: Any) -> list[str]:
+    return [item.strip() for item in str(raw or "").split(",") if item.strip()]
 
 
 def _apply_openai_semantic_vad(provider_config: dict[str, Any], settings: dict) -> None:

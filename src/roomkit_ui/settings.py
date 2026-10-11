@@ -204,6 +204,11 @@ _DEFAULTS = {
     "xai_vad_threshold": "",  # 0.0–1.0 (empty = default)
     "xai_silence_duration_ms": "",  # empty = default
     "xai_prefix_padding_ms": "",  # empty = default
+    # Gemini 3.8 Live (roomkit 0.79+).  Sent only to the models that take them.
+    "gemini_thinking_level": "",  # "" (roomkit sends LOW) | LOW | MEDIUM | HIGH
+    "gemini_language_auto": False,  # user transcript may switch language mid-call
+    "gemini_language_hints": "",  # comma-separated BCP-47 codes, e.g. "fr-FR, en-US"
+    "gemini_custom_vocabulary": "",  # comma-separated names/terms for the user transcript
 }
 
 

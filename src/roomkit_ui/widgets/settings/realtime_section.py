@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 from roomkit_ui.features import REALTIME_PROVIDER_FEATURES
 from roomkit_ui.theme import colors
 from roomkit_ui.widgets.settings.feature_hints import populate_provider_combo
+from roomkit_ui.widgets.settings.realtime_gemini_live import GeminiGenerationFields
 
 PROVIDERS = [
     ("Google Gemini", "gemini"),
@@ -425,6 +426,13 @@ class RealtimeSection(QWidget):
         self.gemini_proactive_audio.setChecked(bool(settings.get("gemini_proactive_audio", False)))
         adv_form.addRow("", self.gemini_proactive_audio)
 
+        self._gemini_generation = GeminiGenerationFields(
+            settings,
+            adv_form,
+            proactive=self.gemini_proactive_audio,
+            affective=self.gemini_affective_dialog,
+        )
+
         start_sens_options = [
             ("Auto", ""),
             ("High", "START_SENSITIVITY_HIGH"),
@@ -735,9 +743,11 @@ class RealtimeSection(QWidget):
             self._on_openai_turn_detection_changed
         )
         self.deepgram_think_provider.currentIndexChanged.connect(self._on_think_provider_changed)
+        self.gemini_model.currentTextChanged.connect(self._gemini_generation.update_for_model)
 
         # Initial state
         self._on_provider_changed(self.provider.currentIndex())
+        self._gemini_generation.update_for_model(self.gemini_model.currentText())
 
     # -- Visibility handlers --
 
@@ -849,6 +859,7 @@ class RealtimeSection(QWidget):
             "gemini_start_sensitivity": self.gemini_start_sensitivity.currentData() or "",
             "gemini_end_sensitivity": self.gemini_end_sensitivity.currentData() or "",
             "gemini_silence_duration_ms": self.gemini_silence_duration.text().strip(),
+            **self._gemini_generation.get_settings(),
             "openai_turn_detection": (self.openai_turn_detection.currentData() or "server_vad"),
             "openai_eagerness": self.openai_eagerness.text().strip(),
             "openai_vad_threshold": self.openai_vad_threshold.text().strip(),
