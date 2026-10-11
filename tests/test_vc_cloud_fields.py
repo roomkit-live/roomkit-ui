@@ -5,7 +5,7 @@ import shiboken6
 
 from roomkit_ui.settings import _DEFAULTS
 from roomkit_ui.widgets.settings.ai_page import _AIPage
-from roomkit_ui.widgets.settings.vc_cloud_fields import VC_ANTHROPIC_MODELS
+from roomkit_ui.widgets.settings.vc_cloud_fields import ELEVENLABS_MODELS, VC_ANTHROPIC_MODELS
 
 
 @pytest.fixture
@@ -103,3 +103,27 @@ def test_editable_lineups_show_ids_and_keep_a_typed_one(page_over):
     settings = page.get_settings()
     assert settings["vc_openai_model"] == "ft:gpt-4o:acme"
     assert settings["vc_gemini_model"] == "gemini-3.8-flash"
+
+
+@pytest.mark.parametrize("model_id", ["eleven_v4", "eleven_v4_turbo"])
+def test_the_v4_models_are_offered(page_over, model_id):
+    page = page_over(elevenlabs_model=model_id)
+
+    assert page.get_settings()["elevenlabs_model"] == model_id
+    assert page._cloud.elevenlabs_model.count() == len(ELEVENLABS_MODELS)
+
+
+@pytest.mark.parametrize("streams", [True, False])
+def test_the_stream_input_toggle_keeps_its_value(page_over, streams):
+    page = page_over(elevenlabs_stream_input=streams)
+
+    assert page.get_settings()["elevenlabs_stream_input"] is streams
+
+
+def test_the_stream_input_toggle_shows_with_elevenlabs_only(page_over):
+    page = page_over(vc_tts_provider="elevenlabs")
+    toggle = page._cloud.elevenlabs_stream_input
+    assert not toggle.isHidden()
+
+    page._cloud.update_tts_visibility("piper")
+    assert toggle.isHidden()

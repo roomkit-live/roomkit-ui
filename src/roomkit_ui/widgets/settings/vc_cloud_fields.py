@@ -6,6 +6,7 @@ import importlib
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QFormLayout,
     QLabel,
@@ -89,6 +90,8 @@ GRADIUM_REGIONS = [
 
 ELEVENLABS_MODELS = [
     ("v3 (expressive, 70+ langs)", "eleven_v3"),
+    ("v4 Turbo (expressive, conversational latency)", "eleven_v4_turbo"),
+    ("v4 (expressive)", "eleven_v4"),
     ("Multilingual v2 (lifelike)", "eleven_multilingual_v2"),
     ("Flash v2.5 (~75ms, multilingual)", "eleven_flash_v2_5"),
     ("Flash v2 (~75ms, EN only)", "eleven_flash_v2"),
@@ -269,6 +272,15 @@ class VCCloudFields:
         self._elevenlabs_model_label = QLabel("Model")
         form.addRow(self._elevenlabs_model_label, self.elevenlabs_model)
 
+        self.elevenlabs_stream_input = QCheckBox("Stream text to ElevenLabs (lower latency)")
+        self.elevenlabs_stream_input.setChecked(bool(s.get("elevenlabs_stream_input", True)))
+        self.elevenlabs_stream_input.setToolTip(
+            "Each sentence is spoken as soon as the model writes it, instead of once the "
+            "whole reply is written. v3 has no streaming: it always waits for the reply."
+        )
+        self._elevenlabs_stream_label = QLabel("")
+        form.addRow(self._elevenlabs_stream_label, self.elevenlabs_stream_input)
+
     # ── Gradium Advanced (collapsible) ──
 
     def add_gradium_advanced(self, vc_layout: QVBoxLayout) -> None:
@@ -423,6 +435,8 @@ class VCCloudFields:
         self.elevenlabs_voice_id.setVisible(is_elevenlabs)
         self._elevenlabs_model_label.setVisible(is_elevenlabs)
         self.elevenlabs_model.setVisible(is_elevenlabs)
+        self._elevenlabs_stream_label.setVisible(is_elevenlabs)
+        self.elevenlabs_stream_input.setVisible(is_elevenlabs)
 
     def update_gradium_visibility(self, stt_provider: str, tts_provider: str) -> None:
         needs_gradium = stt_provider == "gradium" or tts_provider == "gradium"
@@ -460,6 +474,7 @@ class VCCloudFields:
             "elevenlabs_api_key": self.elevenlabs_api_key.text().strip(),
             "elevenlabs_voice_id": self.elevenlabs_voice_id.text().strip(),
             "elevenlabs_model": self.elevenlabs_model.currentData() or "",
+            "elevenlabs_stream_input": self.elevenlabs_stream_input.isChecked(),
             "gradium_language": self.gradium_language.currentData() or "",
             "gradium_stt_model": self.gradium_stt_model.text().strip(),
             "gradium_stt_delay": self.gradium_stt_delay.currentData() or "",

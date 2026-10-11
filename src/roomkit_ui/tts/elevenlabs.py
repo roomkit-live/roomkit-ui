@@ -30,10 +30,18 @@ def create(settings: dict) -> tuple[Any, int]:
         raise ValueError("ElevenLabs API key is required for ElevenLabs TTS.")
     voice_id = settings.get("elevenlabs_voice_id", "") or "21m00Tcm4TlvDq8ikWAM"
 
+    # Streamed input: the reply is sent over a WebSocket sentence by sentence
+    # as the LLM writes it, so the first one is heard ~140 ms after it is
+    # written instead of once the whole reply is (2.6-3.9 s, roomkit's
+    # measure).  v4 / v4 Turbo and the v2 / v2.5 models have a socket; v3 has
+    # none and keeps whole-reply synthesis whatever the setting says.  The
+    # socket stitches nothing across replies and, for v4, applies no voice
+    # settings — none are customised here.
     config = ElevenLabsConfig(
         api_key=api_key,
         voice_id=voice_id,
         model_id=model_id(settings),
         output_format="pcm_24000",
+        stream_input=bool(settings.get("elevenlabs_stream_input", True)),
     )
     return ElevenLabsTTSProvider(config), 24000

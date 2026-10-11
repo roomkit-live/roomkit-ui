@@ -233,6 +233,8 @@ _DEFAULTS = {
     # Barge-in: "off" | "immediate" | "semantic" (words only). Was the bool
     # "vc_interruption" (True = immediate), migrated by load_settings().
     "vc_interruption_mode": "off",
+    # Send the reply to ElevenLabs as it is written (WebSocket; not on v3)
+    "elevenlabs_stream_input": True,
 }
 
 # Keys renamed since a release shipped: new key → (old key, old value → new value).
