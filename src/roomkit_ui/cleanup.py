@@ -5,11 +5,33 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+from collections.abc import Collection
 
 logger = logging.getLogger(__name__)
 
+_SELECTOR_NOTIFIERS = ("_Selector__read_notifiers", "_Selector__write_notifiers")
 
-def cleanup_stale_fds(*, timers_only: bool = False) -> None:
+
+def registered_fds() -> frozenset[int]:
+    """Every FD the running loop watches now, in both qasync notifier layers.
+
+    Taken when a session starts, it names what the session must leave alone
+    at its end: the sockets of the rest of the app (an MCP OAuth callback
+    server or an httpx call in Settings, a skill install, a model download).
+    """
+    loop = asyncio.get_running_loop()
+    fds: set[int] = set()
+    for attr in ("_read_notifiers", "_write_notifiers"):
+        fds.update(getattr(loop, attr, None) or ())
+    selector = getattr(loop, "_selector", None)
+    if selector is not None:
+        for mangled in _SELECTOR_NOTIFIERS:
+            fds.update(getattr(selector, mangled, None) or ())
+        fds.update(getattr(selector, "_fd_to_key", None) or ())
+    return frozenset(fds)
+
+
+def cleanup_stale_fds(*, timers_only: bool = False, keep: Collection[int] = ()) -> None:
     """Purge all qasync event-loop state that MCP/anyio may have leaked.
 
     qasync has TWO notifier layers that can hold stale FDs:
@@ -23,9 +45,12 @@ def cleanup_stale_fds(*, timers_only: bool = False) -> None:
 
     When *timers_only* is True, skip FD notifier cleanup (Layers 1-2).
     Use this during an active session where FDs may still be needed.
+    FDs in *keep* — what ``registered_fds()`` saw when the session started —
+    are never removed: they belong to the app, not to the session.
     """
     loop = asyncio.get_running_loop()
     self_pipe_fd = getattr(getattr(loop, "_ssock", None), "fileno", lambda: -1)()
+    spared = {self_pipe_fd, *keep}
 
     removed = 0
 
@@ -36,7 +61,7 @@ def cleanup_stale_fds(*, timers_only: bool = False) -> None:
             if not notifiers:
                 continue
             for fd in list(notifiers):
-                if fd == self_pipe_fd:
+                if fd in spared:
                     continue
                 try:
                     target = os.readlink(f"/proc/self/fd/{fd}")
@@ -52,24 +77,21 @@ def cleanup_stale_fds(*, timers_only: bool = False) -> None:
         selector = getattr(loop, "_selector", None)
         if selector is not None:
             fd_to_key: dict = getattr(selector, "_fd_to_key", {})
-            for mangled in (
-                "_Selector__read_notifiers",
-                "_Selector__write_notifiers",
-            ):
+            for mangled in _SELECTOR_NOTIFIERS:
                 sel_notifiers: dict | None = getattr(selector, mangled, None)
                 if not sel_notifiers:
                     continue
                 for fd in list(sel_notifiers):
-                    if fd == self_pipe_fd:
+                    if fd in spared:
                         continue
                     logger.warning("cleanup L2: removing %s FD %d", mangled, fd)
                     notifier = sel_notifiers.pop(fd, None)
                     if notifier is not None:
                         notifier.setEnabled(False)
                     removed += 1
-            # Clean corresponding selector keys (skip self-pipe)
+            # Clean corresponding selector keys (skip self-pipe and kept FDs)
             for fd in list(fd_to_key):
-                if fd == self_pipe_fd:
+                if fd in spared:
                     continue
                 logger.warning("cleanup L2: removing selector key FD %d", fd)
                 del fd_to_key[fd]

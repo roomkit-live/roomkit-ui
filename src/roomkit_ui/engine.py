@@ -23,7 +23,7 @@ from typing import Any
 from PySide6.QtCore import QObject, QTimer, Signal
 
 from roomkit_ui.builtin_tools import BUILTIN_TOOLS
-from roomkit_ui.cleanup import cleanup_stale_fds, post_cleanup_monitor
+from roomkit_ui.cleanup import cleanup_stale_fds, post_cleanup_monitor, registered_fds
 from roomkit_ui.cli_tools import CliToolManager
 from roomkit_ui.cli_tools_config import enabled_cli_tools
 from roomkit_ui.engine_callbacks import CallbackMixin
@@ -156,6 +156,9 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         # Maps type → (cache_key_tuple, provider_instance).
         self._cached_models: dict[str, tuple[tuple, Any]] = {}
         self._cleanup_monitor_task: asyncio.Task | None = None
+        # FDs the loop watched before the session: the app's own sockets,
+        # which the end-of-session FD cleanup must leave alone.
+        self._fds_before_session: frozenset[int] = frozenset()
         self._end_conv_handle: asyncio.TimerHandle | None = None
         # Tasks explicitly spawned by the engine.  Avoid sweeping
         # asyncio.all_tasks(): UI/settings/dictation tasks may legitimately
@@ -302,6 +305,7 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         if self._state not in (EngineState.IDLE, EngineState.ERROR):
             return
         self._session_settings = settings
+        self._fds_before_session = registered_fds()
         self._capture_since = capture_since
         self._mic_muted = False
         # Re-attach the log handler (removed during cleanup)
@@ -494,13 +498,15 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         await asyncio.sleep(0)
         await asyncio.sleep(0)
 
-        # Now safe to clean up stale event-loop state left by MCP/anyio.
-        cleanup_stale_fds()
+        # Now safe to clean up stale event-loop state left by MCP/anyio —
+        # only FDs the session registered: the app's own were there before.
+        keep = self._fds_before_session
+        cleanup_stale_fds(keep=keep)
         # The orphaned anyio timers may only appear after the current
         # event-loop iteration completes (they re-create themselves via
         # call_soon).  Schedule a delayed second pass to catch them
         # without interfering with ongoing task finalization.
-        asyncio.get_running_loop().call_later(0.1, cleanup_stale_fds)
+        asyncio.get_running_loop().call_later(0.1, lambda: cleanup_stale_fds(keep=keep))
         # Monitor CPU after cleanup to verify the fix worked
         self._cleanup_monitor_task = self._create_owned_task(
             post_cleanup_monitor(),
