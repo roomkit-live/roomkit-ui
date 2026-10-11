@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from shiboken6 import isValid
 
 from roomkit_ui.theme import colors
 from roomkit_ui.widgets.settings.models_widgets import _ModelRow
@@ -352,21 +353,33 @@ class _ModelsPage(QWidget):
         layout.addStretch()
 
     def _start_download(self, row: _ModelRow, download: _Download, what: str) -> None:
-        """Run *download* with *row* showing its progress, then its outcome."""
+        """Run *download* with *row* showing its progress, then its outcome.
+
+        Closing Settings destroys the row while the download goes on in its
+        thread (download_flight keeps it running for the next dialog), so
+        every update first checks the row is still alive.
+        """
         row.set_resolving()
         loop = asyncio.get_event_loop()
 
+        def _show_progress(pct: int) -> None:
+            if isValid(row):
+                row.set_downloading(pct)
+
         def _progress(downloaded: int, total: int) -> None:
             pct = min(int(downloaded * 100 / total), 100) if total > 0 else 0
-            loop.call_soon_threadsafe(row.set_downloading, pct)
+            loop.call_soon_threadsafe(_show_progress, pct)
 
         async def _run() -> None:
             try:
                 await download(_progress)
-                row.set_downloaded()
             except Exception:
                 logger.exception("%s download failed", what)
-                row.set_error()
+                if isValid(row):
+                    row.set_error()
+                return
+            if isValid(row):
+                row.set_downloaded()
 
         loop.create_task(_run())
 
