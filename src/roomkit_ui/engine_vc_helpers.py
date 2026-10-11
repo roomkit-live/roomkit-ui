@@ -61,6 +61,8 @@ def build_deepgram_stt(settings: dict, stt_language: str, emit_status) -> Any:
     return DeepgramSTTProvider(dg_config)
 
 
+# How Ollama words a model refusing the tools it was given.
+LOCAL_TOOL_REFUSAL = "does not support tools"
 _NO_TOOLS_HINT = (
     'This model does not support tool use. Disable "Model supports tool use" in '
     "Settings → AI Provider."
@@ -83,7 +85,7 @@ def register_local_tool_hint(kit: Any, emit_error) -> None:
     async def _on_tool_refusal(event: Any, context: Any) -> None:
         nonlocal shown
         error = str((getattr(event, "metadata", None) or {}).get("error", ""))
-        if shown or "does not support tools" not in error:
+        if shown or LOCAL_TOOL_REFUSAL not in error:
             return
         shown = True
         try:

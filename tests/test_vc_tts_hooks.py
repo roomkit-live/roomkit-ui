@@ -1,4 +1,5 @@
-"""The VC assistant bubble grows sentence by sentence, one reply at a time.
+"""VC hooks: the assistant bubble grows sentence by sentence, and a failed
+turn says so in the chat.
 
 roomkit runs BEFORE_TTS once per sentence of a streamed reply (and, since
 0.95, for Gradium too), while ChatBubble.update_stream() wants the growing
@@ -104,3 +105,30 @@ async def test_a_user_turn_or_a_tts_error_also_closes_the_reply():
     await kit.events["tts_error"](SimpleNamespace(data={"provider": "gradium"}))
     await before("After the error.", None)
     assert engine.emitted[-1] == ("After the error.", "assistant", False)
+
+
+# -- a turn the assistant could not answer -------------------------------------
+
+
+async def test_a_failed_turn_says_why_in_the_chat():
+    engine, kit = _setup()
+    notices = []
+    engine.session_notice.connect(notices.append)
+
+    await _hook(kit, "on_error")(
+        SimpleNamespace(metadata={"error": "anthropic: 401 invalid x-api-key"}), None
+    )
+
+    assert notices == ["The assistant could not answer: anthropic: 401 invalid x-api-key"]
+
+
+async def test_a_local_tool_refusal_is_left_to_the_settings_hint():
+    engine, kit = _setup()
+    notices = []
+    engine.session_notice.connect(notices.append)
+
+    await _hook(kit, "on_error")(
+        SimpleNamespace(metadata={"error": "qwen3:0.6b does not support tools"}), None
+    )
+
+    assert notices == []

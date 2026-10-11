@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from roomkit_ui.engine_state import EngineState
+from roomkit_ui.engine_vc_helpers import LOCAL_TOOL_REFUSAL
 
 
 def register_audio_hooks(kit: Any, engine: Any) -> None:
@@ -182,6 +183,26 @@ def register_vc_hooks(kit: Any, engine: Any) -> None:
             )
         except Exception:
             pass
+
+    # A turn the LLM could not answer (bad key, quota, refused request) ends
+    # in ON_ERROR, not in a voice event: without this the user hears silence.
+    @kit.hook(HookTrigger.ON_ERROR, HookExecution.ASYNC)
+    async def _on_turn_error(event, context):
+        error = str((getattr(event, "metadata", None) or {}).get("error") or "").strip()
+        if LOCAL_TOOL_REFUSAL in error:
+            return  # register_local_tool_hint names the setting to change instead
+        try:
+            engine.session_notice.emit(_turn_error_notice(error))
+        except Exception:
+            pass
+
+
+def _turn_error_notice(error: str) -> str:
+    """One chat-visible line for a turn the assistant could not answer."""
+    if len(error) > 200:
+        error = error[:197] + "…"
+    notice = "The assistant could not answer"
+    return f"{notice}: {error}" if error else notice
 
 
 def _voice_error_notice(prefix: str, data: dict) -> str:
