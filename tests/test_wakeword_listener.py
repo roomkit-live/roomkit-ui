@@ -62,7 +62,8 @@ def source():
 def listener(detector, source, monkeypatch, inline_jobs):
     lis = WakeWordListener(detector, "/nonexistent/vad.onnx", source=source, jobs=inline_jobs)
     monkeypatch.setattr(lis._capture, "_build_vad", lambda: object())
-    return lis
+    yield lis
+    lis.close()  # an armed listener runs a VAD thread until it is closed
 
 
 # -- arming ------------------------------------------------------------------

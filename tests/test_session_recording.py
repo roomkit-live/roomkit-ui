@@ -32,6 +32,7 @@ async def test_a_session_with_recording_enabled_writes_a_wav(tmp_path):
     for _ in range(5):
         pipeline.process_inbound(session, AudioFrame(data=b"\x01\x00" * 320, sample_rate=16000))
     pipeline.on_session_ended(session)
+    pipeline.close()  # stops the recorder's writer thread, as the channel's close does
 
     files = list(tmp_path.glob("*.wav"))
     assert len(files) == 1
