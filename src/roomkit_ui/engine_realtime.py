@@ -26,6 +26,7 @@ from roomkit_ui.engine_audio import (
     usable_capture_source,
 )
 from roomkit_ui.engine_state import EngineState
+from roomkit_ui.features import FeatureUnavailableError
 from roomkit_ui.hooks import register_realtime_hooks
 from roomkit_ui.mcp_config import has_enabled_mcp_servers
 from roomkit_ui.realtime_providers import (
@@ -152,6 +153,10 @@ class RealtimeMixin:
                 skills_registry=skills_registry,
             )
 
+        except FeatureUnavailableError as e:
+            # Not a fault: the backend is not installed, and the chat says how.
+            logger.warning("Session not started: %s", e)
+            await self._fail_start(str(e), missing=e.feature)  # type: ignore[attr-defined]
         except Exception as e:
             logger.exception("Failed to start voice session")
             await self._fail_start(str(e))  # type: ignore[attr-defined]

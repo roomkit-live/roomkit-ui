@@ -22,6 +22,7 @@ from roomkit_ui.engine_audio import (
     build_debug_taps,
     build_recorder,
     notify_missing_aec,
+    notify_missing_denoiser,
     setup_diarization,
     usable_capture_source,
 )
@@ -38,7 +39,12 @@ from roomkit_ui.engine_vc_helpers import (
     start_local_llm,
     turn_incomplete_wait_ms,
 )
-from roomkit_ui.features import STT_PROVIDER_FEATURES, require, unavailable_reason
+from roomkit_ui.features import (
+    STT_PROVIDER_FEATURES,
+    FeatureUnavailableError,
+    require,
+    unavailable_reason,
+)
 from roomkit_ui.hooks import register_vc_hooks
 from roomkit_ui.providers import create_ai_provider
 from roomkit_ui.speaker_naming import (
@@ -148,6 +154,7 @@ class VoiceChannelMixin:
                 aec_mode, denoise_mode, input_sample_rate, frame_size
             )
             notify_missing_aec(aec_mode, aec, self.session_notice.emit)  # type: ignore[attr-defined]
+            notify_missing_denoiser(denoise_mode, denoiser, self.session_notice.emit)  # type: ignore[attr-defined]
             backend = self._build_vc_backend(settings, aec, output_sample_rate)
             self._backend = backend  # type: ignore[attr-defined]
             log_vc_audio_pipeline(aec, denoiser, input_sample_rate, output_sample_rate)
@@ -192,6 +199,10 @@ class VoiceChannelMixin:
                 agent=self._vc_agent.summary,
             )
 
+        except FeatureUnavailableError as e:
+            # Not a fault: the backend is not installed, and the chat says how.
+            logger.warning("Session not started: %s", e)
+            await self._fail_start(str(e), missing=e.feature)  # type: ignore[attr-defined]
         except Exception as e:
             logger.exception("Failed to start voice channel session")
             await self._fail_start(str(e))  # type: ignore[attr-defined]

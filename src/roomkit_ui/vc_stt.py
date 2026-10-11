@@ -12,6 +12,7 @@ from collections.abc import Callable
 from typing import Any
 
 from roomkit_ui.engine_vc_helpers import try_set_float, try_set_int
+from roomkit_ui.features import is_available
 
 logger = logging.getLogger(__name__)
 
@@ -213,7 +214,8 @@ def build_turn_vad(settings: dict, inference_device: str) -> Any:
     if not str(tuned.get("vad_silence_ms", "") or "").strip():
         tuned["vad_silence_ms"] = str(_TURNLESS_SILENCE_MS)
     vad_model_id = settings.get("vc_vad_model", "")
-    if vad_model_id and is_vad_model_downloaded(vad_model_id):
+    # The VAD models run on sherpa-onnx; without it, the energy VAD.
+    if vad_model_id and is_vad_model_downloaded(vad_model_id) and is_available("local-voice"):
         from roomkit.voice.pipeline.vad.sherpa_onnx import SherpaOnnxVADProvider
 
         logger.info("VAD: %s (turns for a turnless STT)", vad_model_id)

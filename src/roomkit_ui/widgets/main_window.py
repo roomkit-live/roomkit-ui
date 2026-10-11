@@ -102,6 +102,8 @@ class MainWindow(QMainWindow):
         self._engine.user_speaking.connect(self._on_user_speaking)
         self._engine.ai_speaking.connect(self._on_ai_speaking)
         self._engine.error_occurred.connect(self._on_error)
+        # The engine logged it already, as what it is: a backend not installed.
+        self._engine.component_missing.connect(lambda _feature, msg: self._chat.add_error(msg))
         self._engine.tool_use.connect(self._on_tool_use)
         self._engine.tool_use_app.connect(self._on_tool_use_app)
         self._engine.tool_result_app.connect(self._on_tool_result_app)

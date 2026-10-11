@@ -11,6 +11,7 @@ import json
 import logging
 from typing import Any
 
+from roomkit_ui.features import unavailable_reason
 from roomkit_ui.paths import data_dir
 
 logger = logging.getLogger(__name__)
@@ -257,6 +258,14 @@ def notify_missing_aec(aec_mode: str, aec: Any, emit_notice: Any) -> None:
     )
 
 
+def notify_missing_denoiser(denoise_mode: str, denoiser: Any, emit_notice: Any) -> None:
+    """Say in the chat when the GTCRN denoiser is off for want of sherpa-onnx:
+    the session runs without noise suppression, and the user chose some."""
+    reason = unavailable_reason("local-voice") if denoise_mode == "gtcrn" else None
+    if denoiser is None and reason is not None:
+        emit_notice(f"No noise suppression this session: {reason}")
+
+
 def build_denoiser(denoise_mode: str, sample_rate: int) -> Any:
     """Build a denoiser provider for the given mode and sample rate."""
     if denoise_mode == "webrtc":
@@ -276,6 +285,11 @@ def build_denoiser(denoise_mode: str, sample_rate: int) -> Any:
     elif denoise_mode == "gtcrn":
         from roomkit_ui.model_manager import gtcrn_model_path, is_gtcrn_downloaded
 
+        reason = unavailable_reason("local-voice")
+        if reason is not None:
+            # The model runs on sherpa-onnx (notify_missing_denoiser says so).
+            logger.warning("GTCRN denoiser off: %s", reason)
+            return None
         if is_gtcrn_downloaded():
             from roomkit.voice.pipeline.denoiser.sherpa_onnx import (
                 SherpaOnnxDenoiserConfig,
@@ -336,6 +350,12 @@ def setup_diarization(
         return None
     if not vad_available:
         logger.warning("Diarization requires VAD — skipping")
+        return None
+    reason = unavailable_reason("local-voice")
+    if reason is not None:
+        # The speaker model runs on sherpa-onnx.
+        logger.warning("Diarization off: %s", reason)
+        engine.session_notice.emit(f"Speakers are not identified this session: {reason}")
         return None
 
     from roomkit_ui.model_manager import (

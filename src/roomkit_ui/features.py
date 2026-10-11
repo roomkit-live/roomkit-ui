@@ -36,9 +36,14 @@ class FeatureUnavailableError(RuntimeError):
     """A backend the user selected is not installed.
 
     The message is written for the user, not the log: it names the feature and
-    the command that installs it.  Engine start-up already emits ``str(exc)``
-    into the chat, so raising this is enough to surface it.
+    the command that installs it.  It is an expected state, not a fault: a
+    session start that meets one says so in the chat without a traceback.
+    ``feature`` is the key in :data:`FEATURES`, for whatever offers to install it.
     """
+
+    def __init__(self, message: str, feature: str = "") -> None:
+        super().__init__(message)
+        self.feature = feature
 
 
 @dataclass(frozen=True)
@@ -208,7 +213,7 @@ def require(key: str) -> None:
     """Raise :class:`FeatureUnavailableError` unless the feature is installed."""
     reason = unavailable_reason(key)
     if reason is not None:
-        raise FeatureUnavailableError(reason)
+        raise FeatureUnavailableError(reason, key)
 
 
 def _version(distribution: str) -> str:
