@@ -1,8 +1,11 @@
-"""Collapsible session info bar showing model and tool details."""
+"""A quiet Live header with session details available on demand."""
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, QTimer
+from pathlib import Path
+
+from PySide6.QtCore import QSize, Qt
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -13,14 +16,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from roomkit_ui.icons import svg_icon
 from roomkit_ui.theme import colors
-from roomkit_ui.theme_live import themed_style
-
-_COLLAPSED_HEIGHT = 36
-_MAX_EXPANDED_HEIGHT = 400
-_ANIM_INTERVAL = 16  # ms (~60 fps)
-_ANIM_DURATION = 200  # ms
-_ANIM_STEPS = _ANIM_DURATION // _ANIM_INTERVAL
+from roomkit_ui.theme_live import bind_theme, themed_style
+from roomkit_ui.widgets.buttons import KeyboardButton
 
 # Vendor-cased display names; .capitalize() fallback for anything unlisted.
 _PROVIDER_NAMES = {
@@ -60,45 +59,12 @@ def _usage_summary(payload: dict) -> str:
 
 
 class SessionInfoBar(QWidget):
-    """Compact summary bar that expands to show tool details."""
+    """RoomKit identity stays visible; model, tools and usage stay one tap away."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setFixedHeight(0)
-        self.hide()
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-
-        self._expanded = False
-        self._target_height = 0
-        self._anim_step = 0
-        self._anim_start_height = 0
-
-        self._anim_timer = QTimer(self)
-        self._anim_timer.setInterval(_ANIM_INTERVAL)
-        self._anim_timer.timeout.connect(self._anim_tick)
-
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
-        outer.setSpacing(0)
-
-        # ── Summary row (always visible) ──
-        self._header = QWidget()
-        self._header.setFixedHeight(_COLLAPSED_HEIGHT)
-        self._header.setCursor(Qt.PointingHandCursor)
-        themed_style(self._header, lambda c: f"background-color: {c['BG_TERTIARY']};")
-
-        header_layout = QHBoxLayout(self._header)
-        header_layout.setContentsMargins(12, 0, 12, 0)
-        header_layout.setSpacing(0)
-
-        self._summary_label = QLabel()
-        themed_style(
-            self._summary_label,
-            lambda c: f"color: {c['ACCENT_BLUE']}; font-size: 12px; background: transparent;",
-        )
-        header_layout.addWidget(self._summary_label, 1)
-
-        # Stored state for rebuilding summary when attitude changes
+        self.setStyleSheet("SessionInfoBar { background: transparent; }")
         self._provider_display = ""
         self._model_display = ""
         self._tools_display = ""
@@ -106,215 +72,160 @@ class SessionInfoBar(QWidget):
         self._attitude_display = ""
         self._cost_display = ""
 
-        self._chevron = QLabel()
-        self._chevron.setFixedWidth(20)
-        self._chevron.setAlignment(Qt.AlignCenter)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(20, 12, 20, 4)
+        outer.setSpacing(8)
+        header = QHBoxLayout()
+        header.setSpacing(10)
+        mark = QLabel()
+        logo = Path(__file__).resolve().parent.parent / "assets" / "logo.svg"
+        mark.setPixmap(QIcon(str(logo)).pixmap(QSize(26, 26), self.devicePixelRatioF()))
+        mark.setFixedSize(26, 26)
+        mark.setStyleSheet("background: transparent;")
+        header.addWidget(mark)
+        name = QLabel("roomkit.")
         themed_style(
-            self._chevron,
-            lambda c: f"color: {c['ACCENT_BLUE']}; font-size: 14px; background: transparent;",
+            name,
+            lambda c: (
+                f"color: {c['TEXT_PRIMARY']}; font-size: 18px; font-weight: 600;"
+                " background: transparent;"
+            ),
         )
-        header_layout.addWidget(self._chevron)
+        header.addWidget(name)
+        header.addStretch()
+        self._toggle_button = KeyboardButton()
+        self._toggle_button.setCheckable(True)
+        self._toggle_button.setFixedSize(40, 40)
+        self._toggle_button.setIconSize(QSize(20, 20))
+        self._toggle_button.setCursor(Qt.PointingHandCursor)
+        self._toggle_button.setAccessibleName("Session details")
+        self._toggle_button.setToolTip("Session details")
+        themed_style(
+            self._toggle_button,
+            lambda c: (
+                "QPushButton { background: transparent; border: 1px solid transparent;"
+                " border-radius: 14px; padding: 0; }"
+                f"QPushButton:hover, QPushButton:checked {{ background: {c['BG_SECONDARY']}; }}"
+                'QPushButton[keyboardFocus="true"] {'
+                f" border-color: {c['ACCENT_BRAND']}; }}"
+            ),
+        )
+        self._toggle_button.toggled.connect(self._set_expanded)
+        bind_theme(self, self._refresh_icon)
+        header.addWidget(self._toggle_button)
+        outer.addLayout(header)
 
-        outer.addWidget(self._header)
-
-        # ── Separator ──
-        sep = QWidget()
-        sep.setFixedHeight(1)
-        themed_style(sep, lambda c: f"background-color: {c['SEPARATOR']};")
-        outer.addWidget(sep)
-
-        # ── Tool detail panel (scroll area) ──
         self._detail_area = QScrollArea()
         self._detail_area.setWidgetResizable(True)
         self._detail_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self._detail_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self._detail_area.setFrameShape(QFrame.NoFrame)
         self._detail_area.setStyleSheet("background: transparent;")
-        self._detail_area.hide()
-
-        self._detail_container = QWidget()
-        themed_style(self._detail_container, lambda c: f"background-color: {c['BG_TERTIARY']};")
-        self._detail_layout = QVBoxLayout(self._detail_container)
-        self._detail_layout.setContentsMargins(12, 4, 12, 8)
-        self._detail_layout.setSpacing(2)
+        self._detail_container = QFrame()
+        self._detail_container.setObjectName("sessionDetails")
+        themed_style(
+            self._detail_container,
+            lambda c: (
+                "QFrame#sessionDetails {"
+                f" background: {c['BG_SECONDARY']}; border-radius: 16px; }}"
+            ),
+        )
+        details = QVBoxLayout(self._detail_container)
+        details.setContentsMargins(16, 14, 16, 14)
+        details.setSpacing(10)
+        self._summary_label = QLabel()
+        self._summary_label.setTextFormat(Qt.PlainText)
+        self._summary_label.setWordWrap(True)
+        themed_style(
+            self._summary_label,
+            lambda c: f"color: {c['TEXT_PRIMARY']}; font-size: 13px; background: transparent;",
+        )
+        details.addWidget(self._summary_label)
+        self._detail_layout = QVBoxLayout()
+        self._detail_layout.setSpacing(10)
+        details.addLayout(self._detail_layout)
         self._detail_area.setWidget(self._detail_container)
+        self._detail_area.hide()
+        outer.addWidget(self._detail_area)
+        self.hide()
 
-        outer.addWidget(self._detail_area, 1)
-
-        # ── Bottom border ──
-        border = QWidget()
-        border.setFixedHeight(1)
-        themed_style(border, lambda c: f"background-color: {c['SEPARATOR']};")
-        outer.addWidget(border)
-
-        self._header.mousePressEvent = lambda _e: self._toggle()  # type: ignore[method-assign]
-
-    # -- public API ----------------------------------------------------------
+    def _refresh_icon(self) -> None:
+        self._toggle_button.setIcon(svg_icon("information-circle", colors()["TEXT_SECONDARY"], 20))
 
     def set_session(self, info: dict) -> None:
-        """Populate and show the bar with session info."""
         provider = info.get("provider", "")
-        model = info.get("model", "")
         tools: list[dict] = info.get("tools", [])
         skills: list[dict] = info.get("skills", [])
         failed: list[str] = info.get("failed_servers", [])
-        agent: list[dict] = info.get("agent", [])
-
-        # Shorten model name for display
-        display_model = model.split("/")[-1] if "/" in model else model
-        if len(display_model) > 24:
-            display_model = display_model[:22] + "\u2026"
-
-        n_tools = len(tools)
-        n_skills = len(skills)
-        tool_word = "tool" if n_tools == 1 else "tools"
-
         self._provider_display = _PROVIDER_NAMES.get(provider, provider.capitalize())
-        self._model_display = display_model
-        self._cost_display = ""
-        self._tools_display = f"{n_tools} {tool_word}"
-        self._skills_display = ""
-        if n_skills:
-            skill_word = "skill" if n_skills == 1 else "skills"
-            self._skills_display = f"{n_skills} {skill_word}"
-
+        self._model_display = info.get("model", "")
+        self._tools_display = f"{len(tools)} {'tool' if len(tools) == 1 else 'tools'}"
+        self._skills_display = f"{len(skills)} {'skill' if len(skills) == 1 else 'skills'}"
+        self._attitude_display = self._cost_display = ""
         self._rebuild_summary()
-        self._chevron.setText("\u25be")
-
-        # Build detail list
         self._clear_details()
-        c = colors()
-
         if failed:
-            failed_label = QLabel(f"\u26a0  Failed: {', '.join(failed)}")
-            failed_label.setWordWrap(True)
+            label = QLabel(f"Unavailable integrations: {', '.join(failed)}")
+            label.setTextFormat(Qt.PlainText)
+            label.setWordWrap(True)
             themed_style(
-                failed_label,
-                lambda c: (
-                    f"color: {c['ACCENT_RED']}; font-size: 12px;"
-                    f" background: transparent; padding: 2px 0;"
-                ),
+                label,
+                lambda c: f"color: {c['ACCENT_RED']}; font-size: 12px; background: transparent;",
             )
-            self._detail_layout.addWidget(failed_label)
-
-        for tool in tools:
-            self._add_detail_row("\u2699", tool.get("name", ""), tool.get("description", ""), c)
-
-        for skill in skills:
-            self._add_detail_row("\u2726", skill.get("name", ""), skill.get("description", ""), c)
-
-        for part in agent:
-            self._add_detail_row("\u25c6", part.get("name", ""), part.get("description", ""), c)
-
-        self._detail_layout.addStretch()
-
-        # Show bar at collapsed height
-        self._expanded = False
-        self._detail_area.hide()
-        self.setFixedHeight(_COLLAPSED_HEIGHT)
+            self._detail_layout.addWidget(label)
+        for icon, entries in (("⚙", tools), ("✦", skills), ("◇", info.get("agent", []))):
+            for entry in entries:
+                self._add_detail_row(icon, entry.get("name", ""), entry.get("description", ""))
+        self._toggle_button.setChecked(False)
+        self._set_expanded(False)
         self.show()
 
-    def _add_detail_row(self, icon: str, name: str, desc: str, c: dict) -> None:
-        """Add a single tool/skill row to the detail panel."""
-        if len(desc) > 80:
-            desc = desc[:77] + "..."
-        sec_color = c["TEXT_SECONDARY"]
-        row = QLabel(
-            f"<span style='font-weight:600;'>{icon} {_esc(name)}</span>"
-            f"  "
-            f"<span style='color:{sec_color};'>{_esc(desc)}</span>"
-        )
+    def _add_detail_row(self, icon: str, name: str, description: str) -> None:
+        row = QLabel(f"<b>{icon} {_esc(name)}</b><br>{_esc(description)}")
         row.setTextFormat(Qt.RichText)
         row.setWordWrap(True)
         themed_style(
             row,
-            lambda c: (
-                f"color: {c['TEXT_PRIMARY']}; font-size: 12px;"
-                f" background: transparent; padding: 1px 0;"
-            ),
+            lambda c: f"color: {c['TEXT_SECONDARY']}; font-size: 12px; background: transparent;",
         )
         self._detail_layout.addWidget(row)
 
     def set_attitude(self, description: str) -> None:
-        """Update the attitude shown in the header summary."""
-        if description:
-            display = description if len(description) <= 30 else description[:28] + "\u2026"
-            self._attitude_display = display
-        else:
-            self._attitude_display = ""
+        self._attitude_display = description
         self._rebuild_summary()
 
     def update_cost(self, payload: dict) -> None:
-        """Update the running usage/cost figure in the header summary."""
         self._cost_display = _usage_summary(payload)
         self._rebuild_summary()
 
     def clear_session(self) -> None:
-        """Hide the bar."""
-        self._anim_timer.stop()
-        self._expanded = False
-        self.setFixedHeight(0)
-        self.hide()
-        self._detail_area.hide()
-        self._attitude_display = ""
-        self._cost_display = ""
+        self._toggle_button.setChecked(False)
+        self._set_expanded(False)
+        self._provider_display = self._model_display = ""
+        self._tools_display = self._skills_display = ""
+        self._attitude_display = self._cost_display = ""
+        self._summary_label.clear()
         self._clear_details()
-
-    # -- internal ------------------------------------------------------------
+        self.hide()
 
     def _rebuild_summary(self) -> None:
-        """Rebuild the summary label from stored parts."""
-        # Show attitude in place of model name when set
-        second = self._attitude_display or self._model_display
-        parts = [self._provider_display, second, self._tools_display]
-        if self._skills_display:
-            parts.append(self._skills_display)
-        if self._cost_display:
-            parts.append(self._cost_display)
-        self._summary_label.setText("  \u2013  ".join(parts))
+        parts = [self._provider_display, self._model_display]
+        inventory = " · ".join(filter(None, (self._tools_display, self._skills_display)))
+        parts.extend((inventory, self._attitude_display, self._cost_display))
+        self._summary_label.setText("\n".join(filter(None, parts)))
 
-    def _toggle(self) -> None:
-        if self._expanded:
-            self._expanded = False
-            self._chevron.setText("\u25be")
-            self._animate_to(_COLLAPSED_HEIGHT)
-        else:
-            self._expanded = True
-            self._chevron.setText("\u25b4")
-            self._detail_area.show()
-            self._animate_to(_MAX_EXPANDED_HEIGHT)
-
-    def _animate_to(self, target: int) -> None:
-        self._target_height = target
-        self._anim_step = 0
-        self._anim_start_height = self.height()
-        self._anim_timer.start()
-
-    def _anim_tick(self) -> None:
-        self._anim_step += 1
-        progress = min(self._anim_step / _ANIM_STEPS, 1.0)
-        # Ease-out quadratic
-        eased = 1.0 - (1.0 - progress) ** 2
-        current = int(
-            self._anim_start_height + (self._target_height - self._anim_start_height) * eased
-        )
-        self.setFixedHeight(current)
-
-        if progress >= 1.0:
-            self._anim_timer.stop()
-            if not self._expanded:
-                self._detail_area.hide()
+    def _set_expanded(self, expanded: bool) -> None:
+        self._detail_area.setVisible(expanded)
+        self._detail_area.setFixedHeight(220)
+        name = "Hide session details" if expanded else "Session details"
+        self._toggle_button.setAccessibleName(name)
+        self._toggle_button.setToolTip(name)
 
     def _clear_details(self) -> None:
         while self._detail_layout.count():
             item = self._detail_layout.takeAt(0)
-            if item is None:
-                continue
-            w = item.widget()
-            if w:
-                w.deleteLater()
+            if item is not None and (widget := item.widget()) is not None:
+                widget.deleteLater()
 
 
 def _esc(text: str) -> str:
-    """Minimal HTML escaping for rich-text labels."""
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")

@@ -12,9 +12,9 @@ roomkit 0.97's ``setup_background`` gives the agent ``work_in_background``:
 long work runs as a task, in a room of its own, while the conversation goes
 on, and its result comes back as a turn the agent speaks.
 
-Both are add-ons: one that cannot run (backend not installed, no key, a model
-that cannot answer under a schema) is left out of the session, and the chat
-says why.
+Both are add-ons: one that cannot run is left out of the session. Speaking
+policy problems go to session details and logs; other add-ons explain their
+absence in the chat.
 """
 
 from __future__ import annotations
@@ -85,21 +85,20 @@ def build_vc_agent(
     what was left out and why.  *tools* is False when the model is given
     none (a local model without tool use)."""
     agent = VCAgent()
-    _add_speak_policy(agent, settings, ai_provider, notice)
+    _add_speak_policy(agent, settings, ai_provider)
     _add_thinker(agent, settings, ai_provider, notice)
     _add_background(agent, settings, notice, tools=tools)
     return agent
 
 
-def _add_speak_policy(
-    agent: VCAgent, settings: dict, ai_provider: Any, notice: Callable[[str], None]
-) -> None:
+def _add_speak_policy(agent: VCAgent, settings: dict, ai_provider: Any) -> None:
     policy = settings.get("vc_speak_policy", "off")
     if policy not in _CLASSIFIER_BUILDERS:
         return
     reason = _classifier_unavailable(policy, settings, ai_provider)
     if reason is not None:
-        notice(f"The assistant answers every turn: {reason}")
+        logger.warning("Speaking policy unavailable: %s", reason)
+        agent.summary.append({"name": "Answers every turn", "description": reason})
         return
 
     from roomkit import ClassifierSpeakPolicy

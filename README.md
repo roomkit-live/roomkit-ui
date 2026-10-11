@@ -170,10 +170,21 @@ writes, so a CUDA wheel of another version mixes two builds' libraries.
 1. Click the gear icon to open **Settings**
 2. Add your API key in **Providers & keys**, then choose your mode and provider in **Conversation**
 3. Close **Settings** — other edits save whenever the dialog closes, Esc included;
-   the light/dark theme applies immediately — then press the green call button to start a
+   the light/dark theme applies immediately — then press the **Live waveform icon** at the right of the input to start a
    voice session
 4. Speak naturally — the AI will respond in real-time
-5. Press the red button to end the session
+5. Press the **red hang-up icon** to end the session
+
+The compact home has one input row: **+** for attachments, text, a dictation microphone,
+and the Live icon. Only **Live** is enabled in this first step; the other inputs are
+reserved for a future update.
+
+During Live, the microphone and hang-up controls stay below the transcript.
+The violet waveform follows voice activity; muting the microphone keeps playback
+audible. Use the **information icon** for model, tools, skills and usage details.
+Settings returns when the session ends.
+Home, startup and conversation share the same background. Startup progress appears
+in the conversation area with Cancel below it; speaking decisions stay in the logs.
 
 Search Settings with **Ctrl/Cmd+K** or **Ctrl/Cmd+F**. Results open the matching
 page and focus its control; Escape clears the search.
@@ -270,7 +281,9 @@ hidden imports and the native libraries. The release workflow
 (`.github/workflows/build.yml`) passes the same flags, and
 `tests/test_build_flags.py` fails when they differ — a bare `pyinstaller` call
 produces an app without its backends. The app icon is used when present: generate
-it first with `python scripts/generate_icons.py` (needs Pillow and cairosvg). On
+it first with `python scripts/generate_icons.py` (needs Pillow and cairosvg; use
+`--force` after changing the logo). The generator also syncs the packaged icons;
+macOS uses a padded version for both the Dock and the app bundle. On
 macOS, the script signs and notarizes when the environment variables listed at
 its top are set.
 

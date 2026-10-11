@@ -135,7 +135,7 @@ class ChatBubble(QFrame):
         # ("Speaker B"): the chat relabels it once it has a name.
         self.voice = ""
         self._finalized = False
-        self._created = datetime.now()
+        self.setToolTip(datetime.now().strftime("%H:%M"))
         self._raw_text = text
 
         # Word-by-word streaming state
@@ -168,7 +168,7 @@ class ChatBubble(QFrame):
                     f"QFrame#bubbleFrame {{"
                     f"  background-color: {c[bubble_color]};"
                     f"  border-radius: 18px;"
-                    f"  border-top-right-radius: 4px;"
+                    f"  border-top-right-radius: 6px;"
                     f"}}"
                 ),
             )
@@ -183,7 +183,7 @@ class ChatBubble(QFrame):
         # (theme.py), at a shared size; the roles differ only in *framing*
         # (the user's bubble vs the assistant's open column).
         if is_user:
-            self._label.setMaximumWidth(420)
+            self._bubble.setMaximumWidth(304)
             themed_style(
                 self._label,
                 lambda c: (
@@ -191,7 +191,7 @@ class ChatBubble(QFrame):
                     f"  color: {(c['BUBBLE_USER_TEXT'] if is_user else c['BUBBLE_AI_TEXT'])};"
                     f"  font-size: {CHAT_FONT_SIZE_PX}px;"
                     f"  line-height: 1.5;"
-                    f"  padding: 9px 14px 8px 14px;"
+                    f"  padding: 11px 14px 11px 14px;"
                     f"  background: transparent;"
                     f"}}"
                 ),
@@ -222,30 +222,12 @@ class ChatBubble(QFrame):
             # below pins it left when the window is wider than the measure.
             self._bubble.setMaximumWidth(680)
 
-        # ── Timestamp ── (user messages only; assistant text stays clean)
-        self._time_label = QLabel(self._created.strftime("%H:%M"))
-        align = Qt.AlignRight if is_user else Qt.AlignLeft
-        self._time_label.setAlignment(align)
-        themed_style(
-            self._time_label,
-            lambda c: (
-                f"QLabel {{"
-                f"  color: {c['TEXT_SECONDARY']};"
-                f"  font-size: 10px;"
-                f"  background: transparent;"
-                f"  padding: 2px 4px 0px 4px;"
-                f"}}"
-            ),
-        )
-        if not is_user:
-            self._time_label.setVisible(False)
-
         # ── Row: user bubble hugs the right; assistant text owns the row ──
         # Giving the assistant container the full row width (stretch 1, no
         # trailing spacer) is what keeps the word reveal steady: the text
         # wraps inside a fixed measure instead of resizing its own box.
         row = QHBoxLayout()
-        row.setContentsMargins(10, 0, 10, 0)
+        row.setContentsMargins(16, 0, 16, 0)
         row.setSpacing(0)
         if is_user:
             row.addStretch()
@@ -270,16 +252,6 @@ class ChatBubble(QFrame):
                 ),
             )
             self._interrupted_label.setVisible(False)
-
-        # ── Time row ──
-        time_row = QHBoxLayout()
-        time_row.setContentsMargins(14, 0, 14, 0)
-        if is_user:
-            time_row.addStretch()
-            time_row.addWidget(self._time_label)
-        else:
-            time_row.addWidget(self._time_label)
-            time_row.addStretch()
 
         # ── Outer layout ──
         outer = QVBoxLayout(self)
@@ -311,7 +283,6 @@ class ChatBubble(QFrame):
         outer.addLayout(row)
         if self._interrupted_label is not None:
             outer.addWidget(self._interrupted_label)
-        outer.addLayout(time_row)
         self.setStyleSheet("background: transparent;")
         bind_theme(self, self._refresh_markdown)
 
@@ -448,7 +419,7 @@ class ChatBubble(QFrame):
             self._streaming_connected = False
         self._finalized = True
         # Update timestamp to finalization time
-        self._time_label.setText(datetime.now().strftime("%H:%M"))
+        self.setToolTip(datetime.now().strftime("%H:%M"))
 
         # Render markdown for assistant bubbles only
         if self._role not in ("user", "other"):

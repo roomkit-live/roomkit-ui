@@ -12,6 +12,16 @@ Each released section is the source for that version's GitHub release notes.
 ## [Unreleased]
 
 ### Added
+- **Compact home and Live conversation redesign** — one input row with an icon to
+  start Live, a shared violet background, quieter conversation text, and large mute
+  and hang-up controls. Session details open on demand; startup progress stays inside
+  the conversation area. Text, attachments and message dictation remain reserved for
+  the next phase. The old control bar, loading overlay and redundant activity labels
+  are removed. macOS Dock and bundle icons now share balanced transparent margins.
+- **Tool activity during Live conversations** — compact rows show readable tool names
+  and real execution states, with input and results available on click. Interactive
+  MCP output shares the same row; concurrent calls to one tool keep separate results,
+  and late results cannot reappear after a session ends.
 - **Thinking and effort for the Voice Channel LLM** (Conversation → Voice Channel →
   Think · LLM) — Claude takes Thinking (on/off) and Effort (low to max) apart, Gemini a
   thinking level, Off included; each defaults to the model's own. A note under them says
@@ -244,6 +254,8 @@ Each released section is the source for that version's GitHub release notes.
   without it and says so; Voice Channel mode is unchanged.
 
 ### Fixed
+- **Numeric fields in Settings on Linux** — spin boxes reserve enough height for
+  their text and avoid applying input padding twice to their internal editor.
 - **No more "Channel ai not found in registry" in realtime sessions** — the durable room
   kept the LLM channel a Voice Channel session had bound, and every realtime event was
   routed to it. A session now unbinds what it does not serve when it opens the room.

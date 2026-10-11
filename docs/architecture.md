@@ -17,12 +17,12 @@ for user-facing behavior, and [onboarding.md](onboarding.md) to get a dev enviro
 graph TB
     subgraph QtUI["Qt UI — main thread"]
         MW[MainWindow]
-        CB[ControlBar<br/>call / mute / settings]
+        CB[ConversationComposer + Header<br/>Live / mute / settings]
         CV[ChatView + ChatBubble]
         APPW[MCPAppWidget<br/>QWebEngineView]
         VU[VUMeter]
         SI[SessionInfoBar]
-        LO[LoadingOverlay]
+        LO[SessionLoading<br/>Conversation slot]
         SP[SettingsPanel<br/>13 tabs]
         TRAY[Tray icon]
         MW --> CB & CV & VU & SI & LO
@@ -103,13 +103,13 @@ graph TB
 | **Models** | `model_catalog.py`, `model_download.py`, `model_manager.py`, `download_flight.py` | Download/manage local STT/TTS/VAD/speaker/denoiser/turn models (GitHub LFS resolution, one download per model) |
 | **Settings & secrets** | `settings.py`, `settings_secrets.py`, `secret_store.py` | QSettings persistence; API keys and secret env values in the OS keyring |
 | **Providers** | `providers/`, `tts/` | Lazy factory registries for LLM providers and TTS backends |
-| **Widgets** | `widgets/` | Main window, chat, VU meter, control bar, loading overlay, grouped settings workspace |
+| **Widgets** | `widgets/` | Main window, chat, VU meter, compact welcome and composer, loading overlay, grouped settings workspace |
 
 ## Data flow
 
 ### Voice session (both modes)
 
-1. `ControlBar` (or the wake word) asks `MainWindow` to start → `Engine.start(settings)`. The
+1. `ConversationComposer` (or the wake word) asks `MainWindow` to start → `Engine.start(settings)`. The
    engine claims CONNECTING before its first await and runs the start as its own task, so a
    stop (the Cancel button on the loading overlay) can cancel it where it waits.
 2. The engine builds the session from settings:
@@ -127,7 +127,7 @@ graph TB
    recall_conversations) come first, then pure built-ins, CLI tools, MCP. If a realtime
    provider refuses the session config, the start is retried without MCP tools, on freshly
    built media.
-5. RoomKit hooks (`hooks.py`) and provider callbacks (`engine_callbacks.py`) translate framework events into Qt signals: `transcription`, `mic_audio_level`, `speaker_audio_level`, `speaker_identified`, `tool_use`, `state_changed`, `error_occurred`, session notices and usage.
+5. RoomKit hooks (`hooks.py`) and provider callbacks (`engine_callbacks.py`) translate framework events into Qt signals: `transcription`, `mic_audio_level`, `speaker_audio_level`, `speaker_identified`, `state_changed`, `error_occurred`, session notices and usage. Tool dispatch emits `tool_started` / `tool_finished` with an invocation ID (`tool_events.py`), so each activity row receives its own outcome.
 6. `Engine.stop()` publishes STOPPING, cancels a start still in flight, then runs the ordered teardown (`engine.py:_cleanup`): cancel owned tasks → end the voice session → close the session's own STT/TTS (cached models stay) → `kit.close()` (or close the backends directly when no kit exists yet) → close MCP and CLI children → forget the session → yield to the loop, then purge stale timers and the FDs the session registered. A failed start runs the same teardown before reporting ERROR.
 
 ### Dictation
@@ -144,7 +144,7 @@ With **Remember conversations** on (default), every session joins one durable ro
 
 ### MCP Apps
 
-A tool result carrying a `ui://` resource URI triggers `MainWindow._fetch_and_show_app`: the HTML is fetched over MCP, served from a local `http://127.0.0.1` server with its own CSP, rendered in a `QWebEngineView` (one profile per widget), and wired to Python over QWebChannel JSON-RPC (`mcp_app_bridge.py`). App-initiated `tools/call` requests are proxied back through the engine's MCP path. An app whose session ended while it loaded is dropped.
+A tool declaring a `ui://` resource URI triggers `MainWindow._fetch_and_show_app`: the HTML is fetched over MCP, served from a local `http://127.0.0.1` server with its own CSP, rendered in a `QWebEngineView` (one profile per widget), and wired to Python over QWebChannel JSON-RPC (`mcp_app_bridge.py`). Its output attaches to the existing `ToolActivity` row; results and app widgets are matched by invocation ID, including simultaneous calls to the same tool. The row retains an outcome received before the HTML loads. App-initiated `tools/call` requests are proxied through the engine's server-scoped MCP path. An app whose session ended while it loaded is dropped.
 
 ## External integrations
 

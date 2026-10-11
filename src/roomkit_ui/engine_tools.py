@@ -11,9 +11,11 @@ import asyncio
 import json
 import logging
 from typing import TYPE_CHECKING, Any
+from uuid import uuid4
 
 from roomkit_ui.builtin_tools import handle_builtin_tool
 from roomkit_ui.cleanup import cleanup_stale_fds
+from roomkit_ui.tool_events import ToolCall, ToolResult
 
 if TYPE_CHECKING:
     from roomkit_ui.cli_tools import CliToolManager
@@ -105,9 +107,50 @@ class ToolMixin:
         ``roomkit.get_current_voice_session()`` if a session handle is ever
         needed here.
         """
-        # Check if this is an MCP App tool (has ui:// resource)
         app_info = self._mcp.get_app_tool_info(name) if self._mcp else None  # type: ignore[attr-defined]
-        self._show_tool_use(name, arguments, app_info)
+        call = ToolCall(
+            id=uuid4().hex,
+            name=name,
+            arguments_json=json.dumps(arguments, ensure_ascii=False),
+            resource_uri=app_info["uri"] if app_info else "",
+            server_name=app_info["server"] if app_info else "",
+        )
+        try:
+            self.tool_started.emit(call)  # type: ignore[attr-defined]
+        except RuntimeError:
+            pass  # Qt may already have destroyed the engine during teardown.
+
+        try:
+            text = await self._dispatch_tool_call(name, arguments)
+        except asyncio.CancelledError:
+            self._show_tool_result(
+                ToolResult(call.id, "cancelled", '{"error": "Tool call stopped."}')
+            )
+            raise
+        except Exception as failure:
+            self._show_tool_result(
+                ToolResult(call.id, "failed", json.dumps({"error": str(failure)}))
+            )
+            raise  # Providers must still receive ToolFailedError / ToolRefusedError.
+        else:
+            # Managers can return an unknown-tool envelope. Preserve it for
+            # roomkit, but don't present an unserved call as a success.
+            try:
+                body = json.loads(text)
+            except (ValueError, RecursionError):
+                body = None
+            failed = isinstance(body, dict) and bool(body.get("error"))
+            self._show_tool_result(ToolResult(call.id, "failed" if failed else "completed", text))
+            return text
+
+    def _show_tool_result(self, result: ToolResult) -> None:
+        try:
+            self.tool_finished.emit(result)  # type: ignore[attr-defined]
+        except RuntimeError:
+            pass
+
+    async def _dispatch_tool_call(self, name: str, arguments: dict[str, Any]) -> str:
+        """Keep dispatch and provider failure semantics separate from UI events."""
 
         engine_result = await self._handle_engine_tool(name, arguments)
         if engine_result is not None:
@@ -133,22 +176,7 @@ class ToolMixin:
             # roomkit reads this envelope as "not served here", not a result.
             return '{"error": "Unknown tool"}'
 
-        return await self._call_mcp_tool(self._mcp, name, arguments, app_info)
-
-    def _show_tool_use(self, name: str, arguments: dict[str, Any], app_info: Any) -> None:
-        """Show the call in the chat — as an MCP App when it has one."""
-        try:
-            if app_info is not None:
-                self.tool_use_app.emit(  # type: ignore[attr-defined]
-                    name,
-                    json.dumps(arguments),
-                    app_info["uri"],
-                    app_info["server"],
-                )
-            else:
-                self.tool_use.emit(name, json.dumps(arguments))  # type: ignore[attr-defined]
-        except Exception:
-            pass
+        return await self._call_mcp_tool(self._mcp, name, arguments)
 
     async def _handle_engine_tool(self, name: str, arguments: dict[str, Any]) -> str | None:
         """The built-ins that need the engine's state; None for any other tool."""
@@ -191,22 +219,12 @@ class ToolMixin:
         mcp: MCPManager,
         name: str,
         arguments: dict[str, Any],
-        app_info: dict[str, str] | None,
     ) -> str:
-        """Run an MCP tool for the model; a failure raises ``ToolFailedError``.
-
-        The app widget shows the outcome either way, so a failure is handed
-        to it as the ``{"error": ...}`` envelope it reads before it is raised.
-        """
-        from roomkit import ToolFailedError
-
+        """Run an MCP tool for the model; a failure raises ``ToolFailedError``."""
         self._pending_tool_calls += 1
         self._watchdog.tool_call_started()
         try:
-            result = await mcp.handle_tool_call(name, arguments)
-        except ToolFailedError as failure:
-            self._show_app_result(app_info, name, json.dumps({"error": failure.message}))
-            raise
+            return await mcp.handle_tool_call(name, arguments)
         finally:
             self._pending_tool_calls -= 1
             self._watchdog.tool_call_ended()
@@ -215,17 +233,6 @@ class ToolMixin:
             # after every MCP call to prevent 100% CPU spin loops.
             # timers_only=True: don't touch FD notifiers during an active session.
             cleanup_stale_fds(timers_only=True)
-        self._show_app_result(app_info, name, result)
-        return result
-
-    def _show_app_result(self, app_info: dict[str, str] | None, name: str, result: str) -> None:
-        """Hand an MCP App tool's result to its widget; no-op for other tools."""
-        if app_info is None:
-            return
-        try:
-            self.tool_result_app.emit(name, result)  # type: ignore[attr-defined]
-        except Exception:
-            pass
 
     async def _apply_attitude_by_name(self, name: str) -> str:
         """Look up an attitude by name and apply it.

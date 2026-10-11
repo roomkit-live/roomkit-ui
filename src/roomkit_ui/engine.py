@@ -112,9 +112,8 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
     reply_interrupted = Signal(int)
     error_occurred = Signal(str)
     component_missing = Signal(str, str)  # feature key, what the chat says
-    tool_use = Signal(str, str)  # tool_name, arguments_json
-    tool_use_app = Signal(str, str, str, str)  # name, args_json, resource_uri, server_name
-    tool_result_app = Signal(str, str)  # name, result_json
+    tool_started = Signal(object)  # ToolCall
+    tool_finished = Signal(object)  # ToolResult, matched by invocation ID
     mcp_status = Signal(str)  # MCP status message
     session_notice = Signal(str)  # non-fatal session info shown in the chat
     loading_status = Signal(str)  # loading progress message

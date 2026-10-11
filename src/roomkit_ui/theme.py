@@ -17,6 +17,7 @@ DARK: dict[str, str] = {
     "TEXT_PRIMARY": "#FFFFFF",
     "TEXT_SECONDARY": "#8E8E93",
     "ACCENT_BLUE": "#0A84FF",
+    "ACCENT_BRAND": "#B7A6F0",
     "ACCENT_GREEN": "#30D158",
     "ACCENT_RED": "#FF453A",
     # Subtle grey user bubble (modern AI-chat look) — the assistant renders
@@ -38,6 +39,7 @@ LIGHT: dict[str, str] = {
     "TEXT_PRIMARY": "#000000",
     "TEXT_SECONDARY": "#6C6C70",
     "ACCENT_BLUE": "#007AFF",
+    "ACCENT_BRAND": "#6652BD",
     "ACCENT_GREEN": "#34C759",
     "ACCENT_RED": "#FF3B30",
     "BUBBLE_USER_BG": "#E9E9EB",
@@ -61,7 +63,7 @@ _PALETTES = {"dark": DARK, "light": LIGHT}
 # could only be named wrong — "-apple-system" and "SF Pro Text" are CSS and
 # marketing names Qt does not know: it skipped them for Helvetica Neue, after
 # a font-alias lookup it warned about at every start.
-CHAT_FONT_SIZE_PX = 14
+CHAT_FONT_SIZE_PX = 15
 
 
 def fixed_font_family() -> str:
@@ -127,21 +129,7 @@ def get_stylesheet(theme: str = "dark") -> str:
     """Generate the full application QSS for *theme*."""
     c = get_colors(theme)
 
-    # Derive hover/pressed shades for buttons
-    if theme == "light":
-        btn_pressed = "#C7C7CC"
-        start_hover = "#2DB84E"
-        start_pressed = "#28A745"
-        stop_hover = "#E0352B"
-        stop_pressed = "#C42E25"
-        mute_hover_border = "#C7C7CC"
-    else:
-        btn_pressed = "#48484A"
-        start_hover = "#28c04e"
-        start_pressed = "#22a843"
-        stop_hover = "#e03e34"
-        stop_pressed = "#c4352c"
-        mute_hover_border = "#48484A"
+    btn_pressed = "#C7C7CC" if theme == "light" else "#48484A"
 
     # Light mode needs visible borders on buttons
     btn_border = f"border: 1px solid {c['SEPARATOR']};" if theme == "light" else "border: none;"
@@ -203,78 +191,6 @@ QPushButton:hover {{
 }}
 QPushButton:pressed {{
     background-color: {btn_pressed};
-}}
-
-/* ── Start button (green pill) ── */
-QPushButton#startButton {{
-    background-color: {c["ACCENT_GREEN"]};
-    color: #000000;
-    font-size: 15px;
-    font-weight: 600;
-    padding: 12px 28px;
-    border-radius: 24px;
-}}
-QPushButton#startButton:hover {{
-    background-color: {start_hover};
-}}
-QPushButton#startButton:pressed {{
-    background-color: {start_pressed};
-}}
-
-/* ── Stop / End button (red pill) ── */
-QPushButton#stopButton {{
-    background-color: {c["ACCENT_RED"]};
-    color: #FFFFFF;
-    font-size: 15px;
-    font-weight: 600;
-    padding: 12px 28px;
-    border-radius: 24px;
-}}
-QPushButton#stopButton:hover {{
-    background-color: {stop_hover};
-}}
-QPushButton#stopButton:pressed {{
-    background-color: {stop_pressed};
-}}
-
-/* ── Mic mute button (circle) ── */
-QPushButton#muteButton {{
-    background-color: {c["BG_SECONDARY"]};
-    border: 1px solid {c["SEPARATOR"]};
-    border-radius: 22px;
-    padding: 0px;
-}}
-QPushButton#muteButton:hover {{
-    background-color: {c["BG_TERTIARY"]};
-    border-color: {mute_hover_border};
-}}
-QPushButton#muteButton[muted="true"] {{
-    background-color: rgba(255, 69, 58, 0.2);
-    border-color: {c["ACCENT_RED"]};
-}}
-
-/* ── Gear / settings button ── */
-QPushButton#gearButton {{
-    background-color: transparent;
-    border: none;
-    border-radius: 18px;
-    padding: 0px;
-}}
-QPushButton#gearButton:hover {{
-    background-color: {c["BG_SECONDARY"]};
-}}
-
-/* ── Labels ── */
-QLabel#titleLabel {{
-    font-size: 16px;
-    font-weight: 600;
-    color: {c["TEXT_PRIMARY"]};
-    background: transparent;
-}}
-QLabel#statusLabel {{
-    font-size: 11px;
-    color: {c["TEXT_SECONDARY"]};
-    background: transparent;
 }}
 
 /* ── Settings dialog ── */

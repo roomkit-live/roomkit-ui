@@ -60,7 +60,7 @@ class IdleHangup(QObject):
         engine.user_speaking.connect(self._on_user_speaking)
         engine.ai_speaking.connect(self._on_ai_speaking)
         engine.mic_audio_level.connect(self._on_mic_level)
-        engine.tool_use.connect(self._on_tool_use)
+        engine.tool_started.connect(self._on_tool_started)
 
     # -- configuration -------------------------------------------------------
 
@@ -123,7 +123,7 @@ class IdleHangup(QObject):
         self._ai_speaking = speaking
         self.touch()
 
-    def _on_tool_use(self, _name: str, _arguments: str) -> None:
+    def _on_tool_started(self, _call: object) -> None:
         self.touch()
 
     def _on_mic_level(self, level: float) -> None:

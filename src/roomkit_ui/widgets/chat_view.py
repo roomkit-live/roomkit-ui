@@ -1,20 +1,14 @@
-"""Scrollable chat area with bubble widgets and speaking indicators."""
+"""Scrollable conversation; voice activity belongs to the Live controls."""
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from PySide6.QtCore import (
-    QByteArray,
     QEasingCurve,
     QPropertyAnimation,
-    QRectF,
     Qt,
     QTimer,
     Signal,
 )
-from PySide6.QtGui import QColor, QPixmap
-from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
     QFrame,
     QGraphicsOpacityEffect,
@@ -25,7 +19,10 @@ from PySide6.QtWidgets import (
 )
 
 from roomkit_ui.theme_live import themed_style
+from roomkit_ui.tool_events import ToolCall, ToolResult
 from roomkit_ui.widgets.chat_bubble import ChatBubble
+from roomkit_ui.widgets.conversation_home import ConversationWelcome, LiveWelcome
+from roomkit_ui.widgets.tool_activity import ToolActivity
 
 # Entrance fade for new rows (bubbles, tool/info pills).
 _FADE_IN_MS = 220
@@ -54,7 +51,7 @@ def _fade_in(widget: QWidget) -> None:
 
 
 class ChatView(QScrollArea):
-    """Scrollable chat transcript with iMessage-style bubbles."""
+    """User bubbles and open assistant replies, with a quiet Live invitation."""
 
     # A plain click on the name of a voice the STT tells apart ("Speaker B").
     speaker_clicked = Signal(str)
@@ -64,12 +61,13 @@ class ChatView(QScrollArea):
         self.setWidgetResizable(True)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setFrameShape(QFrame.NoFrame)
+        self.viewport().setStyleSheet("background: transparent;")
 
         self._container = QWidget()
         self._container.setStyleSheet("background: transparent;")
         self._layout = QVBoxLayout(self._container)
         self._layout.setContentsMargins(4, 8, 4, 8)
-        self._layout.setSpacing(4)
+        self._layout.setSpacing(12)
         self._layout.addStretch()  # index 0: pushes content down
         self.setWidget(self._container)
 
@@ -84,77 +82,15 @@ class ChatView(QScrollArea):
         # finalize keeps revealing after _reply is released, and
         # a barge-in must be able to snap that reveal short.
         self._last_assistant_bubble: ChatBubble | None = None
-        self._loading_label: QLabel | None = None
+        self._tool_calls: dict[str, ToolActivity] = {}
 
-        # Empty state (shown before conversation starts, centered vertically)
-        self._empty_state = QWidget()
-        self._empty_state.setStyleSheet("background: transparent;")
-        empty_layout = QVBoxLayout(self._empty_state)
-        empty_layout.setAlignment(Qt.AlignCenter)
-        empty_layout.setSpacing(20)
-
-        icon = QLabel()
-        icon.setAlignment(Qt.AlignCenter)
-        icon.setStyleSheet("background: transparent;")
-        logo_path = Path(__file__).resolve().parent.parent / "assets" / "logo.svg"
-        if logo_path.exists():
-            svg_data = QByteArray(logo_path.read_bytes())
-            renderer = QSvgRenderer(svg_data)
-            pixmap = QPixmap(64, 64)
-            pixmap.fill(QColor(0, 0, 0, 0))
-            from PySide6.QtGui import QPainter
-
-            painter = QPainter(pixmap)
-            renderer.render(painter, QRectF(0, 0, 64, 64))
-            painter.end()
-            icon.setPixmap(pixmap)
-        else:
-            icon.setText("\U0001f399")
-            icon.setStyleSheet("font-size: 48px; background: transparent;")
-        empty_layout.addWidget(icon)
-
-        heading = QLabel("RoomKit UI")
-        heading.setAlignment(Qt.AlignCenter)
-        themed_style(
-            heading,
-            lambda c: (
-                f"font-size: 18px; font-weight: 600;"
-                f" color: {c['TEXT_PRIMARY']}; background: transparent;"
-            ),
-        )
-        empty_layout.addWidget(heading)
-
-        hint = QLabel("Press Start to begin a voice conversation")
-        hint.setAlignment(Qt.AlignCenter)
-        themed_style(
-            hint,
-            lambda c: f"font-size: 15px; color: {c['TEXT_SECONDARY']}; background: transparent;",
-        )
-        empty_layout.addWidget(hint)
+        self._empty_state = ConversationWelcome()
+        self._live_empty = LiveWelcome(self._container)
+        self._live_empty.hide()
 
         # Center the empty state: stretch - widget - stretch
         self._layout.insertWidget(1, self._empty_state)
         self._layout.addStretch()  # bottom stretch for centering
-
-        # Status indicator (Listening… / Thinking…)
-        self._status_label = QLabel()
-        self._status_label.setAlignment(Qt.AlignCenter)
-        themed_style(
-            self._status_label,
-            lambda c: (
-                f"QLabel {{ color: {c['TEXT_SECONDARY']}; font-size: 12px; font-style: italic;"
-                f" background: transparent; padding: 4px; }}"
-            ),
-        )
-        self._status_label.hide()
-        self._layout.addWidget(self._status_label)
-
-        # Pulse animation for status indicator
-        self._pulse_timer = QTimer(self)
-        self._pulse_timer.setInterval(500)
-        self._pulse_dots = 0
-        self._pulse_base = ""
-        self._pulse_timer.timeout.connect(self._pulse_tick)
 
         # Reusable single-shot timer for scroll-to-bottom — avoids creating
         # a new QTimer on every streaming tick (~25/sec during responses).
@@ -188,7 +124,6 @@ class ChatView(QScrollArea):
         off, or for an "ok", the voice goes on, and the reply's later words
         and its final land in its own entry.  Only interrupt_reply() cuts it.
         """
-        self._hide_status()
         if role == "assistant":
             self._add_reply_text(text, is_final, speaker_name)
         else:
@@ -251,9 +186,8 @@ class ChatView(QScrollArea):
             self._current_bubble = None
 
     def _insert_bubble(self, bubble: ChatBubble) -> None:
-        # Insert before status_label (last widget) and stretch (second-to-last)
-        idx = max(self._layout.count() - 2, 0)
-        self._layout.insertWidget(idx, bubble)
+        self._hide_live_prompt()
+        self._layout.insertWidget(max(self._layout.count() - 1, 0), bubble)
         _fade_in(bubble)
 
     def name_voice(self, voice: str, name: str) -> None:
@@ -290,15 +224,6 @@ class ChatView(QScrollArea):
                 bubbles.append(widget)
         return bubbles
 
-    def show_listening(self) -> None:
-        self._show_status("Listening")
-
-    def show_thinking(self) -> None:
-        self._show_status("Thinking")
-
-    def hide_status(self) -> None:
-        self._hide_status()
-
     def _make_status_label(self, text: str, color: str) -> QLabel:
         """Quiet inline note shared by loading/info/tool/error rows.
 
@@ -323,69 +248,51 @@ class ChatView(QScrollArea):
         return label
 
     def _insert_status_row(self, widget: QWidget) -> None:
-        """Insert a widget above the bottom status area and scroll."""
-        idx = self._layout.count() - 2
-        if idx < 0:
-            idx = 0
-        self._layout.insertWidget(idx, widget)
+        """Insert a note before the bottom stretch and scroll."""
+        self._layout.insertWidget(max(self._layout.count() - 1, 0), widget)
         _fade_in(widget)
         self._scroll_to_bottom()
 
     def _finalize_current_bubble(self) -> None:
-        self._hide_status()
         for bubble in (self._current_bubble, self._reply):
             if bubble is not None and not bubble.finalized:
                 bubble.finalize()
         self._current_bubble = None
         self._reply = None
 
-    def set_loading_status(self, message: str) -> None:
-        """Show or update a single loading status label (replaces previous)."""
-        if self._loading_label is None:
-            self._loading_label = self._make_status_label("", "TEXT_SECONDARY")
-            self._insert_status_row(self._loading_label)
-        self._loading_label.setText(message)
-        self._scroll_to_bottom()
-
-    def clear_loading_status(self) -> None:
-        """Remove the loading status label if present."""
-        if self._loading_label is not None:
-            self._layout.removeWidget(self._loading_label)
-            self._loading_label.deleteLater()
-            self._loading_label = None
-
     def add_info(self, message: str) -> None:
         """Show a neutral info message in the chat area."""
         self._finalize_current_bubble()
         self._insert_status_row(self._make_status_label(message, "TEXT_SECONDARY"))
 
-    def add_tool_call(self, name: str, arguments: str) -> None:
-        """Show a tool-call indicator in the chat area."""
+    def add_tool_call(self, call: ToolCall) -> ToolActivity:
+        """Insert one compact row, updated by invocation ID when it finishes."""
+        if call.id in self._tool_calls:
+            return self._tool_calls[call.id]
         self._finalize_current_bubble()
-        self._insert_status_row(self._make_status_label(f"\u2699  {name}({arguments})", "#BF5AF2"))
+        self._hide_live_prompt()
+        row = ToolActivity(call, self._container)
+        self._tool_calls[call.id] = row
+        self._insert_status_row(row)
+        return row
 
-    def add_app_tool_call(
-        self,
-        tool_name: str,
-        arguments_json: str,
-        html_content: str | None,
-        server_name: str,
-    ) -> QWidget | None:
-        """Embed an MCP App widget in the chat, or fall back to a text label.
+    def tool_call(self, call_id: str) -> ToolActivity | None:
+        return self._tool_calls.get(call_id)
 
-        Returns the ``MCPAppWidget`` if created, else ``None``.
-        """
+    def finish_tool_call(self, result: ToolResult) -> None:
+        if row := self.tool_call(result.call_id):
+            row.finish(result)
+
+    def attach_app(self, call_id: str, html_content: str | None) -> QWidget | None:
+        """Attach interactive output to its existing row, preserving its position."""
         from roomkit_ui.widgets.mcp_app_widget import MCPAppWidget, has_webengine
 
-        if html_content is None or not has_webengine():
-            self.add_tool_call(tool_name, arguments_json)
+        row = self.tool_call(call_id)
+        if row is None or not html_content or not has_webengine():
             return None
-
-        self._finalize_current_bubble()
-
-        widget = MCPAppWidget(tool_name, server_name, parent=self._container)
+        widget = MCPAppWidget(row.call.name, row.call.server_name, parent=row)
         widget.load_html(html_content)
-        self._insert_status_row(widget)
+        row.attach_app(widget)
         return widget
 
     def add_install_offer(self, feature: str) -> None:
@@ -406,74 +313,54 @@ class ChatView(QScrollArea):
         self._finalize_current_bubble()
         self._insert_status_row(self._make_status_label(message, "ACCENT_RED"))
 
-    def clear(self) -> None:
-        """Remove all bubbles and error labels, switch to chat layout."""
+    def _clear_rows(self) -> None:
         self._empty_state.hide()
-        self._loading_label = None
-        # Remove everything from layout
+        self._live_empty.hide()
+        self._scroll_timer.stop()
         while self._layout.count():
             item = self._layout.takeAt(0)
             if item is None:
                 continue
-            w = item.widget()
-            if w and w not in (self._empty_state, self._status_label):
-                # Finalize streaming bubbles to stop their timers before deletion
-                if isinstance(w, ChatBubble) and not w.finalized:
-                    # Interrupted-style: snaps any pending reveal so its
-                    # timer cannot outlive the widget (no marker shown on
-                    # a bubble that is being deleted anyway).
-                    w.finalize(interrupted=True)
-                w.deleteLater()
-        # Rebuild base layout: stretch (pushes to bottom) + status_label
-        self._layout.addStretch()
-        self._layout.addWidget(self._status_label)
+            widget = item.widget()
+            if widget and widget not in (self._empty_state, self._live_empty):
+                if isinstance(widget, ChatBubble) and not widget.finalized:
+                    widget.finalize(interrupted=True)
+                widget.deleteLater()
         self._current_bubble = None
         self._reply = None
         self._last_assistant_bubble = None
+        self._tool_calls.clear()
         self._voice_names.clear()
+        self._autoscroll = True
+
+    def clear(self) -> None:
+        """Start a fresh Live transcript with a centered invitation."""
+        self._clear_rows()
+        self._layout.addStretch()
+        self._layout.addWidget(self._live_empty)
+        self._layout.addStretch()
+        self._live_empty.show()
 
     def reset(self) -> None:
-        """Clear conversation and show empty state again."""
-        self._hide_status()
-        self._loading_label = None
-        while self._layout.count():
-            item = self._layout.takeAt(0)
-            if item is None:
-                continue
-            w = item.widget()
-            if w and w not in (self._empty_state, self._status_label):
-                if isinstance(w, ChatBubble) and not w.finalized:
-                    w.finalize()
-                w.deleteLater()
-        self._current_bubble = None
-        self._reply = None
-        self._last_assistant_bubble = None  # deleted above, like every bubble
-        self._voice_names.clear()
-        # Rebuild with empty state centered
+        """Clear the session and return to the welcome page."""
+        self._clear_rows()
         self._layout.addStretch()
-        self._layout.insertWidget(1, self._empty_state)
+        self._layout.addWidget(self._empty_state)
         self._layout.addStretch()
-        self._layout.addWidget(self._status_label)
         self._empty_state.show()
 
+    def _hide_live_prompt(self) -> None:
+        if self._live_empty.isHidden() and self._empty_state.isHidden():
+            return
+        for prompt in (self._live_empty, self._empty_state):
+            prompt.hide()
+            self._layout.removeWidget(prompt)
+        # Remove its leading stretch, keeping the one after the transcript.
+        first = self._layout.itemAt(0)
+        if first is not None and first.spacerItem() is not None:
+            self._layout.takeAt(0)
+
     # -- internal ------------------------------------------------------------
-
-    def _show_status(self, text: str) -> None:
-        self._pulse_base = text
-        self._pulse_dots = 0
-        self._status_label.setText(text + "...")
-        self._status_label.show()
-        self._pulse_timer.start()
-        self._scroll_to_bottom()
-
-    def _hide_status(self) -> None:
-        self._pulse_timer.stop()
-        self._status_label.hide()
-
-    def _pulse_tick(self) -> None:
-        self._pulse_dots = (self._pulse_dots + 1) % 4
-        dots = "." * (self._pulse_dots + 1)
-        self._status_label.setText(self._pulse_base + dots)
 
     def _scroll_to_bottom(self) -> None:
         self._scroll_timer.start()  # restarts if already running

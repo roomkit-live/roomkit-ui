@@ -28,6 +28,7 @@ from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QDialog, QFrame, QLabel, QSizePolicy, QVBoxLayout, QWidget
 
 from roomkit_ui.theme import colors
+from roomkit_ui.theme_live import themed_style
 from roomkit_ui.widgets.mcp_app_server import get_http_server, release_content
 from roomkit_ui.widgets.mcp_app_wrapper import WRAPPER_HTML
 
@@ -85,41 +86,22 @@ class MCPAppWidget(QFrame):
         # Expand horizontally to fill the scroll area; fixed height.
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
-        c = colors()
-        self.setStyleSheet(
-            f"MCPAppWidget {{"
-            f"  background: {c['BG_TERTIARY']};"
-            f"  border: 1px solid {c['SEPARATOR']};"
-            f"  border-radius: 8px;"
-            f"  margin: 4px 20px;"
-            f"}}"
-        )
+        # ToolActivity owns the frame, title and status for every kind of tool.
+        self.setStyleSheet("MCPAppWidget { background: transparent; border: none; }")
 
         self._layout = QVBoxLayout(self)
         self._layout.setContentsMargins(0, 0, 0, 0)
         self._layout.setSpacing(0)
 
-        # Header — show the MCP server name (e.g. "Excalidraw"), like Claude does
-        header = QLabel(f"\u2699  {server_name}")
-        header.setStyleSheet(
-            "QLabel {"
-            "  color: #BF5AF2;"
-            "  font-size: 12px;"
-            "  background: transparent;"
-            "  padding: 6px 12px 2px 12px;"
-            "}"
-        )
-        self._layout.addWidget(header)
-
         # Error label — hidden by default, shown on JS errors
-        c2 = colors()
         self._error_label = QLabel()
         self._error_label.setWordWrap(True)
-        self._error_label.setStyleSheet(
-            f"QLabel {{"
-            f"  color: {c2['ACCENT_RED']}; font-size: 11px;"
-            f"  background: transparent; padding: 4px 12px;"
-            f"}}"
+        themed_style(
+            self._error_label,
+            lambda c: (
+                f"color: {c['ACCENT_RED']}; font-size: 11px;"
+                "background: transparent; padding: 4px 12px;"
+            ),
         )
         self._error_label.hide()
 
@@ -135,10 +117,10 @@ class MCPAppWidget(QFrame):
         self._layout.addWidget(self._error_label)
 
     def _add_fallback(self) -> None:
-        c = colors()
         label = QLabel("MCP App (QWebEngine not available)")
-        label.setStyleSheet(
-            f"color: {c['TEXT_SECONDARY']}; padding: 12px; background: transparent;"
+        themed_style(
+            label,
+            lambda c: f"color: {c['TEXT_SECONDARY']}; padding: 12px; background: transparent;",
         )
         self._layout.addWidget(label)
 

@@ -1,11 +1,12 @@
-"""The Voice Channel agent's speak policy: built from the settings, said in the chat.
+"""The Voice Channel agent's speak policy and its diagnostic reporting.
 
 The policy is an add-on: one that cannot run leaves the session answering
-every turn and says why, never fails the start.
+every turn with details available outside the chat, never fails the start.
 """
 
 from __future__ import annotations
 
+import logging
 from types import SimpleNamespace
 
 import pytest
@@ -15,7 +16,7 @@ from roomkit.speaking import SpeakDecision
 from vc_harness import StreamingInputTTS, open_session, until
 
 from roomkit_ui import vc_agent
-from roomkit_ui.agent_hooks import FALLBACK_NOTICE, register_agent_hooks, speak_decision_notice
+from roomkit_ui.agent_hooks import register_agent_hooks
 from roomkit_ui.vc_agent import agent_name, build_vc_agent
 
 
@@ -51,10 +52,9 @@ def test_a_classifier_without_its_key_leaves_the_assistant_answering(policy):
     agent, notices = _build({"vc_speak_policy": policy, "openai_api_key": ""})
 
     assert agent.channel_options() == {}
-    assert notices == [
-        "The assistant answers every turn: the speaking decision has no API key "
-        "(Settings → AI → Voice Channel → Agent)."
-    ]
+    assert notices == []
+    assert agent.summary[0]["name"] == "Answers every turn"
+    assert "no API key" in agent.summary[0]["description"]
 
 
 def test_a_classifier_not_installed_names_its_install(monkeypatch):
@@ -63,7 +63,8 @@ def test_a_classifier_not_installed_names_its_install(monkeypatch):
     agent, notices = _build({"vc_speak_policy": "jev", "typesafe_api_key": "k"})
 
     assert agent.channel_options() == {}
-    assert notices == ["The assistant answers every turn: typesafe missing: pip …"]
+    assert notices == []
+    assert "typesafe missing: pip …" in agent.summary[0]["description"]
 
 
 def test_the_conversation_model_decides_only_when_it_answers_under_a_schema():
@@ -73,7 +74,8 @@ def test_the_conversation_model_decides_only_when_it_answers_under_a_schema():
 
     agent, notices = _build({"vc_speak_policy": "llm"}, MockAIProvider())
     assert agent.channel_options() == {}
-    assert "cannot answer the speaking decision's questions" in notices[0]
+    assert notices == []
+    assert "cannot answer the speaking decision's questions" in agent.summary[0]["description"]
 
 
 def test_the_assistant_is_called_assistant_unless_named():
@@ -81,35 +83,10 @@ def test_the_assistant_is_called_assistant_unless_named():
     assert agent_name({"vc_agent_name": "Nova"}) == "Nova"
 
 
-@pytest.mark.parametrize(
-    ("decision", "asked_again", "line"),
-    [
-        (SpeakDecision("silent", "not finished"), False, "Stayed quiet — you had not finished."),
-        (
-            SpeakDecision("silent", "asked to listen"),
-            False,
-            "Stayed quiet — listening until spoken to.",
-        ),
-        (
-            SpeakDecision("silent", "a reason of its own"),
-            False,
-            "Stayed quiet — a reason of its own.",
-        ),
-        # Each silence of a listening room repeats the one said when it began.
-        (SpeakDecision("silent", "listening"), False, None),
-        # Taken again once the agent thought: the first decision was shown.
-        (SpeakDecision("silent", "not addressed"), True, None),
-        (SpeakDecision("speak", "addressed"), False, None),
-        (SpeakDecision("offer", "wondered about"), False, None),
-    ],
-)
-def test_the_chat_says_why_the_assistant_stayed_quiet(decision, asked_again, line):
-    assert speak_decision_notice(decision, asked_again=asked_again) == line
-
-
-async def test_a_turn_the_speaker_had_not_finished_gets_no_answer_and_a_line(qapp):
+async def test_an_unfinished_turn_gets_no_answer_or_technical_chat_line(qapp, caplog):
     # The real policy on scripted judgments: the classifier hears an
-    # unfinished sentence, the assistant stays quiet and the chat says why.
+    # unfinished sentence: the assistant stays quiet without a technical chat row.
+    caplog.set_level(logging.INFO, logger="roomkit_ui.agent_hooks")
     classifier = MockClassifier({"unfinished": 0.9})
     vc = await open_session(
         tts=StreamingInputTTS(),
@@ -122,15 +99,16 @@ async def test_a_turn_the_speaker_had_not_finished_gets_no_answer_and_a_line(qap
     register_agent_hooks(vc.kit, vc.engine)
 
     await vc.speak()
-    await until(lambda: bool(notices))
+    await until(lambda: "Speak decision: silent" in caplog.text)
     await vc.kit.close()
 
-    assert notices == ["Stayed quiet — you had not finished."]
+    assert notices == []
+    assert "not finished" in caplog.text
     assert vc.ai.contexts == []  # no turn ran
     assert classifier.calls
 
 
-async def test_a_policy_that_fails_lets_the_assistant_answer_and_says_so(qapp):
+async def test_a_failed_policy_still_answers_and_logs_the_fallback(qapp, caplog):
     from roomkit.speaking import MockSpeakPolicy
 
     vc = await open_session(
@@ -143,10 +121,11 @@ async def test_a_policy_that_fails_lets_the_assistant_answer_and_says_so(qapp):
     register_agent_hooks(vc.kit, vc.engine)
 
     await vc.speak()
-    await until(lambda: len(vc.ai.contexts) == 1 and bool(notices))
+    await until(lambda: len(vc.ai.contexts) == 1 and "Speak decision: speak" in caplog.text)
     await vc.kit.close()
 
-    assert notices == [FALLBACK_NOTICE]
+    assert notices == []
+    assert "fallback" in caplog.text
 
 
 class _HookKit:
@@ -161,7 +140,7 @@ class _HookKit:
         return register
 
 
-async def test_a_failing_policy_is_said_once_per_session():
+async def test_repeated_decisions_stay_in_logs(caplog):
     from roomkit_ui.engine_state import EngineState
 
     kit, said = _HookKit(), []
@@ -177,7 +156,8 @@ async def test_a_failing_policy_is_said_once_per_session():
     await hook(event, None)
     await hook(event, None)
 
-    assert said == [FALLBACK_NOTICE]
+    assert said == []
+    assert caplog.text.count("Speak decision: speak") == 2
 
 
 def test_the_agent_tab_saves_its_choices(qapp):

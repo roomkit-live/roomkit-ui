@@ -109,18 +109,19 @@ kept, never replaced. Agent Skills reach realtime sessions as well as Voice Chan
 
 ### Voice Channel agent (Settings → Conversation → Voice setup → Voice Channel → Agent)
 
-Three add-ons, all off by default. One that cannot run is left out of the session and the
-chat says why; none fails the start.
+Three add-ons, all off by default. One that cannot run is left out of the session;
+none fails the start. An unavailable speaking policy is explained in session details
+and logs; the other add-ons report their absence in the chat.
 
 - **Deciding when to speak** — roomkit's `ClassifierSpeakPolicy`: on each turn one
   classifier call judges whether the speaker finished, put it off, asked for quiet or
   spoke to the assistant, and the assistant answers, offers one short sentence, or stays
-  quiet. A quiet turn shows "Stayed quiet — <why>" in the chat. "Just listen" keeps it
+  quiet. These decisions stay in the logs. "Just listen" keeps it
   listening until spoken to by its name (the tab's Name field, "Assistant" by default).
   The judgments come from OpenAI Decisions (the OpenAI key), TypeSafe Jev (`typesafe`
   extra and key) or the conversation model (one that answers under a JSON schema). Every
   reply waits for the decision; a classifier that fails or misses roomkit's 2 s bound lets
-  the assistant answer, said once in the chat.
+  the assistant answer, with the fallback recorded in the logs.
 - **Thinking while listening** — needs a speaking decision. On the turns the assistant
   stays quiet, the conversation model rewrites its thought (what is said, what it could
   add); with something worth saying it may offer it. Thoughts go to the log only.
@@ -212,6 +213,10 @@ makes the assistant answer only utterances attributed to the enrolled primary sp
 
 ### Tools: MCP + CLI + built-ins + MCP Apps
 
+- **Activity in Live**: compact rows show each tool's readable name and actual state
+  (working, done, failed or stopped). Click a row to inspect its input and result;
+  details are selectable plain text, with a bounded preview for large outputs.
+  Interactive MCP output shares the same row. Repeated calls keep separate results.
 - **Built-in tools** (always available): date/time, RoomKit info, attitudes (list, set),
   clipboard paste, end-conversation (only on an explicit goodbye), and
   `recall_conversations` when memory is on. (`builtin_tools.py`, `engine_tools.py`)
@@ -400,7 +405,7 @@ sequenceDiagram
 - The pre-built binaries carry Smart Turn but neither Pocket TTS, Qwen3-TTS nor NeuTTS
   (outside the `all` extra); install from source for those.
 - Azure MAI-Transcribe and Meta Muse are not offered for dictation.
-- MCP Apps require QtWebEngine (graceful fallback to a plain tool pill without it).
+- MCP Apps require QtWebEngine (the tool's activity and text result remain available without it).
 - Window size fixed; no chat search/export.
 - French-centric Piper catalog (all three Piper voices are French); Pocket TTS covers six
   more languages.

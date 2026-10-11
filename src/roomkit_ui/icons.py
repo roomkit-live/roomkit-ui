@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QByteArray, QRectF
-from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
+from PySide6.QtGui import QColor, QGuiApplication, QIcon, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 
 # ---------------------------------------------------------------------------
@@ -17,6 +17,10 @@ _SVG_TEMPLATE = (
 )
 
 _PATHS = {
+    "check": '<path stroke-linecap="round" stroke-linejoin="round" d="m5 12 4 4L19 6"/>',
+    "chevron-right": '<path stroke-linecap="round" stroke-linejoin="round" d="m9 5 7 7-7 7"/>',
+    "chevron-down": '<path stroke-linecap="round" stroke-linejoin="round" d="m5 9 7 7 7-7"/>',
+    "plus": '<path stroke-linecap="round" d="M12 5v14M5 12h14"/>',
     "magnifying-glass": (
         '<circle cx="10.5" cy="10.5" r="7.5"/><path stroke-linecap="round" d="m16 16 5 5"/>'
     ),
@@ -146,7 +150,10 @@ def svg_icon(name: str, color: str = "#FFFFFF", size: int = 24) -> QIcon:
     data = QByteArray(svg.encode("utf-8"))
     renderer = QSvgRenderer(data)
 
-    pixmap = QPixmap(size, size)
+    screen = QGuiApplication.primaryScreen()
+    ratio = screen.devicePixelRatio() if screen else 1.0
+    pixmap = QPixmap(round(size * ratio), round(size * ratio))
+    pixmap.setDevicePixelRatio(ratio)
     pixmap.fill(QColor(0, 0, 0, 0))  # transparent
     painter = QPainter(pixmap)
     try:
@@ -155,32 +162,3 @@ def svg_icon(name: str, color: str = "#FFFFFF", size: int = 24) -> QIcon:
         painter.end()
 
     return QIcon(pixmap)
-
-
-def svg_icon_dual(
-    name: str,
-    color_normal: str = "#FFFFFF",
-    color_active: str = "#FFFFFF",
-    size: int = 24,
-) -> QIcon:
-    """QIcon with normal + active/selected modes."""
-    icon = QIcon()
-
-    for color, mode in [
-        (color_normal, QIcon.Normal),
-        (color_active, QIcon.Active),
-    ]:
-        paths = _PATHS.get(name, "")
-        svg = _SVG_TEMPLATE.format(color=color, paths=paths)
-        data = QByteArray(svg.encode("utf-8"))
-        renderer = QSvgRenderer(data)
-        pixmap = QPixmap(size, size)
-        pixmap.fill(QColor(0, 0, 0, 0))
-        painter = QPainter(pixmap)
-        try:
-            renderer.render(painter, QRectF(0, 0, size, size))
-        finally:
-            painter.end()
-        icon.addPixmap(pixmap, mode)
-
-    return icon

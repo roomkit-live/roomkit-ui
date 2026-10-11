@@ -11,6 +11,7 @@ from shiboken6 import isValid
 
 import roomkit_ui.widgets.main_window as main_window_mod
 from roomkit_ui.engine_state import EngineState
+from roomkit_ui.tool_events import ToolCall, ToolResult
 from roomkit_ui.widgets.main_window import MainWindow
 from roomkit_ui.widgets.settings import SettingsPanel
 
@@ -25,6 +26,20 @@ def window(qapp):
     yield w
     w.deleteLater()
     _flush_deletes()
+
+
+def test_home_returns_after_live_with_no_idle_audio_meter(window):
+    assert not window._chat._empty_state.isHidden()
+    assert window._vu.isHidden()
+    window._chat.clear()
+
+    window._on_state_changed(EngineState.ACTIVE)
+    assert not window._vu.isHidden()
+    assert window._chat._empty_state.isHidden()
+
+    window._on_state_changed(EngineState.IDLE)
+    assert window._vu.isHidden()
+    assert not window._chat._empty_state.isHidden()
 
 
 # -- Settings dialog -----------------------------------------------------------
@@ -132,11 +147,11 @@ def inserted_apps(window, monkeypatch) -> list[_FakeAppWidget]:
     """The MCP App widgets the chat is asked to show, in an active session."""
     inserted: list[_FakeAppWidget] = []
 
-    def add_app_tool_call(*_args):
+    def attach_app(*_args):
         inserted.append(_FakeAppWidget())
         return inserted[-1]
 
-    monkeypatch.setattr(window._chat, "add_app_tool_call", add_app_tool_call)
+    monkeypatch.setattr(window._chat, "attach_app", attach_app)
     window._engine._state = EngineState.ACTIVE
     return inserted
 
@@ -148,8 +163,10 @@ def _end_session(window: MainWindow) -> None:
 
 async def test_an_app_loaded_after_the_session_ended_is_not_shown(window, inserted_apps):
     window._engine._mcp = _SlowMCP(lambda: _end_session(window))
+    call = ToolCall("one", "chart", "{}", "ui://chart", "viz")
+    window._chat.add_tool_call(call)
 
-    await window._fetch_and_show_app("chart", "{}", "ui://chart", "viz")
+    await window._fetch_and_show_app(call)
 
     assert inserted_apps == []
     assert window._active_app_widgets == {}
@@ -157,11 +174,51 @@ async def test_an_app_loaded_after_the_session_ended_is_not_shown(window, insert
 
 async def test_an_app_loaded_while_the_session_runs_is_shown(window, inserted_apps):
     window._engine._mcp = _SlowMCP(lambda: None)
+    call = ToolCall("one", "chart", "{}", "ui://chart", "viz")
+    window._chat.add_tool_call(call)
 
-    await window._fetch_and_show_app("chart", "{}", "ui://chart", "viz")
+    await window._fetch_and_show_app(call)
 
     assert len(inserted_apps) == 1
-    assert window._active_app_widgets["chart"] is inserted_apps[0]
+    assert window._active_app_widgets["one"] is inserted_apps[0]
+
+
+async def test_result_before_app_load_reaches_only_its_own_invocation(window, inserted_apps):
+    calls = [ToolCall(str(i), "chart", "{}", "ui://chart", "viz") for i in range(2)]
+    for call in calls:
+        window._chat.add_tool_call(call)
+    window._on_tool_finished(ToolResult("1", "completed", '{"result": "second"}'))
+    window._engine._mcp = _SlowMCP(lambda: None)
+    for call in calls:
+        await window._fetch_and_show_app(call)
+    assert inserted_apps[0].results == []
+    assert inserted_apps[1].results == ['{"result": "second"}']
+    window._on_tool_finished(ToolResult("0", "failed", '{"error": "first"}'))
+    assert inserted_apps[0].results == ['{"error": "first"}']
+    assert len(window._active_app_widgets) == 2
+
+
+async def test_cleared_call_cannot_attach_to_replacement_session(window, inserted_apps):
+    call = ToolCall("old", "chart", "{}", "ui://chart", "viz")
+    window._chat.add_tool_call(call)
+    window._engine._mcp = _SlowMCP(window._chat.clear)
+    await window._fetch_and_show_app(call)
+    assert inserted_apps == []
+    window._on_tool_finished(ToolResult("old", "completed", "{}"))
+    assert window._chat.tool_call("old") is None
+
+
+async def test_interactive_output_failure_preserves_tool_result(window, inserted_apps):
+    def fail():
+        raise RuntimeError("resource unavailable")
+
+    call = ToolCall("one", "chart", "{}", "ui://chart", "viz")
+    row = window._chat.add_tool_call(call)
+    window._engine._mcp = _SlowMCP(fail)
+    window._on_tool_finished(ToolResult(call.id, "completed", "42"))
+    await window._fetch_and_show_app(call)
+    assert inserted_apps == []
+    assert row.result.text == "42"
 
 
 async def test_a_new_session_forgets_the_previous_app_widgets(window, monkeypatch):
@@ -174,6 +231,18 @@ async def test_a_new_session_forgets_the_previous_app_widgets(window, monkeypatc
     monkeypatch.setattr(window._engine, "start", start)
     window._on_start()  # clears the chat, stale widget included
     await asyncio.sleep(0)  # let the (fake) engine start run
-    window._on_tool_result_app("chart", "{}")
+    window._on_tool_finished(ToolResult("chart", "completed", "{}"))
 
     assert stale.results == []
+
+
+async def test_an_app_request_queued_before_teardown_cannot_run_in_a_new_session(
+    window, monkeypatch
+):
+    from unittest.mock import AsyncMock
+
+    handler = AsyncMock()
+    monkeypatch.setattr(window._engine, "handle_app_tool_call", handler)
+    window._engine._state = EngineState.ACTIVE
+    await window._proxy_app_tool_call("req", "chart", {}, "cleared-call", "viz")
+    handler.assert_not_awaited()

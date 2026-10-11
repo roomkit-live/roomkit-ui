@@ -4,10 +4,13 @@ from __future__ import annotations
 
 from PySide6.QtCore import QSettings
 
+from roomkit_ui.theme import get_colors
+
 
 def settings_colors(theme: str | None = None) -> dict[str, str]:
     if theme is None:
         theme = str(QSettings().value("room/theme", "dark"))
+    accent = get_colors(theme)["ACCENT_BRAND"]
     if theme == "light":
         return {
             "surface": "#FFFFFF",
@@ -17,7 +20,7 @@ def settings_colors(theme: str | None = None) -> dict[str, str]:
             "outline": "#C5C5D3",
             "text": "#262633",
             "muted": "#6C6C7E",
-            "accent": "#6652BD",
+            "accent": accent,
             "selected": "#EFEBFA",
             "success": "#216943",
             "success_bg": "#EAF5EE",
@@ -34,7 +37,7 @@ def settings_colors(theme: str | None = None) -> dict[str, str]:
         "outline": "#676173",
         "text": "#F0EEF6",
         "muted": "#B0AABD",
-        "accent": "#B7A6F0",
+        "accent": accent,
         "selected": "#342B4B",
         "success": "#9ADAB1",
         "success_bg": "#263A30",
@@ -237,6 +240,17 @@ def settings_stylesheet(theme: str) -> str:
             border: 1px solid {c["outline"]}; border-radius: 7px;
             background: {c["soft"]}; padding: 8px 12px; color: {c["text"]};
         }}
+        /* Size the numeric field itself; its internal editor must not get
+           a second border/padding or a font taller than the native frame. */
+        QDialog#settingsPanel QAbstractSpinBox {{
+            border: 1px solid {c["outline"]}; border-radius: 7px;
+            background: {c["soft"]}; padding: 8px 12px; color: {c["text"]};
+            font-size: 14px; min-height: 1.25em;
+        }}
+        QDialog#settingsPanel QAbstractSpinBox QLineEdit {{
+            border: none; padding: 0; background: transparent;
+        }}
+        QDialog#settingsPanel QAbstractSpinBox:focus {{ border-color: {c["accent"]}; }}
         QDialog#settingsPanel QComboBox:disabled, QDialog#settingsPanel QLineEdit:disabled {{
             color: {c["muted"]}; border-color: {c["border"]};
         }}

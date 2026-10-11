@@ -42,7 +42,7 @@ src/roomkit_ui/
 ├── engine_vc_helpers.py # Stateless VC builders: barge-in, TTS filter, Smart Turn, local LLM
 ├── vc_stt.py            # VC cloud STT builders (dispatch table) + the turn VAD a turnless STT needs
 ├── vc_agent.py          # VC agent from the Agent tab: speak policy (classifier), thinker, background flag
-├── agent_hooks.py       # VC agent chat lines: quiet turns, background tasks started/ended; running-task count
+├── agent_hooks.py       # VC decision logs, background-task chat notices and running-task count
 ├── speaker_roster.py    # Voices Muse tells apart + their names, the user's voice, primary gate, prompt note — leaf
 ├── speaker_naming.py    # Muse speaker hook, name_voice (chat click), name_speaker tool, per-turn speaker note
 ├── engine_realtime.py   # Realtime start: media per attempt, no-MCP retry, channel — mixin
@@ -50,6 +50,7 @@ src/roomkit_ui/
 ├── engine_audio.py      # Pipeline builders: AEC, denoiser, VAD, diarization, recorder, DSP_THREADS, shared-mic rate
 ├── engine_callbacks.py  # Realtime provider callbacks → Qt signals — mixin
 ├── engine_tools.py      # Tool dispatch (engine built-ins → built-ins → CLI → MCP), attitudes, paste — mixin
+├── tool_events.py       # ToolCall / ToolResult, matched by invocation ID — leaf
 ├── toolset.py           # Tool grouping (builtin/cli/mcp), channel_options(), reachable_mcp_tools — leaf
 ├── builtin_tools.py     # Built-in tools (always available)
 ├── hooks.py             # RoomKit hook registration for UI events (VC + realtime)
@@ -98,16 +99,18 @@ src/roomkit_ui/
 │                        #  enroller, encoder_download, page_sensitivity
 └── widgets/
     ├── main_window.py     # Main window layout + Engine↔UI signal wiring
-    ├── control_bar.py     # Call button + mic mute + settings
+    ├── conversation_home.py # Compact welcome, violet background + settings header
+    ├── conversation_composer.py # Reserved text input + Live / cancel / end / mute
     ├── chat_view.py       # Scrollable chat transcript
     ├── chat_bubble.py     # One chat entry: user bubble, typeset assistant text
-    ├── loading_overlay.py # Full-window curtain (with Cancel) while a session connects
+    ├── tool_activity.py   # Compact tool state, optional plain-text details and inline MCP output
+    ├── session_loading.py # In-layout startup progress; Cancel stays in the composer
     ├── mcp_app_widget.py  # MCP App widget (QWebEngineView, text fallback)
     ├── mcp_app_web.py     # QtWebEngine request filter + page
     ├── mcp_app_server.py  # 127.0.0.1 server + CSP for MCP App content
     ├── mcp_app_wrapper.py # Wrapper page: QWebChannel bridge + app iframe
-    ├── vu_meter.py        # Animated ambient glow VU meter
-    ├── session_info.py    # Collapsible session info bar
+    ├── vu_meter.py        # Compact violet waveform; mic mute preserves playback activity
+    ├── session_info.py    # Live identity header + session details on demand
     ├── hotkey_button.py   # Interactive hotkey capture widget
     ├── dictation_log.py   # Dictation event log window
     ├── wakeword_wizard.py # Guided wake-word enrolment
@@ -179,7 +182,7 @@ Every AI backend lives behind an extra declared in `pyproject.toml` AND mirrored
 - Every roomkit channel built with tools takes `**toolset.channel_options()`: since 0.95 roomkit bounds each tool call itself (10 s realtime, 30 s AIChannel) and Tool Search hides tools behind `find_tools` once the catalogue is large. The app keeps its own bounds (MCP 60 s, per-CLI-tool timeout) and pins the built-ins. roomkit also refuses a tool name declared twice when it builds a realtime channel, so `_setup_tools` drops MCP tools named like a built-in/CLI tool or outside `[A-Za-z0-9_-]{1,64}` and says so in the chat
 - A tool that fails raises `roomkit.ToolFailedError` (it ran and failed) or `ToolRefusedError` (nothing ran) — since roomkit 0.95 Gemini reads any returned body as a success. Two envelopes stay: `{"error": "Unknown tool"}` (roomkit reads it as "not served here") and the `{"error": ...}` an MCP App widget receives before the engine re-raises
 - The Voice Channel's tools reach the AIChannel through `ToolSet.turn_config()` (its `config_provider`), never the binding's `metadata={"tools": ...}`: a background task runs the agent in a room attached without that metadata. Not the constructor's `tools=` either: it raises when a host tool is named like a skill or Tool Search tool (`list_tools`, `activate_skill`), where a turn config's tools are left out with a warning
-- VC agent add-ons (`vc_agent.py`) never fail a start: one that cannot run is left out and named in the chat. roomkit refuses a thinker without a speak policy, and closes neither the classifier nor the thinker — `Engine._close_vc_agent()` does, after `kit.close()`
+- VC agent add-ons (`vc_agent.py`) never fail a start. An unavailable speaking policy is reported in session details and logs, not the transcript; other add-ons explain their absence in the chat. roomkit refuses a thinker without a speak policy, and closes neither the classifier nor the thinker — `Engine._close_vc_agent()` does, after `kit.close()`
 - CLI tool schemas are hand-authored and never pass through `_clean_schema()` — so do NOT add `additionalProperties` to them, nothing would strip it and Gemini rejects it
 - Tool names reaching a provider must be `[A-Za-z0-9_-]{1,64}` — no spaces, no dots. Don't push that rule onto the user: `cli_tools_config.slugify_tool_name()` derives it ("GitHub CLI" → `github_cli`) and the settings page shows the result. A declaration the model never receives must surface in the chat, not only in a log
 - `cli_help.parse_subcommands()` covers Click/Typer, Rich boxes and Cobra (`gh` uses colon-suffixed names across several `* COMMANDS` sections). It is best-effort by design — a CLI with bespoke help (`git`, `brew`) seeds depth 1 and the model explores via `--help` through the tool. Test any parser change against `gh`, `kubectl`, `docker` AND a Rich/Typer CLI: the two ecosystems break each other

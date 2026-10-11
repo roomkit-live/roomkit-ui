@@ -16,7 +16,7 @@ class FakeEngine(QObject):
     user_speaking = Signal(bool)
     ai_speaking = Signal(bool)
     mic_audio_level = Signal(float)
-    tool_use = Signal(str, str)
+    tool_started = Signal(object)
 
     def __init__(self) -> None:
         super().__init__()
@@ -128,7 +128,7 @@ def test_disabled_never_fires(engine):
         lambda e: e.transcription.emit("bonjour", "user", True, ""),
         lambda e: e.user_speaking.emit(True),
         lambda e: e.ai_speaking.emit(False),
-        lambda e: e.tool_use.emit("search", "{}"),
+        lambda e: e.tool_started.emit(object()),
     ],
 )
 def test_activity_resets_the_countdown(engine, hangup, emit):

@@ -45,8 +45,8 @@ src/roomkit_ui/
 ├── providers/                  # LLM factories: anthropic, openai, gemini, local, llamacpp (lazy registry)
 ├── tts/                        # TTS factories: piper, pocket, qwen3, neutts, gradium, elevenlabs, azure
 ├── wakeword/                   # Wake word: controller, listener, capture, detection, enrolment
-└── widgets/                    # Main window, chat, MCP App views, loading overlay, wake-word wizard,
-                                #  settings/ (grouped settings workspace)
+└── widgets/                    # Main window, chat, tool activity, MCP App views, startup progress,
+                                #  wake-word wizard, settings/ (grouped settings workspace)
 ```
 
 The Architecture section of [CLAUDE.md](../CLAUDE.md) describes every module.
@@ -130,6 +130,13 @@ bounds MCP calls at 60 s and each CLI tool at its own timeout) and pins the buil
 against Tool Search. A failed call raises `roomkit.ToolFailedError` or `ToolRefusedError`,
 which every provider reads as a failure — Gemini reads any returned body as a success.
 
+The dispatch wrapper emits `ToolCall` / `ToolResult` events through `tool_started` and
+`tool_finished`. A fresh invocation ID associates every outcome with its activity row
+and optional MCP App, even when calls complete out of order. Exceptions and cancellation
+still propagate to roomkit after the UI receives a terminal state. `ToolActivity` keeps
+details collapsed and renders output as plain text; the display preview is capped at
+20,000 characters per input/result, while the MCP App receives the original result.
+
 The Voice Channel's AIChannel gets its tools from `ToolSet.turn_config()`, its
 `config_provider`, not from the room binding's metadata: the metadata reaches only the room
 it was attached with, and a background task runs the agent in a room of its own. The
@@ -144,9 +151,9 @@ tools are left out with a warning instead.
 `LLMClassifier`) and `thinker` (`LLMThinker` on the conversation model), and a `background`
 flag the engine turns into `kit.setup_background(ai_channel)`. roomkit closes neither the
 classifier nor the thinker: `Engine._close_vc_agent()` does, after the kit.
-`agent_hooks.py` turns `ON_SPEAK_DECISION`, `ON_TASK_DELEGATED` and `ON_TASK_COMPLETED`
-into chat lines and logs `ON_THOUGHT`; it keeps `Engine._background_tasks`, which the idle
-hang-up waits on.
+`agent_hooks.py` logs `ON_SPEAK_DECISION` and `ON_THOUGHT`; those diagnostics stay out
+of the transcript. `ON_TASK_DELEGATED` and `ON_TASK_COMPLETED` produce chat notices
+and update `Engine._background_tasks`, which the idle hang-up waits on.
 
 ### No private-API reaches
 

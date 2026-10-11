@@ -161,7 +161,8 @@ def _create_app() -> QApplication:
     app.setApplicationName("RoomKit UI")
     app.setOrganizationName("RoomKit")
     app.setQuitOnLastWindowClosed(False)
-    icon_path = Path(__file__).resolve().parent / "assets" / "icon.png"
+    icon_name = "icon-macos.png" if sys.platform == "darwin" else "icon.png"
+    icon_path = Path(__file__).resolve().parent / "assets" / icon_name
     if icon_path.exists():
         app.setWindowIcon(QIcon(str(icon_path)))
     return app
