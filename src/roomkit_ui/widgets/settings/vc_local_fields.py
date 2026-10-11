@@ -170,7 +170,7 @@ class VCLocalFields:
         self.vc_pocket_language = QComboBox()
         for label, value in LANGUAGES:
             self.vc_pocket_language.addItem(label, value)
-        index = self.vc_pocket_language.findData(s.get("vc_pocket_language", "english"))
+        index = self.vc_pocket_language.findData(s.get("vc_pocket_language", ""))
         self.vc_pocket_language.setCurrentIndex(max(index, 0))
         self._vc_pocket_language_label = QLabel("Language")
         form.addRow(self._vc_pocket_language_label, self.vc_pocket_language)
@@ -320,6 +320,6 @@ class VCLocalFields:
             "vc_tts_model": self.vc_tts_model.currentData() or "",
             "vc_tts_ref_audio": self.vc_tts_ref_audio.text().strip(),
             "vc_tts_ref_text": self.vc_tts_ref_text.text().strip(),
-            "vc_pocket_language": self.vc_pocket_language.currentData() or "english",
+            "vc_pocket_language": self.vc_pocket_language.currentData() or "",
             "vc_pocket_voice": self.vc_pocket_voice.text().strip(),
         }

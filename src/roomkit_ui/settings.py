@@ -192,7 +192,8 @@ _DEFAULTS = {
     "vc_llamacpp_model": "",  # "repo:quant" or a .gguf path (empty = Qwen3-4B Q4_K_M)
     "vc_llamacpp_context": "",  # context window in tokens (empty = 8192)
     # Pocket TTS (roomkit 0.90+, Kyutai): one language per model, voice by name or clip
-    "vc_pocket_language": "english",  # english | french | ... | french_24l (see tts/pocket.py)
+    # "" = the STT language's model (English when Pocket has none) | english | french_24l…
+    "vc_pocket_language": "",
     "vc_pocket_voice": "",  # pre-made voice or a clip to clone (empty = alba / estelle)
     # Azure / Microsoft Foundry speech (roomkit 0.96, public preview): one resource,
     # one key for MAI-Transcribe (endpoint) and Azure Speech TTS (region)

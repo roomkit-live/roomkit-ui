@@ -63,8 +63,9 @@ kept, never replaced. Agent Skills reach realtime sessions as well as Voice Chan
   and Ollama: a reasoning model otherwise thinks for seconds before a spoken reply. A model
   that always reasons cannot be switched off; the hint says so.
 - **Pocket TTS** — Kyutai's local voice, CPU-friendly, in English, French, German,
-  Spanish, Italian, Portuguese and Dutch (larger variants for all but English); a pre-made
-  voice or a WAV to clone (cloning needs the gated `kyutai/pocket-tts` weights).
+  Spanish, Italian, Portuguese and Dutch (larger variants for all but English). By default
+  it speaks the speech-recognition language (English when Pocket has no model for it); a
+  pre-made voice or a WAV to clone (cloning needs the gated `kyutai/pocket-tts` weights).
 - **Azure MAI-Transcribe / MAI-Voice** — Microsoft Foundry speech, one resource and one
   key for both. MAI-Transcribe finds no turns itself, so the session always gets a VAD
   (the chosen model, else an energy VAD) with an 800 ms end-of-turn silence by default.

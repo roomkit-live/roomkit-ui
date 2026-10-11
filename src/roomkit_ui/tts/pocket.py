@@ -9,6 +9,7 @@ from typing import Any
 # model, each but English also as a larger "_24l" variant that sounds better
 # and runs about three times slower (dutch needs pocket-tts 3.3+).
 LANGUAGES = [
+    ("Same as speech recognition", ""),
     ("English", "english"),
     ("French", "french"),
     ("French (larger, ~3× slower)", "french_24l"),
@@ -58,8 +59,27 @@ def cache_fields(settings: dict) -> tuple:
     return (language, voice, clip_mtime)
 
 
+# The STT language codes (constants.STT_LANGUAGES) Pocket has a model for.
+_STT_TO_POCKET = {
+    "en": "english",
+    "fr": "french",
+    "de": "german",
+    "es": "spanish",
+    "it": "italian",
+    "pt": "portuguese",
+    "nl": "dutch",
+}
+
+
 def _language(settings: dict) -> str:
-    return (settings.get("vc_pocket_language", "") or "").strip() or "english"
+    """The chosen model, or by default the language speech recognition is set to.
+
+    A language Pocket has no model for (or STT on auto-detect) speaks English.
+    """
+    chosen = (settings.get("vc_pocket_language", "") or "").strip()
+    if chosen:
+        return chosen
+    return _STT_TO_POCKET.get((settings.get("stt_language", "") or "").strip(), "english")
 
 
 def _voice(settings: dict, language: str) -> str:

@@ -30,6 +30,25 @@ def test_french_defaults_to_the_french_voice():
     assert tts._config.voices == {"default": "estelle"}
 
 
+def test_by_default_pocket_speaks_the_speech_recognition_language():
+    tts, _ = pocket.create({"stt_language": "fr"})
+
+    assert tts._config.language == "french"
+    assert tts._config.voices == {"default": "estelle"}
+
+
+def test_a_chosen_language_wins_over_the_speech_recognition_one():
+    tts, _ = pocket.create({"stt_language": "fr", "vc_pocket_language": "german"})
+
+    assert tts._config.language == "german"
+
+
+def test_a_language_pocket_has_no_model_for_speaks_english():
+    for stt_language in ("ja", ""):  # Japanese, and STT on auto-detect
+        tts, _ = pocket.create({"stt_language": stt_language})
+        assert tts._config.language == "english"
+
+
 def test_a_clip_is_cloned_and_cuda_is_followed(tmp_path):
     clip = tmp_path / "me.wav"
     clip.write_bytes(b"RIFF")
