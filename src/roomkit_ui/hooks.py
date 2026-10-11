@@ -46,9 +46,11 @@ def register_vc_hooks(kit: Any, engine: Any) -> None:
     async def _on_speaker_change(event, context):
         try:
             speaker_id = getattr(event, "speaker_id", "")
-            confidence = getattr(event, "confidence", 0.0)
+            # A diarizing STT's label carries no score (roomkit 0.92): None,
+            # which the float signal cannot carry.
+            confidence = getattr(event, "confidence", None)
             engine._current_speaker_id = speaker_id
-            engine.speaker_identified.emit(speaker_id, confidence)
+            engine.speaker_identified.emit(speaker_id, float(confidence or 0.0))
         except Exception:
             pass
 
