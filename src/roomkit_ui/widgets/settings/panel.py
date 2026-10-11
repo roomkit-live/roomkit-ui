@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from functools import partial
+
 from PySide6.QtCore import QSize
 from PySide6.QtWidgets import (
     QDialog,
     QHBoxLayout,
+    QLineEdit,
     QListWidget,
     QListWidgetItem,
     QScrollArea,
@@ -29,6 +32,15 @@ from roomkit_ui.widgets.settings.skills import _SkillsPage
 from roomkit_ui.widgets.settings.speakers_page import _SpeakersPage
 from roomkit_ui.widgets.settings.telemetry_page import _TelemetryPage
 from roomkit_ui.widgets.settings.wakeword_page import _WakeWordPage
+
+
+def _mirror_text(fields: list[QLineEdit], text: str) -> None:
+    """Copy a user edit to the other fields.  setText() emits no textEdited,
+    so mirroring never loops; the edited field is skipped so its cursor stays.
+    """
+    for field in fields:
+        if field.text() != text:
+            field.setText(text)
 
 
 class SettingsPanel(QDialog):
@@ -113,6 +125,7 @@ class SettingsPanel(QDialog):
 
         # Populate the AI tab's attitude combo from the attitudes page
         self._ai.populate_attitude_combo(self._attitudes.all_attitude_names())
+        self._link_api_key_fields()
         for page in self._pages:
             scroll = QScrollArea()
             scroll.setWidget(page)
@@ -153,6 +166,22 @@ class SettingsPanel(QDialog):
     _SKILLS_TAB = 7
     _AUDIO_DEBUG_TAB = 10
 
+    def _link_api_key_fields(self) -> None:
+        """Mirror each shared API key across every tab that edits it.
+
+        One key shows up on several tabs (realtime, voice channel,
+        dictation), each copy loaded with the saved value.  Left apart,
+        the save had to pick one: a new key typed on the Dictation tab lost
+        to the untouched realtime copy, and a cleared key came back.
+        Mirrored, the copies always hold the same value.
+        """
+        groups = self._ai.api_key_fields()
+        groups["openai_api_key"].append(self._dictation.openai_api_key)
+        groups["deepgram_api_key"].append(self._dictation.deepgram_api_key)
+        for fields in groups.values():
+            for field in fields:
+                field.textEdited.connect(partial(_mirror_text, fields))
+
     def _on_tab_changed(self, index: int) -> None:
         self._stack.setCurrentIndex(index)
         if index == self._AI_TAB:
@@ -184,12 +213,13 @@ class SettingsPanel(QDialog):
             if hasattr(page, "get_settings"):
                 settings.update(page.get_settings())
 
-        # Merge API keys: prefer non-empty from any source.  Pop every temp
-        # key BEFORE choosing — an `or` chain of pops short-circuits, and a
-        # leftover temp key would be persisted in plaintext by save_settings().
+        # The copies of a shared key are mirrored (_link_api_key_fields), so
+        # any one of them is the key — an emptied one included.  Pop every
+        # temp copy all the same: a leftover would be persisted in plaintext
+        # by save_settings().
         def merge_key(*temp_names: str) -> str:
-            values = [settings.pop(name, "") for name in temp_names]
-            return next((v for v in values if v), "")
+            values: list[str] = [settings.pop(name, "") for name in temp_names]
+            return values[0]
 
         settings["openai_api_key"] = merge_key(
             "_rt_openai_key", "_vc_openai_key", "_dict_openai_key"
@@ -198,11 +228,9 @@ class SettingsPanel(QDialog):
         settings["deepgram_api_key"] = merge_key(
             "_rt_deepgram_key", "_vc_deepgram_key", "_dict_deepgram_key"
         )
-        # The VC TTS page writes elevenlabs_api_key directly — merge rather
-        # than overwrite it with the realtime field.
-        settings["elevenlabs_api_key"] = merge_key("_rt_elevenlabs_key") or settings.get(
-            "elevenlabs_api_key", ""
-        )
+        # The VC TTS page writes elevenlabs_api_key directly; the realtime
+        # copy mirrors it.
+        settings.pop("_rt_elevenlabs_key", None)
 
         save_settings(settings)
 

@@ -13,7 +13,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
 
 import roomkit_ui.widgets.settings.panel as panel_mod
-from roomkit_ui.settings import load_settings
+from roomkit_ui.settings import load_settings, save_settings
 from roomkit_ui.widgets.settings.cli_tools_page import _CliToolsPage
 from roomkit_ui.widgets.settings.panel import SettingsPanel
 
@@ -75,3 +75,70 @@ def test_every_way_out_saves_exactly_once(panel, monkeypatch, close):
     close(panel)
 
     assert len(saves) == 1
+
+
+# -- shared API keys ---------------------------------------------------------
+
+
+@pytest.fixture
+def keyed_panel(qapp):
+    """A panel opened over saved keys, each shown on several tabs."""
+    save_settings(
+        {
+            "openai_api_key": "sk-old",
+            "api_key": "g-old",
+            "deepgram_api_key": "dg-old",
+            "elevenlabs_api_key": "el-old",
+        }
+    )
+    p = SettingsPanel()
+    p.show()
+    yield p
+    p.deleteLater()
+
+
+def _retype(field, text: str) -> None:
+    """Replace a field's content the way a user does: select all, type over."""
+    field.selectAll()
+    if text:
+        QTest.keyClicks(field, text)
+    else:
+        QTest.keyClick(field, Qt.Key_Backspace)
+
+
+def test_a_key_typed_on_the_dictation_tab_is_the_one_saved(keyed_panel):
+    _retype(keyed_panel._dictation.openai_api_key, "sk-new")
+
+    # Every other copy follows the edit at once.
+    assert keyed_panel._ai._realtime.openai_api_key.text() == "sk-new"
+    assert keyed_panel._ai._cloud.vc_openai_api_key.text() == "sk-new"
+
+    keyed_panel.reject()
+    assert load_settings()["openai_api_key"] == "sk-new"
+
+
+def test_a_cleared_key_stays_cleared(keyed_panel):
+    _retype(keyed_panel._ai._cloud.vc_gemini_api_key, "")
+    _retype(keyed_panel._dictation.deepgram_api_key, "")
+
+    keyed_panel.reject()
+
+    saved = load_settings()
+    assert saved["api_key"] == ""
+    assert saved["deepgram_api_key"] == ""
+
+
+def test_an_elevenlabs_key_edited_for_the_voice_channel_is_saved(keyed_panel):
+    _retype(keyed_panel._ai._cloud.elevenlabs_api_key, "el-new")
+
+    keyed_panel.reject()
+
+    assert load_settings()["elevenlabs_api_key"] == "el-new"
+
+
+def test_untouched_keys_survive_the_save(keyed_panel):
+    keyed_panel.reject()
+
+    saved = load_settings()
+    assert saved["openai_api_key"] == "sk-old"
+    assert saved["api_key"] == "g-old"

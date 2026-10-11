@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QFormLayout,
     QLabel,
+    QLineEdit,
     QStackedWidget,
     QTabBar,
     QTextEdit,
@@ -305,6 +306,16 @@ class _AIPage(QWidget):
             if idx >= 0:
                 self.attitude_combo.setCurrentIndex(idx)
         self.attitude_combo.blockSignals(False)
+
+    def api_key_fields(self) -> dict[str, list[QLineEdit]]:
+        """This page's copies of each API key that several tabs edit, by setting key."""
+        rt, cloud = self._realtime, self._cloud
+        return {
+            "openai_api_key": [rt.openai_api_key, cloud.vc_openai_api_key],
+            "api_key": [rt.gemini_api_key, cloud.vc_gemini_api_key],
+            "deepgram_api_key": [rt.deepgram_api_key, cloud.deepgram_api_key],
+            "elevenlabs_api_key": [rt.elevenlabs_api_key, cloud.elevenlabs_api_key],
+        }
 
     def selected_attitude_name(self) -> str:
         text = str(self.attitude_combo.currentText())
