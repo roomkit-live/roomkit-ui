@@ -35,7 +35,7 @@ async def test_a_search_answered_after_the_dialog_closed_is_dropped(qapp, monkey
 
     monkeypatch.setattr(marketplace_mod.SkillsShClient, "search", search)
 
-    await tab._run_search("pdf")  # must not raise on the destroyed widgets
+    await tab._run_search("pdf", tab._search_seq)  # must not raise on the destroyed widgets
 
 
 async def test_an_install_finishing_after_the_dialog_closed_is_dropped(qapp):
@@ -44,9 +44,8 @@ async def test_an_install_finishing_after_the_dialog_closed_is_dropped(qapp):
 
     tab = MarketplaceTab(on_install_source=install)
     tab._render([SKILL])
-    card = tab._flow.itemAt(0).widget()
 
-    await tab._do_install(SKILL, card)  # must not raise on the destroyed widgets
+    await tab._do_install(SKILL)  # must not raise on the destroyed widgets
 
 
 async def test_a_clone_finishing_after_the_dialog_closed_is_dropped(qapp, monkeypatch, tmp_path):

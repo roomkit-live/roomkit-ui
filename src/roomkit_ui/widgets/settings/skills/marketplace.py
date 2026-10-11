@@ -44,7 +44,11 @@ class MarketplaceTab(QWidget):
         self._cb_is_source_installed = is_source_installed
         self._loaded = False
         self._results: list[SkillsShSkill] = []
+        # The card on screen for each skill id — a search re-renders them all.
+        self._cards: dict[str, SkillCard] = {}
         self._installing_source: str | None = None
+        # Bumped by every search: only the latest one may update the tab.
+        self._search_seq = 0
         # One debounce timer, parented: it must not fire into a page the
         # closed Settings dialog has already destroyed.
         self._pending_query = ""
@@ -117,6 +121,7 @@ class MarketplaceTab(QWidget):
         self._search_timer.start()  # restarts the debounce if already running
 
     def _do_search(self, query: str) -> None:
+        self._search_seq += 1
         query = query.strip()
         if len(query) < 2:
             self._results = []
@@ -124,23 +129,33 @@ class MarketplaceTab(QWidget):
             self._status.setText("Type at least 2 characters to search skills.sh.")
             return
         self._status.setText("Searching...")
-        asyncio.ensure_future(self._run_search(query))
+        asyncio.ensure_future(self._run_search(query, self._search_seq))
 
-    async def _run_search(self, query: str) -> None:
+    async def _run_search(self, query: str, seq: int) -> None:
         try:
             client = SkillsShClient()
             results = await client.search(query, limit=50)
-            if not isValid(self):
-                return  # the Settings dialog closed while the search ran
+            if not self._is_latest_search(seq):
+                return
             self._results = results
             self._render(results)
             self._status.setText(f"{len(results)} results")
         except Exception as exc:
             logger.exception("skills.sh search failed")
-            if isValid(self):
+            if self._is_latest_search(seq):
                 self._status.setText(f"Search failed: {exc}")
 
+    def _is_latest_search(self, seq: int) -> bool:
+        """Whether search *seq* may still update the tab.
+
+        Searches can answer out of order: an older, slower one must not
+        overwrite the results of the query the user typed last.  Nor may
+        any search touch the tab once the Settings dialog has closed.
+        """
+        return isValid(self) and seq == self._search_seq
+
     def _clear_cards(self) -> None:
+        self._cards.clear()
         while self._flow.count():
             item = self._flow.takeAt(0)
             if item and item.widget():
@@ -163,6 +178,9 @@ class MarketplaceTab(QWidget):
                 card.action_btn.clicked.connect(
                     lambda _checked, s=skill, c=card: self._install_skill_source(s, c)
                 )
+                if skill.id == self._installing_source:
+                    self._show_installing(card)
+            self._cards[skill.id] = card
             self._flow.addWidget(card)
 
         self._container.updateGeometry()
@@ -176,19 +194,26 @@ class MarketplaceTab(QWidget):
         if self._installing_source or self._cb_install_source is None:
             return
         self._installing_source = skill.id
+        self._show_installing(card)
+        asyncio.ensure_future(self._do_install(skill))
+
+    @staticmethod
+    def _show_installing(card: SkillCard) -> None:
         if card.action_btn:
             card.action_btn.setText("Installing...")
             card.action_btn.setEnabled(False)
-        asyncio.ensure_future(self._do_install(skill, card))
 
-    async def _do_install(self, skill: SkillsShSkill, card: SkillCard) -> None:
+    async def _do_install(self, skill: SkillsShSkill) -> None:
+        # The card is looked up again once the install returns: a search
+        # meanwhile re-renders the grid and deletes the card that was clicked.
         try:
             if self._cb_install_source is None:
                 raise RuntimeError("No installer configured")
             await self._cb_install_source(skill)
             if not isValid(self):
                 return  # the Settings dialog closed during the install
-            if card.action_btn:
+            card = self._cards.get(skill.id)
+            if card is not None and card.action_btn:
                 c = colors()
                 card.action_btn.setText("Installed \u2713")
                 card.action_btn.setStyleSheet(
@@ -200,7 +225,8 @@ class MarketplaceTab(QWidget):
             logger.exception("Failed to install skills.sh source %s", skill.source)
             if not isValid(self):
                 return
-            if card.action_btn:
+            card = self._cards.get(skill.id)
+            if card is not None and card.action_btn:
                 card.action_btn.setText("Retry")
                 card.action_btn.setEnabled(True)
             self._status.setText(f"Install failed: {exc}")
