@@ -309,7 +309,9 @@ class _MCPPage(QWidget):
             w.blockSignals(False)
 
         self._update_field_visibility(transport)
-        self._refresh_oauth_status(str(srv.get("id", "") or srv.get("name", "")))
+        self._refresh_oauth_status(
+            str(srv.get("id", "") or srv.get("name", "")), str(srv.get("url", ""))
+        )
         self._stack.setCurrentIndex(1)
 
     def _on_item_activated(self, _item: QListWidgetItem) -> None:
@@ -406,14 +408,18 @@ class _MCPPage(QWidget):
 
     # -- OAuth actions -------------------------------------------------------
 
-    def _refresh_oauth_status(self, server_name: str) -> None:
-        """Update the token status label for the current server."""
+    def _refresh_oauth_status(self, server_name: str, server_url: str | None = None) -> None:
+        """Update the token status label for the current server.
+
+        Tokens issued for another URL than *server_url* count as none: the
+        next connection drops them rather than sending them to the new host.
+        """
         if not server_name:
             self._oauth_status.setText("")
             return
         from roomkit_ui.mcp_auth import has_oauth_tokens
 
-        if has_oauth_tokens(server_name):
+        if has_oauth_tokens(server_name, server_url):
             self._oauth_status.setText("Token stored")
             self._oauth_status.setStyleSheet(
                 "font-size: 12px; color: #4caf50; background: transparent;"

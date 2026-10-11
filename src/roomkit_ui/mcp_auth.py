@@ -33,12 +33,48 @@ class SecretTokenStorage:
 
     Legacy QSettings entries under ``room/mcp_oauth/{name}/`` are migrated on
     first read.
+
+    Given *server_url*, the tokens are bound to it: the SDK sends whatever it
+    reads here as a bearer to the server URL (and a refresh token to the
+    authorization server it discovers from there), and a server keeps its id
+    when its URL is edited. Tokens stored for another URL are dropped instead
+    of read, so they never reach the new host. Tokens saved before the
+    binding existed are adopted by the URL that reads them first.
     """
 
-    def __init__(self, server_name: str, store: SecretStore | None = None) -> None:
+    def __init__(
+        self,
+        server_name: str,
+        store: SecretStore | None = None,
+        server_url: str | None = None,
+    ) -> None:
         self._name = server_name
         self._store = store or get_secret_store()
         self._qs = QSettings()
+        self._url = server_url.strip() if server_url else None
+        self._binding_checked = False
+
+    def _check_url_binding(self) -> None:
+        """Drop the stored tokens if they were issued for another URL."""
+        if self._url is None or self._binding_checked:
+            return
+        self._binding_checked = True
+        bound = self._store.get_secret(self._secret_name("url"), "")
+        if bound == self._url:
+            return
+        if bound:
+            logger.warning(
+                "MCP server %r: OAuth tokens were issued for another URL; "
+                "dropping them so they are not sent to the new one",
+                self._name,
+            )
+            clear_oauth_tokens(self._name, store=self._store)
+        elif self._get_json("tokens") or self._get_json("client_info"):
+            self._store.set_secret(self._secret_name("url"), self._url)
+
+    def _bind_url(self) -> None:
+        if self._url is not None:
+            self._store.set_secret(self._secret_name("url"), self._url)
 
     def _key(self, suffix: str) -> str:
         return f"{_SETTINGS_PREFIX}/{self._name}/{suffix}"
@@ -71,6 +107,7 @@ class SecretTokenStorage:
     async def get_tokens(self):  # noqa: ANN201
         from mcp.shared.auth import OAuthToken
 
+        self._check_url_binding()
         raw = self._get_json("tokens")
         if raw is None:
             return None
@@ -81,11 +118,14 @@ class SecretTokenStorage:
             return None
 
     async def set_tokens(self, tokens) -> None:
+        self._check_url_binding()
         self._set_json("tokens", tokens.model_dump_json())
+        self._bind_url()
 
     async def get_client_info(self):  # noqa: ANN201
         from mcp.shared.auth import OAuthClientInformationFull
 
+        self._check_url_binding()
         raw = self._get_json("client_info")
         if raw is None:
             return None
@@ -96,7 +136,9 @@ class SecretTokenStorage:
             return None
 
     async def set_client_info(self, client_info) -> None:
+        self._check_url_binding()
         self._set_json("client_info", client_info.model_dump_json())
+        self._bind_url()
 
 
 # Backward-compatible name for any tests or integrations importing it.
@@ -253,7 +295,7 @@ async def create_oauth_provider(
     callback_server = LocalOAuthCallbackServer()
     await callback_server.start()
 
-    storage = SecretTokenStorage(server_name)
+    storage = SecretTokenStorage(server_name, server_url=server_url)
 
     redirect_uri = callback_server.redirect_uri
     auth_method: Literal["none", "client_secret_post"] = (
@@ -315,19 +357,27 @@ async def create_oauth_provider(
 # ---------------------------------------------------------------------------
 
 
-def clear_oauth_tokens(server_name: str) -> None:
+def clear_oauth_tokens(server_name: str, store: SecretStore | None = None) -> None:
     """Remove stored OAuth tokens for *server_name*."""
-    store = get_secret_store()
-    for suffix in ("tokens", "client_info"):
+    store = store or get_secret_store()
+    for suffix in ("tokens", "client_info", "url"):
         store.delete_secret(f"mcp_oauth:{server_name}:{suffix}")
     qs = QSettings()
     qs.remove(f"{_SETTINGS_PREFIX}/{server_name}")
     qs.sync()
 
 
-def has_oauth_tokens(server_name: str) -> bool:
-    """Return ``True`` if tokens are stored for *server_name*."""
+def has_oauth_tokens(server_name: str, server_url: str | None = None) -> bool:
+    """Return ``True`` if tokens are stored for *server_name*.
+
+    With *server_url*, tokens issued for another URL do not count: they will
+    be dropped, not used, on the next connection.
+    """
     store = get_secret_store()
+    if server_url is not None:
+        bound = store.get_secret(f"mcp_oauth:{server_name}:url", "")
+        if bound and bound != server_url.strip():
+            return False
     if store.get_secret(f"mcp_oauth:{server_name}:tokens", ""):
         return True
     qs = QSettings()

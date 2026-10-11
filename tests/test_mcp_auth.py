@@ -89,3 +89,58 @@ async def test_oauth_helpers_check_and_clear_secret_store(secure_store):
     assert has_oauth_tokens("srv") is False
     assert secure_store.get_secret("mcp_oauth:srv:tokens") == ""
     assert secure_store.get_secret("mcp_oauth:srv:client_info") == ""
+
+
+async def test_tokens_issued_for_another_url_are_dropped_not_sent(secure_store):
+    # A server keeps its id when its URL is edited: the old host's bearer and
+    # refresh token must not be handed to the new one.
+    old = SecretTokenStorage("srv", store=secure_store, server_url="https://old.test/mcp")
+    await old.set_tokens(OAuthToken(access_token="old-access", refresh_token="old-refresh"))
+    await old.set_client_info(
+        OAuthClientInformationFull(
+            client_id="old-client", redirect_uris=["http://127.0.0.1:1234/callback"]
+        )
+    )
+    assert has_oauth_tokens("srv", "https://evil.test/mcp") is False
+
+    moved = SecretTokenStorage("srv", store=secure_store, server_url="https://evil.test/mcp")
+
+    assert await moved.get_tokens() is None
+    assert await moved.get_client_info() is None
+    assert secure_store.get_secret("mcp_oauth:srv:tokens") == ""
+
+
+async def test_a_preset_client_id_does_not_bind_old_tokens_to_a_new_url(secure_store):
+    old = SecretTokenStorage("srv", store=secure_store, server_url="https://old.test/mcp")
+    await old.set_tokens(OAuthToken(access_token="old-access"))
+
+    # create_oauth_provider writes the configured client before the SDK reads.
+    moved = SecretTokenStorage("srv", store=secure_store, server_url="https://new.test/mcp")
+    await moved.set_client_info(
+        OAuthClientInformationFull(
+            client_id="client-id", redirect_uris=["http://127.0.0.1:1234/callback"]
+        )
+    )
+
+    assert await moved.get_tokens() is None
+    assert (await moved.get_client_info()).client_id == "client-id"
+
+
+async def test_tokens_for_the_same_url_are_kept(secure_store):
+    first = SecretTokenStorage("srv", store=secure_store, server_url="https://a.test/mcp")
+    await first.set_tokens(OAuthToken(access_token="access"))
+
+    again = SecretTokenStorage("srv", store=secure_store, server_url="https://a.test/mcp")
+
+    assert (await again.get_tokens()).access_token == "access"
+    assert has_oauth_tokens("srv", "https://a.test/mcp") is True
+
+
+async def test_tokens_saved_before_the_binding_are_adopted_by_their_url(secure_store):
+    unbound = SecretTokenStorage("srv", store=secure_store)
+    await unbound.set_tokens(OAuthToken(access_token="access"))
+
+    reader = SecretTokenStorage("srv", store=secure_store, server_url="https://a.test/mcp")
+
+    assert (await reader.get_tokens()).access_token == "access"
+    assert secure_store.get_secret("mcp_oauth:srv:url") == "https://a.test/mcp"
