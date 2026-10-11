@@ -80,6 +80,31 @@ def test_the_session_prompt_appends_the_selected_attitude(qapp):
     assert engine._attitude_name == "Pirate"
 
 
+async def test_an_attitude_change_keeps_the_memory_of_past_sessions(engine):
+    from types import SimpleNamespace
+
+    engine._compose_session_prompt({"system_prompt": "Be brief."})
+    engine._memory_recap = "## Memory of previous conversations"
+    prompts = []
+    engine._ai_channel = SimpleNamespace(set_system_prompt=prompts.append)
+
+    await engine._apply_attitude_by_name("pirate")
+    engine._ai_channel = None
+
+    assert prompts == [
+        "Be brief.\n\n## Memory of previous conversations\n\n# Attitude\nTalk like a pirate."
+    ]
+
+
+def test_a_new_session_starts_without_the_last_ones_recap(qapp):
+    from roomkit_ui.engine import Engine
+
+    engine = Engine()
+    engine._memory_recap = "## Memory of previous conversations"
+
+    assert engine._compose_session_prompt({"system_prompt": "Be brief."}) == "Be brief."
+
+
 def test_the_session_prompt_without_an_attitude_is_the_users(qapp):
     from roomkit_ui.engine import Engine
 

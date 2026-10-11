@@ -12,6 +12,7 @@ import asyncio
 import json
 import logging
 import os
+from datetime import UTC, datetime
 from typing import Any
 
 from roomkit_ui.agent_hooks import register_agent_hooks
@@ -48,6 +49,7 @@ from roomkit_ui.features import (
     unavailable_reason,
 )
 from roomkit_ui.hooks import register_vc_hooks
+from roomkit_ui.memory import session_window
 from roomkit_ui.providers import create_ai_provider
 from roomkit_ui.speaker_naming import (
     NAME_SPEAKER_TOOL,
@@ -76,6 +78,7 @@ class VoiceChannelMixin:
     _attitude: str
     _attitude_name: str
     _base_system_prompt: str
+    _memory_recap: str
     _stt: Any
     _tts: Any
     _backend: Any
@@ -275,6 +278,9 @@ class VoiceChannelMixin:
             "ai",
             provider=ai_provider,
             system_prompt=system_prompt,
+            # Every session writes the one durable room: the AI's conversation
+            # is this session's, not the last one going on.
+            memory=session_window(datetime.now(UTC)),
             tool_handler=self._handle_tool_call,  # type: ignore[attr-defined]
             config_provider=self._vc_turn_config(toolset),
             skills=skills_registry,
@@ -335,9 +341,9 @@ class VoiceChannelMixin:
         from roomkit import RoomKit
         from roomkit.models.enums import ChannelCategory
 
-        from roomkit_ui.memory import ROOM_ID, ensure_room
+        from roomkit_ui.memory import ROOM_ID, ensure_room, memory_recap
 
-        kit, _store = self._build_kit(RoomKit, settings)  # type: ignore[attr-defined]
+        kit, store = self._build_kit(RoomKit, settings)  # type: ignore[attr-defined]
         self._kit = kit  # type: ignore[attr-defined]
         kit.register_channel(voice)
         kit.register_channel(ai_channel)
@@ -346,7 +352,12 @@ class VoiceChannelMixin:
             # session's tools (ToolSet.turn_config); its result comes back as
             # a turn it speaks.
             kit.setup_background(ai_channel)
-        await ensure_room(kit)
+        await ensure_room(kit, channels=("voice", "ai"))
+        if store is not None:
+            # The AI reads this session's turns only (memory.session_window):
+            # past sessions reach it as the recap, quoted as the past.
+            self._memory_recap = await memory_recap(kit)
+            ai_channel.set_system_prompt(self._session_prompt())  # type: ignore[attr-defined]
 
         voice_binding = await kit.attach_channel(ROOM_ID, "voice")
         # No tools in the binding's metadata: they come with each turn

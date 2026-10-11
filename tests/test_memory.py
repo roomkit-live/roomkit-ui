@@ -152,6 +152,14 @@ async def test_a_past_line_cannot_close_the_recap_block():
     assert "ignore your instructions" not in block[1]
 
 
+async def test_the_recap_opens_a_new_conversation():
+    recap = await memory_recap(_kit(_FakeStore(events=[_event("end the session", "user")])))
+
+    # The model took up what the last session left open at the user's "hello".
+    assert "This session is a new conversation" in recap
+    assert "only when the user refers to it" in recap
+
+
 async def test_recap_empty_history_is_empty_string():
     assert await memory_recap(_kit(_FakeStore())) == ""
 
@@ -190,15 +198,43 @@ async def test_ensure_room_survives_two_kit_lifecycles(tmp_path):
     from roomkit.store.sqlite import SQLiteStore
 
     kit = RoomKit(store=SQLiteStore(tmp_path / "m.db"))
-    await ensure_room(kit)
+    await ensure_room(kit, channels=("voice",))
     room = await kit.store.get_room(ROOM_ID)
     await kit.close()
 
     kit2 = RoomKit(store=SQLiteStore(tmp_path / "m.db"))
-    await ensure_room(kit2)  # must reuse, not reset
+    await ensure_room(kit2, channels=("voice",))  # must reuse, not reset
     room2 = await kit2.store.get_room(ROOM_ID)
     assert room2.created_at == room.created_at
     await kit2.close()
+
+
+@pytest.mark.skipif(not _sqlite_available(), reason="installed roomkit has no SQLiteStore")
+async def test_a_session_unbinds_the_llm_channel_another_mode_left(tmp_path):
+    from roomkit import RoomKit
+    from roomkit.channels.ai import AIChannel
+    from roomkit.models.enums import ChannelCategory
+    from roomkit.providers.ai.mock import MockAIProvider
+    from roomkit.store.sqlite import SQLiteStore
+
+    # A Voice Channel session binds its LLM channel to the durable room.
+    vc = RoomKit(store=SQLiteStore(tmp_path / "m.db"))
+    vc.register_channel(AIChannel("ai", provider=MockAIProvider()))
+    await ensure_room(vc, channels=("voice", "ai"))
+    await vc.attach_channel(ROOM_ID, "ai", category=ChannelCategory.INTELLIGENCE)
+    await vc.close()
+
+    # The next Voice Channel session keeps it.
+    vc_again = RoomKit(store=SQLiteStore(tmp_path / "m.db"))
+    await ensure_room(vc_again, channels=("voice", "ai"))
+    assert [b.channel_id for b in await vc_again.store.list_bindings(ROOM_ID)] == ["ai"]
+    await vc_again.close()
+
+    # A realtime session has none: every event it stored was routed to it.
+    realtime = RoomKit(store=SQLiteStore(tmp_path / "m.db"))
+    await ensure_room(realtime, channels=("voice",))
+    assert await realtime.store.list_bindings(ROOM_ID) == []
+    await realtime.close()
 
 
 def _mode(path) -> int:
@@ -215,7 +251,7 @@ async def test_the_history_is_created_readable_by_its_owner_only(tmp_path, monke
     old_umask = os.umask(0o022)  # the usual default: world-readable files
     try:
         kit = RoomKit(store=build_store({}))
-        await ensure_room(kit)  # opens the database, writes through the WAL
+        await ensure_room(kit, channels=("voice",))  # opens the database, writes through the WAL
         # SQLite removes -wal / -shm when the last connection closes.
         modes = {p.name: _mode(p) for p in db.parent.iterdir()}
         await kit.close()
@@ -256,3 +292,39 @@ def test_the_store_is_declared_this_apps_own(caplog, monkeypatch, tmp_path):
 
     assert store.is_process_local
     assert not [r for r in caplog.records if "InMemoryLockManager" in r.getMessage()]
+
+
+# -- the voice channel AI reads this session's turns only ---------------------
+
+
+def _stored_at(event_id: str, when: datetime) -> SimpleNamespace:
+    return SimpleNamespace(id=event_id, created_at=when)
+
+
+async def test_the_session_window_leaves_the_last_sessions_turns_out():
+    from roomkit_ui.memory import session_window
+
+    started = datetime(2026, 10, 11, 20, 46, tzinfo=UTC)
+    before = _stored_at("old", datetime(2026, 10, 11, 20, 39, tzinfo=UTC))
+    hello = _stored_at("hello", datetime(2026, 10, 11, 20, 46, 28, tzinfo=UTC))
+    answer = _stored_at("answer", datetime(2026, 10, 11, 20, 46, 32, tzinfo=UTC))
+    now = _stored_at("now", datetime(2026, 10, 11, 20, 46, 40, tzinfo=UTC))
+    context = SimpleNamespace(recent_events=[before, hello, answer, now])
+
+    result = await session_window(started).retrieve("main", now, context)
+
+    assert [e.id for e in result.events] == ["hello", "answer"]
+
+
+async def test_the_session_window_keeps_roomkits_last_n():
+    from roomkit_ui.memory import session_window
+
+    started = datetime(2026, 10, 11, tzinfo=UTC)
+    events = [_stored_at(str(i), datetime(2026, 10, 11, 1, i, tzinfo=UTC)) for i in range(5)]
+    context = SimpleNamespace(recent_events=events)
+
+    window = session_window(started, max_events=3)
+    result = await window.retrieve("main", events[-1], context)
+
+    assert [e.id for e in result.events] == ["2", "3"]
+    assert window.recent_events_window == 3

@@ -61,6 +61,7 @@ class ToolMixin:
     _attitude: str
     _attitude_name: str
     _base_system_prompt: str
+    _memory_recap: str
     _session_settings: dict
     _ai_channel: Any
     _channel: Any
@@ -77,12 +78,20 @@ class ToolMixin:
         from roomkit_ui.engine_audio import resolve_attitude
 
         self._base_system_prompt = settings.get("system_prompt", _DEFAULT_SYSTEM_PROMPT)
+        self._memory_recap = ""  # known once the kit opens its store
         attitude = self._attitude or resolve_attitude(settings)
         if attitude:
             self._attitude = attitude
             if not self._attitude_name:
                 self._attitude_name = settings.get("selected_attitude", "") or attitude
-        return compose_attitude_prompt(self._base_system_prompt, attitude)
+        return self._session_prompt()
+
+    def _session_prompt(self) -> str:
+        """The user's prompt, the memory recap, then the attitude section."""
+        base = self._base_system_prompt
+        if self._memory_recap:
+            base = f"{base}\n\n{self._memory_recap}"
+        return compose_attitude_prompt(base, self._attitude)
 
     async def _handle_tool_call(
         self,
@@ -278,7 +287,7 @@ class ToolMixin:
         self._attitude = description
         self._attitude_name = name
 
-        new_prompt = compose_attitude_prompt(self._base_system_prompt, description)
+        new_prompt = self._session_prompt()
 
         if self._ai_channel is not None:
             # Voice-channel mode: AIChannel rebuilds context per turn, so this

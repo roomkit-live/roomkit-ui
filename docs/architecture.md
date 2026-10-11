@@ -140,7 +140,7 @@ While enabled, `WakeWordController` keeps a shared roomkit `LocalMicSource` runn
 
 ### Conversation memory
 
-With **Remember conversations** on (default), every session joins one durable room in roomkit's `SQLiteStore`. The Voice Channel's AI rebuilds its context from the room; realtime providers (whose context starts blank) get a fenced recap of recent exchanges in the system prompt; the `recall_conversations` tool searches the whole history.
+With **Remember conversations** on (default), every session joins one durable room in roomkit's `SQLiteStore`. Each session is a new conversation: both modes get a fenced recap of recent exchanges in the system prompt (`Engine._session_prompt`: user prompt, recap, attitude), and the Voice Channel's AIChannel reads only this session's events (`memory.session_window`, a `SlidingWindowMemory` filtered by the session start); the `recall_conversations` tool searches the whole history.
 
 ### MCP Apps
 

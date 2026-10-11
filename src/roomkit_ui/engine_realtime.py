@@ -77,6 +77,7 @@ class RealtimeMixin:
     _attitude: str
     _attitude_name: str
     _base_system_prompt: str
+    _memory_recap: str
     _transport: Any
     _kit: Any
     _channel: Any
@@ -323,13 +324,12 @@ class RealtimeMixin:
 
         try:
             self._kit, store = self._build_kit(RoomKit, settings)  # type: ignore[attr-defined]
-            await ensure_room(self._kit)  # type: ignore[attr-defined]
+            await ensure_room(self._kit, channels=("voice",))  # type: ignore[attr-defined]
             if store is not None and system_prompt is not None:
                 # Realtime context lives server-side and starts blank — the
                 # recap is the only way previous sessions reach the provider.
-                recap = await memory_recap(self._kit)  # type: ignore[attr-defined]
-                if recap:
-                    system_prompt = f"{system_prompt}\n\n{recap}"
+                self._memory_recap = await memory_recap(self._kit)  # type: ignore[attr-defined]
+                system_prompt = self._session_prompt()  # type: ignore[attr-defined]
             self._channel = RealtimeVoiceChannel(  # type: ignore[attr-defined]
                 "voice",
                 provider=provider,

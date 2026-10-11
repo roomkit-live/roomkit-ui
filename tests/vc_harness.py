@@ -12,12 +12,14 @@ import asyncio
 import threading
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from PySide6.QtCore import QObject, Signal
 from roomkit import RoomKit, VoiceChannel
 from roomkit.channels.ai import AIChannel
 from roomkit.models.enums import ChannelCategory
+from roomkit.models.event import TextContent
 from roomkit.providers.ai.base import AIContext, AIProvider, AIResponse
 from roomkit.voice.audio_frame import AudioFrame
 from roomkit.voice.backends.mock import MockVoiceBackend
@@ -150,12 +152,14 @@ async def open_session(
     engine: FakeEngine | None = None,
     tts_filter: Any = None,
     ai_options: dict[str, Any] | None = None,
+    history: list[str] | None = None,
 ) -> VCSession:
     """A connected voice session whose user turns the TokenAI answers.
 
     *build_channel* is called as ``(stt, tts, backend, pipeline, tts_filter)``
     — the engine's ``_build_voice_channel`` — instead of a plain VoiceChannel.
     *ai_options* go to the AIChannel (a speak policy, a thinker).
+    *history* is what the assistant said in the room before the session.
     """
     stt = MockSTTProvider(transcripts=transcripts or ["Hello"])
     backend = MockVoiceBackend()
@@ -172,6 +176,15 @@ async def open_session(
     room = await kit.create_room()
     await kit.attach_channel(room.id, "voice")
     await kit.attach_channel(room.id, "ai", category=ChannelCategory.INTELLIGENCE)
+    for said in history or []:
+        # Stored as the assistant's, five minutes ago, answered by nobody.
+        await kit.send_event(
+            room.id,
+            "ai",
+            TextContent(body=said),
+            created_at=datetime.now(UTC) - timedelta(minutes=5),
+            addressed_to=[],
+        )
     engine = engine or FakeEngine()
     register_vc_hooks(kit, engine, tts_filter=tts_filter)
     session = await kit.join(room.id, "voice", participant_id="user-1")

@@ -162,9 +162,13 @@ transcription — so the phrase works in any language.
 ### Conversation memory
 
 Settings → Privacy & memory → "Remember conversations", on by default. Sessions
-share one persistent history (`conversations.db`, readable by its owner only). The Voice
-Channel's AI reads it as context; a realtime provider gets a recap of recent exchanges
-(answers the user never heard are left out, cut answers are marked interrupted); the
+share one persistent history (`conversations.db`, readable by its owner only). Each
+session is a new conversation: in both modes the model gets a recap of recent exchanges
+in its system prompt, quoted as the past and to be brought up only when the user refers
+to it (answers the user never heard are left out, cut answers are marked interrupted).
+The Voice Channel's AI reads only this session's turns as the conversation
+(`session_window`): reading the room, it took up what the last session left open at the
+user's first "hello". The recap stays through an attitude change. The
 `recall_conversations` tool lets the assistant search all of it. (`memory.py`)
 
 ### System-wide dictation

@@ -143,6 +143,9 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         # start so mid-session attitude changes can recompute the full
         # prompt without reaching into channel internals.
         self._base_system_prompt: str = ""
+        # Past sessions as the model reads them (memory.memory_recap), between
+        # the base prompt and the attitude: an attitude change keeps it.
+        self._memory_recap: str = ""
         # The settings the session started with; mid-session lookups read
         # this, never load_settings() and its keyring round-trip.
         self._session_settings: dict = {}
@@ -680,6 +683,7 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         self._speakers = None
         self._partial_buffers.clear()
         self._base_system_prompt = ""
+        self._memory_recap = ""
 
     async def _finalize_event_loop(self) -> None:
         """Let cancelled tasks finish, then clear what MCP/anyio left behind.

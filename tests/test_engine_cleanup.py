@@ -162,6 +162,7 @@ async def test_cleanup_nullifies_session_state(engine):
     engine._transport = object()
     engine._partial_buffers["user"] = "leftover"
     engine._base_system_prompt = "prompt"
+    engine._memory_recap = "## Memory of previous conversations"
 
     await _run_cleanup(engine)
 
@@ -171,6 +172,7 @@ async def test_cleanup_nullifies_session_state(engine):
     assert engine._transport is None
     assert engine._partial_buffers == {}
     assert engine._base_system_prompt == ""
+    assert engine._memory_recap == ""
 
 
 async def test_cleanup_cancels_engine_owned_tasks(engine):
