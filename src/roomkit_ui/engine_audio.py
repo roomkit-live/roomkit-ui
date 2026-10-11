@@ -211,13 +211,15 @@ def build_denoiser(denoise_mode: str, sample_rate: int) -> Any:
 
 
 def reset_diarization(diarization: Any) -> None:
-    """Reset a cached diarization provider and forget all enrolled speakers.
+    """Forget the enrolled speakers of a cached diarization provider.
 
-    ``reset()`` clears transient clustering state; ``clear_speakers()`` drops
-    the enrollment set so a provider reused across sessions doesn't carry
-    speakers between conversations.  Both are public roomkit APIs (0.24.0+).
+    ``clear_speakers()`` drops the enrollment set so a provider reused across
+    sessions doesn't carry speakers between conversations; the session then
+    enrolls the current profiles again.  The per-stream clustering state needs
+    nothing here: ``reset(stream)`` takes a stream id since roomkit keyed that
+    state by stream, and the pipeline calls it for the session's stream when
+    the session ends.
     """
-    diarization.reset()
     diarization.clear_speakers()
 
 
