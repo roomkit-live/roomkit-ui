@@ -235,6 +235,9 @@ _DEFAULTS = {
     "vc_interruption_mode": "off",
     # Send the reply to ElevenLabs as it is written (WebSocket; not on v3)
     "elevenlabs_stream_input": True,
+    # Local (vLLM / Ollama) model reasoning: off by default, a voice reply
+    # must not wait for seconds of hidden thinking
+    "vc_local_thinking": False,
 }
 
 # Keys renamed since a release shipped: new key → (old key, old value → new value).

@@ -17,6 +17,12 @@ from PySide6.QtWidgets import (
 
 from roomkit_ui.theme import colors
 
+_THINKING_HINT = (
+    "Off, a reasoning model (Qwen3, DeepSeek-R1) answers at once instead of thinking "
+    "for seconds before a word is spoken. A model that always reasons (Qwen3 "
+    "Thinking-2507) then says its reasoning aloud: turn this on for it."
+)
+
 
 class VCLocalFields:
     """Local provider fields added to a parent QFormLayout in phases.
@@ -52,6 +58,18 @@ class VCLocalFields:
         self.vc_local_tools.setChecked(bool(s.get("vc_local_tools", True)))
         self._vc_local_tools_label = QLabel("")
         form.addRow(self._vc_local_tools_label, self.vc_local_tools)
+
+        self.vc_local_thinking = QCheckBox("Model thinking (slower answers)")
+        self.vc_local_thinking.setChecked(bool(s.get("vc_local_thinking", False)))
+        self._vc_local_thinking_label = QLabel("")
+        form.addRow(self._vc_local_thinking_label, self.vc_local_thinking)
+        self._vc_local_thinking_hint = QLabel(_THINKING_HINT)
+        self._vc_local_thinking_hint.setWordWrap(True)
+        self._vc_local_thinking_hint.setStyleSheet(
+            f"font-size: 11px; color: {colors()['TEXT_SECONDARY']};"
+            f" font-style: italic; background: transparent;"
+        )
+        form.addRow("", self._vc_local_thinking_hint)
 
         self._add_llamacpp_fields(form)
 
@@ -198,6 +216,9 @@ class VCLocalFields:
             self._vc_llamacpp_note,
         ):
             widget.setVisible(is_llamacpp)
+        self._vc_local_thinking_label.setVisible(is_local)
+        self.vc_local_thinking.setVisible(is_local)
+        self._vc_local_thinking_hint.setVisible(is_local)
 
     def update_stt_visibility(self, provider: str) -> None:
         is_local = provider == "local"
@@ -294,6 +315,7 @@ class VCLocalFields:
             "vc_local_tools": self.vc_local_tools.isChecked(),
             "vc_llamacpp_model": self.vc_llamacpp_model.text().strip(),
             "vc_llamacpp_context": self.vc_llamacpp_context.text().strip(),
+            "vc_local_thinking": self.vc_local_thinking.isChecked(),
             "vc_stt_model": self.vc_stt_model.currentData() or "",
             "vc_tts_model": self.vc_tts_model.currentData() or "",
             "vc_tts_ref_audio": self.vc_tts_ref_audio.text().strip(),
