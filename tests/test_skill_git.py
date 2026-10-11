@@ -127,3 +127,19 @@ async def test_pull_updates_a_clone(skills_root, tmp_path):
 
     assert await sm.pull_repo(dest) is True
     assert (dest / "new.txt").exists()
+
+
+def test_skill_git_ignores_an_inherited_git_dir(monkeypatch, tmp_path):
+    # Started from a git hook (or `rebase --exec`), the app inherits GIT_DIR:
+    # every skill clone or pull would then act on that repository instead.
+    decoy = tmp_path / "decoy"
+    _git("init", "-q", str(decoy))
+    monkeypatch.setenv("GIT_DIR", str(decoy / ".git"))
+
+    work = tmp_path / "work"
+    work.mkdir()
+    result = sm._run_git(
+        ["-C", str(work), "rev-parse", "--absolute-git-dir"], timeout=10, ceiling=tmp_path
+    )
+
+    assert str(decoy) not in result.stdout

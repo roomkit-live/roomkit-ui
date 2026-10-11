@@ -20,6 +20,17 @@ logger = logging.getLogger(__name__)
 
 _GIT_CLONE_TIMEOUT = 180.0
 _GIT_PULL_TIMEOUT = 120.0
+# Variables that point git at another repository, index or object store.
+_GIT_REDIRECTS = (
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_COMMON_DIR",
+    "GIT_NAMESPACE",
+    "GIT_PREFIX",
+)
 # Anything but letters, digits, ".", "_", "-" — a backslash included, which
 # Windows reads as a path separator.
 _UNSAFE_SEGMENT_CHARS = re.compile(r"[^A-Za-z0-9._-]+")
@@ -110,11 +121,16 @@ def _run_git(args: list[str], *, timeout: float, ceiling: Path | None = None) ->
     *ceiling* stops git from looking above that directory for a repository,
     so ``-C`` on a folder that is not a clone fails instead of acting on an
     enclosing one (a home directory kept in git, say).
+
+    Git's repository-redirecting variables are dropped: an app started from
+    a git hook or a terminal inside ``git rebase --exec`` inherits GIT_DIR,
+    and every skill clone or pull would act on that repository instead.
     """
     git = resolve_command("git")
     if git is None:
         raise RuntimeError("git is not installed or not on PATH")
-    env = {"GIT_TERMINAL_PROMPT": "0"}
+    env: dict[str, str | None] = dict.fromkeys(_GIT_REDIRECTS)
+    env["GIT_TERMINAL_PROMPT"] = "0"
     if ceiling is not None:
         env["GIT_CEILING_DIRECTORIES"] = str(ceiling)
     return run_sync([*git, *args], timeout=timeout, registry=ProcessRegistry(), extra_env=env)

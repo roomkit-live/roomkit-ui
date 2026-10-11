@@ -17,6 +17,7 @@ import shlex
 import shutil
 import subprocess  # nosec B404 — argv lists only, never shell=True
 import sys
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -91,9 +92,12 @@ def run_sync(
     *,
     timeout: float,
     registry: ProcessRegistry,
-    extra_env: dict[str, str] | None = None,
+    extra_env: Mapping[str, str | None] | None = None,
 ) -> CliResult:
     """Run *argv* to completion. Blocking — call via ``asyncio.to_thread``.
+
+    *extra_env* is layered over :func:`child_env`; a ``None`` value removes
+    that variable from the child's environment.
 
     stdin is closed so a CLI that prompts fails fast instead of hanging until
     the timeout. ``start_new_session`` puts the child in its own process group
@@ -103,8 +107,11 @@ def run_sync(
     a result — or a ``--help`` probe at session start — into an exception.
     """
     env = child_env()
-    if extra_env:
-        env.update(extra_env)
+    for key, value in (extra_env or {}).items():
+        if value is None:
+            env.pop(key, None)
+        else:
+            env[key] = value
     try:
         proc = subprocess.Popen(  # nosec B603 — argv list, never shell=True
             argv,
