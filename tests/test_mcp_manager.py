@@ -368,3 +368,63 @@ async def test_close_all_shuts_a_real_stdio_server_down_promptly(tmp_path):
     await asyncio.wait_for(manager.close_all(), timeout=5)
 
     assert manager._tasks == []
+
+
+# -- servers that cannot start -----------------------------------------------------------
+
+
+def test_a_blank_entry_is_no_server_and_an_incomplete_one_says_why():
+    from roomkit_ui.mcp_config import enabled_mcp_servers, mcp_server_problem
+
+    blank = {"enabled": True, "name": "", "transport": "stdio", "command": "", "url": ""}
+    no_command = {"enabled": True, "name": "files", "transport": "stdio", "command": " "}
+    no_url = {"enabled": True, "name": "web", "transport": "streamable_http", "url": ""}
+
+    assert enabled_mcp_servers([blank, no_command, no_url]) == [no_command, no_url]
+    assert mcp_server_problem(no_command) == "it has no command"
+    assert mcp_server_problem(no_url) == "it has no URL"
+    assert mcp_server_problem({"transport": "stdio", "command": "npx srv"}) is None
+
+
+async def test_a_server_without_a_command_is_reported_not_launched(caplog):
+    mgr = MCPManager([{"name": "files", "transport": "stdio", "command": ""}])
+
+    with caplog.at_level("INFO", logger="roomkit_ui.mcp_manager"):
+        await mgr.connect_all()
+        await mgr.close_all()
+
+    assert mgr.failed_servers == ["files"]
+    errors = [r for r in caplog.records if r.levelname == "ERROR"]
+    said = [r.getMessage() for r in errors]
+    assert said == ["MCP server 'files' not started: it has no command"]
+    assert not any("Connecting" in r.getMessage() for r in caplog.records)
+
+
+async def test_a_command_that_cannot_run_is_one_line_not_a_traceback(caplog, tmp_path):
+    script = tmp_path / "server.sh"
+    script.write_text("#!/bin/sh\n")  # not executable: Permission denied
+    mgr = MCPManager([{"name": "", "transport": "stdio", "command": str(script)}])
+
+    with caplog.at_level("ERROR", logger="roomkit_ui.mcp_manager"):
+        await mgr.connect_all()
+        await mgr.close_all()
+
+    assert mgr.failed_servers == ["<unnamed>"]
+    (error,) = [r for r in caplog.records if r.levelname == "ERROR"]
+    assert error.getMessage().startswith("MCP server '<unnamed>' could not be started:")
+    assert error.exc_info is None
+
+
+def test_the_settings_page_does_not_save_a_blank_entry(qapp):
+    import json
+
+    import shiboken6
+
+    from roomkit_ui.widgets.settings.mcp_page import _MCPPage
+
+    page = _MCPPage({})
+    try:
+        page._add_server()  # "Add server", then nothing filled in
+        assert json.loads(page.get_servers_json()) == []
+    finally:
+        shiboken6.delete(page)

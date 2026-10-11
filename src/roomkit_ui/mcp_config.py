@@ -22,9 +22,25 @@ def parse_mcp_servers(raw: Any) -> list[dict[str, Any]]:
     return [dict(item) for item in data if isinstance(item, dict)]
 
 
+def is_blank_mcp_server(server: dict[str, Any]) -> bool:
+    """An entry "Add server" made and nobody filled in: no name, command or URL."""
+    return not any(str(server.get(key) or "").strip() for key in ("name", "command", "url"))
+
+
+def mcp_server_problem(server: dict[str, Any]) -> str | None:
+    """Why this server cannot be started, said for the user; None when it can."""
+    if server.get("transport", "stdio") == "stdio":
+        return None if str(server.get("command") or "").strip() else "it has no command"
+    return None if str(server.get("url") or "").strip() else "it has no URL"
+
+
 def enabled_mcp_servers(raw: Any) -> list[dict[str, Any]]:
-    """Return enabled MCP server configs only."""
-    return [server for server in parse_mcp_servers(raw) if server.get("enabled", True)]
+    """Return enabled MCP server configs only, blank entries left out."""
+    return [
+        server
+        for server in parse_mcp_servers(raw)
+        if server.get("enabled", True) and not is_blank_mcp_server(server)
+    ]
 
 
 def has_enabled_mcp_servers(raw: Any) -> bool:

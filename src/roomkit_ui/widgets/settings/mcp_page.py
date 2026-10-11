@@ -23,7 +23,11 @@ from PySide6.QtWidgets import (
 )
 from shiboken6 import isValid
 
-from roomkit_ui.mcp_config import parse_mcp_servers, validate_mcp_http_url
+from roomkit_ui.mcp_config import (
+    is_blank_mcp_server,
+    parse_mcp_servers,
+    validate_mcp_http_url,
+)
 from roomkit_ui.theme import colors
 
 MCP_TRANSPORTS = [
@@ -529,8 +533,12 @@ class _MCPPage(QWidget):
         return name
 
     def get_servers_json(self) -> str:
-        """Return server configs as a JSON string for saving."""
-        return json.dumps(self._servers)
+        """Return server configs as a JSON string for saving.
+
+        An entry "Add server" made and nobody filled in is not saved: it is
+        not a server, and the next session would try to launch it.
+        """
+        return json.dumps([srv for srv in self._servers if not is_blank_mcp_server(srv)])
 
     def get_settings(self) -> dict:
         """Return this page's settings slice."""

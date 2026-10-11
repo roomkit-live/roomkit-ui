@@ -22,7 +22,7 @@ from typing import Any
 
 from roomkit_ui.cli_exec import resolve_command, search_path
 from roomkit_ui.env_config import parse_env_block
-from roomkit_ui.mcp_config import validate_mcp_http_url
+from roomkit_ui.mcp_config import mcp_server_problem, validate_mcp_http_url
 
 _CONNECT_TIMEOUT = 10  # seconds per connection step, per server
 _MAX_TOOL_PAGES = 1000  # a server paging on past this is not listing anything
@@ -194,7 +194,15 @@ class MCPManager:
         task, so each server's AsyncExitStack lives entirely inside its own
         task — this is what allows the servers to connect in parallel.
         """
-        name = cfg.get("name", "<unnamed>")
+        name = cfg.get("name") or "<unnamed>"
+        problem = mcp_server_problem(cfg)
+        if problem is not None:
+            # A config error, said once: launching it would only fail (an empty
+            # command is spawned as "" and denied).
+            logger.error("MCP server %r not started: %s", name, problem)
+            self.failed_servers.append(name)
+            ready.set()
+            return
         stack = AsyncExitStack()
         connected = False
         try:
@@ -228,6 +236,10 @@ class MCPManager:
                     name,
                 )
                 self.failed_servers.append(name)
+        except OSError as exc:
+            # Its command is missing or not executable: the user's to fix, no traceback.
+            logger.error("MCP server %r could not be started: %s", name, exc)
+            self.failed_servers.append(name)
         except Exception:
             logger.exception("Failed to connect to MCP server %r", name)
             self.failed_servers.append(name)
