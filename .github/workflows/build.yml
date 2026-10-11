@@ -111,8 +111,9 @@ jobs:
 
       # `--extra all` is load-bearing: the base install is now core-only, and a
       # bare `uv sync` would ship a bundle with no providers at all.  It leaves
-      # out qwen3-tts / neutts, which conflict with each other and would add
-      # several GB of torch — see [tool.uv].conflicts in pyproject.toml.
+      # out qwen3-tts, neutts and smart-turn, which pin conflicting transformers
+      # versions (see [tool.uv].conflicts in pyproject.toml), and pocket-tts;
+      # qwen3-tts, neutts and pocket-tts would add several GB of torch.
       - name: Install Python dependencies
         run: |
           uv sync --extra all

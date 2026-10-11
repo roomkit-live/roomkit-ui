@@ -17,7 +17,8 @@ cd "$(dirname "$0")/.."
 
 # `--extra all` is load-bearing: the base install is core-only, and a bare
 # `uv sync` would bundle an app with no AI backend at all.  It leaves out
-# qwen3-tts / neutts, which conflict with each other and pull GBs of torch.
+# qwen3-tts, neutts and smart-turn, which pin conflicting transformers
+# versions, and pocket-tts; qwen3-tts, neutts and pocket-tts pull GBs of torch.
 echo "==> Installing dependencies..."
 if command -v uv &>/dev/null; then
     uv sync --extra all
