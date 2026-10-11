@@ -41,6 +41,8 @@ elif [[ "$OSTYPE" == "linux"* ]]; then
 fi
 
 echo "==> Running PyInstaller..."
+# The same flags as both build steps of .github/workflows/build.yml — the
+# release builds; tests/test_build_flags.py fails when they drift.
 uv run pyinstaller \
     --name "RoomKit UI" \
     --noconfirm \

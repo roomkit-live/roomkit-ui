@@ -93,7 +93,10 @@ jobs:
       - name: Generate icons
         run: uv run python scripts/generate_icons.py
 
-      # macOS / Linux
+      # macOS / Linux. The PyInstaller flags here, in the Windows step and in
+      # scripts/build_app.sh must match: tests/test_build_flags.py fails when
+      # they drift. --collect-binaries=aec_audio_processing is the one with no
+      # import behind it: the package loads its WebRTC library by path.
       - name: Build (Unix)
         if: runner.os != 'Windows'
         run: |
@@ -131,9 +134,16 @@ jobs:
             --hidden-import=sounddevice \
             --hidden-import=_sounddevice_data \
             --hidden-import=certifi \
+            --hidden-import=aec_audio_processing \
+            --collect-binaries=aec_audio_processing \
+            --collect-binaries=sherpa_onnx \
+            --hidden-import=sherpa_onnx \
             --collect-binaries=onnxruntime \
             --hidden-import=onnxruntime \
             --hidden-import=onnxruntime.capi._pybind_state \
+            --hidden-import=pynput \
+            --hidden-import=pynput.keyboard \
+            --hidden-import=pynput.keyboard._darwin \
             --add-data "src/roomkit_ui${SEP}roomkit_ui" \
             src/roomkit_ui/__main__.py
 
@@ -230,9 +240,16 @@ jobs:
             "--hidden-import=sounddevice",
             "--hidden-import=_sounddevice_data",
             "--hidden-import=certifi",
+            "--hidden-import=aec_audio_processing",
+            "--collect-binaries=aec_audio_processing",
+            "--collect-binaries=sherpa_onnx",
+            "--hidden-import=sherpa_onnx",
             "--collect-binaries=onnxruntime",
             "--hidden-import=onnxruntime",
             "--hidden-import=onnxruntime.capi._pybind_state",
+            "--hidden-import=pynput",
+            "--hidden-import=pynput.keyboard",
+            "--hidden-import=pynput.keyboard._darwin",
             "--add-data", "src/roomkit_ui;roomkit_ui",
             "src/roomkit_ui/__main__.py"
           )
