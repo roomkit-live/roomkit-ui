@@ -103,7 +103,7 @@ def test_settings_combos_cover_every_offered_provider():
         VC_STT_PROVIDERS,
         VC_TTS_PROVIDERS,
     )
-    from roomkit_ui.widgets.settings.realtime_section import PROVIDERS as RT_PROVIDERS
+    from roomkit_ui.widgets.settings.realtime_catalogs import PROVIDERS as RT_PROVIDERS
 
     for entries, mapping in (
         (VC_LLM_PROVIDERS, AI_PROVIDER_FEATURES),

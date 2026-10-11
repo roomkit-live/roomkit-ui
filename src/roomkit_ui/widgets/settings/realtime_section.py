@@ -8,8 +8,6 @@ shows exactly one group.
 
 from __future__ import annotations
 
-import importlib
-
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -25,193 +23,28 @@ from PySide6.QtWidgets import (
 from roomkit_ui.features import REALTIME_PROVIDER_FEATURES
 from roomkit_ui.theme import colors
 from roomkit_ui.widgets.settings.feature_hints import populate_provider_combo
+from roomkit_ui.widgets.settings.realtime_catalogs import (
+    DEEPGRAM_LANGUAGES,
+    DEEPGRAM_LISTEN_MODELS,
+    DEEPGRAM_THINK_CATALOGS,
+    DEEPGRAM_THINK_PROVIDERS,
+    DEEPGRAM_VOICES,
+    GEMINI_LANGUAGES,
+    GEMINI_MODELS,
+    GEMINI_VOICES,
+    OPENAI_MODELS,
+    OPENAI_VOICES,
+    PROVIDERS,
+    XAI_MODELS,
+    XAI_VOICES,
+    chat_model_options,
+    populate_model_combo,
+    populate_voice_combo,
+    sts_model_options,
+    voice_options,
+)
 from roomkit_ui.widgets.settings.realtime_gemini_live import GeminiGenerationFields
 from roomkit_ui.widgets.settings.realtime_gpt_live import GPTLiveFields
-
-PROVIDERS = [
-    ("Google Gemini", "gemini"),
-    ("OpenAI", "openai"),
-    ("Deepgram Voice Agent", "deepgram"),
-    ("ElevenLabs (Conversational AI)", "elevenlabs"),
-    ("xAI Grok", "xai"),
-    ("OpenAI GPT-Live (full-duplex)", "openai_live"),
-]
-
-# Fallback STS model ids, used until the installed roomkit ships the
-# realtime_models catalogs (added upstream for 0.44; 0.43 has none — the chat
-# catalogs exclude realtime ids on purpose).  The STS model combos are fixed
-# dropdowns: a saved id outside the lineup is inserted, not silently replaced.
-GEMINI_MODELS = [
-    "gemini-2.5-flash-native-audio-preview-12-2025",
-    "gemini-3.1-flash-live-preview",
-    "gemini-2.0-flash-live-001",
-]
-# Fallback ids, used only when roomkit's offline voice catalog fails to import.
-GEMINI_VOICES = ["Aoede", "Charon", "Fenrir", "Kore", "Puck"]
-
-GEMINI_LANGUAGES = [
-    ("Auto-detect", ""),
-    ("English (US)", "en-US"),
-    ("English (UK)", "en-GB"),
-    ("French", "fr-FR"),
-    ("Spanish", "es-ES"),
-    ("German", "de-DE"),
-    ("Italian", "it-IT"),
-    ("Portuguese (BR)", "pt-BR"),
-    ("Dutch", "nl-NL"),
-    ("Japanese", "ja-JP"),
-    ("Chinese", "zh-CN"),
-    ("Korean", "ko-KR"),
-    ("Russian", "ru-RU"),
-    ("Arabic", "ar-XA"),
-    ("Hindi", "hi-IN"),
-]
-
-OPENAI_MODELS = [
-    "gpt-realtime-2.1",
-    "gpt-realtime-2.1-mini",
-    "gpt-realtime-1.5",
-    "gpt-4o-realtime-preview",
-]
-OPENAI_VOICES = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
-
-# Fallback Aura-2 ids (the catalog has ~90 live voices; the combo stays
-# editable so any "aura-2-{name}-{lang}" id can be typed either way).
-DEEPGRAM_VOICES = [
-    "aura-2-thalia-en",
-    "aura-2-andromeda-en",
-    "aura-2-apollo-en",
-    "aura-2-asteria-en",
-    "aura-2-athena-en",
-    "aura-2-atlas-en",
-    "aura-2-helena-en",
-    "aura-2-hermes-en",
-    "aura-2-orion-en",
-    "aura-2-agathe-fr",
-    "aura-2-hector-fr",
-]
-DEEPGRAM_THINK_PROVIDERS = [
-    ("OpenAI", "open_ai"),
-    ("Anthropic", "anthropic"),
-    ("Google", "google"),
-]
-
-# Listen (STT) languages.  nova-3 monolingual is English-only: picking a
-# specific language with the model on Auto makes the engine select nova-2;
-# "Multilingual" rides nova-3's code-switching mode.
-DEEPGRAM_LANGUAGES = [
-    ("English (default)", ""),
-    ("Multilingual (nova-3)", "multi"),
-    ("French", "fr"),
-    ("Spanish", "es"),
-    ("German", "de"),
-    ("Portuguese", "pt"),
-    ("Italian", "it"),
-    ("Dutch", "nl"),
-    ("Japanese", "ja"),
-    ("Korean", "ko"),
-    ("Russian", "ru"),
-    ("Hindi", "hi"),
-]
-
-DEEPGRAM_LISTEN_MODELS = ["nova-3", "nova-2", "flux-general-en"]
-
-# Deepgram's think stage speaks each vendor's chat API, so roomkit's chat
-# model catalogs (pure-data modules) are the right suggestion source.
-DEEPGRAM_THINK_CATALOGS = {
-    "open_ai": "roomkit.providers.openai.models",
-    "anthropic": "roomkit.providers.anthropic.models",
-    "google": "roomkit.providers.gemini.models",
-}
-
-XAI_MODELS = ["grok-2-audio"]
-XAI_VOICES = ["eve", "ara", "rex", "sal", "leo"]
-
-
-def _chat_model_options(module_name: str) -> list[str]:
-    """Model ids from a roomkit chat catalog (``MODELS: list[ModelInfo]``).
-
-    Same import economics as the voice catalogs: pure data, no vendor SDK.
-    An unknown module or a shape change yields an empty list — the combo is
-    editable, so suggestions are decoration, never a gate.
-    """
-    try:
-        models = importlib.import_module(module_name).MODELS
-        return [m.id for m in models]
-    except Exception:
-        return []
-
-
-def _sts_model_options(module_name: str, fallback: list[str]) -> list[str]:
-    """STS model ids from a roomkit ``realtime_models`` catalog, or *fallback*.
-
-    The catalogs land in roomkit 0.44 (``providers/*/realtime_models.py``);
-    on 0.43 the import fails and the hardcoded lineup answers instead.
-    Deprecated ids (the retired gpt-4o previews) are dropped — anyone still
-    pinning one can type it, the combos being editable.
-    """
-    try:
-        models = importlib.import_module(module_name).MODELS
-        ids = [m.id for m in models if not m.deprecated]
-        return ids or fallback
-    except Exception:
-        return fallback
-
-
-def _voice_options(module_name: str, fallback: list[str]) -> list[tuple[str, str]]:
-    """``(voice_id, traits)`` pairs from a roomkit offline voice catalog.
-
-    The catalogs are pure-data modules (no vendor SDK import), but the first
-    one still pays roomkit's package import (~0.5 s cold) — acceptable once
-    per process, at dialog-open time.  Deprecated voices (e.g. Deepgram's
-    Aura-1 line) are dropped.  Falls back to the bare id list on any import
-    problem so the dialog never breaks with the catalog.
-    """
-    try:
-        voices = importlib.import_module(module_name).VOICES
-    except Exception:
-        return [(vid, "") for vid in fallback]
-    options = [
-        (v.id, ", ".join(t for t in (v.gender, v.description) if t))
-        for v in voices
-        if not v.deprecated
-    ]
-    return options or [(vid, "") for vid in fallback]
-
-
-def _populate_model_combo(combo: QComboBox, options: list[str], current: str) -> None:
-    """Fill a fixed model dropdown and restore the selection.
-
-    A saved id the lineup does not carry (legacy default, hand-pinned model)
-    is inserted at the top and stays selectable — replacing it silently would
-    change what the next session runs.
-    """
-    combo.addItems(options)
-    if current:
-        idx = combo.findText(current)
-        if idx < 0:
-            combo.insertItem(0, current)
-            idx = 0
-        combo.setCurrentIndex(idx)
-
-
-def _populate_voice_combo(combo: QComboBox, options: list[tuple[str, str]], current: str) -> None:
-    """Fill a voice combo with catalog entries and restore the selection.
-
-    Item data always carries the bare voice id.  Editable combos show the id
-    itself (the text doubles as free input); fixed combos show ``id — traits``.
-    """
-    editable = combo.isEditable()
-    for vid, traits in options:
-        label = vid if editable or not traits else f"{vid} — {traits[:48]}"
-        combo.addItem(label, vid)
-        if traits:
-            combo.setItemData(combo.count() - 1, traits, Qt.ToolTipRole)
-    idx = combo.findData(current)
-    if idx >= 0:
-        combo.setCurrentIndex(idx)
-    elif editable:
-        combo.setCurrentText(current)
 
 
 class RealtimeSection(QWidget):
@@ -237,7 +70,34 @@ class RealtimeSection(QWidget):
         rt_form.setSpacing(10)
         rt_form.setLabelAlignment(Qt.AlignRight)
 
-        # Provider selector
+        self._add_provider_selector(settings, rt_form)
+        self._add_api_keys(settings, rt_form)
+        self._add_models_and_voices(settings, rt_form)
+        self._add_deepgram_fields(settings, rt_form)
+        self._add_elevenlabs_fields(settings, rt_form)
+        self._add_xai_fields(settings, rt_form)
+        self._add_openai_live_fields(settings, rt_form)
+        rt_layout.addLayout(rt_form)
+        self._add_gemini_advanced(settings, rt_layout)
+        self._add_openai_advanced(settings, rt_layout)
+        self._add_deepgram_advanced(settings, rt_layout)
+        self._add_xai_advanced(settings, rt_layout)
+        self._map_provider_widgets()
+
+        # Wire signals
+        self.provider.currentIndexChanged.connect(self._on_provider_changed)
+        self.openai_turn_detection.currentIndexChanged.connect(
+            self._on_openai_turn_detection_changed
+        )
+        self.deepgram_think_provider.currentIndexChanged.connect(self._on_think_provider_changed)
+        self.gemini_model.currentTextChanged.connect(self._gemini_generation.update_for_model)
+
+        # Initial state
+        self._on_provider_changed(self.provider.currentIndex())
+        self._gemini_generation.update_for_model(self.gemini_model.currentText())
+
+    def _add_provider_selector(self, settings: dict, rt_form: QFormLayout) -> None:
+        """The provider combo, set to the saved provider."""
         self.provider = QComboBox()
         populate_provider_combo(self.provider, PROVIDERS, REALTIME_PROVIDER_FEATURES)
         current_provider = settings.get("provider", "gemini")
@@ -247,7 +107,8 @@ class RealtimeSection(QWidget):
                 break
         rt_form.addRow("Provider", self.provider)
 
-        # API keys (one per provider, shown/hidden)
+    def _add_api_keys(self, settings: dict, rt_form: QFormLayout) -> None:
+        """One API key field per provider; only the current one shows."""
         self.gemini_api_key = QLineEdit(settings.get("api_key", ""))
         self.gemini_api_key.setEchoMode(QLineEdit.Password)
         self.gemini_api_key.setPlaceholderText("Enter your Google API key")
@@ -260,11 +121,13 @@ class RealtimeSection(QWidget):
         self._openai_key_label = QLabel("API Key")
         rt_form.addRow(self._openai_key_label, self.openai_api_key)
 
+    def _add_models_and_voices(self, settings: dict, rt_form: QFormLayout) -> None:
+        """Gemini and OpenAI model and voice combos, fed by roomkit's catalogs."""
         # Model (Gemini)
         self.gemini_model = QComboBox()
-        _populate_model_combo(
+        populate_model_combo(
             self.gemini_model,
-            _sts_model_options("roomkit.providers.gemini.realtime_models", GEMINI_MODELS),
+            sts_model_options("roomkit.providers.gemini.realtime_models", GEMINI_MODELS),
             settings.get("model", GEMINI_MODELS[0]),
         )
         self._gemini_model_label = QLabel("Model")
@@ -272,9 +135,9 @@ class RealtimeSection(QWidget):
 
         # Model (OpenAI)
         self.openai_model = QComboBox()
-        _populate_model_combo(
+        populate_model_combo(
             self.openai_model,
-            _sts_model_options("roomkit.providers.openai.realtime_models", OPENAI_MODELS),
+            sts_model_options("roomkit.providers.openai.realtime_models", OPENAI_MODELS),
             settings.get("openai_model", OPENAI_MODELS[0]),
         )
         self._openai_model_label = QLabel("Model")
@@ -282,9 +145,9 @@ class RealtimeSection(QWidget):
 
         # Voice (Gemini)
         self.gemini_voice = QComboBox()
-        _populate_voice_combo(
+        populate_voice_combo(
             self.gemini_voice,
-            _voice_options("roomkit.providers.gemini.voices", GEMINI_VOICES),
+            voice_options("roomkit.providers.gemini.voices", GEMINI_VOICES),
             settings.get("voice", "Aoede"),
         )
         self._gemini_voice_label = QLabel("Voice")
@@ -292,15 +155,16 @@ class RealtimeSection(QWidget):
 
         # Voice (OpenAI)
         self.openai_voice = QComboBox()
-        _populate_voice_combo(
+        populate_voice_combo(
             self.openai_voice,
-            _voice_options("roomkit.providers.openai.voices", OPENAI_VOICES),
+            voice_options("roomkit.providers.openai.voices", OPENAI_VOICES),
             settings.get("openai_voice", "alloy"),
         )
         self._openai_voice_label = QLabel("Voice")
         rt_form.addRow(self._openai_voice_label, self.openai_voice)
 
-        # ── Deepgram Voice Agent ──
+    def _add_deepgram_fields(self, settings: dict, rt_form: QFormLayout) -> None:
+        """Deepgram Voice Agent: think/speak/listen stages and the half-duplex escape hatch."""
         self.deepgram_api_key = QLineEdit(settings.get("deepgram_api_key", ""))
         self.deepgram_api_key.setEchoMode(QLineEdit.Password)
         self.deepgram_api_key.setPlaceholderText("Enter your Deepgram API key")
@@ -309,9 +173,9 @@ class RealtimeSection(QWidget):
 
         self.deepgram_voice = QComboBox()
         self.deepgram_voice.setEditable(True)
-        _populate_voice_combo(
+        populate_voice_combo(
             self.deepgram_voice,
-            _voice_options("roomkit.providers.deepgram.voices", DEEPGRAM_VOICES),
+            voice_options("roomkit.providers.deepgram.voices", DEEPGRAM_VOICES),
             settings.get("deepgram_agent_voice", DEEPGRAM_VOICES[0]),
         )
         self._deepgram_voice_label = QLabel("Voice")
@@ -337,7 +201,9 @@ class RealtimeSection(QWidget):
         )
         rt_form.addRow("", self.deepgram_half_duplex)
 
-        # ── ElevenLabs Conversational AI ──
+    def _add_elevenlabs_fields(self, settings: dict, rt_form: QFormLayout) -> None:
+        """ElevenLabs Conversational AI: the agent defines model and voice."""
+        c = colors()
         self.elevenlabs_api_key = QLineEdit(settings.get("elevenlabs_api_key", ""))
         self.elevenlabs_api_key.setEchoMode(QLineEdit.Password)
         self.elevenlabs_api_key.setPlaceholderText("Enter your ElevenLabs API key")
@@ -359,7 +225,8 @@ class RealtimeSection(QWidget):
         )
         rt_form.addRow("", self._elevenlabs_note)
 
-        # ── xAI Grok ──
+    def _add_xai_fields(self, settings: dict, rt_form: QFormLayout) -> None:
+        """xAI Grok model and voice."""
         self.xai_api_key = QLineEdit(settings.get("xai_api_key", ""))
         self.xai_api_key.setEchoMode(QLineEdit.Password)
         self.xai_api_key.setPlaceholderText("Enter your xAI API key")
@@ -367,29 +234,30 @@ class RealtimeSection(QWidget):
         rt_form.addRow(self._xai_key_label, self.xai_api_key)
 
         self.xai_model = QComboBox()
-        _populate_model_combo(
+        populate_model_combo(
             self.xai_model,
-            _sts_model_options("roomkit.providers.xai.realtime_models", XAI_MODELS),
+            sts_model_options("roomkit.providers.xai.realtime_models", XAI_MODELS),
             settings.get("xai_model", XAI_MODELS[0]),
         )
         self._xai_model_label = QLabel("Model")
         rt_form.addRow(self._xai_model_label, self.xai_model)
 
         self.xai_voice = QComboBox()
-        _populate_voice_combo(
+        populate_voice_combo(
             self.xai_voice,
-            _voice_options("roomkit.providers.xai.voices", XAI_VOICES),
+            voice_options("roomkit.providers.xai.voices", XAI_VOICES),
             settings.get("xai_voice", "eve"),
         )
         self._xai_voice_label = QLabel("Voice")
         rt_form.addRow(self._xai_voice_label, self.xai_voice)
 
-        # ── OpenAI GPT-Live (shares the OpenAI key field above) ──
+    def _add_openai_live_fields(self, settings: dict, rt_form: QFormLayout) -> None:
+        """OpenAI GPT-Live (shares the OpenAI key field)."""
         self._gpt_live = GPTLiveFields(settings, rt_form)
 
-        rt_layout.addLayout(rt_form)
-
-        # ── Gemini Advanced (collapsible) ──
+    def _add_gemini_advanced(self, settings: dict, rt_layout: QVBoxLayout) -> None:
+        """Gemini Advanced (collapsible)."""
+        c = colors()
         self._gemini_adv_toggle = QPushButton("\u25b8 Advanced")
         self._gemini_adv_toggle.setFlat(True)
         self._gemini_adv_toggle.setCursor(Qt.PointingHandCursor)
@@ -477,7 +345,9 @@ class RealtimeSection(QWidget):
         self._gemini_adv_container.hide()
         rt_layout.addWidget(self._gemini_adv_container)
 
-        # ── OpenAI Advanced (collapsible) ──
+    def _add_openai_advanced(self, settings: dict, rt_layout: QVBoxLayout) -> None:
+        """OpenAI Advanced (collapsible)."""
+        c = colors()
         self._openai_adv_toggle = QPushButton("\u25b8 Advanced")
         self._openai_adv_toggle.setFlat(True)
         self._openai_adv_toggle.setCursor(Qt.PointingHandCursor)
@@ -569,7 +439,9 @@ class RealtimeSection(QWidget):
         self._openai_adv_container.hide()
         rt_layout.addWidget(self._openai_adv_container)
 
-        # ── Deepgram Advanced (collapsible) ──
+    def _add_deepgram_advanced(self, settings: dict, rt_layout: QVBoxLayout) -> None:
+        """Deepgram Advanced (collapsible)."""
+        c = colors()
         self._deepgram_adv_toggle = QPushButton("▸ Advanced")
         self._deepgram_adv_toggle.setFlat(True)
         self._deepgram_adv_toggle.setCursor(Qt.PointingHandCursor)
@@ -652,7 +524,9 @@ class RealtimeSection(QWidget):
         self._deepgram_adv_container.hide()
         rt_layout.addWidget(self._deepgram_adv_container)
 
-        # ── xAI Advanced (collapsible) ──
+    def _add_xai_advanced(self, settings: dict, rt_layout: QVBoxLayout) -> None:
+        """xAI Advanced (collapsible)."""
+        c = colors()
         self._xai_adv_toggle = QPushButton("▸ Advanced")
         self._xai_adv_toggle.setFlat(True)
         self._xai_adv_toggle.setCursor(Qt.PointingHandCursor)
@@ -687,8 +561,12 @@ class RealtimeSection(QWidget):
         self._xai_adv_container.hide()
         rt_layout.addWidget(self._xai_adv_container)
 
-        # Provider → widgets that must be visible only for it.  Advanced
-        # containers are handled separately (they stay collapsed on switch).
+    def _map_provider_widgets(self) -> None:
+        """Which widgets show for which provider.
+
+        Advanced containers are handled separately: they stay collapsed on a
+        provider switch.
+        """
         self._provider_widgets: dict[str, list[QWidget]] = {
             "gemini": [
                 self._gemini_key_label,
@@ -747,18 +625,6 @@ class RealtimeSection(QWidget):
             "xai": (self._xai_adv_container, self._xai_adv_toggle),
         }
 
-        # Wire signals
-        self.provider.currentIndexChanged.connect(self._on_provider_changed)
-        self.openai_turn_detection.currentIndexChanged.connect(
-            self._on_openai_turn_detection_changed
-        )
-        self.deepgram_think_provider.currentIndexChanged.connect(self._on_think_provider_changed)
-        self.gemini_model.currentTextChanged.connect(self._gemini_generation.update_for_model)
-
-        # Initial state
-        self._on_provider_changed(self.provider.currentIndex())
-        self._gemini_generation.update_for_model(self.gemini_model.currentText())
-
     # -- Visibility handlers --
 
     def _on_provider_changed(self, index: int) -> None:
@@ -806,7 +672,7 @@ class RealtimeSection(QWidget):
         """Reload the think-model suggestions for *think_provider*."""
         combo = self.deepgram_think_model
         combo.clear()
-        combo.addItems(_chat_model_options(DEEPGRAM_THINK_CATALOGS.get(think_provider, "")))
+        combo.addItems(chat_model_options(DEEPGRAM_THINK_CATALOGS.get(think_provider, "")))
         combo.setCurrentText(current)
         if think_provider == "open_ai":
             placeholder = "gpt-4o-mini (default)"

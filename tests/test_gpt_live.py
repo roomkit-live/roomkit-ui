@@ -17,7 +17,8 @@ from roomkit_ui.realtime_providers import (
 )
 from roomkit_ui.settings import _DEFAULTS
 from roomkit_ui.toolset import ToolSet
-from roomkit_ui.widgets.settings.realtime_section import PROVIDERS, RealtimeSection
+from roomkit_ui.widgets.settings.realtime_catalogs import PROVIDERS
+from roomkit_ui.widgets.settings.realtime_section import RealtimeSection
 
 ROOT = Path(__file__).resolve().parent.parent
 

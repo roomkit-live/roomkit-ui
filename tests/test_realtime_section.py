@@ -122,10 +122,10 @@ def test_saved_think_model_survives_construction(qapp):
 
 
 def test_sts_model_options_fall_back_until_the_catalog_ships():
-    from roomkit_ui.widgets.settings.realtime_section import _sts_model_options
+    from roomkit_ui.widgets.settings.realtime_catalogs import sts_model_options
 
     # Unknown module (roomkit 0.43 has no realtime_models) → the local lineup.
-    assert _sts_model_options("roomkit.providers.gemini.realtime_models_nope", ["a", "b"]) == [
+    assert sts_model_options("roomkit.providers.gemini.realtime_models_nope", ["a", "b"]) == [
         "a",
         "b",
     ]
