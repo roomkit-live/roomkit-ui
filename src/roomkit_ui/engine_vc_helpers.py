@@ -94,13 +94,51 @@ def register_local_tool_hint(kit: Any, emit_error) -> None:
             logger.debug("emit_error failed (Qt object deleted?)", exc_info=True)
 
 
-def build_interruption(settings: dict) -> Any:
+# How long "words only" barge-in waits for a streaming STT's first words
+# before judging the speech on its duration.  roomkit's examples use 2 s: a
+# streaming transducer gives a short word ("okay", "no") 1-1.5 s in.
+_TRANSCRIPT_WAIT_MS = 2000
+
+
+def build_interruption(settings: dict, *, stt_streams: bool) -> Any:
+    """The barge-in policy of ``vc_interruption_mode``: off, immediate or semantic.
+
+    *stt_streams* says whether the STT hears words while the user speaks
+    (``supports_streaming``), which the semantic mode depends on.
+    """
     from roomkit.voice.interruption import InterruptionConfig, InterruptionStrategy
 
-    enabled = settings.get("vc_interruption", False)
-    strategy = InterruptionStrategy.IMMEDIATE if enabled else InterruptionStrategy.DISABLED
-    logger.info("Interruption: %s", strategy.value)
-    return InterruptionConfig(strategy=strategy)
+    mode = settings.get("vc_interruption_mode", "off")
+    if mode == "semantic":
+        config = _semantic_interruption(stt_streams)
+    elif mode == "immediate":
+        config = InterruptionConfig(strategy=InterruptionStrategy.IMMEDIATE)
+    else:
+        # DISABLED explicitly: None would let roomkit fall back to its own default.
+        config = InterruptionConfig(strategy=InterruptionStrategy.DISABLED)
+    logger.info("Interruption: %s (STT streams: %s)", config.strategy.value, stt_streams)
+    return config
+
+
+def _semantic_interruption(stt_streams: bool) -> Any:
+    """Words only: an acknowledgement lets the assistant go on, other words stop it.
+
+    ``PhraseBackchannelDetector`` reads the words the STT hears while the
+    assistant speaks ("ok", "mm", "d'accord", "merci" — English and French).
+    With a streaming STT, sound without words (echo the AEC left, a cough)
+    never cuts in.  An STT that does not stream (a Whisper-type local model)
+    has no words before the speech ends, so there wordless speech must still
+    cut in once it lasts — as CONFIRMED does — or nothing could stop the
+    assistant at all.
+    """
+    from roomkit.voice.interruption import InterruptionConfig, InterruptionStrategy
+    from roomkit.voice.pipeline.backchannel import PhraseBackchannelDetector
+
+    return InterruptionConfig(
+        strategy=InterruptionStrategy.SEMANTIC,
+        backchannel_detector=PhraseBackchannelDetector(cut_without_words=not stt_streams),
+        transcript_wait_ms=_TRANSCRIPT_WAIT_MS,
+    )
 
 
 def build_turn_detector(settings: dict, inference_device: str) -> Any:

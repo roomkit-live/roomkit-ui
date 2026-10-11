@@ -169,7 +169,9 @@ class VoiceChannelMixin:
                 vad_available=vad is not None,
                 inference_device=inference_device,
             )
-            interruption = build_interruption(settings)
+            interruption = build_interruption(
+                settings, stt_streams=bool(getattr(stt, "supports_streaming", False))
+            )
             turn_detector = build_turn_detector(settings, inference_device)
 
             # 6.5. AudioPipelineConfig

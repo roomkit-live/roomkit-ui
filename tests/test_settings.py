@@ -39,11 +39,29 @@ def test_defaults_returned_when_nothing_saved():
 
 
 def test_round_trip_preserves_values():
-    save_settings({"provider": "openai", "stt_enabled": False, "vc_interruption": True})
+    save_settings({"provider": "openai", "stt_enabled": False, "diarization_enabled": True})
     out = load_settings()
     assert out["provider"] == "openai"
     assert out["stt_enabled"] is False
-    assert out["vc_interruption"] is True
+    assert out["diarization_enabled"] is True
+
+
+@pytest.mark.parametrize(("legacy", "mode"), [(True, "immediate"), (False, "off")])
+def test_barge_in_bool_migrates_to_a_mode(legacy, mode):
+    QSettings().setValue("room/vc_interruption", legacy)
+
+    assert load_settings()["vc_interruption_mode"] == mode
+    assert not QSettings().contains("room/vc_interruption")
+    assert load_settings()["vc_interruption_mode"] == mode  # stored, not recomputed
+
+
+def test_a_saved_barge_in_mode_wins_over_the_legacy_bool():
+    qs = QSettings()
+    qs.setValue("room/vc_interruption", True)
+    qs.setValue("room/vc_interruption_mode", "semantic")
+
+    assert load_settings()["vc_interruption_mode"] == "semantic"
+    assert not QSettings().contains("room/vc_interruption")
 
 
 def test_bool_strings_are_coerced():

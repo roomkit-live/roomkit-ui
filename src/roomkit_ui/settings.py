@@ -148,7 +148,6 @@ _DEFAULTS = {
     "vad_energy_silence_rms": "",  # energy fast-exit RMS threshold (empty = 20, 0 = off)
     "vc_turn_detector": "",  # "" (none) or "smart-turn"
     "vc_turn_threshold": "",  # 0.0–1.0 (empty = 0.5)
-    "vc_interruption": False,
     # Speaker diarization
     "diarization_enabled": False,
     "diarization_model": "",
@@ -230,6 +229,18 @@ _DEFAULTS = {
     "openai_live_voice": "marin",
     "openai_live_backend_model": "gpt-5.6-terra",  # roomkit's example backend
     "openai_live_backend_effort": "low",  # low | medium | high
+    # Voice Channel pipeline (roomkit 0.96)
+    # Barge-in: "off" | "immediate" | "semantic" (words only). Was the bool
+    # "vc_interruption" (True = immediate), migrated by load_settings().
+    "vc_interruption_mode": "off",
+}
+
+# Keys renamed since a release shipped: new key → (old key, old value → new value).
+_RENAMED_KEYS: dict[str, tuple[str, Callable[[Any], Any]]] = {
+    "vc_interruption_mode": (
+        "vc_interruption",
+        lambda old: "immediate" if str(old).lower() in ("true", "1", "yes") else "off",
+    ),
 }
 
 
@@ -604,10 +615,26 @@ def _sanitize_cli_tools(raw: Any, store: SecretStore, *, persist: bool) -> Any:
     return json.dumps(tools)
 
 
+def _migrate_renamed_keys(qs: QSettings) -> None:
+    """Move a value saved under a key's old name to its new one, converted.
+
+    Done once: the old key is removed, and a value already saved under the
+    new name wins over the old one.
+    """
+    for key, (old_key, convert) in _RENAMED_KEYS.items():
+        if not qs.contains(f"room/{old_key}"):
+            continue
+        if not qs.contains(f"room/{key}"):
+            qs.setValue(f"room/{key}", convert(qs.value(f"room/{old_key}")))
+        qs.remove(f"room/{old_key}")
+        qs.sync()
+
+
 def load_settings() -> dict:
     """Load persisted settings, falling back to defaults."""
     qs = QSettings()
     store = get_secret_store()
+    _migrate_renamed_keys(qs)
     out: dict = {}
     for key, default in _DEFAULTS.items():
         if key in _SECRET_KEYS:

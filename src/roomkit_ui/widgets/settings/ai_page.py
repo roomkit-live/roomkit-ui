@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QCheckBox,
     QComboBox,
     QFormLayout,
     QLabel,
@@ -56,6 +55,21 @@ VC_TTS_PROVIDERS: list[tuple[str, str]] = [
     ("Pocket TTS (local, voice clone)", "pocket"),
     ("Azure MAI-Voice", "azure"),
 ]
+
+# Barge-in: how the user's speech may cut the assistant off (build_interruption).
+VC_INTERRUPTION_MODES: list[tuple[str, str]] = [
+    ("Off — the assistant finishes speaking", "off"),
+    ("Any speech interrupts", "immediate"),
+    ("Words only — ignores “ok”, “mm” and noise", "semantic"),
+]
+
+_INTERRUPTION_HINT = (
+    "Words only lets acknowledgements (“ok”, “mm-hmm”, "
+    "“d’accord”, “merci”) through and stops for anything else. "
+    "It needs an STT that hears words while you speak (Deepgram, Gradium, a streaming "
+    "local model): a Whisper-type local model only gives them once you stop, so with "
+    "one any speech that lasts stops the assistant."
+)
 
 
 class _AIPage(QWidget):
@@ -193,9 +207,7 @@ class _AIPage(QWidget):
         self._local.add_tts_fields(tts_form)
         self._cloud.add_tts_fields(tts_form)
 
-        self.vc_interruption = QCheckBox("Allow barge-in (interrupt TTS by speaking)")
-        self.vc_interruption.setChecked(bool(settings.get("vc_interruption", False)))
-        tts_form.addRow("", self.vc_interruption)
+        self._add_interruption_fields(tts_form, settings)
 
         self._vc_stack.addWidget(tts_page)
 
@@ -261,6 +273,22 @@ class _AIPage(QWidget):
         self._on_vc_provider_changed(self.vc_provider.currentIndex())
         self._on_vc_stt_provider_changed(self.vc_stt_provider.currentIndex())
         self._on_vc_tts_provider_changed(self.vc_tts_provider.currentIndex())
+
+    def _add_interruption_fields(self, form: QFormLayout, settings: dict) -> None:
+        self.vc_interruption_mode = QComboBox()
+        for label, value in VC_INTERRUPTION_MODES:
+            self.vc_interruption_mode.addItem(label, value)
+        idx = self.vc_interruption_mode.findData(settings.get("vc_interruption_mode", "off"))
+        self.vc_interruption_mode.setCurrentIndex(max(idx, 0))
+        form.addRow("Barge-in", self.vc_interruption_mode)
+
+        hint = QLabel(_INTERRUPTION_HINT)
+        hint.setWordWrap(True)
+        hint.setStyleSheet(
+            f"font-size: 11px; color: {colors()['TEXT_SECONDARY']};"
+            f" font-style: italic; background: transparent;"
+        )
+        form.addRow("", hint)
 
     # -- Mode / provider change handlers --
 
@@ -350,7 +378,7 @@ class _AIPage(QWidget):
             **self._realtime.get_settings(),
             "vc_llm_provider": VC_LLM_PROVIDERS[self.vc_provider.currentIndex()][1],
             "vc_stt_provider": VC_STT_PROVIDERS[self.vc_stt_provider.currentIndex()][1],
-            "vc_interruption": self.vc_interruption.isChecked(),
+            "vc_interruption_mode": self.vc_interruption_mode.currentData() or "off",
             "vc_tts_provider": VC_TTS_PROVIDERS[self.vc_tts_provider.currentIndex()][1],
             **self._local.get_settings(),
             **self._cloud.get_settings(),
