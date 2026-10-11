@@ -2,38 +2,48 @@ version = 1
 revision = 3
 requires-python = ">=3.12"
 resolution-markers = [
-    "python_full_version >= '3.15' and sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version >= '3.15' and sys_platform == 'emscripten' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version >= '3.15' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version == '3.14.*' and sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version == '3.14.*' and sys_platform == 'emscripten' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version == '3.14.*' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version == '3.13.*' and sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version == '3.13.*' and sys_platform == 'emscripten' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version == '3.13.*' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version < '3.13' and sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version < '3.13' and sys_platform == 'emscripten' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version < '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version >= '3.15' and sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version >= '3.15' and sys_platform == 'emscripten' and extra == 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version >= '3.15' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version == '3.14.*' and sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version == '3.14.*' and sys_platform == 'emscripten' and extra == 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version == '3.14.*' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version == '3.13.*' and sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version == '3.13.*' and sys_platform == 'emscripten' and extra == 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version == '3.13.*' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version < '3.13' and sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version < '3.13' and sys_platform == 'emscripten' and extra == 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version < '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version >= '3.15' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version == '3.14.*' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version == '3.13.*' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version < '3.13' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts'",
+    "python_full_version >= '3.15' and sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version >= '3.15' and sys_platform == 'emscripten' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version >= '3.15' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version == '3.14.*' and sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version == '3.14.*' and sys_platform == 'emscripten' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version == '3.14.*' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version == '3.13.*' and sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version == '3.13.*' and sys_platform == 'emscripten' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version == '3.13.*' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version < '3.13' and sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version < '3.13' and sys_platform == 'emscripten' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version < '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version >= '3.15' and sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version >= '3.15' and sys_platform == 'emscripten' and extra == 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version >= '3.15' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version == '3.14.*' and sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version == '3.14.*' and sys_platform == 'emscripten' and extra == 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version == '3.14.*' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version == '3.13.*' and sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version == '3.13.*' and sys_platform == 'emscripten' and extra == 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version == '3.13.*' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version < '3.13' and sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version < '3.13' and sys_platform == 'emscripten' and extra == 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version < '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version >= '3.15' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version == '3.14.*' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version == '3.13.*' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version < '3.13' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version >= '3.15' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version == '3.14.*' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version == '3.13.*' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version < '3.13' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
 ]
 conflicts = [[
     { package = "roomkit-ui", extra = "neutts" },
     { package = "roomkit-ui", extra = "qwen3-tts" },
+], [
+    { package = "roomkit-ui", extra = "qwen3-tts" },
+    { package = "roomkit-ui", extra = "smart-turn" },
+], [
+    { package = "roomkit-ui", extra = "neutts" },
+    { package = "roomkit-ui", extra = "smart-turn" },
 ]]
 
 [[package]]
@@ -84,7 +94,7 @@ dependencies = [
     { name = "frozenlist" },
     { name = "multidict" },
     { name = "propcache" },
-    { name = "typing-extensions", marker = "python_full_version < '3.13' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "typing-extensions", marker = "python_full_version < '3.13' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
     { name = "yarl" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/58/d9/22ce5786ac0c1653ae8b6c23bded02c1686d11f0dbb45b31ce128e0df985/aiohttp-3.14.3.tar.gz", hash = "sha256:9491196535a88924a60afd5b5f434b5b203b6cc616250878dbdb223a8f7844bc", size = 7971213, upload-time = "2026-07-23T01:57:27.037Z" }
@@ -179,7 +189,7 @@ version = "1.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "frozenlist" },
-    { name = "typing-extensions", marker = "python_full_version < '3.13' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "typing-extensions", marker = "python_full_version < '3.13' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/61/62/06741b579156360248d1ec624842ad0edf697050bbaf7c3e46394e106ad1/aiosignal-1.4.0.tar.gz", hash = "sha256:f47eecd9468083c2029cc99945502cb7708b082c232f9aca65da147157b251c7", size = 25007, upload-time = "2025-07-03T22:54:43.528Z" }
 wheels = [
@@ -243,7 +253,7 @@ version = "4.14.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "idna" },
-    { name = "typing-extensions", marker = "python_full_version < '3.13' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "typing-extensions", marker = "python_full_version < '3.13' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/61/cc/a381afa6efea9f496eff839d4a6a1aed3bfafc7b3ab4b0d1b243a12573dd/anyio-4.14.2.tar.gz", hash = "sha256:cfa139f3ed1a23ee8f88a145ddb5ac7605b8bbfd8592baacd7ce3d8bb4313c7f", size = 260176, upload-time = "2026-07-12T20:29:07.082Z" }
 wheels = [
@@ -397,7 +407,7 @@ name = "bandit"
 version = "1.9.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
     { name = "pyyaml" },
     { name = "rich" },
     { name = "stevedore" },
@@ -474,7 +484,7 @@ name = "cffi"
 version = "2.1.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pycparser", marker = "implementation_name != 'PyPy' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "pycparser", marker = "implementation_name != 'PyPy' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/9e/ef/008a1939e372c06329a3fce4279c02f328488f3526744906eeec3da7ad5f/cffi-2.1.1.tar.gz", hash = "sha256:dd31f52ea1086513bb9df30f8fcee9b8918323ae067a3d5b78bc826a000712be", size = 530807, upload-time = "2026-08-03T21:21:18.939Z" }
 wheels = [
@@ -620,7 +630,7 @@ name = "click"
 version = "8.4.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/76/d4/81420972a676e8ffea40450d8c8c92943e7218a78fe9b64359836cc9876b/click-8.4.2.tar.gz", hash = "sha256:9a6cea6e60b17ebe0a44c5cc636d94f09bd66142c1cd7d8b4cd731c4917a15f6", size = 338000, upload-time = "2026-06-24T17:45:15.148Z" }
 wheels = [
@@ -641,7 +651,7 @@ name = "cryptography"
 version = "50.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cffi", marker = "platform_python_implementation != 'PyPy' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "cffi", marker = "platform_python_implementation != 'PyPy' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/de/41/6cbdcf9142d00fe82836fbb51e503e58088575cf7a0fe1dbff6695bf0840/cryptography-50.0.0.tar.gz", hash = "sha256:eeac2acb5a20ed25e0ad6d1df9891a520b78b404266b6d11778f25d5d691a6c9", size = 880201, upload-time = "2026-07-31T14:25:10.11Z" }
 wheels = [
@@ -691,7 +701,7 @@ name = "cuda-bindings"
 version = "13.3.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cuda-pathfinder", marker = "(python_full_version < '3.15' and sys_platform != 'emscripten' and sys_platform != 'win32') or (python_full_version < '3.15' and sys_platform == 'emscripten' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (python_full_version < '3.15' and sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (python_full_version >= '3.15' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'emscripten' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "cuda-pathfinder", marker = "python_full_version < '3.15' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ce/67/5e7dba1ba576dd73da5dee894ca076ca5e959450dfff66d6d510a255d1f7/cuda_bindings-13.3.1-cp312-cp312-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:c7855c4868aabc0cfae28abbe83d56734bdfbd08f08fc234ac1912a12858bf49", size = 6025351, upload-time = "2026-05-29T23:11:49.685Z" },
@@ -726,43 +736,43 @@ wheels = [
 
 [package.optional-dependencies]
 cublas = [
-    { name = "nvidia-cublas", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
-    { name = "nvidia-cuda-nvrtc", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "nvidia-cublas", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "nvidia-cuda-nvrtc", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
 ]
 cudart = [
-    { name = "nvidia-cuda-runtime", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "nvidia-cuda-runtime", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
 ]
 cufft = [
-    { name = "nvidia-cufft", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
-    { name = "nvidia-nvjitlink", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "nvidia-cufft", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "nvidia-nvjitlink", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
 ]
 cufile = [
-    { name = "nvidia-cufile", marker = "(platform_machine != 'aarch64' and platform_machine != 'x86_64' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (sys_platform != 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "nvidia-cufile", marker = "(platform_machine != 'aarch64' and platform_machine != 'x86_64' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (platform_machine != 'aarch64' and platform_machine != 'x86_64' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (platform_machine != 'aarch64' and platform_machine != 'x86_64' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (sys_platform != 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform != 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform != 'linux' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
 ]
 cupti = [
-    { name = "nvidia-cuda-cupti", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "nvidia-cuda-cupti", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
 ]
 curand = [
-    { name = "nvidia-curand", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "nvidia-curand", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
 ]
 cusolver = [
-    { name = "nvidia-cublas", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
-    { name = "nvidia-cusolver", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
-    { name = "nvidia-cusparse", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
-    { name = "nvidia-nvjitlink", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "nvidia-cublas", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "nvidia-cusolver", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "nvidia-cusparse", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "nvidia-nvjitlink", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
 ]
 cusparse = [
-    { name = "nvidia-cusparse", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
-    { name = "nvidia-nvjitlink", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "nvidia-cusparse", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "nvidia-nvjitlink", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
 ]
 nvjitlink = [
-    { name = "nvidia-nvjitlink", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "nvidia-nvjitlink", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
 ]
 nvrtc = [
-    { name = "nvidia-cuda-nvrtc", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "nvidia-cuda-nvrtc", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
 ]
 nvtx = [
-    { name = "nvidia-nvtx", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "nvidia-nvtx", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'linux' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
 ]
 
 [[package]]
@@ -772,7 +782,7 @@ source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "dill" },
     { name = "filelock" },
-    { name = "fsspec", version = "2026.6.0", source = { registry = "https://pypi.org/simple" }, extra = ["http"], marker = "extra == 'extra-10-roomkit-ui-neutts'" },
+    { name = "fsspec", version = "2026.6.0", source = { registry = "https://pypi.org/simple" }, extra = ["http"], marker = "extra == 'extra-10-roomkit-ui-neutts' or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
     { name = "httpx" },
     { name = "huggingface-hub", version = "1.27.0", source = { registry = "https://pypi.org/simple" } },
     { name = "multiprocess" },
@@ -1061,22 +1071,26 @@ name = "fsspec"
 version = "2026.7.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version >= '3.15' and sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version >= '3.15' and sys_platform == 'emscripten' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version >= '3.15' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version == '3.14.*' and sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version == '3.14.*' and sys_platform == 'emscripten' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version == '3.14.*' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version == '3.13.*' and sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version == '3.13.*' and sys_platform == 'emscripten' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version == '3.13.*' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version < '3.13' and sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version < '3.13' and sys_platform == 'emscripten' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version < '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version >= '3.15' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version == '3.14.*' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version == '3.13.*' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version < '3.13' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts'",
+    "python_full_version >= '3.15' and sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version >= '3.15' and sys_platform == 'emscripten' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version >= '3.15' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version == '3.14.*' and sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version == '3.14.*' and sys_platform == 'emscripten' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version == '3.14.*' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version == '3.13.*' and sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version == '3.13.*' and sys_platform == 'emscripten' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version == '3.13.*' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version < '3.13' and sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version < '3.13' and sys_platform == 'emscripten' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version < '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version >= '3.15' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version == '3.14.*' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version == '3.13.*' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version < '3.13' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version >= '3.15' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version == '3.14.*' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version == '3.13.*' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version < '3.13' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/00/78/f34251dadb8f3921264a1d9b8946f5e542014ee2614b285261b4e40e6775/fsspec-2026.7.0.tar.gz", hash = "sha256:c803c40f4cf860b49dea58ee3e1c33cb9c790520e233537e1340049f89b82a88", size = 317040, upload-time = "2026-07-28T16:34:51.052Z" }
 wheels = [
@@ -1348,7 +1362,7 @@ dependencies = [
     { name = "httpcore2" },
     { name = "idna" },
     { name = "truststore" },
-    { name = "typing-extensions", marker = "python_full_version < '3.13' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "typing-extensions", marker = "python_full_version < '3.13' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/21/14/38128fbafd7e0ed41d874df6c9a653d47c2d111cfe59e2b4ac95161b4abd/httpx2-2.9.1.tar.gz", hash = "sha256:1932a768737e3666291582833da748cc4e563c337cf96706fccc04fa6e58764a", size = 95458, upload-time = "2026-07-24T09:21:04.972Z" }
 wheels = [
@@ -1374,14 +1388,14 @@ resolution-markers = [
     "python_full_version < '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 dependencies = [
-    { name = "filelock", marker = "extra == 'extra-10-roomkit-ui-qwen3-tts'" },
-    { name = "fsspec", version = "2026.7.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-10-roomkit-ui-qwen3-tts'" },
-    { name = "hf-xet", marker = "(platform_machine == 'aarch64' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (platform_machine == 'amd64' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (platform_machine == 'arm64' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (platform_machine == 'x86_64' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
-    { name = "packaging", marker = "extra == 'extra-10-roomkit-ui-qwen3-tts'" },
-    { name = "pyyaml", marker = "extra == 'extra-10-roomkit-ui-qwen3-tts'" },
-    { name = "requests", marker = "extra == 'extra-10-roomkit-ui-qwen3-tts'" },
-    { name = "tqdm", marker = "extra == 'extra-10-roomkit-ui-qwen3-tts'" },
-    { name = "typing-extensions", marker = "extra == 'extra-10-roomkit-ui-qwen3-tts'" },
+    { name = "filelock", marker = "extra == 'extra-10-roomkit-ui-qwen3-tts' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "fsspec", version = "2026.7.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-10-roomkit-ui-qwen3-tts' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "hf-xet", marker = "(platform_machine == 'aarch64' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (platform_machine == 'amd64' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (platform_machine == 'arm64' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (platform_machine == 'x86_64' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "packaging", marker = "extra == 'extra-10-roomkit-ui-qwen3-tts' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "pyyaml", marker = "extra == 'extra-10-roomkit-ui-qwen3-tts' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "requests", marker = "extra == 'extra-10-roomkit-ui-qwen3-tts' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "tqdm", marker = "extra == 'extra-10-roomkit-ui-qwen3-tts' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "typing-extensions", marker = "extra == 'extra-10-roomkit-ui-qwen3-tts' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/7c/b7/8cb61d2eece5fb05a83271da168186721c450eb74e3c31f7ef3169fa475b/huggingface_hub-0.36.2.tar.gz", hash = "sha256:1934304d2fb224f8afa3b87007d58501acfda9215b334eed53072dd5e815ff7a", size = 649782, upload-time = "2026-02-06T09:24:13.098Z" }
 wheels = [
@@ -1393,38 +1407,59 @@ name = "huggingface-hub"
 version = "1.27.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version >= '3.15' and sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version >= '3.15' and sys_platform == 'emscripten' and extra == 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version >= '3.15' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version == '3.14.*' and sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version == '3.14.*' and sys_platform == 'emscripten' and extra == 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version == '3.14.*' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version == '3.13.*' and sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version == '3.13.*' and sys_platform == 'emscripten' and extra == 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version == '3.13.*' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version < '3.13' and sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version < '3.13' and sys_platform == 'emscripten' and extra == 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version < '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version >= '3.15' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version == '3.14.*' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version == '3.13.*' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts'",
-    "python_full_version < '3.13' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts'",
+    "python_full_version >= '3.15' and sys_platform == 'win32'",
+    "python_full_version >= '3.15' and sys_platform == 'emscripten'",
+    "python_full_version >= '3.15' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version == '3.14.*' and sys_platform == 'win32'",
+    "python_full_version == '3.14.*' and sys_platform == 'emscripten'",
+    "python_full_version == '3.14.*' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version == '3.13.*' and sys_platform == 'win32'",
+    "python_full_version == '3.13.*' and sys_platform == 'emscripten'",
+    "python_full_version == '3.13.*' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'emscripten'",
+    "python_full_version < '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 dependencies = [
-    { name = "click", marker = "extra == 'extra-10-roomkit-ui-neutts' or extra != 'extra-10-roomkit-ui-qwen3-tts'" },
-    { name = "filelock", marker = "extra == 'extra-10-roomkit-ui-neutts' or extra != 'extra-10-roomkit-ui-qwen3-tts'" },
-    { name = "fsspec", version = "2026.6.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-10-roomkit-ui-neutts'" },
-    { name = "fsspec", version = "2026.7.0", source = { registry = "https://pypi.org/simple" }, marker = "(extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts')" },
-    { name = "hf-xet", marker = "(platform_machine == 'AMD64' and extra == 'extra-10-roomkit-ui-neutts') or (platform_machine == 'AMD64' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (platform_machine == 'aarch64' and extra == 'extra-10-roomkit-ui-neutts') or (platform_machine == 'aarch64' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (platform_machine == 'amd64' and extra == 'extra-10-roomkit-ui-neutts') or (platform_machine == 'amd64' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (platform_machine == 'arm64' and extra == 'extra-10-roomkit-ui-neutts') or (platform_machine == 'arm64' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (platform_machine == 'x86_64' and extra == 'extra-10-roomkit-ui-neutts') or (platform_machine == 'x86_64' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
-    { name = "httpx", marker = "extra == 'extra-10-roomkit-ui-neutts' or extra != 'extra-10-roomkit-ui-qwen3-tts'" },
-    { name = "packaging", marker = "extra == 'extra-10-roomkit-ui-neutts' or extra != 'extra-10-roomkit-ui-qwen3-tts'" },
-    { name = "pyyaml", marker = "extra == 'extra-10-roomkit-ui-neutts' or extra != 'extra-10-roomkit-ui-qwen3-tts'" },
-    { name = "tqdm", marker = "extra == 'extra-10-roomkit-ui-neutts' or extra != 'extra-10-roomkit-ui-qwen3-tts'" },
-    { name = "typing-extensions", marker = "extra == 'extra-10-roomkit-ui-neutts' or extra != 'extra-10-roomkit-ui-qwen3-tts'" },
+    { name = "click", marker = "extra == 'extra-10-roomkit-ui-neutts' or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "filelock", marker = "extra == 'extra-10-roomkit-ui-neutts' or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "fsspec", version = "2026.6.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-10-roomkit-ui-neutts' or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "hf-xet", marker = "(platform_machine == 'AMD64' and extra == 'extra-10-roomkit-ui-neutts') or (platform_machine == 'aarch64' and extra == 'extra-10-roomkit-ui-neutts') or (platform_machine == 'amd64' and extra == 'extra-10-roomkit-ui-neutts') or (platform_machine == 'arm64' and extra == 'extra-10-roomkit-ui-neutts') or (platform_machine == 'x86_64' and extra == 'extra-10-roomkit-ui-neutts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "httpx", marker = "extra == 'extra-10-roomkit-ui-neutts' or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "packaging", marker = "extra == 'extra-10-roomkit-ui-neutts' or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "pyyaml", marker = "extra == 'extra-10-roomkit-ui-neutts' or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "tqdm", marker = "extra == 'extra-10-roomkit-ui-neutts' or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "typing-extensions", marker = "extra == 'extra-10-roomkit-ui-neutts' or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/3e/9b/ddf3d02a8681f1b9ce52fda03d755dad6b74c4f8172304c4c8d2975450f9/huggingface_hub-1.27.0.tar.gz", hash = "sha256:c1fed40ea82a6b41b477f5243546549b792ae0a93abcea608cff66089bf8f8df", size = 942668, upload-time = "2026-08-07T12:48:05.161Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/de/d8/95b735e183957c1f26d94c52977f09d466d55119cbbc1558ea4975e4c216/huggingface_hub-1.27.0-py3-none-any.whl", hash = "sha256:7df6827c2f956c60fbaa64646e979e566db76f619dd0a9729dfb8c5a3eb4f68d", size = 784926, upload-time = "2026-08-07T12:48:02.905Z" },
+]
+
+[[package]]
+name = "huggingface-hub"
+version = "2.2.0"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.15'",
+    "python_full_version == '3.14.*'",
+    "python_full_version == '3.13.*'",
+    "python_full_version < '3.13'",
+]
+dependencies = [
+    { name = "click" },
+    { name = "filelock" },
+    { name = "fsspec", version = "2026.7.0", source = { registry = "https://pypi.org/simple" } },
+    { name = "hf-xet", marker = "(platform_machine == 'AMD64' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (platform_machine == 'ARM64' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (platform_machine == 'aarch64' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (platform_machine == 'amd64' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (platform_machine == 'arm64' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (platform_machine == 'x86_64' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "httpx2" },
+    { name = "packaging" },
+    { name = "pyyaml" },
+    { name = "tqdm" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/12/47/6858d63643e66fb4f6585c3cfd4029c0b2bc1ae21688cee9b3335f20a10d/huggingface_hub-2.2.0.tar.gz", hash = "sha256:5d1b47537394e4215cb858aa12fd493d0f7ef7f58990f5dcd24bc173107b2871", size = 1041026, upload-time = "2026-10-08T15:30:59.971Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/eb/b0/0f7b430fd100b3a3b037fdbb314878200241082e607b3383c63d91a13a72/huggingface_hub-2.2.0-py3-none-any.whl", hash = "sha256:1667f145dc56dc210d60966069397df9ecfca9607a5d43db88b308c89dae56b3", size = 839884, upload-time = "2026-10-08T15:30:57.914Z" },
 ]
 
 [[package]]
@@ -1654,9 +1689,9 @@ dependencies = [
     { name = "jaraco-classes" },
     { name = "jaraco-context" },
     { name = "jaraco-functools" },
-    { name = "jeepney", marker = "sys_platform == 'linux' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
-    { name = "pywin32-ctypes", marker = "sys_platform == 'win32' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
-    { name = "secretstorage", marker = "sys_platform == 'linux' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "jeepney", marker = "sys_platform == 'linux' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "pywin32-ctypes", marker = "sys_platform == 'win32' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "secretstorage", marker = "sys_platform == 'linux' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/43/4b/674af6ef2f97d56f0ab5153bf0bfa28ccb6c3ed4d1babf4305449668807b/keyring-25.7.0.tar.gz", hash = "sha256:fe01bd85eb3f8fb3dd0405defdeac9a5b4f6f0439edbb3149577f244a2e8245b", size = 63516, upload-time = "2025-11-16T16:26:09.482Z" }
 wheels = [
@@ -1690,8 +1725,8 @@ dependencies = [
     { name = "pooch" },
     { name = "scikit-learn" },
     { name = "scipy" },
-    { name = "soundfile", version = "0.13.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-10-roomkit-ui-neutts'" },
-    { name = "soundfile", version = "0.14.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-10-roomkit-ui-qwen3-tts'" },
+    { name = "soundfile", version = "0.13.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-10-roomkit-ui-neutts' or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "soundfile", version = "0.14.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-10-roomkit-ui-qwen3-tts' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
     { name = "soxr" },
     { name = "standard-aifc", marker = "python_full_version >= '3.13'" },
     { name = "standard-sunau", marker = "python_full_version >= '3.13'" },
@@ -1908,7 +1943,7 @@ name = "macholib"
 version = "1.16.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "altgraph", marker = "(sys_platform != 'emscripten' and sys_platform != 'win32') or (sys_platform == 'emscripten' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'emscripten' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "altgraph" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/10/2f/97589876ea967487978071c9042518d28b958d87b17dceb7cdc1d881f963/macholib-1.16.4.tar.gz", hash = "sha256:f408c93ab2e995cd2c46e34fe328b130404be143469e41bc366c807448979362", size = 59427, upload-time = "2025-11-22T08:28:38.373Z" }
 wheels = [
@@ -2003,12 +2038,12 @@ dependencies = [
     { name = "pydantic" },
     { name = "pyjwt", extra = ["crypto"] },
     { name = "python-multipart" },
-    { name = "pywin32", marker = "sys_platform == 'win32' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "pywin32", marker = "sys_platform == 'win32' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
     { name = "sse-starlette" },
     { name = "starlette" },
     { name = "typing-extensions" },
     { name = "typing-inspection" },
-    { name = "uvicorn", marker = "sys_platform != 'emscripten' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "uvicorn", marker = "sys_platform != 'emscripten' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/74/33/32d4dff2c95bb5d897c3ef4c83649a08996b17b58f0a326d2495d4c81179/mcp-2.0.0.tar.gz", hash = "sha256:0f440e735c13ece8bb19bc62cf0b86f4313448432fbb77d35e14034f4e050728", size = 1662284, upload-time = "2026-07-28T13:45:32.346Z" }
 wheels = [
@@ -2229,7 +2264,7 @@ version = "2.3.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "ast-serialize" },
-    { name = "librt", marker = "platform_python_implementation != 'PyPy' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "librt", marker = "platform_python_implementation != 'PyPy' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
     { name = "mypy-extensions" },
     { name = "pathspec" },
     { name = "typing-extensions" },
@@ -2407,7 +2442,7 @@ name = "nvidia-cublas"
 version = "13.1.1.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "nvidia-cuda-nvrtc", marker = "(sys_platform != 'emscripten' and sys_platform != 'win32') or (sys_platform == 'emscripten' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'emscripten' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "nvidia-cuda-nvrtc" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a7/a1/0bd24ee8c8d03adac032fd2909426a00c88f8c57961b1277ded97f91119f/nvidia_cublas-13.1.1.3-py3-none-manylinux_2_27_aarch64.whl", hash = "sha256:b7a210458267ac818974c53038fbec2e969d5c99f305ab15c72522fa9f001dd5", size = 542848918, upload-time = "2026-04-08T18:46:22.985Z" },
@@ -2450,7 +2485,7 @@ name = "nvidia-cudnn-cu13"
 version = "9.20.0.48"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "nvidia-cublas", marker = "(sys_platform != 'emscripten' and sys_platform != 'win32') or (sys_platform == 'emscripten' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'emscripten' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "nvidia-cublas" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/56/c5/83384d846b2fd17c44bd499b36c75a45ed4f095fbbb2252294e89cea5c5c/nvidia_cudnn_cu13-9.20.0.48-py3-none-manylinux_2_27_aarch64.whl", hash = "sha256:e31454ae00094b0c55319d9d15b6fa2fc50a9e1c0f5c8c80fb75258234e731e1", size = 444574296, upload-time = "2026-03-09T19:28:27.751Z" },
@@ -2463,7 +2498,7 @@ name = "nvidia-cufft"
 version = "12.0.0.61"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "nvidia-nvjitlink", marker = "(sys_platform != 'emscripten' and sys_platform != 'win32') or (sys_platform == 'emscripten' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'emscripten' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "nvidia-nvjitlink" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/8b/ae/f417a75c0259e85c1d2f83ca4e960289a5f814ed0cea74d18c353d3e989d/nvidia_cufft-12.0.0.61-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:2708c852ef8cd89d1d2068bdbece0aa188813a0c934db3779b9b1faa8442e5f5", size = 214053554, upload-time = "2025-09-04T08:31:38.196Z" },
@@ -2495,9 +2530,9 @@ name = "nvidia-cusolver"
 version = "12.0.4.66"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "nvidia-cublas", marker = "(sys_platform != 'emscripten' and sys_platform != 'win32') or (sys_platform == 'emscripten' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'emscripten' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts')" },
-    { name = "nvidia-cusparse", marker = "(sys_platform != 'emscripten' and sys_platform != 'win32') or (sys_platform == 'emscripten' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'emscripten' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts')" },
-    { name = "nvidia-nvjitlink", marker = "(sys_platform != 'emscripten' and sys_platform != 'win32') or (sys_platform == 'emscripten' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'emscripten' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "nvidia-cublas" },
+    { name = "nvidia-cusparse" },
+    { name = "nvidia-nvjitlink" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c8/c3/b30c9e935fc01e3da443ec0116ed1b2a009bb867f5324d3f2d7e533e776b/nvidia_cusolver-12.0.4.66-py3-none-manylinux_2_27_aarch64.whl", hash = "sha256:02c2457eaa9e39de20f880f4bd8820e6a1cfb9f9a34f820eb12a155aa5bc92d2", size = 223467760, upload-time = "2025-09-04T08:33:04.222Z" },
@@ -2510,7 +2545,7 @@ name = "nvidia-cusparse"
 version = "12.6.3.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "nvidia-nvjitlink", marker = "(sys_platform != 'emscripten' and sys_platform != 'win32') or (sys_platform == 'emscripten' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'emscripten' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "nvidia-nvjitlink" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/f8/94/5c26f33738ae35276672f12615a64bd008ed5be6d1ebcb23579285d960a9/nvidia_cusparse-12.6.3.3-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:80bcc4662f23f1054ee334a15c72b8940402975e0eab63178fc7e670aa59472c", size = 162155568, upload-time = "2025-09-04T08:33:42.864Z" },
@@ -2979,8 +3014,9 @@ source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "einops" },
     { name = "fastapi" },
-    { name = "huggingface-hub", version = "0.36.2", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-10-roomkit-ui-qwen3-tts'" },
-    { name = "huggingface-hub", version = "1.27.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-10-roomkit-ui-neutts' or extra != 'extra-10-roomkit-ui-qwen3-tts'" },
+    { name = "huggingface-hub", version = "0.36.2", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-10-roomkit-ui-qwen3-tts' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "huggingface-hub", version = "1.27.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-10-roomkit-ui-neutts' or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "huggingface-hub", version = "2.2.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-10-roomkit-ui-smart-turn' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts')" },
     { name = "numpy" },
     { name = "pydantic" },
     { name = "python-multipart" },
@@ -2988,7 +3024,8 @@ dependencies = [
     { name = "safetensors" },
     { name = "scipy" },
     { name = "sentencepiece" },
-    { name = "tokenizers" },
+    { name = "tokenizers", version = "0.22.2", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-10-roomkit-ui-neutts' or extra == 'extra-10-roomkit-ui-qwen3-tts'" },
+    { name = "tokenizers", version = "0.23.3", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-10-roomkit-ui-smart-turn' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts')" },
     { name = "torch" },
     { name = "typer" },
     { name = "typing-extensions" },
@@ -3360,11 +3397,11 @@ version = "6.21.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "altgraph" },
-    { name = "macholib", marker = "sys_platform == 'darwin' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "macholib", marker = "sys_platform == 'darwin' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
     { name = "packaging" },
-    { name = "pefile", marker = "sys_platform == 'win32' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "pefile", marker = "sys_platform == 'win32' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
     { name = "pyinstaller-hooks-contrib" },
-    { name = "pywin32-ctypes", marker = "sys_platform == 'win32' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "pywin32-ctypes", marker = "sys_platform == 'win32' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
     { name = "setuptools" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/d5/4d/ec706c3fcf39e26888c35b39615ff4d5865d184069666c47492cff1fbe50/pyinstaller-6.21.0.tar.gz", hash = "sha256:bb9fab705983e393a2d1cac77d6972513057ad800215fd861dc15ff5272e98fd", size = 4061519, upload-time = "2026-06-13T14:15:06.25Z" }
@@ -3413,10 +3450,10 @@ name = "pynput"
 version = "1.8.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "evdev", marker = "'linux' in sys_platform or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
-    { name = "pyobjc-framework-applicationservices", marker = "sys_platform == 'darwin' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
-    { name = "pyobjc-framework-quartz", marker = "sys_platform == 'darwin' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
-    { name = "python-xlib", marker = "'linux' in sys_platform or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "evdev", marker = "'linux' in sys_platform or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "pyobjc-framework-applicationservices", marker = "sys_platform == 'darwin' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "pyobjc-framework-quartz", marker = "sys_platform == 'darwin' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "python-xlib", marker = "'linux' in sys_platform or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
     { name = "six" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/86/c6/e2d415610cfbc78308bee44218a46124aaa3301b1df08814df819b2254a1/pynput-1.8.2.tar.gz", hash = "sha256:f493c87157cd3861b4468f7f896857051762f44ed26f1b641e7cc5840a457087", size = 82818, upload-time = "2026-05-12T19:11:39.464Z" }
@@ -3444,10 +3481,10 @@ name = "pyobjc-framework-applicationservices"
 version = "12.2.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core", marker = "(sys_platform != 'emscripten' and sys_platform != 'win32') or (sys_platform == 'emscripten' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'emscripten' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts')" },
-    { name = "pyobjc-framework-cocoa", marker = "(sys_platform != 'emscripten' and sys_platform != 'win32') or (sys_platform == 'emscripten' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'emscripten' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts')" },
-    { name = "pyobjc-framework-coretext", marker = "(sys_platform != 'emscripten' and sys_platform != 'win32') or (sys_platform == 'emscripten' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'emscripten' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts')" },
-    { name = "pyobjc-framework-quartz", marker = "(sys_platform != 'emscripten' and sys_platform != 'win32') or (sys_platform == 'emscripten' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'emscripten' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "pyobjc-core" },
+    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-framework-coretext" },
+    { name = "pyobjc-framework-quartz" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/5e/4d/0ebdd8144aba94b8fe9828ccee5616a4bf53d1f8bc51cff55f3cce86d695/pyobjc_framework_applicationservices-12.2.1.tar.gz", hash = "sha256:048ea663c9ac75c44a15dc7d5b8d78cbb4c97bf1c76e83835e8d5498e184001f", size = 109342, upload-time = "2026-06-19T16:19:46.149Z" }
 wheels = [
@@ -3465,7 +3502,7 @@ name = "pyobjc-framework-cocoa"
 version = "12.2.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core", marker = "(sys_platform != 'emscripten' and sys_platform != 'win32') or (sys_platform == 'emscripten' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'emscripten' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "pyobjc-core" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/51/34/fbe38a204643aa4e1b91391cdce07a34da565a69171ebcad08de7438a556/pyobjc_framework_cocoa-12.2.1.tar.gz", hash = "sha256:b94b37fe5730e5ae1fb0052912cd174e6ec329b0bfba4a012ae5db1014b5864b", size = 3125751, upload-time = "2026-06-19T16:20:05.159Z" }
 wheels = [
@@ -3483,9 +3520,9 @@ name = "pyobjc-framework-coretext"
 version = "12.2.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core", marker = "(sys_platform != 'emscripten' and sys_platform != 'win32') or (sys_platform == 'emscripten' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'emscripten' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts')" },
-    { name = "pyobjc-framework-cocoa", marker = "(sys_platform != 'emscripten' and sys_platform != 'win32') or (sys_platform == 'emscripten' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'emscripten' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts')" },
-    { name = "pyobjc-framework-quartz", marker = "(sys_platform != 'emscripten' and sys_platform != 'win32') or (sys_platform == 'emscripten' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'emscripten' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "pyobjc-core" },
+    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-framework-quartz" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/5a/9c/4c7f452059dc1d3845b8e627b9113c247a997b9b07518e848c2ab7ff3149/pyobjc_framework_coretext-12.2.1.tar.gz", hash = "sha256:af740e784d7c592c34025ec7165f4f6c1a69b5a2d9075f06e41e4f77c212aed2", size = 97349, upload-time = "2026-06-19T16:20:22.508Z" }
 wheels = [
@@ -3503,8 +3540,8 @@ name = "pyobjc-framework-quartz"
 version = "12.2.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core", marker = "(sys_platform != 'emscripten' and sys_platform != 'win32') or (sys_platform == 'emscripten' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'emscripten' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts')" },
-    { name = "pyobjc-framework-cocoa", marker = "(sys_platform != 'emscripten' and sys_platform != 'win32') or (sys_platform == 'emscripten' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'emscripten' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "pyobjc-core" },
+    { name = "pyobjc-framework-cocoa" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/3b/f6/2a8b84dbf1fe7c04dd96ea73d991678d4e09a909f51971ecc51629bb2ab4/pyobjc_framework_quartz-12.2.1.tar.gz", hash = "sha256:b3b8b6f71e66147f8ff9e6213864cc8527e3a0b1ee90835b93ce221f4802d9b0", size = 3215521, upload-time = "2026-06-19T16:21:30.199Z" }
 wheels = [
@@ -3553,7 +3590,7 @@ name = "pytest"
 version = "9.1.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
     { name = "iniconfig" },
     { name = "packaging" },
     { name = "pluggy" },
@@ -3570,7 +3607,7 @@ version = "1.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pytest" },
-    { name = "typing-extensions", marker = "python_full_version < '3.13' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "typing-extensions", marker = "python_full_version < '3.13' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/43/7c/d36d04db312ecf4298932ef77e6e4a9e8ad017906e24e34f0b0c361a2473/pytest_asyncio-1.4.0.tar.gz", hash = "sha256:c6c0d2259945122819f171a32ecea2c349ead889ee28176caaf492143424be42", size = 58514, upload-time = "2026-05-26T09:56:04.083Z" }
 wheels = [
@@ -3743,7 +3780,7 @@ source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "attrs" },
     { name = "rpds-py" },
-    { name = "typing-extensions", marker = "python_full_version < '3.13' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "typing-extensions", marker = "python_full_version < '3.13' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/22/f5/df4e9027acead3ecc63e50fe1e36aca1523e1719559c499951bb4b53188f/referencing-0.37.0.tar.gz", hash = "sha256:44aefc3142c5b842538163acb373e24cce6632bd54bdb01b21ad5863489f50d8", size = 78036, upload-time = "2025-10-13T15:30:48.871Z" }
 wheels = [
@@ -3944,7 +3981,12 @@ realtime-openai = [
 ]
 sherpa-onnx = [
     { name = "sherpa-onnx" },
-    { name = "sherpa-onnx-core", marker = "platform_machine != 'armv7l' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "sherpa-onnx-core", marker = "platform_machine != 'armv7l' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+]
+smart-turn = [
+    { name = "numpy" },
+    { name = "onnxruntime" },
+    { name = "transformers", version = "5.19.0", source = { registry = "https://pypi.org/simple" } },
 ]
 webrtc-aec = [
     { name = "aec-audio-processing" },
@@ -4029,7 +4071,7 @@ mcp-apps = [
     { name = "pyside6-addons" },
 ]
 neutts = [
-    { name = "roomkit", extra = ["neutts"], marker = "extra == 'extra-10-roomkit-ui-neutts'" },
+    { name = "roomkit", extra = ["neutts"], marker = "extra == 'extra-10-roomkit-ui-neutts' or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
 ]
 openai = [
     { name = "roomkit", extra = ["openai", "realtime-openai"] },
@@ -4038,7 +4080,10 @@ pocket-tts = [
     { name = "roomkit", extra = ["pocket-tts"] },
 ]
 qwen3-tts = [
-    { name = "roomkit", extra = ["qwen-tts"], marker = "extra == 'extra-10-roomkit-ui-qwen3-tts'" },
+    { name = "roomkit", extra = ["qwen-tts"], marker = "extra == 'extra-10-roomkit-ui-qwen3-tts' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+]
+smart-turn = [
+    { name = "roomkit", extra = ["smart-turn"], marker = "(extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra != 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
 ]
 telemetry = [
     { name = "opentelemetry-api" },
@@ -4084,6 +4129,7 @@ requires-dist = [
     { name = "roomkit", extras = ["pocket-tts"], marker = "extra == 'pocket-tts'", specifier = ">=0.96.1" },
     { name = "roomkit", extras = ["qwen-tts"], marker = "extra == 'qwen3-tts'", specifier = ">=0.96.1" },
     { name = "roomkit", extras = ["sherpa-onnx"], marker = "extra == 'local-voice'", specifier = ">=0.96.1" },
+    { name = "roomkit", extras = ["smart-turn"], marker = "extra == 'smart-turn'", specifier = ">=0.96.1" },
     { name = "roomkit-ui", extras = ["all"], marker = "extra == 'dev'" },
     { name = "roomkit-ui", extras = ["anthropic"], marker = "extra == 'cloud'" },
     { name = "roomkit-ui", extras = ["azure-speech"], marker = "extra == 'cloud'" },
@@ -4104,7 +4150,7 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6" },
     { name = "sherpa-onnx-core", marker = "extra == 'local-voice'", specifier = ">=1.13" },
 ]
-provides-extras = ["anthropic", "openai", "gemini", "deepgram", "elevenlabs", "gradium", "azure-speech", "local-voice", "qwen3-tts", "neutts", "llamacpp", "pocket-tts", "dictation", "mcp-apps", "wakeword", "telemetry", "cloud", "all", "dev"]
+provides-extras = ["anthropic", "openai", "gemini", "deepgram", "elevenlabs", "gradium", "azure-speech", "local-voice", "qwen3-tts", "neutts", "llamacpp", "pocket-tts", "smart-turn", "dictation", "mcp-apps", "wakeword", "telemetry", "cloud", "all", "dev"]
 
 [[package]]
 name = "rpds-py"
@@ -4358,8 +4404,8 @@ name = "secretstorage"
 version = "3.5.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cryptography", marker = "(sys_platform != 'emscripten' and sys_platform != 'win32') or (sys_platform == 'emscripten' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'emscripten' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts')" },
-    { name = "jeepney", marker = "(sys_platform != 'emscripten' and sys_platform != 'win32') or (sys_platform == 'emscripten' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'emscripten' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "cryptography" },
+    { name = "jeepney" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/1c/03/e834bcd866f2f8a49a85eaff47340affa3bfa391ee9912a952a1faa68c7b/secretstorage-3.5.0.tar.gz", hash = "sha256:f04b8e4689cbce351744d5537bf6b1329c6fc68f91fa666f60a380edddcd11be", size = 19884, upload-time = "2025-11-23T19:02:53.191Z" }
 wheels = [
@@ -4548,8 +4594,8 @@ resolution-markers = [
     "python_full_version < '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 dependencies = [
-    { name = "cffi", marker = "extra == 'extra-10-roomkit-ui-neutts'" },
-    { name = "numpy", marker = "extra == 'extra-10-roomkit-ui-neutts'" },
+    { name = "cffi", marker = "extra == 'extra-10-roomkit-ui-neutts' or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "numpy", marker = "extra == 'extra-10-roomkit-ui-neutts' or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/e1/41/9b873a8c055582859b239be17902a85339bec6a30ad162f98c9b0288a2cc/soundfile-0.13.1.tar.gz", hash = "sha256:b2c68dab1e30297317080a5b43df57e302584c49e2942defdde0acccc53f0e5b", size = 46156, upload-time = "2025-01-25T09:17:04.831Z" }
 wheels = [
@@ -4581,9 +4627,9 @@ resolution-markers = [
     "python_full_version < '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 dependencies = [
-    { name = "cffi", marker = "extra == 'extra-10-roomkit-ui-qwen3-tts'" },
-    { name = "numpy", marker = "extra == 'extra-10-roomkit-ui-qwen3-tts'" },
-    { name = "typing-extensions", marker = "extra == 'extra-10-roomkit-ui-qwen3-tts'" },
+    { name = "cffi", marker = "extra == 'extra-10-roomkit-ui-qwen3-tts' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "numpy", marker = "extra == 'extra-10-roomkit-ui-qwen3-tts' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "typing-extensions", marker = "extra == 'extra-10-roomkit-ui-qwen3-tts' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/d2/db/949331952a6fb1c5b12e9de80fd08747966c2039d1a61db4764fbd3981c2/soundfile-0.14.0.tar.gz", hash = "sha256:ba1c1a2d618bca5c406647c83b89f07cc8810fa506a50622a6993ba130c1de11", size = 47842, upload-time = "2026-06-06T08:58:47.869Z" }
 wheels = [
@@ -4681,7 +4727,7 @@ version = "1.4.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
-    { name = "typing-extensions", marker = "python_full_version < '3.13' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "typing-extensions", marker = "python_full_version < '3.13' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/0f/3c/76d2fd1f1357ed0f0108d8a5aa233dcf16e2946a8559c84912fe08e01ac7/starlette-1.4.1.tar.gz", hash = "sha256:b7332de6e9375593a29ba9eee1e6ecfeb3eb2043e2e19a13b4b71da73ff35540", size = 2709041, upload-time = "2026-08-05T15:17:26.23Z" }
 wheels = [
@@ -4778,9 +4824,23 @@ wheels = [
 name = "tokenizers"
 version = "0.22.2"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.15' and sys_platform == 'win32'",
+    "python_full_version >= '3.15' and sys_platform == 'emscripten'",
+    "python_full_version >= '3.15' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version == '3.14.*' and sys_platform == 'win32'",
+    "python_full_version == '3.14.*' and sys_platform == 'emscripten'",
+    "python_full_version == '3.14.*' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version == '3.13.*' and sys_platform == 'win32'",
+    "python_full_version == '3.13.*' and sys_platform == 'emscripten'",
+    "python_full_version == '3.13.*' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'emscripten'",
+    "python_full_version < '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+]
 dependencies = [
-    { name = "huggingface-hub", version = "0.36.2", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-10-roomkit-ui-qwen3-tts'" },
-    { name = "huggingface-hub", version = "1.27.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-10-roomkit-ui-neutts' or extra != 'extra-10-roomkit-ui-qwen3-tts'" },
+    { name = "huggingface-hub", version = "0.36.2", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-10-roomkit-ui-qwen3-tts' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "huggingface-hub", version = "1.27.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-10-roomkit-ui-neutts' or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/73/6f/f80cfef4a312e1fb34baf7d85c72d4411afde10978d4657f8cdd811d3ccc/tokenizers-0.22.2.tar.gz", hash = "sha256:473b83b915e547aa366d1eee11806deaf419e17be16310ac0a14077f1e28f917", size = 372115, upload-time = "2026-01-05T10:45:15.988Z" }
 wheels = [
@@ -4802,6 +4862,46 @@ wheels = [
 ]
 
 [[package]]
+name = "tokenizers"
+version = "0.23.3"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.15'",
+    "python_full_version == '3.14.*'",
+    "python_full_version == '3.13.*'",
+    "python_full_version < '3.13'",
+]
+dependencies = [
+    { name = "huggingface-hub", version = "2.2.0", source = { registry = "https://pypi.org/simple" } },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/e0/7c/2cabb2174e772636683008f2c5621949b645da7d303c596589e84516a184/tokenizers-0.23.3.tar.gz", hash = "sha256:cded33237c77caeef62944d32aa9a7ef42bdce2b3497e18d137e072a8c4be438", size = 385286, upload-time = "2026-10-09T10:16:55.759Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/aa/2e/4ce5b9716f26e526eff6b0502ebed4ea8d7161f03b3c77617c9f25528e97/tokenizers-0.23.3-cp310-abi3-macosx_10_12_x86_64.whl", hash = "sha256:9d2b5c97daf61688c2ad1803ca851800feaba50fb68d5821779e9ea5880d968c", size = 3148800, upload-time = "2026-10-09T10:00:51.457Z" },
+    { url = "https://files.pythonhosted.org/packages/b2/72/01e49f032bb346e5aaf06c10c74fe8aeec847173adbadd66eb7c53054bf2/tokenizers-0.23.3-cp310-abi3-macosx_11_0_arm64.whl", hash = "sha256:68649e97d5b43c44c031d8d848874a6eecae8f8fe40ea989aa777a5a83aca716", size = 3101381, upload-time = "2026-10-09T10:00:54.063Z" },
+    { url = "https://files.pythonhosted.org/packages/15/fc/ae987741829b1cd547668c4c94be732ae3eefd1d74344e64c3d2ca714acd/tokenizers-0.23.3-cp310-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:ec82e80e65a862275b97c3d90b7a523df8d9519ee48aeb4e9625b2cc909274e0", size = 3519944, upload-time = "2026-10-09T10:00:55.885Z" },
+    { url = "https://files.pythonhosted.org/packages/1c/da/cc8f6c030afaf05fbddc608158fbb761dca46913cbeba6b112e59fc82e2a/tokenizers-0.23.3-cp310-abi3-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:c64a0713180ff16829d4e7f39a658b77ea11443af4e1aa46523692943c9b1414", size = 3397695, upload-time = "2026-10-09T10:00:57.444Z" },
+    { url = "https://files.pythonhosted.org/packages/ec/f1/256f78d1365fa2cd3ea6db716883d74667c8cbb6a21f15fa5b89a773cdc2/tokenizers-0.23.3-cp310-abi3-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:ddedfd4b3b4be6be24ff6ca645c4a37fddfd305f6f3e354c54cf10b715c48215", size = 3753125, upload-time = "2026-10-09T10:01:00.165Z" },
+    { url = "https://files.pythonhosted.org/packages/60/93/eee007ac2fcbf4ecfce7fbc354826cf3611f56bdb886f3e91b1f7dd06b8f/tokenizers-0.23.3-cp310-abi3-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:2a89614730d7b80940a5d2ed9320e1ec8add5a745c6151d8d05071b7215505b6", size = 4018598, upload-time = "2026-10-09T10:01:02.05Z" },
+    { url = "https://files.pythonhosted.org/packages/bf/f9/0c96c4739461fce9d8d865b416728081bf6230022d7163bd6244f35f4b31/tokenizers-0.23.3-cp310-abi3-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:e88646b8580c5ad7f4361477f1298e9cc01771a1ee9aecfe32c47b8ff614cc38", size = 3602442, upload-time = "2026-10-09T10:01:03.77Z" },
+    { url = "https://files.pythonhosted.org/packages/3a/40/6706b82693715581457c6d5423eaa7faae576bb0526c5738a57085eb4449/tokenizers-0.23.3-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:376851d22bcf9d650a5c3090bb83e6cf9e895fbf0595369fa4cd43c1f69b5f87", size = 3396193, upload-time = "2026-10-09T10:01:05.48Z" },
+    { url = "https://files.pythonhosted.org/packages/fe/0c/85946de40e25b7364b8f1bcf56def129069acd5bb364b7c86a32919e1a23/tokenizers-0.23.3-cp310-abi3-manylinux_2_31_riscv64.whl", hash = "sha256:bf501c40b72d2d5c8623620210430e9cac1ce47a46e45b34107b70a1557d46b0", size = 3553483, upload-time = "2026-10-09T10:01:07.387Z" },
+    { url = "https://files.pythonhosted.org/packages/f1/6b/8d615d92cad1d511ca5ab188d1c7c167f0b3d295cc0d96207f9f82d486d8/tokenizers-0.23.3-cp310-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:114e2b55ed177179d59f4ab98200a4471e11e78f9e4b5a922d146740f96fcf52", size = 9972248, upload-time = "2026-10-09T10:01:09.437Z" },
+    { url = "https://files.pythonhosted.org/packages/c9/7d/a922e37ddd58d1b463bbc2ad08120c8f59c60b814cd353519a116b24f8ba/tokenizers-0.23.3-cp310-abi3-musllinux_1_2_armv7l.whl", hash = "sha256:d3407fb7b9c4d75dd68850ffd7180bc0a5d2dbaf0762d888e612f31fec3f9c6b", size = 9802957, upload-time = "2026-10-09T10:01:11.869Z" },
+    { url = "https://files.pythonhosted.org/packages/4b/06/5d3f506a86ae0699a0e4ea05c05978f9aee169ef2c1d844e68c971cf8194/tokenizers-0.23.3-cp310-abi3-musllinux_1_2_i686.whl", hash = "sha256:84513ef0aeb8bf8f4ea11a2e8a7ac163ec5288aa115e649a59b470ac5c3107df", size = 10145487, upload-time = "2026-10-09T10:01:14.268Z" },
+    { url = "https://files.pythonhosted.org/packages/26/e5/065625317690ea3548d834dad81f48ea1fd32e4964610e658e195d7fe28e/tokenizers-0.23.3-cp310-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:e05ab7baf7f47b406a95fea6f3b0a484b2ddcd9e1d14b68844c457eb755085a3", size = 10266026, upload-time = "2026-10-09T10:16:33.054Z" },
+    { url = "https://files.pythonhosted.org/packages/77/4e/babede85d0d19f5e3deeef0063e01848141329934d3d77c31b5cab5ac2b4/tokenizers-0.23.3-cp310-abi3-win32.whl", hash = "sha256:1ebf28794e7e4954e20a7f70fbea410b2d1f0418f7dbbca97ca384fcfef38c25", size = 2588086, upload-time = "2026-10-09T10:16:35.686Z" },
+    { url = "https://files.pythonhosted.org/packages/d1/6c/24f074c9a0efb98e61b20aafe6b2641922d5db24e447d5d6daffd9e17555/tokenizers-0.23.3-cp310-abi3-win_amd64.whl", hash = "sha256:1f0823bb00c5fdc98e487354d54dd55a03848d61a1a0bf29a68c77f24f3b26c3", size = 2872101, upload-time = "2026-10-09T10:16:37.533Z" },
+    { url = "https://files.pythonhosted.org/packages/53/77/a476b6f73a661c11d113a342d2326b91506cf2285f0995d1212a6bb2022d/tokenizers-0.23.3-cp310-abi3-win_arm64.whl", hash = "sha256:7e48734d2de9260d86f03ab056d2cfeeff3869f61dbd49aaa15a2793b5f3458b", size = 2742580, upload-time = "2026-10-09T10:16:39.244Z" },
+    { url = "https://files.pythonhosted.org/packages/65/46/f66baaedd42414a3f583c47379dc350e3e1f858a690d2574fd85ae70681b/tokenizers-0.23.3-cp314-cp314t-macosx_10_12_x86_64.whl", hash = "sha256:efa3d7318406b4d115dce61ad5061953f1f44b128e79c020ce4615d763e23b6e", size = 3154274, upload-time = "2026-10-09T10:16:40.876Z" },
+    { url = "https://files.pythonhosted.org/packages/c6/41/8de8c63b2d935eee5a0f42011fb7b786ffafeab0b8eb6d17acb8af2293b7/tokenizers-0.23.3-cp314-cp314t-macosx_11_0_arm64.whl", hash = "sha256:a4fbb3662f9f59d199d61338e54b4bcc11d07ebbb1aeb3540dacb2be9c521cb7", size = 3077805, upload-time = "2026-10-09T10:16:42.856Z" },
+    { url = "https://files.pythonhosted.org/packages/e3/08/b1cbae8dc8fc7c91f992ac2d87a086e9b3f25a28814047ca16a82fe8c87b/tokenizers-0.23.3-cp314-cp314t-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:de536665495cb4b409d25bade41963f801aff4225c19a6b804b048f7d14e34c7", size = 3491678, upload-time = "2026-10-09T10:16:45.093Z" },
+    { url = "https://files.pythonhosted.org/packages/3e/0d/aac0cb2f3a1fdbef514145b4c5f2df4d05deeb1ee8f73ae641a1b4a62a85/tokenizers-0.23.3-cp314-cp314t-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:5cc24bb457dd4a8af89c8fcb40074d570129ec473df2a866c276ee55db4749d7", size = 3367420, upload-time = "2026-10-09T10:16:47.112Z" },
+    { url = "https://files.pythonhosted.org/packages/1e/1d/41a697d0c193a320b243fbd68b2057b6eb2f01ecf80899e1a16e646ff699/tokenizers-0.23.3-cp314-cp314t-musllinux_1_2_aarch64.whl", hash = "sha256:acd5c57b4bd3e56e246e2731a3a3a6825a7a7d89b7e3b761ba80bc521710f04b", size = 9945973, upload-time = "2026-10-09T10:16:49.326Z" },
+    { url = "https://files.pythonhosted.org/packages/37/e9/b56e619fcd583000a2b1254bb46af8dc6a174d3ba3329f454ad5a95a2be2/tokenizers-0.23.3-cp314-cp314t-musllinux_1_2_x86_64.whl", hash = "sha256:82eb480f6f1c21cea3349dec32cf1a6384c6c1e775f00f83b0d51197bc013687", size = 10237491, upload-time = "2026-10-09T10:16:51.943Z" },
+    { url = "https://files.pythonhosted.org/packages/6f/68/f58b3beb95f3b62816e91e5e768e684cd63e58f9cbece22036dae3b1c971/tokenizers-0.23.3-cp314-cp314t-win_amd64.whl", hash = "sha256:1554a6eed34d9d6a78d23360f4e06df8dffab1ae08c7e8488e0b3e3b36cc266f", size = 2847654, upload-time = "2026-10-09T10:16:54.166Z" },
+]
+
+[[package]]
 name = "tomlkit"
 version = "0.14.0"
 source = { registry = "https://pypi.org/simple" }
@@ -4815,20 +4915,20 @@ name = "torch"
 version = "2.13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cuda-bindings", marker = "(python_full_version < '3.15' and sys_platform == 'linux') or (python_full_version >= '3.15' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform != 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
-    { name = "cuda-toolkit", extra = ["cublas", "cudart", "cufft", "cufile", "cupti", "curand", "cusolver", "cusparse", "nvjitlink", "nvrtc", "nvtx"], marker = "sys_platform == 'linux' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "cuda-bindings", marker = "(python_full_version < '3.15' and sys_platform == 'linux') or (python_full_version >= '3.15' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (python_full_version >= '3.15' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (python_full_version >= '3.15' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform != 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform != 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform != 'linux' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "cuda-toolkit", extra = ["cublas", "cudart", "cufft", "cufile", "cupti", "curand", "cusolver", "cusparse", "nvjitlink", "nvrtc", "nvtx"], marker = "sys_platform == 'linux' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
     { name = "filelock" },
-    { name = "fsspec", version = "2026.6.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-10-roomkit-ui-neutts'" },
-    { name = "fsspec", version = "2026.7.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-10-roomkit-ui-qwen3-tts' or extra != 'extra-10-roomkit-ui-neutts'" },
+    { name = "fsspec", version = "2026.6.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-10-roomkit-ui-neutts' or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "fsspec", version = "2026.7.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-10-roomkit-ui-qwen3-tts' or extra == 'extra-10-roomkit-ui-smart-turn' or extra != 'extra-10-roomkit-ui-neutts'" },
     { name = "jinja2" },
     { name = "networkx" },
-    { name = "nvidia-cudnn-cu13", marker = "sys_platform == 'linux' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
-    { name = "nvidia-cusparselt-cu13", marker = "sys_platform == 'linux' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
-    { name = "nvidia-nccl-cu13", marker = "sys_platform == 'linux' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
-    { name = "nvidia-nvshmem-cu13", marker = "sys_platform == 'linux' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "nvidia-cudnn-cu13", marker = "sys_platform == 'linux' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "nvidia-cusparselt-cu13", marker = "sys_platform == 'linux' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "nvidia-nccl-cu13", marker = "sys_platform == 'linux' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "nvidia-nvshmem-cu13", marker = "sys_platform == 'linux' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
     { name = "setuptools" },
     { name = "sympy" },
-    { name = "triton", marker = "(python_full_version < '3.15' and sys_platform == 'linux') or (python_full_version >= '3.15' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform != 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "triton", marker = "(python_full_version < '3.15' and sys_platform == 'linux') or (python_full_version >= '3.15' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (python_full_version >= '3.15' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (python_full_version >= '3.15' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform != 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform != 'linux' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform != 'linux' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
     { name = "typing-extensions" },
 ]
 wheels = [
@@ -4919,7 +5019,7 @@ source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "blobfile" },
     { name = "datasets" },
-    { name = "huggingface-hub", version = "1.27.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-10-roomkit-ui-neutts'" },
+    { name = "huggingface-hub", version = "1.27.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-10-roomkit-ui-neutts' or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
     { name = "kagglehub" },
     { name = "numpy" },
     { name = "omegaconf" },
@@ -4928,7 +5028,7 @@ dependencies = [
     { name = "safetensors" },
     { name = "sentencepiece" },
     { name = "tiktoken" },
-    { name = "tokenizers" },
+    { name = "tokenizers", version = "0.22.2", source = { registry = "https://pypi.org/simple" } },
     { name = "torchdata" },
     { name = "tqdm" },
 ]
@@ -4941,7 +5041,7 @@ name = "tqdm"
 version = "4.70.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/21/3b/6c24bec5be5e743ffd99576daa5cc077722fc7d5bbc00bd133fa0c698dc6/tqdm-4.70.0.tar.gz", hash = "sha256:55b0b0dbd97462d06ebee91e4dac24ed4d4702be82b24f07e6c1d27e08cea220", size = 795438, upload-time = "2026-07-27T11:33:15.271Z" }
 wheels = [
@@ -4975,7 +5075,7 @@ dependencies = [
     { name = "regex" },
     { name = "requests" },
     { name = "safetensors" },
-    { name = "tokenizers" },
+    { name = "tokenizers", version = "0.22.2", source = { registry = "https://pypi.org/simple" } },
     { name = "tqdm" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/dd/70/d42a739e8dfde3d92bb2fff5819cbf331fe9657323221e79415cd5eb65ee/transformers-4.57.3.tar.gz", hash = "sha256:df4945029aaddd7c09eec5cad851f30662f8bd1746721b34cc031d70c65afebc", size = 10139680, upload-time = "2025-11-25T15:51:30.139Z" }
@@ -5008,13 +5108,39 @@ dependencies = [
     { name = "pyyaml" },
     { name = "regex" },
     { name = "safetensors" },
-    { name = "tokenizers" },
+    { name = "tokenizers", version = "0.22.2", source = { registry = "https://pypi.org/simple" } },
     { name = "tqdm" },
     { name = "typer-slim" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/c9/1d/a7d91500a6c02ec76058bc9e65fcdec1bdb8882854dec8e4adf12d0aa8b0/transformers-5.1.0.tar.gz", hash = "sha256:c60d6180e5845ea1b4eed38d7d1b06fcc4cc341c6b7fa5c1dc767d7e25fe0139", size = 8531810, upload-time = "2026-02-05T15:41:42.932Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b7/66/57042d4b0f1ede8046d7ae6409bf3640df996e9cbc3fe20467aa29badc54/transformers-5.1.0-py3-none-any.whl", hash = "sha256:de534b50c9b2ce6217fc56421075a1734241fb40704fdc90f50f6a08fc533d59", size = 10276537, upload-time = "2026-02-05T15:41:40.358Z" },
+]
+
+[[package]]
+name = "transformers"
+version = "5.19.0"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.15'",
+    "python_full_version == '3.14.*'",
+    "python_full_version == '3.13.*'",
+    "python_full_version < '3.13'",
+]
+dependencies = [
+    { name = "huggingface-hub", version = "2.2.0", source = { registry = "https://pypi.org/simple" } },
+    { name = "numpy" },
+    { name = "packaging" },
+    { name = "pyyaml" },
+    { name = "regex" },
+    { name = "safetensors" },
+    { name = "tokenizers", version = "0.23.3", source = { registry = "https://pypi.org/simple" } },
+    { name = "tqdm" },
+    { name = "typer" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/65/4c/70012ed0795235fb6bd7806fafd4a1842f03e49ebbfa3bb9580e451948ce/transformers-5.19.0.tar.gz", hash = "sha256:87f38dd25e4521151b97e94520ac457f44a0ae8a8358a5b112daff6c64a822d6", size = 10032022, upload-time = "2026-10-06T16:39:00.229Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b9/59/1e7f1212c215c73690ae6cab4678efe1555ff985953e145d88cc212859b0/transformers-5.19.0-py3-none-any.whl", hash = "sha256:afcd2dd5f603ed28c1e1fcb00a338ccbb4ef5f878ed289635df8b58187afb518", size = 12599123, upload-time = "2026-10-06T16:38:56.794Z" },
 ]
 
 [[package]]
@@ -5047,7 +5173,7 @@ version = "0.27.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "annotated-doc" },
-    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts')" },
+    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
     { name = "rich" },
     { name = "shellingham" },
 ]

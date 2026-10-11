@@ -14,8 +14,15 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from roomkit_ui.features import TURN_DETECTOR_FEATURES, unavailable_reason
 from roomkit_ui.theme import colors
 from roomkit_ui.widgets.hotkey_button import HotkeyButton
+from roomkit_ui.widgets.settings.feature_hints import populate_provider_combo
+
+_TURN_HINT = (
+    "Audio-native turn completion — detects when the user has finished speaking "
+    "from prosody alone. Download the model in AI Models tab."
+)
 
 THEMES = [
     ("Dark", "dark"),
@@ -279,38 +286,7 @@ class _GeneralPage(QWidget):
         self.vad_model.currentIndexChanged.connect(self._on_vad_changed)
         self._on_vad_changed(self.vad_model.currentIndex())
 
-        # Turn detector (smart turn)
-        from roomkit_ui.model_manager import is_smart_turn_downloaded
-
-        self.turn_detector = QComboBox()
-        self.turn_detector.addItem("None", "")
-        if is_smart_turn_downloaded():
-            self.turn_detector.addItem("Smart Turn v3", "smart-turn")
-        saved_td = settings.get("vc_turn_detector", "")
-        for i in range(self.turn_detector.count()):
-            if self.turn_detector.itemData(i) == saved_td:
-                self.turn_detector.setCurrentIndex(i)
-                break
-        proc_form.addRow("Turn Detector", self.turn_detector)
-
-        self.turn_threshold = QLineEdit(str(settings.get("vc_turn_threshold", "") or ""))
-        self.turn_threshold.setPlaceholderText("0.5 (0 = eager … 1 = patient)")
-        self._turn_threshold_label = QLabel("Turn Threshold")
-        proc_form.addRow(self._turn_threshold_label, self.turn_threshold)
-
-        self._turn_hint = QLabel(
-            "Audio-native turn completion — detects when the user has finished speaking "
-            "from prosody alone. Download the model in AI Models tab."
-        )
-        self._turn_hint.setWordWrap(True)
-        self._turn_hint.setStyleSheet(
-            f"font-size: 11px; color: {c['TEXT_SECONDARY']};"
-            f" font-style: italic; background: transparent;"
-        )
-        proc_form.addRow("", self._turn_hint)
-
-        self.turn_detector.currentIndexChanged.connect(self._on_turn_detector_changed)
-        self._on_turn_detector_changed(self.turn_detector.currentIndex())
+        self._add_turn_detector_fields(proc_form, settings)
 
         # Inference device
         from roomkit_ui.model_manager import detect_providers
@@ -351,10 +327,63 @@ class _GeneralPage(QWidget):
             self._vad_adv_container.hide()
             self._vad_adv_toggle.setText("\u25b8 Advanced")
 
+    def _add_turn_detector_fields(self, form: QFormLayout, settings: dict) -> None:
+        """Turn detector (Smart Turn), its threshold and its wait for more speech."""
+        from roomkit_ui.model_manager import is_smart_turn_downloaded
+
+        self.turn_detector = QComboBox()
+        self.turn_detector.addItem("None", "")
+        if is_smart_turn_downloaded():
+            # Flagged "not installed" when the smart-turn extra is missing.
+            populate_provider_combo(
+                self.turn_detector, [("Smart Turn v3", "smart-turn")], TURN_DETECTOR_FEATURES
+            )
+            self.turn_detector.setItemData(self.turn_detector.count() - 1, "smart-turn")
+        saved_td = settings.get("vc_turn_detector", "")
+        for i in range(self.turn_detector.count()):
+            if self.turn_detector.itemData(i) == saved_td:
+                self.turn_detector.setCurrentIndex(i)
+                break
+        form.addRow("Turn Detector", self.turn_detector)
+
+        self.turn_threshold = QLineEdit(str(settings.get("vc_turn_threshold", "") or ""))
+        self.turn_threshold.setPlaceholderText("0.5 (0 = eager … 1 = patient)")
+        self._turn_threshold_label = QLabel("Turn Threshold")
+        form.addRow(self._turn_threshold_label, self.turn_threshold)
+
+        self.turn_incomplete_wait = QLineEdit(
+            str(settings.get("vc_turn_incomplete_wait_ms", "") or "")
+        )
+        self.turn_incomplete_wait.setPlaceholderText("1500")
+        self.turn_incomplete_wait.setToolTip(
+            "How long a turn judged unfinished waits for you to go on before it is answered."
+        )
+        self._turn_wait_label = QLabel("Unfinished Wait (ms)")
+        form.addRow(self._turn_wait_label, self.turn_incomplete_wait)
+
+        self._turn_hint = QLabel(_TURN_HINT)
+        self._turn_hint.setWordWrap(True)
+        self._turn_hint.setStyleSheet(
+            f"font-size: 11px; color: {colors()['TEXT_SECONDARY']};"
+            f" font-style: italic; background: transparent;"
+        )
+        form.addRow("", self._turn_hint)
+
+        self.turn_detector.currentIndexChanged.connect(self._on_turn_detector_changed)
+        self._on_turn_detector_changed(self.turn_detector.currentIndex())
+
     def _on_turn_detector_changed(self, index: int) -> None:
-        has_detector = bool(self.turn_detector.currentData())
-        self._turn_threshold_label.setVisible(has_detector)
-        self.turn_threshold.setVisible(has_detector)
+        detector = self.turn_detector.currentData() or ""
+        for widget in (
+            self._turn_threshold_label,
+            self.turn_threshold,
+            self._turn_wait_label,
+            self.turn_incomplete_wait,
+        ):
+            widget.setVisible(bool(detector))
+        feature = TURN_DETECTOR_FEATURES.get(detector)
+        reason = unavailable_reason(feature) if feature else None
+        self._turn_hint.setText(reason or _TURN_HINT)
 
     def _on_device_changed(self, index: int) -> None:
         val = self._inference_providers[index][1]
@@ -385,6 +414,7 @@ class _GeneralPage(QWidget):
             "vad_energy_silence_rms": self.vad_energy_silence_rms.text().strip(),
             "vc_turn_detector": self.turn_detector.currentData() or "",
             "vc_turn_threshold": self.turn_threshold.text().strip(),
+            "vc_turn_incomplete_wait_ms": self.turn_incomplete_wait.text().strip(),
             "inference_device": self._inference_providers[self.inference_device.currentIndex()][1],
             "input_device": self.input_combo.currentData(),
             "output_device": self.output_combo.currentData(),

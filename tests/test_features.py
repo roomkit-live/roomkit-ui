@@ -14,10 +14,12 @@ import pytest
 
 from roomkit_ui.features import (
     AI_PROVIDER_FEATURES,
+    EXCLUSIVE_EXTRAS,
     FEATURES,
     REALTIME_PROVIDER_FEATURES,
     STT_PROVIDER_FEATURES,
     TTS_PROVIDER_FEATURES,
+    TURN_DETECTOR_FEATURES,
     FeatureUnavailableError,
     format_report,
     install_command,
@@ -44,10 +46,12 @@ def test_every_feature_names_a_declared_extra(declared_extras):
 def test_aggregate_all_covers_every_installable_feature(declared_extras):
     """``[all]`` must pull every feature except the deliberately excluded ones.
 
-    qwen3-tts, neutts and pocket-tts stay out: torch and perth are several
-    GB for optional voices.  Any *other* omission means a user who installed
-    ``roomkit-ui[all]`` still hits a missing backend, which is the exact
-    failure this registry exists to prevent.
+    The extras that pin conflicting transformers versions stay out: qwen3-tts
+    and neutts (torch and perth, several GB for two optional voices) and
+    smart-turn, which neither of them can share an environment with.
+    pocket-tts stays out too: it pulls torch.  Any *other* omission means a
+    user who installed ``roomkit-ui[all]`` still hits a missing backend, which
+    is the exact failure this registry exists to prevent.
     """
     data = tomllib.loads(PYPROJECT.read_text())
     extras = data["project"]["optional-dependencies"]
@@ -63,8 +67,18 @@ def test_aggregate_all_covers_every_installable_feature(declared_extras):
             if req.startswith("roomkit-ui[") and req.endswith("]"):
                 frontier.extend(req[len("roomkit-ui[") : -1].split(","))
 
-    expected = {f.extra for f in FEATURES.values()} - {"qwen3-tts", "neutts", "pocket-tts"}
+    expected = {f.extra for f in FEATURES.values()} - EXCLUSIVE_EXTRAS - {"pocket-tts"}
     assert expected <= reached, f"not reachable from [all]: {sorted(expected - reached)}"
+
+
+def test_exclusive_extras_mirror_the_uv_conflicts():
+    """The doctor says "install at most one" of exactly the extras uv keeps apart."""
+    data = tomllib.loads(PYPROJECT.read_text())
+    in_conflicts = {
+        member["extra"] for group in data["tool"]["uv"]["conflicts"] for member in group
+    }
+
+    assert in_conflicts == EXCLUSIVE_EXTRAS
 
 
 @pytest.mark.parametrize(
@@ -74,6 +88,7 @@ def test_aggregate_all_covers_every_installable_feature(declared_extras):
         STT_PROVIDER_FEATURES,
         TTS_PROVIDER_FEATURES,
         REALTIME_PROVIDER_FEATURES,
+        TURN_DETECTOR_FEATURES,
     ],
 )
 def test_provider_maps_point_at_known_features(provider_map):

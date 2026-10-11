@@ -7,6 +7,7 @@ settings dict (plus emit callbacks for UI status/errors).
 
 from __future__ import annotations
 
+import functools
 import logging
 from typing import Any
 
@@ -180,9 +181,10 @@ def _tts_reads_audio_tags(settings: dict) -> bool:
     return reads_audio_tags(model_id(settings))
 
 
-def build_turn_detector(settings: dict, inference_device: str) -> Any:
-    td_name = settings.get("vc_turn_detector", "")
-    if td_name != "smart-turn":
+def smart_turn_config(settings: dict, inference_device: str) -> Any:
+    """The SmartTurnConfig the settings ask for; None when no detector is selected
+    or its model is not downloaded."""
+    if settings.get("vc_turn_detector", "") != "smart-turn":
         return None
 
     from roomkit_ui.model_manager import is_smart_turn_downloaded, smart_turn_model_path
@@ -191,23 +193,47 @@ def build_turn_detector(settings: dict, inference_device: str) -> Any:
         logger.warning("Smart Turn model not downloaded — skipping")
         return None
 
-    from roomkit.voice.pipeline.turn.smart_turn import SmartTurnConfig, SmartTurnDetector
+    from roomkit.voice.pipeline.turn.smart_turn import SmartTurnConfig
 
-    threshold_str = settings.get("vc_turn_threshold", "")
-    threshold = 0.5
-    if threshold_str:
-        try:
-            threshold = float(threshold_str)
-        except (ValueError, TypeError):
-            pass
-    logger.info("Turn detector: smart-turn, threshold=%.2f", threshold)
-    return SmartTurnDetector(
-        SmartTurnConfig(
-            model_path=str(smart_turn_model_path()),
-            threshold=threshold,
-            provider=inference_device,
-        )
+    threshold: dict[str, Any] = {"threshold": 0.5}
+    try_set_float(threshold, "threshold", settings.get("vc_turn_threshold", ""))
+    return SmartTurnConfig(
+        model_path=str(smart_turn_model_path()),
+        threshold=threshold["threshold"],
+        provider=inference_device,
     )
+
+
+def build_turn_detector(config: Any) -> Any:
+    """A SmartTurnDetector the engine keeps across sessions.
+
+    The pipeline closes its stages when a session ends, and SmartTurnDetector
+    .close() drops its ONNX session — the cached detector would load again,
+    every session.  This one keeps it; the engine's model cache owns it.
+    """
+    logger.info("Turn detector: smart-turn, threshold=%.2f", config.threshold)
+    return _kept_smart_turn_class()(config)
+
+
+@functools.cache
+def _kept_smart_turn_class() -> type:
+    from roomkit.voice.pipeline.turn.smart_turn import SmartTurnDetector
+
+    class KeptSmartTurnDetector(SmartTurnDetector):
+        def close(self) -> None:
+            """Stay loaded for the next session (see build_turn_detector)."""
+
+    return KeptSmartTurnDetector
+
+
+def turn_incomplete_wait_ms(settings: dict) -> float:
+    """How long a turn the detector judged unfinished waits for more speech.
+
+    roomkit's default (1500 ms) unless the setting holds a number of ms.
+    """
+    wait: dict[str, Any] = {"ms": 1500.0}
+    try_set_float(wait, "ms", settings.get("vc_turn_incomplete_wait_ms", ""))
+    return float(wait["ms"])
 
 
 def log_vc_audio_pipeline(

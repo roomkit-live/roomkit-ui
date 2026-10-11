@@ -25,10 +25,11 @@ from typing import TextIO
 
 DISTRIBUTION = "roomkit-ui"
 
-# Extras that cannot share an environment: qwen-tts pins transformers==4.57.3
-# and neutts wants 5.1.0.  Mirrors `[tool.uv].conflicts` in pyproject.toml —
-# suggesting both in one command would hand the user a resolution failure.
-EXCLUSIVE_EXTRAS = frozenset({"qwen3-tts", "neutts"})
+# Extras that cannot share an environment: qwen-tts pins transformers==4.57.3,
+# neutts wants 5.1.0 and Smart Turn >=5.5.  Mirrors `[tool.uv].conflicts` in
+# pyproject.toml — suggesting two in one command would hand the user a
+# resolution failure.
+EXCLUSIVE_EXTRAS = frozenset({"qwen3-tts", "neutts", "smart-turn"})
 
 
 class FeatureUnavailableError(RuntimeError):
@@ -100,6 +101,11 @@ FEATURES: dict[str, Feature] = {
     # over a websocket, Azure Speech TTS posts SSML with httpx (a core dep).
     "azure-stt": Feature("azure-speech", "Azure MAI-Transcribe", ("websockets",)),
     "azure-tts": Feature("azure-speech", "Azure Speech TTS (MAI-Voice)", ("httpx",)),
+    # SmartTurnDetector imports numpy and onnxruntime when built, and
+    # transformers (WhisperFeatureExtractor) when it loads the model.
+    "smart-turn": Feature(
+        "smart-turn", "Smart Turn detector", ("numpy", "onnxruntime", "transformers")
+    ),
 }
 
 # Provider ids as stored in QSettings → feature key.  A provider absent from a
@@ -138,6 +144,11 @@ REALTIME_PROVIDER_FEATURES: dict[str, str] = {
     # GPT-Live rides the same websocket transport; tiktoken (in the extra)
     # only sizes context appends, and roomkit falls back to bytes without it.
     "openai_live": "openai-realtime",
+}
+
+# Voice-channel turn detectors (vc_turn_detector) → feature key.
+TURN_DETECTOR_FEATURES: dict[str, str] = {
+    "smart-turn": "smart-turn",
 }
 
 

@@ -238,6 +238,8 @@ _DEFAULTS = {
     # Local (vLLM / Ollama) model reasoning: off by default, a voice reply
     # must not wait for seconds of hidden thinking
     "vc_local_thinking": False,
+    # How long a turn Smart Turn judged unfinished waits for more speech
+    "vc_turn_incomplete_wait_ms": "",  # ms (empty = 1500)
 }
 
 # Keys renamed since a release shipped: new key → (old key, old value → new value).

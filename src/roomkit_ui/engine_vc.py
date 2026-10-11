@@ -8,6 +8,7 @@ TTS, VAD + diarization + smart-turn, skills, and MCP tools.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -38,10 +39,12 @@ from roomkit_ui.engine_vc_helpers import (
     log_vc_audio_pipeline,
     mcp_servers_configured,
     register_local_tool_hint,
+    smart_turn_config,
     start_local_llm,
     stt_needs_turn_vad,
+    turn_incomplete_wait_ms,
 )
-from roomkit_ui.features import STT_PROVIDER_FEATURES, require
+from roomkit_ui.features import STT_PROVIDER_FEATURES, require, unavailable_reason
 from roomkit_ui.hooks import register_vc_hooks
 from roomkit_ui.providers import create_ai_provider
 from roomkit_ui.toolset import ToolSet, tool_summaries
@@ -173,7 +176,7 @@ class VoiceChannelMixin:
             interruption = build_interruption(
                 settings, stt_streams=bool(getattr(stt, "supports_streaming", False))
             )
-            turn_detector = build_turn_detector(settings, inference_device)
+            turn_detector = await self._build_turn_detector(settings, inference_device)
 
             # 6.5. AudioPipelineConfig
             debug_taps = build_debug_taps(settings)
@@ -185,6 +188,7 @@ class VoiceChannelMixin:
                 interruption=interruption,
                 diarization=diarization,
                 turn_detector=turn_detector,
+                turn_incomplete_wait_ms=turn_incomplete_wait_ms(settings),
                 debug_taps=debug_taps,
                 recorder=recorder,
                 recording_config=recording_config,
@@ -420,6 +424,38 @@ class VoiceChannelMixin:
         vad_config = build_vad_config(vad_model_id, provider=inference_device, settings=settings)
         logger.info("VAD: %s", vad_model_id)
         return SherpaOnnxVADProvider(vad_config)
+
+    # -- Turn detector ----------------------------------------------------
+
+    async def _build_turn_detector(self, settings: dict, inference_device: str) -> Any:
+        """The Smart Turn detector, cached across sessions and loaded before the first turn.
+
+        Loading it imports ``transformers`` (seconds) and the ONNX model; done
+        here, off the loop, the first turn no longer waits for it.  Without the
+        packages the session runs without it and says so: the detector would
+        fail every turn and, after three, never let a turn end.
+        """
+        config = smart_turn_config(settings, inference_device)
+        if config is None:
+            return None
+        reason = unavailable_reason("smart-turn")
+        if reason is not None:
+            self.session_notice.emit(f"Turn detection is off for this session. {reason}")  # type: ignore[attr-defined]
+            return None
+        key = ("turn", config.model_path, config.threshold, config.provider)
+        detector = self._get_cached("turn", key)  # type: ignore[attr-defined]
+        if detector is not None:
+            return detector
+        detector = build_turn_detector(config)
+        self.loading_status.emit("Loading turn detector…")  # type: ignore[attr-defined]
+        try:
+            await asyncio.to_thread(detector.warmup)
+        except Exception as exc:
+            logger.exception("Smart Turn failed to load")
+            self.session_notice.emit(f"Turn detection is off for this session: {exc}")  # type: ignore[attr-defined]
+            return None
+        self._set_cached("turn", key, detector)  # type: ignore[attr-defined]
+        return detector
 
     # -- Skills + session info -------------------------------------------
 

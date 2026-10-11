@@ -65,6 +65,10 @@ llamacpp = ["roomkit[llamacpp]>=0.96.1"]
 # Kyutai's Pocket TTS: local, CPU-friendly, voice cloning from a clip.  Outside
 # `all` like the two above: pocket-tts pulls torch (the CUDA build on Linux).
 pocket-tts = ["roomkit[pocket-tts]>=0.96.1"]
+# Smart Turn turn detector (Voice Channel): onnxruntime runs the model and
+# transformers' WhisperFeatureExtractor feeds it. Outside `all`: it needs
+# transformers>=5.5, which qwen-tts's 4.57.3 pin and neutts's 5.1.0 refuse.
+smart-turn = ["roomkit[smart-turn]>=0.96.1"]
 
 # ── Desktop features ──────────────────────────────────────────────────────
 # Global hotkey + system-wide dictation. Needs a local STT model to transcribe.
@@ -122,6 +126,8 @@ roomkit-ui = "roomkit_ui.app:main"
 # hit the same wall at install time.
 conflicts = [
     [{ extra = "qwen3-tts" }, { extra = "neutts" }],
+    [{ extra = "smart-turn" }, { extra = "qwen3-tts" }],
+    [{ extra = "smart-turn" }, { extra = "neutts" }],
 ]
 
 # ── Ruff ──────────────────────────────────────────────────────────────────
