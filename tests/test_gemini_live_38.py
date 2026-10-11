@@ -2,7 +2,7 @@
 
 import pytest
 
-from roomkit_ui.engine_realtime import _build_provider_config
+from roomkit_ui.realtime_providers import build_provider_config
 from roomkit_ui.settings import _DEFAULTS
 from roomkit_ui.widgets.settings.realtime_section import RealtimeSection
 
@@ -20,7 +20,7 @@ EVERYTHING = {
 
 
 def _config(model: str, **overrides) -> dict:
-    return _build_provider_config("gemini", {"model": model, **EVERYTHING, **overrides})
+    return build_provider_config("gemini", {"model": model, **EVERYTHING, **overrides})
 
 
 # -- provider_config -----------------------------------------------------------

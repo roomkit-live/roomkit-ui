@@ -40,9 +40,9 @@ def session_input_rate(settings: dict) -> int:
     """
     if settings.get("conversation_mode", "realtime") == "voice_channel":
         return VC_INPUT_SAMPLE_RATE
-    from roomkit_ui.engine_realtime import _realtime_sample_rate
+    from roomkit_ui.realtime_providers import realtime_sample_rate
 
-    return _realtime_sample_rate(str(settings.get("provider", "gemini")))
+    return realtime_sample_rate(str(settings.get("provider", "gemini")))
 
 
 def usable_capture_source(source: Any, sample_rate: int) -> Any:

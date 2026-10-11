@@ -10,10 +10,10 @@ from roomkit.providers.openai.live import HostedReasoning, OpenAILiveProvider
 from roomkit.voice.realtime.mock import MockRealtimeTransport
 
 from roomkit_ui.builtin_tools import BUILTIN_TOOLS
-from roomkit_ui.engine_realtime import (
-    _build_realtime_provider,
-    _realtime_sample_rate,
-    _transport_audio_profile,
+from roomkit_ui.realtime_providers import (
+    build_realtime_provider,
+    realtime_sample_rate,
+    transport_audio_profile,
 )
 from roomkit_ui.settings import _DEFAULTS
 from roomkit_ui.toolset import ToolSet
@@ -26,11 +26,11 @@ ROOT = Path(__file__).resolve().parent.parent
 
 def test_gpt_live_needs_the_openai_key():
     with pytest.raises(ValueError, match="OpenAI API key"):
-        _build_realtime_provider("openai_live", {})
+        build_realtime_provider("openai_live", {})
 
 
 def test_gpt_live_defaults_mirror_roomkits_example():
-    provider, voice, model = _build_realtime_provider("openai_live", {"openai_api_key": "k"})
+    provider, voice, model = build_realtime_provider("openai_live", {"openai_api_key": "k"})
 
     assert isinstance(provider, OpenAILiveProvider)
     assert provider.full_duplex
@@ -42,7 +42,7 @@ def test_gpt_live_defaults_mirror_roomkits_example():
 
 
 def test_gpt_live_settings_reach_the_provider():
-    provider, voice, _ = _build_realtime_provider(
+    provider, voice, _ = build_realtime_provider(
         "openai_live",
         {
             "openai_api_key": "k",
@@ -62,16 +62,16 @@ def test_gpt_live_settings_reach_the_provider():
 
 def test_gpt_live_runs_the_aec_at_transport_level_with_webrtc_ns():
     aec = object()
-    transport_aec, denoiser, prebuffer = _transport_audio_profile("openai_live", aec, 24000)
+    transport_aec, denoiser, prebuffer = transport_audio_profile("openai_live", aec, 24000)
 
     assert transport_aec is aec
     assert type(denoiser).__name__ == "WebRTCNoiseSuppressorProvider"
     assert prebuffer == 120  # LocalAudioBackend's default, which the example keeps
-    assert _realtime_sample_rate("openai_live") == 24000
+    assert realtime_sample_rate("openai_live") == 24000
 
 
 def test_gpt_live_without_an_aec_keeps_the_noise_suppressor():
-    transport_aec, denoiser, prebuffer = _transport_audio_profile("openai_live", None, 24000)
+    transport_aec, denoiser, prebuffer = transport_audio_profile("openai_live", None, 24000)
 
     assert transport_aec is None  # the mic is muted during playback instead
     assert denoiser is not None
