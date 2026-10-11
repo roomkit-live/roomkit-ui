@@ -167,6 +167,25 @@ def _create_app() -> QApplication:
     return app
 
 
+def install_asyncgen_hooks(loop: asyncio.AbstractEventLoop) -> None:
+    """Have the loop close the async generators a loop body leaves early.
+
+    asyncio's run_forever installs these hooks; qasync's does not.  Without
+    them, a generator abandoned with ``break`` (roomkit leaves an STT stream
+    that way to drop an echo) is closed by the garbage collector, outside the
+    loop: its ``finally`` cannot await, "async generator ignored GeneratorExit"
+    is printed, and what it should have closed stays open — a streaming STT's
+    websocket and the task feeding it audio.  With them, the loop runs its
+    ``aclose()`` as a task.
+    """
+    firstiter = getattr(loop, "_asyncgen_firstiter_hook", None)
+    finalizer = getattr(loop, "_asyncgen_finalizer_hook", None)
+    if firstiter is None or finalizer is None:
+        logging.getLogger(__name__).warning("Event loop has no async generator hooks")
+        return
+    sys.set_asyncgen_hooks(firstiter=firstiter, finalizer=finalizer)
+
+
 def _prewarm_webengine() -> None:
     """Start the Chromium subprocess before the first MCP App needs it.
 
@@ -367,6 +386,7 @@ def main() -> None:
     app.setStyleSheet(get_stylesheet(settings.get("theme", "dark")))
     loop = QEventLoop(app)
     asyncio.set_event_loop(loop)
+    install_asyncgen_hooks(loop)
 
     window = MainWindow()
     window.show()
