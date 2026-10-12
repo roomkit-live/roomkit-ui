@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import os
+from collections.abc import Callable
 from typing import Any
 
 from PySide6.QtCore import Signal
@@ -15,6 +16,7 @@ from roomkit_ui.engine import Engine
 from roomkit_ui.engine_state import EngineState
 from roomkit_ui.idle_hangup import IdleHangup
 from roomkit_ui.settings import load_settings
+from roomkit_ui.text_chat import text_chat_unavailable
 from roomkit_ui.tool_events import ToolCall, ToolResult
 from roomkit_ui.widgets.chat_view import ChatView
 from roomkit_ui.widgets.conversation_composer import ConversationComposer
@@ -79,10 +81,12 @@ class MainWindow(QMainWindow):
         self._vu.hide()  # audio feedback only occupies space during Live
         root.addWidget(self._vu)
 
-        # ── Composer (Live first; text input follows in a later step) ──
+        # ── Composer ──
         self._controls = ConversationComposer()
         root.addWidget(self._controls)
         self._start_pending = False
+        self._closed = False
+        self._request_task: asyncio.Future | None = None
         self._history = ConversationHistory(self)
         self._session_drawer = SessionDrawer(self._surface)
         self._header.history_requested.connect(self._history.show)
@@ -91,6 +95,7 @@ class MainWindow(QMainWindow):
 
         # ── Signals ──
         self._controls.start_requested.connect(self._on_start)
+        self._controls.send_requested.connect(self._on_send)
         self._controls.stop_requested.connect(self._on_stop)
         self._controls.mute_toggled.connect(self._engine.set_mic_muted)
         self._controls.mute_toggled.connect(self._vu.set_muted)
@@ -98,6 +103,7 @@ class MainWindow(QMainWindow):
 
         self._engine.state_changed.connect(self._on_state_changed)
         self._engine.transcription.connect(self._on_transcription)
+        self._engine.text_reply_stopped.connect(self._chat.stop_text_reply)
         self._engine.mic_audio_level.connect(self._vu.set_mic_level)
         self._engine.speaker_audio_level.connect(self._vu.set_speaker_level)
         self._engine.reply_interrupted.connect(self._on_reply_interrupted)
@@ -127,6 +133,8 @@ class MainWindow(QMainWindow):
         self._end_notice = ""  # why the session is ending, re-shown once it has
         self._apply_idle_hangup_settings()
         self.settings_saved.connect(self._apply_idle_hangup_settings)
+        self.settings_saved.connect(self._refresh_text_availability)
+        self._refresh_text_availability()
 
         # MCP App state
         self._active_app_widgets: dict[str, Any] = {}  # invocation ID → MCPAppWidget
@@ -139,6 +147,8 @@ class MainWindow(QMainWindow):
             self._on_start()
 
     def _open_settings(self) -> None:
+        if self._finish_text_session(self._open_settings):
+            return
         dlg = SettingsPanel(self)
         self.settings_opened.emit()
         dlg.exec()
@@ -147,8 +157,29 @@ class MainWindow(QMainWindow):
         dlg.deleteLater()
         self.settings_saved.emit()
 
+    def _finish_text_session(self, then: Callable[[], None]) -> bool:
+        """Close a waiting text session before changing its thread or settings."""
+        if self._engine.state != EngineState.READY:
+            return False
+        self._start_pending = True
+        self._history.drawer.set_busy(True)
+        task = asyncio.ensure_future(self._engine.stop())
+        self._request_task = task
+
+        def finished(done: asyncio.Future) -> None:
+            self._start_finished(done)
+            if not self._closed and not done.cancelled() and done.exception() is None:
+                then()
+
+        task.add_done_callback(finished)
+        return True
+
     def _on_start(self, capture_since: Any = None) -> None:
-        if self._start_pending or self._engine.state not in (EngineState.IDLE, EngineState.ERROR):
+        if self._start_pending or self._engine.state not in (
+            EngineState.IDLE,
+            EngineState.ERROR,
+            EngineState.READY,
+        ):
             return  # the engine refuses it: keep the chat of the session ending
         settings = load_settings()
         self._history.save()
@@ -165,13 +196,65 @@ class MainWindow(QMainWindow):
                 )
             )
             task.add_done_callback(self._start_finished)
+            self._request_task = task
         except Exception as e:
             self._start_pending = False
             logger.exception("Failed to schedule engine start")
             self._chat.add_error(str(e))
 
+    def _refresh_text_availability(self) -> None:
+        self._controls.set_text_availability(text_chat_unavailable(load_settings()))
+
+    def _on_send(self, text: str) -> None:
+        text = text.strip()
+        if (
+            not text
+            or self._start_pending
+            or self._engine.state not in (EngineState.IDLE, EngineState.ERROR, EngineState.READY)
+        ):
+            return
+        settings = load_settings()
+        reason = text_chat_unavailable(settings)
+        self._controls.set_text_availability(reason)
+        if reason:
+            return
+        # Title generation uses this same LLM even if Live uses a realtime provider.
+        settings["conversation_mode"] = "voice_channel"
+        self._history.save()
+        conversation_id, context = self._history.prepare(settings)
+        try:
+            self._start_pending = True
+            task = asyncio.ensure_future(
+                self._engine.start(
+                    settings,
+                    conversation_id=conversation_id,
+                    resume_context=context,
+                    text=text,
+                )
+            )
+            self._request_task = task
+            task.add_done_callback(self._start_finished)
+        except Exception as exc:
+            self._start_pending = False
+            logger.exception("Failed to schedule text response")
+            self._chat.add_error(str(exc))
+            return
+        self._chat.add_transcription(text, "user", True)
+        self._history.changed()
+        self._controls.clear_draft()
+        self._controls.set_state(EngineState.CONNECTING, text_mode=True)
+        self._controls.focus_input()
+        self._history.drawer.set_busy(True)
+        self._chat.set_text_pending(True)
+
     def _start_finished(self, task: asyncio.Future) -> None:
+        self._request_task = None
         self._start_pending = False
+        idle = self._engine.state in (EngineState.IDLE, EngineState.ERROR, EngineState.READY)
+        self._history.drawer.set_busy(not idle)
+        if idle:
+            self._controls.set_state(self._engine.state, text_mode=self._engine.is_text)
+            self._chat.set_text_pending(False)
         if not task.cancelled() and task.exception() is not None:
             logger.error("Session startup failed: %s", task.exception())
 
@@ -182,13 +265,23 @@ class MainWindow(QMainWindow):
         utterance began, so what was said before the session existed is
         replayed into it rather than lost to the handshake.
         """
-        if self._engine.state not in (EngineState.IDLE, EngineState.ERROR):
+        if self._engine.state not in (EngineState.IDLE, EngineState.ERROR, EngineState.READY):
             return
         self._on_start(capture_since)
 
     def _on_stop(self) -> None:
+        if self._start_pending and self._engine.state in (
+            EngineState.IDLE,
+            EngineState.ERROR,
+            EngineState.READY,
+        ):
+            if self._request_task is not None:
+                self._request_task.cancel()
+            return
         try:
-            asyncio.ensure_future(self._engine.stop())
+            asyncio.ensure_future(
+                self._engine.cancel_response() if self._engine.is_text else self._engine.stop()
+            )
         except Exception as e:
             logger.exception("Failed to schedule engine stop")
             self._chat.add_error(str(e))
@@ -209,21 +302,37 @@ class MainWindow(QMainWindow):
         self._on_stop()
 
     def _on_state_changed(self, state: str) -> None:
-        self._history.drawer.set_busy(state not in (EngineState.IDLE, EngineState.ERROR))
-        self._controls.set_state(state)
+        self._history.drawer.set_busy(
+            state not in (EngineState.IDLE, EngineState.ERROR, EngineState.READY)
+        )
+        text_mode = self._engine.is_text
+        self._controls.set_state(state, text_mode=text_mode)
         welcome_visible = state in (EngineState.IDLE, EngineState.ERROR)
         self._header.setVisible(welcome_visible)
         if state == EngineState.CONNECTING:
-            self._session_drawer.clear_session()
-            self._loading.start()
-            self._conversation_stack.setCurrentWidget(self._loading)
+            if not self._engine.text_session_open:
+                self._session_drawer.clear_session()
+            if text_mode:
+                self._header.setVisible(not self._engine.text_session_open)
+                self._chat.set_text_pending(True)
+                self._conversation_stack.setCurrentWidget(self._chat)
+            else:
+                self._loading.start()
+                self._conversation_stack.setCurrentWidget(self._loading)
         elif state == EngineState.ACTIVE:
             self._conversation_stack.setCurrentWidget(self._chat)
             self._info_bar.show()
-            self._vu.show()
-            self._vu.start()
-            self._idle_hangup.start()
-            self.session_active_changed.emit(True)
+            if not text_mode:
+                self._vu.show()
+                self._vu.start()
+                self._idle_hangup.start()
+                self.session_active_changed.emit(True)
+        elif state == EngineState.READY:
+            self._conversation_stack.setCurrentWidget(self._chat)
+            self._chat.finish_text_turn()
+            self._history.save()
+            self._history.suggest_title(ended=True)
+            self._info_bar.show()
         elif state in (EngineState.IDLE, EngineState.ERROR):
             self._idle_hangup.stop()
             self._conversation_stack.setCurrentWidget(self._chat)
@@ -244,7 +353,8 @@ class MainWindow(QMainWindow):
             if was_open:
                 self._header._history.setFocus()
             self._active_app_widgets.clear()
-            self.session_active_changed.emit(False)
+            if not text_mode:
+                self.session_active_changed.emit(False)
         elif state == EngineState.STOPPING:
             self._loading.stop()
             self._vu.stop()
@@ -258,7 +368,10 @@ class MainWindow(QMainWindow):
             EngineState.STOPPING,
         ):
             return  # A late provider final must not alter a thread opened from history.
-        self._chat.add_transcription(text, role, is_final, speaker_name)
+        if self._engine.is_text and role == "assistant":
+            self._chat.add_text_reply(text, is_final)
+        else:
+            self._chat.add_transcription(text, role, is_final, speaker_name)
         self._history.changed()
         if is_final:
             self._history.suggest_title()
@@ -282,19 +395,20 @@ class MainWindow(QMainWindow):
             self._session_drawer.set_session(info)
 
     def _show_session_details(self) -> None:
-        if self._engine.state == EngineState.ACTIVE:
+        if self._engine.state in (EngineState.ACTIVE, EngineState.READY):
             self._session_drawer.present(self._info_bar._details_button)
 
     def _on_session_cost(self, payload: dict) -> None:
         if self._engine.state in (
             EngineState.CONNECTING,
             EngineState.ACTIVE,
+            EngineState.READY,
             EngineState.STOPPING,
         ):
             self._session_drawer.update_cost(payload)
 
     def _on_attitude_changed(self, description: str) -> None:
-        if self._engine.state in (EngineState.CONNECTING, EngineState.ACTIVE):
+        if self._engine.state in (EngineState.CONNECTING, EngineState.ACTIVE, EngineState.READY):
             self._session_drawer.set_attitude(description)
 
     def _on_mcp_status(self, message: str) -> None:
@@ -311,7 +425,10 @@ class MainWindow(QMainWindow):
         self._chat.add_tool_call(call)
         self._history.changed()
         if call.resource_uri:
-            asyncio.ensure_future(self._fetch_and_show_app(call))
+            self._engine._create_owned_task(
+                self._fetch_and_show_app(call),
+                name=f"mcp_app_resource_{call.id}",
+            )
 
     async def _fetch_and_show_app(self, call: ToolCall) -> None:
         """Fetch HTML from MCP server and embed an app widget in the chat."""
@@ -378,7 +495,10 @@ class MainWindow(QMainWindow):
         Each session builds its own MCP manager, so a different one means a
         new session started while the caller was awaiting.
         """
-        if self._engine.state != EngineState.ACTIVE:
+        if self._engine.state != EngineState.ACTIVE and not (
+            self._engine.text_session_open
+            and self._engine.state in (EngineState.READY, EngineState.CONNECTING)
+        ):
             return True
         return self._engine._mcp is not mcp  # noqa: SLF001
 
@@ -391,8 +511,9 @@ class MainWindow(QMainWindow):
         origin_server: str,
     ) -> None:
         """Proxy a tools/call from an MCP App through the engine."""
-        asyncio.ensure_future(
-            self._proxy_app_tool_call(request_id, tool_name, arguments, widget_key, origin_server)
+        self._engine._create_owned_task(
+            self._proxy_app_tool_call(request_id, tool_name, arguments, widget_key, origin_server),
+            name=f"mcp_app_call_{request_id}",
         )
 
     async def _proxy_app_tool_call(
@@ -403,7 +524,8 @@ class MainWindow(QMainWindow):
         widget_key: str,
         origin_server: str,
     ) -> None:
-        if self._engine.state != EngineState.ACTIVE or widget_key not in self._active_app_widgets:
+        mcp = self._engine._mcp
+        if self._session_is_over(mcp) or widget_key not in self._active_app_widgets:
             return  # A queued request must not run in a replacement session.
         result = await self._engine.handle_app_tool_call(origin_server, tool_name, arguments)
         widget = self._active_app_widgets.get(widget_key)
@@ -425,8 +547,15 @@ class MainWindow(QMainWindow):
         self._chat.add_error(msg)
 
     def closeEvent(self, event) -> None:  # noqa: N802
+        self._closed = True
         self._history.save()
         self._history.close()
+        if (
+            self._start_pending
+            and self._request_task is not None
+            and self._engine.state != EngineState.STOPPING
+        ):
+            self._request_task.cancel()
         if self._engine.state != EngineState.IDLE:
             # Schedule cleanup and give it time to finish before the loop exits.
             # This ensures MCP subprocesses are terminated and audio backends closed.

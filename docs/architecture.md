@@ -109,6 +109,31 @@ graph TB
 
 ## Data flow
 
+### Typed conversation
+
+`text_chat.py` checks the selected `vc_llm_provider` locally for its required settings
+and installed feature. The composer refreshes this gate when Settings closes. A send
+prepares the selected conversation and snapshots earlier context before appending the
+new user message. `Engine.start(..., text=...)` dispatches to `engine_text.py`:
+`AIChannel` plus a `WebSocketChannel` whose delivery callbacks run in-process (no server
+or network socket for the UI transport). The selected thread owns its RoomKit kit,
+provider and tool sources across requests. On reply completion it becomes **READY**:
+the composer accepts another message, and MCP Apps can finish loading or call their
+server. The AI's session window retains subsequent turns and tool results without
+repeating the initial resume context. Text skips voice backends, the speaking decision
+and hangup tool. The same durable room stores events; private threads stay in memory.
+
+Text deltas update chat bubbles directly; finalized text segments around tool calls
+remain separate, and system events never become messages. Stop cancels startup or the
+running response, preserves received text and marks an unfinished reply interrupted.
+Once setup is complete, `cancel_response()` returns to READY without closing apps.
+`stop()` closes the session when switching threads, opening Settings, starting Live
+or closing the window. A changed engine configuration also replaces the session.
+Generation blocks switching threads and duplicate sends, while allowing the next draft.
+The existing engine teardown is reused; its delayed FD cleanup skips any newer session.
+CancelScope timer cleanup preserves active deadlines and cancellation deliveries; only
+cancelled handles and retries of retired scopes with no living tasks are removed.
+
 ### Voice session (both modes)
 
 1. `ConversationComposer` (or the wake word) asks `MainWindow` to start → `Engine.start(settings)`. The

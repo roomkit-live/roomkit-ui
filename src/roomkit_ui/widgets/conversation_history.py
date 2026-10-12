@@ -49,6 +49,7 @@ class ConversationHistory(QObject):
     def busy(self) -> bool:
         return self.window._start_pending or self.window._engine.state not in (
             EngineState.IDLE,
+            EngineState.READY,
             EngineState.ERROR,
         )
 
@@ -78,6 +79,7 @@ class ConversationHistory(QObject):
         if pending is None or self.window._engine.state not in (
             EngineState.ACTIVE,
             EngineState.IDLE,
+            EngineState.READY,
         ):
             return
         conversation_id, settings = pending
@@ -171,7 +173,7 @@ class ConversationHistory(QObject):
     def close(self) -> None:
         self._title_timer.stop()
         self._title_pending = None
-        if self.window._engine.state == EngineState.IDLE:
+        if self.window._engine.state in (EngineState.IDLE, EngineState.READY):
             for task in self._title_tasks.values():
                 task.cancel()
 
@@ -247,8 +249,11 @@ class ConversationHistory(QObject):
     def new(self) -> None:
         if self.busy:
             return
+        if self.window._finish_text_session(self.new):
+            return
         self.save()
         self.current = None
+        self.window._controls.clear_draft()
         self.window._chat.reset()
         self.window._active_app_widgets.clear()
         self.window._header.set_conversation("")
@@ -256,6 +261,11 @@ class ConversationHistory(QObject):
 
     def select(self, conversation_id: str) -> None:
         if self.busy:
+            return
+        if self.current is not None and conversation_id == self.current.id:
+            self.drawer.dismiss()
+            return
+        if self.window._finish_text_session(lambda: self.select(conversation_id)):
             return
         self.save()
         try:
@@ -269,6 +279,7 @@ class ConversationHistory(QObject):
             self.drawer.set_notice("This conversation could not be opened.")
             return
         self.current = conversation
+        self.window._controls.clear_draft()
         self.window._active_app_widgets.clear()
         self.window._header.set_conversation(conversation.title)
         self.drawer.dismiss()

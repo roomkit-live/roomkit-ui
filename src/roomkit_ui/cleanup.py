@@ -12,6 +12,34 @@ logger = logging.getLogger(__name__)
 _SELECTOR_NOTIFIERS = ("_Selector__read_notifiers", "_Selector__write_notifiers")
 
 
+def _orphaned_cancel_retry(callback: object) -> bool:
+    """Only a retired scope with no living owner/children can lose its retry.
+
+    Active CancelScope._timeout callbacks enforce MCP request deadlines. Treating
+    every bound CancelScope callback as an orphan silently removed those deadlines.
+    """
+    scope = getattr(callback, "__self__", None)
+    if type(scope).__name__ != "CancelScope" or getattr(callback, "__name__", "") != (
+        "_deliver_cancellation"
+    ):
+        return False
+    scopes, seen = [scope], set()
+    while scopes:
+        current = scopes.pop()
+        if id(current) in seen:
+            continue
+        seen.add(id(current))
+        if getattr(current, "_active", True):
+            return False
+        tasks = set(getattr(current, "_tasks", ()))
+        if owner := getattr(current, "_host_task", None):
+            tasks.add(owner)
+        if any(not task.done() for task in tasks):
+            return False
+        scopes.extend(getattr(current, "_child_scopes", ()))
+    return True
+
+
 def registered_fds() -> frozenset[int]:
     """Every FD the running loop watches now, in both qasync notifier layers.
 
@@ -118,7 +146,7 @@ def cleanup_stale_fds(*, timers_only: bool = False, keep: Collection[int] = ()) 
             if cb_self is None:
                 continue
             # anyio CancelScope stuck in a cancel-delivery retry loop
-            if type(cb_self).__name__ == "CancelScope":
+            if _orphaned_cancel_retry(cb):
                 logger.warning(
                     "cleanup L3: killing orphaned CancelScope timer %s",
                     tid,

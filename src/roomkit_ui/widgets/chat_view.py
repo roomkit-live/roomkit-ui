@@ -78,6 +78,7 @@ class ChatView(QScrollArea):
         # reply), and each keeps its own entry.
         self._current_bubble: ChatBubble | None = None
         self._reply: ChatBubble | None = None
+        self._text_pending: QLabel | None = None
         # The session's nameable voices ("Speaker B") → what they are called.
         self._voice_names: dict[str, str] = {}
         # The last assistant entry, tracked past its final: a graceful
@@ -131,6 +132,36 @@ class ChatView(QScrollArea):
         else:
             self._add_turn_text(text, role, is_final, speaker_name)
         self._scroll_to_bottom()
+
+    def set_text_pending(self, pending: bool) -> None:
+        if self._text_pending is not None:
+            self._layout.removeWidget(self._text_pending)
+            self._text_pending.deleteLater()
+            self._text_pending = None
+        if pending:
+            self._text_pending = self._make_status_label("Thinking…", "TEXT_SECONDARY")
+            self._insert_status_row(self._text_pending)
+
+    def add_text_reply(self, text: str, is_final: bool) -> None:
+        """Show provider deltas immediately, without the voice playback pacing."""
+        if not text:
+            return
+        self.set_text_pending(False)
+        if self._reply is None:
+            self._reply = self._last_assistant_bubble = ChatBubble("", role="assistant")
+            self._insert_bubble(self._reply)
+        self._reply.set_text(text)
+        if is_final:
+            self._reply.finalize()
+            self._reply = None
+        self._scroll_to_bottom()
+
+    def stop_text_reply(self) -> None:
+        """Keep all received text when generation is stopped or fails."""
+        self.set_text_pending(False)
+        if self._reply is not None:
+            self._reply.finalize(interrupted=True)
+            self._reply = None
 
     def interrupt_reply(self, heard_ms: int = -1) -> None:
         """roomkit cut the assistant's voice: its reply keeps what was said,
@@ -325,8 +356,17 @@ class ChatView(QScrollArea):
                 )
         self._scroll_to_bottom()
 
+    def finish_text_turn(self) -> None:
+        """Settle a written reply while leaving its interactive output alive."""
+        self.set_text_pending(False)
+        self._finalize_current_bubble()
+        for row in self._tool_calls.values():
+            if row.result is None:
+                row.finish(ToolResult(row.call.id, "cancelled", "The request ended."))
+
     def end_session(self) -> None:
         """Keep the transcript, release live app resources and settle pending rows."""
+        self.set_text_pending(False)
         self._finalize_current_bubble()
         for bubble in self._bubbles():
             if not bubble.finalized:
@@ -337,7 +377,7 @@ class ChatView(QScrollArea):
         for row in self._tool_calls.values():
             row.release_app()
             if row.result is None:
-                row.finish(ToolResult(row.call.id, "cancelled", "The live session ended."))
+                row.finish(ToolResult(row.call.id, "cancelled", "The session ended."))
 
     def attach_app(self, call_id: str, html_content: str | None) -> QWidget | None:
         """Attach interactive output to its existing row, preserving its position."""
@@ -375,6 +415,7 @@ class ChatView(QScrollArea):
         self._insert_status_row(self._make_status_label(message, "ACCENT_RED"))
 
     def _clear_rows(self) -> None:
+        self.set_text_pending(False)
         self._empty_state.hide()
         self._live_empty.hide()
         self._scroll_timer.stop()

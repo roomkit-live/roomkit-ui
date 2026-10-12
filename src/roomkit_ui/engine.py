@@ -7,6 +7,7 @@ The heavy lifting lives in sibling modules:
 * :mod:`roomkit_ui.engine_tools` — tool dispatch + attitude + paste mixin.
 * :mod:`roomkit_ui.engine_realtime` — Gemini / OpenAI realtime startup mixin.
 * :mod:`roomkit_ui.engine_vc` — classic STT → LLM → TTS startup mixin.
+* :mod:`roomkit_ui.engine_text` — typed requests and streamed AI replies.
 
 This file keeps only the Engine class shell: signals, state, session
 dispatcher, teardown, and the roomkit-voice error-log bridge.
@@ -30,6 +31,7 @@ from roomkit_ui.cli_tools_config import enabled_cli_tools
 from roomkit_ui.engine_callbacks import CallbackMixin
 from roomkit_ui.engine_realtime import RealtimeMixin
 from roomkit_ui.engine_state import EngineState
+from roomkit_ui.engine_text import TextMixin
 from roomkit_ui.engine_tools import ToolMixin
 from roomkit_ui.engine_vc import VoiceChannelMixin
 from roomkit_ui.mcp_config import enabled_mcp_servers
@@ -101,8 +103,8 @@ class _VoiceErrorLogHandler(logging.Handler):
 # ---------------------------------------------------------------------------
 
 
-class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject):
-    """Manages a roomkit voice session and bridges events to Qt signals."""
+class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, TextMixin, QObject):
+    """Manages RoomKit voice sessions and text requests, bridging events to Qt."""
 
     state_changed = Signal(str)  # idle / connecting / active / error
     transcription = Signal(str, str, bool, str)  # text, role, is_final, speaker_name
@@ -113,6 +115,7 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
     ai_speaking = Signal(bool)
     # roomkit cut the assistant's voice (barge-in): ms of the reply heard, -1 unknown
     reply_interrupted = Signal(int)
+    text_reply_stopped = Signal()
     error_occurred = Signal(str)
     component_missing = Signal(str, str)  # feature key, what the chat says
     tool_started = Signal(object)  # ToolCall
@@ -145,6 +148,10 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         )
         self._mic_muted = False
         self._state = EngineState.IDLE
+        self._text_request: str | None = None
+        self._text_ready = False
+        self._cancelling_text_response = False
+        self._session_generation = 0
         self._room_id = f"conversation-{uuid4().hex}"
         self._resume_context = ""
         self._attitude: str = ""  # full description text (injected into prompt)
@@ -294,6 +301,14 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
     def state(self) -> EngineState:
         return self._state
 
+    @property
+    def is_text(self) -> bool:
+        return self._text_request is not None
+
+    @property
+    def text_session_open(self) -> bool:
+        return self.is_text and self._text_ready
+
     def _set_state(self, state: EngineState) -> None:
         """Assign the session state and notify the UI."""
         self._state = state
@@ -343,6 +358,7 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         *,
         conversation_id: str | None = None,
         resume_context: str = "",
+        text: str | None = None,
     ) -> None:
         """Open a session.
 
@@ -353,16 +369,31 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
                 spoken reach the provider instead of being lost to the
                 handshake.
             conversation_id: Room for this thread; omitted for a fresh one.
-            resume_context: Fenced transcript of earlier Live calls in this thread.
+            resume_context: Fenced transcript of earlier turns in this thread.
+            text: A typed message; opens an AI channel without starting audio.
         """
-        if self._state not in (EngineState.IDLE, EngineState.ERROR):
+        if self._state not in (EngineState.IDLE, EngineState.ERROR, EngineState.READY):
             return
+        if text is not None and not text.strip():
+            return
+        reuse = (
+            self._state == EngineState.READY
+            and text is not None
+            and conversation_id == self._room_id
+            and settings == self._session_settings
+        )
+        if self._state == EngineState.READY and not reuse:
+            await self.stop()
+        self._text_request = text
+        self._session_generation += 1
         self._room_id = conversation_id or f"conversation-{uuid4().hex}"
-        self._resume_context = resume_context
+        if not reuse:
+            self._resume_context = resume_context
         # Claimed before any await: from here a second start() is refused.
         self._set_state(EngineState.CONNECTING)
-        self._session_settings = settings
-        self._fds_before_session = registered_fds()
+        self._session_settings = dict(settings)
+        if not reuse:
+            self._fds_before_session = registered_fds()
         self._capture_since = capture_since
         self._mic_muted = False
         # Re-attach the log handler (removed during cleanup)
@@ -371,10 +402,11 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
             self._log_handler._engine_ref = weakref.ref(self)
             voice_logger.addHandler(self._log_handler)
 
-        self._ai_pricing = None
-        self._usage_cost = 0.0
-        self._usage_in = 0
-        self._usage_out = 0
+        if not reuse:
+            self._ai_pricing = None
+            self._usage_cost = 0.0
+            self._usage_in = 0
+            self._usage_out = 0
 
         # Its own task, so stop() can cancel it wherever it is waiting.
         task = asyncio.create_task(self._open_session(settings), name="engine_start")
@@ -390,6 +422,12 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
             self._start_task = None
 
     async def _open_session(self, settings: dict) -> None:
+        if self._text_request is not None:
+            if self._text_ready:
+                await self._send_text_turn(self._text_request)
+            else:
+                await self._start_text(settings, self._text_request)
+            return
         mode = settings.get("conversation_mode", "realtime")
         if mode == "voice_channel":
             await self._start_voice_channel(settings)
@@ -556,8 +594,19 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         return discovered
 
     async def stop(self) -> None:
-        if self._state not in (EngineState.ACTIVE, EngineState.CONNECTING, EngineState.ERROR):
+        cancelling_reply = self._cancelling_text_response
+        if (
+            self._state
+            not in (
+                EngineState.ACTIVE,
+                EngineState.CONNECTING,
+                EngineState.ERROR,
+                EngineState.READY,
+            )
+            and not cancelling_reply
+        ):
             return
+        self._cancelling_text_response = False
         # Guard re-entrancy immediately — before any await — so a second
         # call (e.g. end_conversation timer + user click) is rejected.
         self._set_state(EngineState.STOPPING)
@@ -597,12 +646,12 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         """Tear the session down, in the order the fixes below depend on."""
         self._watchdog.stop()
         self._skill_approvals.cancel_all()  # closes a question still open
-        self._pending_tool_calls = 0
-        self._background_tasks = 0
         self._spk_timer.stop()
         self._spk_rms_queue.clear()
         await self._cancel_cleanup_monitor()
         await self._cancel_owned_tasks()
+        self._pending_tool_calls = 0
+        self._background_tasks = 0
         await self._end_voice_session()
         await self._close_session_models()
         await self._close_framework()
@@ -693,6 +742,7 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         the user explicitly ends the session.
         """
         self._channel = None
+        self._text_ready = False
         self._ai_channel = None
         self._vc_agent = None
         self._session = None
@@ -730,7 +780,18 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         # event-loop iteration completes (they re-create themselves via
         # call_soon).  A delayed second pass catches them without
         # interfering with ongoing task finalization.
-        asyncio.get_running_loop().call_later(0.1, lambda: cleanup_stale_fds(keep=keep))
+        generation = self._session_generation
+
+        def finish_cleanup() -> None:
+            # A typed reply can be followed immediately by another request.
+            # The previous turn must never remove its new provider's sockets.
+            if self._session_generation == generation and self.state in (
+                EngineState.IDLE,
+                EngineState.ERROR,
+            ):
+                cleanup_stale_fds(keep=keep)
+
+        asyncio.get_running_loop().call_later(0.1, finish_cleanup)
         # Monitor CPU after cleanup to verify the fix worked
         self._cleanup_monitor_task = self._create_owned_task(
             post_cleanup_monitor(),

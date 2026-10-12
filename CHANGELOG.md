@@ -12,6 +12,17 @@ Each released section is the source for that version's GitHub release notes.
 ## [Unreleased]
 
 ### Added
+- **Typed conversations** — send from the composer with Enter or the arrow;
+  responses stream through RoomKit's AI channel into the selected conversation. Stop
+  keeps the text already received. The composer is greyed out with a setup hint until
+  the selected conversation LLM has its required configuration and backend installed;
+  closing Settings immediately refreshes availability. Text uses the Voice Channel's
+  LLM, tools and instructions independently of the Live mode, without starting audio.
+  The draft grows from one to eight visual lines, then scrolls; Shift+Enter adds a line.
+  Finishing or stopping a response keeps the conversation's MCP connections and apps
+  open, so interactive output such as dice stays usable between messages. Switching
+  threads, opening Settings, starting Live or closing the app releases them. Timer
+  cleanup now preserves active anyio deadlines and cancellation callbacks.
 - **Live session details panel** — the information icon opens a sliding panel matching
   conversation history, with STT/LLM/TTS models, voice, speaking decision, thinker,
   Realtime audio and delegated models, personality, reported usage and searchable
@@ -61,8 +72,8 @@ Each released section is the source for that version's GitHub release notes.
 - **Compact home and Live conversation redesign** — one input row with an icon to
   start Live, a shared violet background, quieter conversation text, and large mute
   and hang-up controls. Session details open on demand; startup progress stays inside
-  the conversation area. Text, attachments and message dictation remain reserved for
-  the next phase. The old control bar, loading overlay and redundant activity labels
+  the conversation area. Attachments and message dictation remain reserved for the next
+  phase. The old control bar, loading overlay and redundant activity labels
   are removed. macOS Dock and bundle icons now share balanced transparent margins.
 - **Tool activity during Live conversations** — compact rows show readable tool names
   and real execution states, with input and results available on click. Interactive

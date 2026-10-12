@@ -76,8 +76,30 @@ async def test_a_session_spares_what_was_registered_when_it_started(qapp, monkey
 
     monkeypatch.setattr(eng, "_start_realtime", opened)
     await eng.start({"conversation_mode": "realtime"})
-    await eng._cleanup()
+    await eng.stop()
     await asyncio.sleep(0.15)  # the delayed second pass
     eng._cleanup_monitor_task.cancel()
 
     assert calls == [frozenset({10}), frozenset({10})]
+
+
+async def test_previous_cleanup_cannot_remove_a_new_turns_sockets(qapp, monkeypatch):
+    calls = []
+    fds = {10}
+    monkeypatch.setattr(engine_module, "registered_fds", lambda: frozenset(fds))
+    monkeypatch.setattr(engine_module, "cleanup_stale_fds", lambda **kw: calls.append(kw["keep"]))
+    eng = Engine()
+
+    async def opened(_settings):
+        eng._enter_active()
+
+    monkeypatch.setattr(eng, "_start_realtime", opened)
+    await eng.start({})
+    await eng.stop()
+    # Another socket and a complete new turn appear before the delayed pass.
+    fds.add(20)
+    await eng.start({})
+    await eng.stop()
+    await asyncio.sleep(0.15)
+    eng._cleanup_monitor_task.cancel()
+    assert calls == [frozenset({10}), frozenset({10, 20}), frozenset({10, 20})]

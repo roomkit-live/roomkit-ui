@@ -364,6 +364,21 @@ thinker models. Realtime shows integrated audio, separate transcription or deleg
 reasoning when used, and Deepgram's three stages. ElevenLabs agent models managed remotely
 are identified as not reported. Model details come from the resolved backends, including
 their defaults; searching tools hides the overview until the search is cleared.
+The composer starts on one line, grows to eight visual lines, then scrolls vertically.
+Enter or the arrow sends; Shift+Enter adds a line, and pasted text keeps its line breaks.
+It uses the LLM chosen in
+**Settings → Conversation → Voice Channel → Reason · LLM**, including when Live is set
+to Realtime. Until that provider has its required key/model and installed backend, the
+input stays grey with **Configure chat in Settings…**; its tooltip identifies what is
+missing. Closing Settings refreshes it immediately. This local check does not test
+credentials or contact a server. An empty draft keeps the Live button; while a written
+response streams, the button stops generation and retains all received text. A following
+draft can be prepared during generation. Text uses the selected thread's context, tools,
+instructions and history preference without opening microphone, STT or TTS. Attachments
+and in-composer dictation remain unavailable. MCP connections, session details and
+interactive tool outputs stay available between replies, including after stopping a
+generation. Changing conversations, opening Settings, starting Live or closing the app
+releases that text session and its embedded apps.
 The Live header contains only history and information actions. Startup progress appears
 within the conversation area, with a Cancel button. Other features include dark/light
 themes, synthesized start/stop sounds and a watchdog that nudges a model that left the

@@ -38,6 +38,8 @@ src/roomkit_ui/
 ├── component_installer.py # The app's one installer (QProcess, no shell), restart_app()
 ├── engine.py            # Engine shell: start task / stop, state machine, model cache, kit build, ordered teardown
 ├── engine_state.py      # EngineState StrEnum — leaf
+├── engine_text.py       # Typed turns: AIChannel + in-process delivery, streaming, no audio — mixin
+├── text_chat.py         # Local composer readiness check for the configured conversation LLM
 ├── engine_vc.py         # Voice Channel start (STT → LLM → TTS) — mixin
 ├── engine_vc_helpers.py # Stateless VC builders: barge-in, TTS filter, Smart Turn, local LLM
 ├── vc_stt.py            # VC cloud STT builders (dispatch table) + the turn VAD a turnless STT needs
@@ -110,7 +112,8 @@ src/roomkit_ui/
     ├── conversation_drawer.py # Full-width sliding thread list, search and New conversation
     ├── navigation_brand.py # Shared RoomKit wordmark for Settings and conversation navigation
     ├── sliding_panel.py   # Shared panel shell, animation, focus and theme; one overlay at a time
-    ├── conversation_composer.py # Reserved text input + Live / cancel / end / mute
+    ├── conversation_composer.py # Text send/stop + Live / cancel / end / mute
+    ├── message_input.py    # Draft grows to eight visual lines, then scrolls; Shift+Enter newline
     ├── chat_view.py       # Scrollable chat transcript
     ├── chat_bubble.py     # One chat entry: user bubble, typeset assistant text
     ├── tool_activity.py   # Compact tool state, optional plain-text details and inline MCP output
@@ -153,7 +156,7 @@ src/roomkit_ui/
                            #  also models_widgets, speakers_dialogs, speakers_muse, feature_hints
 ```
 
-Engine composition: `Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject)` —
+Engine composition: `Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, TextMixin, QObject)` —
 mixins hold no state; all attributes live on `Engine`. Docs: `docs/architecture.md`,
 `docs/technical.md`, `docs/features.md`, `docs/onboarding.md`.
 
@@ -186,8 +189,10 @@ Every AI backend lives behind an extra declared in `pyproject.toml` AND mirrored
 - One microphone session per voice channel, the app's own: roomkit's `LocalAudioBackend` declares `auto_connect`, so `attach_channel` would join a session and start the mic before the app opens its own (`_listen`: replay mark, mute before the first frame). Build every local backend a `VoiceChannel` uses with `engine_audio.local_audio_backend()` (it opts out) — two sessions mean every sentence heard, answered and spoken twice
 - qasync installs no async generator hooks: `app.install_asyncgen_hooks()` does, right after the loop is created. Without them a generator left with `break` (roomkit's continuous STT, to drop an echo) is closed by the GC, its `finally` cannot await, and a streaming STT's websocket stays open
 - `start()` claims CONNECTING before its first await and runs the start as its own task (`_start_task`); `stop()` publishes STOPPING, cancels that task and tears down once it has unwound. A failed start goes STOPPING → cleanup → ERROR (`_fail_start`). A stop before the kit exists closes the transport/backend itself (`_close_unowned_backends`)
+- Text reply completion returns READY with the kit, provider and MCP Apps connected. The same thread/config reuses them and RoomKit's current-session memory; `cancel_response()` cancels only generation. `stop()` owns full teardown on navigation, Settings, Live or window close. A late MCP App resource belongs to the session, not the turn; it may arrive in READY, but never in a replacement session.
 - Teardown order in `Engine._cleanup` is load-bearing (TTS before `kit.close()`, MCP after it, two loop yields before the FD pass); each step is a named method saying why
 - qasync timer cleanup: after an MCP session closes, anyio leaves orphaned 0ms timers → 100% CPU. See `cleanup.py`. The end-of-session pass `cleanup_stale_fds(keep=...)` removes only FD notifiers registered since the session started (`registered_fds()` snapshot) — the app's own sockets (OAuth callback, downloads) survive
+- A bound `CancelScope` callback is not proof of an orphan. Keep active `_timeout` deadlines and cancellation retries; remove a retry only for an inactive scope with no living owner or child tasks.
 - MCP server stacks are closed in the task that opened them (anyio cancel scopes). Closing one from another task made anyio cancel the owner and hung `close_all()`
 
 ### Tools

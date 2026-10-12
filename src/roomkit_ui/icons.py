@@ -17,6 +17,7 @@ _SVG_TEMPLATE = (
 )
 
 _PATHS = {
+    "arrow-up": '<path stroke-linecap="round" stroke-linejoin="round" d="M12 20V4m-7 7 7-7 7 7"/>',
     "sidebar": '<rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/>',
     "x-mark": '<path stroke-linecap="round" d="m6 6 12 12M6 18 18 6"/>',
     "check": '<path stroke-linecap="round" stroke-linejoin="round" d="m5 12 4 4L19 6"/>',

@@ -219,7 +219,11 @@ class SessionDrawer(SlidingPanel):
 
     def set_session(self, info: dict) -> None:
         # Inventory refreshes must not close the panel or reset live usage/personality.
-        self._mode.setText("Voice Channel" if info.get("mode") == "voice_channel" else "Realtime")
+        self._mode.setText(
+            {"voice_channel": "Voice Channel", "text": "Text conversation"}.get(
+                info.get("mode", ""), "Realtime"
+            )
+        )
         self._clear_models()
         for model in info.get("models", []):
             row = QWidget()

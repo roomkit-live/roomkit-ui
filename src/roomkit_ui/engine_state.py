@@ -15,5 +15,6 @@ class EngineState(StrEnum):
     IDLE = "idle"
     CONNECTING = "connecting"
     ACTIVE = "active"
+    READY = "ready"  # text session open, waiting for the next message
     STOPPING = "stopping"
     ERROR = "error"
