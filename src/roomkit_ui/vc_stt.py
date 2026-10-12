@@ -179,6 +179,11 @@ def build_meta_stt(settings: dict, emit_status: Callable[[str], None]) -> Any:
     return MetaSTTProvider(config)
 
 
+# Google's one live recogniser (roomkit's GeminiTranscribeConfig default); the
+# batch gemini-3.5-transcribe takes a whole recording, not a stream.
+GEMINI_STT_MODEL = "gemini-3.5-transcribe-live"
+
+
 def build_gemini_stt(settings: dict, emit_status: Callable[[str], None]) -> Any:
     """Google's live recogniser (``gemini-3.5-transcribe-live``) over the Gemini API.
 
@@ -203,6 +208,7 @@ def build_gemini_stt(settings: dict, emit_status: Callable[[str], None]) -> Any:
     ]
     config = GeminiTranscribeConfig(
         api_key=api_key,
+        model=str(settings.get("gemini_stt_model", "") or "").strip() or GEMINI_STT_MODEL,
         language_codes=[language] if language else [],
         custom_vocabulary=[term for term in vocabulary if term],
     )

@@ -212,6 +212,7 @@ _DEFAULTS = {
     "meta_api_key": "",  # secret — keyring, never QSettings
     "meta_stt_keywords": "",  # comma-separated terms to bias recognition toward
     # Google Gemini STT (gemini-3.5-transcribe-live) and TTS; the key is "api_key"
+    "gemini_stt_model": "",  # empty = gemini-3.5-transcribe-live
     "gemini_stt_vocabulary": "",  # comma-separated terms to bias recognition toward
     "gemini_tts_model": "",  # empty = gemini-3.8-flash-lite-tts
     "gemini_tts_voice": "",  # empty = Kore

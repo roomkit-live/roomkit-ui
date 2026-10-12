@@ -5,6 +5,7 @@ from __future__ import annotations
 from PySide6.QtWidgets import QComboBox, QFormLayout, QLabel, QLineEdit, QWidget
 
 from roomkit_ui.tts.gemini import DEFAULT_MODEL, DEFAULT_VOICE
+from roomkit_ui.vc_stt import GEMINI_STT_MODEL
 from roomkit_ui.widgets.settings.realtime_catalogs import (
     GEMINI_VOICES,
     populate_model_combo,
@@ -34,15 +35,28 @@ class GeminiSpeechFields:
         self._settings = settings
 
     def add_stt_rows(self, form: QFormLayout) -> None:
+        self.stt_model = QComboBox()
+        self.stt_model.setEditable(True)
+        populate_model_combo(
+            self.stt_model,
+            [GEMINI_STT_MODEL],
+            self._settings.get("gemini_stt_model", "") or GEMINI_STT_MODEL,
+        )
+        self.stt_model.setToolTip(
+            "Google's live recogniser, its only streaming one today. Another id can be typed."
+        )
         self.vocabulary = QLineEdit(self._settings.get("gemini_stt_vocabulary", ""))
         self.vocabulary.setPlaceholderText("RoomKit, Tremblay (optional)")
         self.vocabulary.setToolTip(
             "Comma-separated names and terms the recogniser gets wrong: product names, "
             "people, places. Google reports the best results under about 100."
         )
-        label = QLabel("Vocabulary")
-        form.addRow(label, self.vocabulary)
-        self._stt_rows: tuple[QWidget, ...] = (label, self.vocabulary)
+        rows: list[QWidget] = []
+        for text, field in (("Model", self.stt_model), ("Vocabulary", self.vocabulary)):
+            label = QLabel(text)
+            form.addRow(label, field)
+            rows += [label, field]
+        self._stt_rows: tuple[QWidget, ...] = tuple(rows)
 
     def add_tts_rows(self, form: QFormLayout) -> None:
         s = self._settings
@@ -83,6 +97,7 @@ class GeminiSpeechFields:
 
     def get_settings(self) -> dict:
         return {
+            "gemini_stt_model": self.stt_model.currentText().strip(),
             "gemini_stt_vocabulary": self.vocabulary.text().strip(),
             "gemini_tts_model": self.model.currentText().strip(),
             # Editable: the text is the id, picked or typed.

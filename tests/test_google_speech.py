@@ -25,6 +25,13 @@ def test_the_stt_needs_the_gemini_key():
         build_gemini_stt({}, lambda _status: None)
 
 
+def test_the_stt_runs_the_live_recogniser_unless_another_is_named():
+    assert _stt()._config.model == "gemini-3.5-transcribe-live"
+    assert _stt(gemini_stt_model="gemini-4-transcribe-live")._config.model == (
+        "gemini-4-transcribe-live"
+    )
+
+
 def test_the_stt_detects_the_language_unless_the_app_sets_one():
     assert _stt()._config.language_codes == []
     assert _stt(stt_language="fr")._config.language_codes == ["fr"]
@@ -103,11 +110,13 @@ def test_the_settings_offer_gemini_to_listen_and_to_speak(qapp):
         assert ("Google Gemini", "gemini") in VC_STT_PROVIDERS
         assert ("Google Gemini", "gemini") in VC_TTS_PROVIDERS
         assert not google.vocabulary.isHidden()
+        assert google.stt_model.currentText() == "gemini-3.5-transcribe-live"
         assert not google.voice.isHidden()
         assert google.model.currentText() == "gemini-3.8-flash-lite-tts"
         out = page.get_settings()
         assert out["vc_stt_provider"] == "gemini"
         assert out["vc_tts_provider"] == "gemini"
+        assert out["gemini_stt_model"] == "gemini-3.5-transcribe-live"
         assert out["gemini_stt_vocabulary"] == "RoomKit"
         assert out["gemini_tts_model"] == "gemini-3.8-flash-lite-tts"
         assert out["gemini_tts_voice"] == "Puck"
@@ -130,6 +139,7 @@ def test_gemini_rows_stay_hidden_for_other_providers(qapp):
     page = VoiceSetup(dict(_DEFAULTS))
     try:
         assert page._cloud.google.vocabulary.isHidden()
+        assert page._cloud.google.stt_model.isHidden()
         assert page._cloud.google.voice.isHidden()
     finally:
         shiboken6.delete(page)
