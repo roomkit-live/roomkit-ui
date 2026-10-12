@@ -15,6 +15,7 @@ from typing import Any
 
 from PySide6.QtCore import QObject, Signal, Slot
 
+from roomkit_ui.mcp_app_state import AppToolResults
 from roomkit_ui.url_policy import public_http_url, safe_url_for_log
 
 logger = logging.getLogger(__name__)
@@ -79,6 +80,8 @@ class MCPAppBridge(QObject):
         self._tool_name = tool_name
         self._server_name = server_name
         self._initialized = False
+        self._read_only = False
+        self._saved_results = AppToolResults()
         self._pending: list[str] = []  # queued JSON messages until app is ready
         self._MAX_PENDING = 50
 
@@ -119,6 +122,12 @@ class MCPAppBridge(QObject):
 
     # -- Python → JS convenience ----------------------------------------------
 
+    def set_read_only(self, results: AppToolResults | None = None) -> None:
+        """Keep the saved result visible without calling a disconnected server."""
+        self._read_only = True
+        if results is not None:
+            self._saved_results = results
+
     def send_tool_input(self, arguments: dict[str, Any]) -> None:
         """Push tool-call arguments to the app (``ui/notifications/tool-input``)."""
         self._send_notification("ui/notifications/tool-input", {"arguments": arguments})
@@ -152,6 +161,8 @@ class MCPAppBridge(QObject):
             "result": {
                 "protocolVersion": _PROTOCOL_VERSION,
                 "hostCapabilities": {
+                    # Archived pages can still request their saved data through
+                    # tools/call. The bridge answers locally and never emits it.
                     "serverTools": {},
                     "openLinks": {},
                 },
@@ -176,6 +187,21 @@ class MCPAppBridge(QObject):
         tool_name = params.get("name", "")
         arguments = params.get("arguments", {})
         request_id = str(msg_id) if msg_id is not None else ""
+        if self._read_only:
+            saved = (
+                self._saved_results.lookup(tool_name, arguments)
+                if isinstance(tool_name, str) and isinstance(arguments, dict)
+                else None
+            )
+            self.send_tool_call_response(
+                request_id,
+                saved
+                if saved is not None
+                else json.dumps(
+                    {"error": "No saved data for this action. Try it in a new message."}
+                ),
+            )
+            return
         self.tool_call_requested.emit(request_id, tool_name, arguments)
 
     @staticmethod

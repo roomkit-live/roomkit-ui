@@ -118,12 +118,16 @@ class _FakeAppWidget:
     def __init__(self) -> None:
         self.tool_call_requested = _FakeSignal()
         self.results: list[str] = []
+        self.responses: list[tuple] = []
 
     def send_tool_input(self, _arguments) -> None:
         pass
 
     def send_tool_result(self, result: str) -> None:
         self.results.append(result)
+
+    def send_tool_call_response(self, *response) -> None:
+        self.responses.append(response)
 
 
 class _FakeSignal:
@@ -246,6 +250,47 @@ async def test_an_app_request_queued_before_teardown_cannot_run_in_a_new_session
     window._engine._state = EngineState.ACTIVE
     await window._proxy_app_tool_call("req", "chart", {}, "cleared-call", "viz")
     handler.assert_not_awaited()
+
+
+async def test_app_data_is_saved_when_received_and_unchanged_polling_does_not_autosave(
+    window, inserted_apps, monkeypatch
+):
+    from unittest.mock import AsyncMock, Mock
+
+    call = ToolCall("roll", "roll_dice", "{}", "ui://dice", "Dice")
+    row = window._chat.add_tool_call(call)
+    window._engine._mcp = _SlowMCP(lambda: None)
+    await window._fetch_and_show_app(call)
+    changed = Mock()
+    monkeypatch.setattr(window._history, "changed", changed)
+    monkeypatch.setattr(window._engine, "handle_app_tool_call", AsyncMock(return_value="11"))
+    for request_id in ("first", "poll"):
+        await window._proxy_app_tool_call(
+            request_id, "get_screen_data", {"view": "dice"}, "roll", "Dice"
+        )
+    changed.assert_called_once()
+    assert row.app_results.lookup("get_screen_data", {"view": "dice"}) == "11"
+    assert inserted_apps[0].responses == [("first", "11"), ("poll", "11")]
+
+
+async def test_late_app_data_cannot_overwrite_a_reopened_view(window, inserted_apps, monkeypatch):
+    call = ToolCall("roll", "roll_dice", "{}", "ui://dice", "Dice")
+    row = window._chat.add_tool_call(call)
+    window._engine._mcp = _SlowMCP(lambda: None)
+    await window._fetch_and_show_app(call)
+    original = inserted_apps[0]
+
+    async def replace(*_):
+        window._active_app_widgets["roll"] = _FakeAppWidget()
+        return "late response"
+
+    monkeypatch.setattr(window._engine, "handle_app_tool_call", replace)
+    await window._proxy_app_tool_call(
+        "request", "get_screen_data", {"view": "dice"}, "roll", "Dice"
+    )
+    assert row.app_results.snapshot() == []
+    assert original.responses == []
+    assert window._active_app_widgets["roll"].responses == []
 
 
 def test_the_chat_holds_no_native_window(window):

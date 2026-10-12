@@ -34,6 +34,7 @@ from roomkit_ui.engine_state import EngineState
 from roomkit_ui.engine_text import TextMixin
 from roomkit_ui.engine_tools import ToolMixin
 from roomkit_ui.engine_vc import VoiceChannelMixin
+from roomkit_ui.images import ImageAttachment
 from roomkit_ui.mcp_config import enabled_mcp_servers
 from roomkit_ui.mcp_manager import MCPManager
 from roomkit_ui.session_models import SessionModel
@@ -149,6 +150,9 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, TextMix
         self._mic_muted = False
         self._state = EngineState.IDLE
         self._text_request: str | None = None
+        self._text_images: tuple[ImageAttachment, ...] = ()
+        self._resume_image_entries: list[dict] = []
+        self._text_vision = False
         self._text_ready = False
         self._cancelling_text_response = False
         self._session_generation = 0
@@ -359,6 +363,8 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, TextMix
         conversation_id: str | None = None,
         resume_context: str = "",
         text: str | None = None,
+        images: tuple[ImageAttachment, ...] = (),
+        resume_image_entries: list[dict] | None = None,
     ) -> None:
         """Open a session.
 
@@ -371,10 +377,12 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, TextMix
             conversation_id: Room for this thread; omitted for a fresh one.
             resume_context: Fenced transcript of earlier turns in this thread.
             text: A typed message; opens an AI channel without starting audio.
+            images: Attachments for the typed message; text may be empty.
+            resume_image_entries: Saved messages supplying recent visual context.
         """
         if self._state not in (EngineState.IDLE, EngineState.ERROR, EngineState.READY):
             return
-        if text is not None and not text.strip():
+        if text is not None and not text.strip() and not images:
             return
         reuse = (
             self._state == EngineState.READY
@@ -385,10 +393,12 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, TextMix
         if self._state == EngineState.READY and not reuse:
             await self.stop()
         self._text_request = text
+        self._text_images = images
         self._session_generation += 1
         self._room_id = conversation_id or f"conversation-{uuid4().hex}"
         if not reuse:
             self._resume_context = resume_context
+            self._resume_image_entries = list(resume_image_entries or [])
         # Claimed before any await: from here a second start() is refused.
         self._set_state(EngineState.CONNECTING)
         self._session_settings = dict(settings)
@@ -745,6 +755,8 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, TextMix
         """
         self._channel = None
         self._text_ready = False
+        self._text_images = ()
+        self._resume_image_entries = []
         self._ai_channel = None
         self._vc_agent = None
         self._session = None

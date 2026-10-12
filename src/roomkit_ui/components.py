@@ -39,7 +39,7 @@ _NOTES = {
 
 # Components a running app only picks up once restarted: Qt modules it
 # probed at start (MCP App views, sounds), and the global hotkeys it set up.
-_RESTART = frozenset({"mcp-apps", "dictation"})
+_RESTART = frozenset({"mcp-apps", "camera", "dictation"})
 
 
 class Installer(StrEnum):

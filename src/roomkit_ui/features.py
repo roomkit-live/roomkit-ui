@@ -92,6 +92,9 @@ FEATURES: dict[str, Feature] = {
         "MCP Apps, notification sounds and audio preview",
         ("PySide6.QtWebEngineWidgets", "PySide6.QtWebChannel", "PySide6.QtMultimedia"),
     ),
+    "camera": Feature(
+        "camera", "Camera photos", ("PySide6.QtMultimedia", "PySide6.QtMultimediaWidgets")
+    ),
     "telemetry": Feature(
         "telemetry",
         "OpenTelemetry export",

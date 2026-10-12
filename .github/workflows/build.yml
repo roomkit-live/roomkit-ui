@@ -195,6 +195,9 @@ jobs:
           /usr/libexec/PlistBuddy -c \
             "Add :NSMicrophoneUsageDescription string 'RoomKit UI needs microphone access for voice conversations.'" \
             "$PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c \
+            "Add :NSCameraUsageDescription string 'RoomKit UI uses your camera to take a photo you can attach to a message.'" \
+            "$PLIST" 2>/dev/null || true
 
           # PyInstaller leaves the identifier unset and the version at 0.0.0.
           # `build_app.sh` patched the identifier for local builds, so the

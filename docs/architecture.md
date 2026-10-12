@@ -134,6 +134,27 @@ The existing engine teardown is reused; its delayed FD cleanup skips any newer s
 CancelScope timer cleanup preserves active deadlines and cancellation deliveries; only
 cancelled handles and retries of retired scopes with no living tasks are removed.
 
+`images.py` normalizes local files, clipboard rasters and camera frames into bounded
+`ImageAttachment` values. Drafts and `ChatBubble` snapshots share this representation;
+the normal conversation store persists its inline bytes only for persistent threads.
+`image_messages.py` builds RoomKit `CompositeContent` with text and `MediaContent`
+data URLs. `ImageSessionWindow` also supplies up to four earlier images when reopening
+a thread, alongside its fenced transcript. Provider vision capability is checked before
+inbound processing, so a text-only provider cannot silently discard current images.
+
+`CameraDialog` owns its permission callback, camera, capture session and preview.
+It uses [`QImageCapture.capture()`](https://doc.qt.io/qtforpython-6/PySide6/QtMultimedia/QImageCapture.html)
+to receive a `QImage` without saving to the system photo folder. A reviewed photo joins
+the draft; neither taking it nor selecting **Use photo** sends a message. Dismissal,
+thread changes and window closure stop capture. The optional `camera` extra supplies
+Qt Multimedia, and both macOS builds declare camera permission and the entitlement.
+For source macOS runs without a bundle declaration, `camera_process` opens only this
+dialog in the `camera_capture` helper. `macos_app` supplies its cached bundle, leaving
+the main process's interpreter and Keychain identity unchanged. The helper loads no
+application settings or secrets; a bounded JSON pipe returns one normalized image.
+Cancel, parent-pipe EOF and application exit close the helper. Other platforms and
+packaged builds keep the dialog in process.
+
 ### Voice session (both modes)
 
 1. `ConversationComposer` (or the wake word) asks `MainWindow` to start → `Engine.start(settings)`. The
@@ -180,7 +201,8 @@ messages and 24,000 characters. `recall_conversations` searches the selected roo
 `conversations.db`. It saves titles, their source (fallback/generated/manual), timestamps
 and display snapshots atomically, without
 changing RoomKit's schema or version. Snapshots retain interrupted text, speaker names
-and tool outcomes; replay never invokes tools or restores interactive app resources.
+and tool outcomes, including the HTML of loaded MCP Apps. Replay recreates their
+sandboxed views and delivers the saved input and result, with server tool calls disabled.
 `ConversationHistory` autosaves changes and flushes on hangup, navigation and close.
 It imports the former `main` room as **Earlier history** through RoomKit's
 `get_conversation()` (messages only, unlike `get_timeline()`). `ui_migrations` records
@@ -202,6 +224,18 @@ selected thread. Provider errors leave the first-message title intact.
 ### MCP Apps
 
 A tool declaring a `ui://` resource URI triggers `MainWindow._fetch_and_show_app`: the HTML is fetched over MCP, served from a local `http://127.0.0.1` server with its own CSP, rendered in a `QWebEngineView` (one profile per widget), and wired to Python over QWebChannel JSON-RPC (`mcp_app_bridge.py`). Its output attaches to the existing `ToolActivity` row; results and app widgets are matched by invocation ID, including simultaneous calls to the same tool. The row retains an outcome received before the HTML loads. App-initiated `tools/call` requests are proxied through the engine's server-scoped MCP path. An app whose session ended while it loaded is dropped.
+
+Loaded HTML belongs to the tool row's snapshot, even if WebEngine is unavailable.
+History reopens the page from that snapshot without reconnecting MCP or repeating
+the tool call. The bridge queues the original input and result until the page is
+ready. Restored pages and pages whose session ended keep their display but reject
+new server calls. Pages that fetch their display data with `tools/call` receive the
+saved response for the same tool and arguments, using their new request ID. Each row
+owns its `app_results`: up to 64 distinct requests, latest response per request.
+Only changed data triggers autosave; responses arriving after navigation cannot
+update another page. Clearing the conversation releases web views and HTTP content.
+Late HTML arrival also triggers autosave. Older snapshots without HTML retain
+their ordinary tool row and text result. Private conversations keep the HTML in memory.
 
 ## External integrations
 

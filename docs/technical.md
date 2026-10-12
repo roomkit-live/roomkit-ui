@@ -29,6 +29,7 @@ src/roomkit_ui/
 ├── app.py, features.py         # Startup (graphics env, --doctor, qasync); optional-backend registry
 ├── engine.py, engine_state.py  # Engine shell: start task / stop, state machine, model cache, teardown
 ├── engine_text.py, text_chat.py # Typed turns via AIChannel, streaming delivery and local readiness gate
+├── images.py, image_messages.py # Prepared images, multimodal content and bounded image resume context
 ├── engine_vc.py, engine_vc_helpers.py, vc_stt.py  # Voice Channel mode (mixin + stateless builders)
 ├── vc_agent.py, agent_hooks.py                 # VC agent: speak policy, thinker, background work + chat lines
 ├── engine_realtime.py, realtime_providers.py   # Realtime mode (mixin + provider builders, audio wiring)
@@ -148,6 +149,15 @@ and optional MCP App, even when calls complete out of order. Exceptions and canc
 still propagate to roomkit after the UI receives a terminal state. `ToolActivity` keeps
 details collapsed and renders output as plain text; the display preview is capped at
 20,000 characters per input/result, while the MCP App receives the original result.
+Its row also saves the fetched HTML as `app_html`, alongside the call and result.
+Restoration uses the same sandbox and queues the saved input/result until initialization,
+with server calls disabled. Session end preserves the view; navigation releases it.
+App-initiated display reads are saved as `app_results` per tool name and canonical
+JSON arguments. The archived bridge serves those responses locally, so pages using
+`tools/call` to obtain their visual data render without a live server. Data is scoped
+to its original invocation, including when multiple calls use the same page.
+Old snapshots without `app_html` remain readable, and missing WebEngine never discards
+saved HTML when the conversation is saved again.
 
 The Voice Channel's AIChannel gets its tools from `ToolSet.turn_config()`, its
 `config_provider`, not from the room binding's metadata: the metadata reaches only the room

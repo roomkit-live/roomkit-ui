@@ -32,6 +32,8 @@ Entry point: `src/roomkit_ui/app.py` → `roomkit_ui.app:main`
 src/roomkit_ui/
 ├── __main__.py          # `python -m roomkit_ui` → app.main
 ├── app.py               # Startup: graphics env (before PySide6), --doctor, QApplication + qasync, tray, hotkeys, wake word
+├── macos_app.py         # Cached camera-only macOS bundle and usage declaration; original Python untouched
+├── camera_capture.py    # Isolated photo window entrypoint; pipe to parent, no settings or secret access
 ├── constants.py         # UI-independent constants (attitude presets, …)
 ├── features.py          # Optional-backend registry: extras ↔ import probes ↔ install commands, EXCLUSIVE_EXTRAS, --doctor
 ├── components.py        # One extra = one component; install_plan(): app runs uv/pip, checkout gets `uv sync`, frozen nothing — leaf
@@ -40,6 +42,8 @@ src/roomkit_ui/
 ├── engine_state.py      # EngineState StrEnum — leaf
 ├── engine_text.py       # Typed turns: AIChannel + in-process delivery, streaming, no audio — mixin
 ├── text_chat.py         # Local composer readiness check for the configured conversation LLM
+├── images.py            # Bounded image import/normalization and self-contained attachments
+├── image_messages.py    # RoomKit CompositeContent and recent image context when resuming
 ├── engine_vc.py         # Voice Channel start (STT → LLM → TTS) — mixin
 ├── engine_vc_helpers.py # Stateless VC builders: barge-in, TTS filter, Smart Turn, local LLM
 ├── vc_stt.py            # VC cloud STT builders (dispatch table) + the turn VAD a turnless STT needs
@@ -114,6 +118,10 @@ src/roomkit_ui/
     ├── sliding_panel.py   # Shared panel shell, animation, focus and theme; one overlay at a time
     ├── conversation_composer.py # Text send/stop + Live / cancel / end / mute
     ├── message_input.py    # Draft grows to eight visual lines, then scrolls; Shift+Enter newline
+    ├── menus.py            # Shared rounded popup style, themed action icons and composer anchoring
+    ├── image_attachments.py # File/clipboard/drop previews, remove/open, camera entry point
+    ├── camera_dialog.py    # Permission, still-photo review and camera lifetime; optional Qt media
+    ├── camera_process.py   # Source macOS camera process, bounded image reply, cancel/exit cleanup
     ├── chat_view.py       # Scrollable chat transcript
     ├── chat_bubble.py     # One chat entry: user bubble, typeset assistant text
     ├── tool_activity.py   # Compact tool state, optional plain-text details and inline MCP output
@@ -175,6 +183,7 @@ Every AI backend lives behind an extra declared in `pyproject.toml` AND mirrored
 ## Gotchas
 
 ### Startup and Qt
+- Style menus through `QProxyStyle.polish`, including Qt-created editor menus. Never use an application-wide Python event filter for this: PySide can wrap a partially constructed WebEngine QObject (`QWebEngineUrlRequestJob`) and crash before the filter body runs. WebEngine integration tests must install the production menu style as well as the application QSS.
 - The graphics environment is decided by `app._graphics_env()` and applied BEFORE PySide6 is imported. The OpenGL probe runs on Linux only (macOS/Windows render through Metal/Direct3D and ship no libEGL); only without OpenGL does it set `QT_QUICK_BACKEND=software`, `LIBGL_ALWAYS_SOFTWARE=1` and Chromium's GPU-off flags
 - Never pass `--disable-web-security` to Chromium: it is process-wide, and MCP Apps rely on the same-origin policy (with `url_policy`) to keep local and LAN services out of reach
 - Qt signals in async callbacks: always wrap emit() in try/except — the C++ object may be deleted
@@ -196,6 +205,7 @@ Every AI backend lives behind an extra declared in `pyproject.toml` AND mirrored
 - MCP server stacks are closed in the task that opened them (anyio cancel scopes). Closing one from another task made anyio cancel the owner and hung `close_all()`
 
 ### Tools
+- MCP App HTML (`app_html`) and app-initiated tool responses (`app_results`, `mcp_app_state.AppToolResults`) belong to the `ToolActivity` snapshot, alongside the original call and result. Some pages read their display data through `tools/call` (e.g. `get_screen_data`), so saving HTML and the model's text result alone is insufficient. Autosave changed responses per exact tool/input pair, scoped to the same widget, row and MCP manager after awaiting; repeated identical polls do not save again. History answers those requests from saved data with new request IDs; never reconnect MCP or repeat tools just to display history. End of session freezes app actions; navigation releases the view and HTTP content. Preserve saved data without WebEngine; old snapshots remain readable.
 - MCP tool schemas: strip `$schema` and `additionalProperties` keys for Gemini compatibility (`_clean_schema()` in mcp_manager.py)
 - MCP sessions open through `mcp_manager.negotiate_era` (`server/discover`, then the initialize handshake: mcp's own `Client(mode="auto")` policy), never `session.initialize()` alone: a server on the 2026 protocol (FastMCP 4, mcp 2.x) declares its extensions only there, so its skills never showed
 - Skills an MCP server publishes go through roomkit's `SkillRegistry.add_mcp_server`, once the servers are connected (`_load_all_skills`, both modes), named `<label>:<path>` with the label from the server's name. Never fetch or inline a served skill's files in the app: roomkit verifies them against the listing and hands them to the model as the server's data. The CLI tools are the `execution_tools`: while a served skill is active, each asks the user (`SkillApprovals`, 60 s, then refused; roomkit keeps a yes per conversation and skill version). mcp 2.0's `send_request` takes only its `types.Request` and its `Result` drops unknown fields — `mcp_skills` sends and reads raw
@@ -217,6 +227,7 @@ Every AI backend lives behind an extra declared in `pyproject.toml` AND mirrored
 - llama.cpp: roomkit spawns `llama-server` with a copy of the app's environment, PyInstaller's library path included; since 0.97.0 roomkit sets the host's own loader path back for it (`cli_exec` does the same for CLI tools). The server runs on its own thread and loop (`providers/llamacpp.py`) so it survives sessions and the end-of-session FD cleanup
 
 ### Packaging
+- Source macOS camera capture needs a bundle `NSCameraUsageDescription`. Only `camera_capture` re-execs through `macos_app`'s cached interpreter copy, preserving the venv via `__PYVENV_LAUNCHER__`. Never relaunch the main app this way: changing its executable identity triggers Keychain prompts for saved API keys. The helper must not import `settings`, `secret_store`, providers or the main app; use the supplied theme, and return the reviewed image through the bounded stdout pipe. Cancellation and stdin EOF close capture. Frozen apps use their own bundle and an in-process dialog. Never patch shared Python, change Keychain ACLs or reset TCC grants.
 - A backend this install lacks is a state, not a fault: code that needs one calls `features.require(key)` (or checks `unavailable_reason`) BEFORE importing it, so it raises `FeatureUnavailableError` (which carries the feature key), never a raw ImportError. A session start catches it apart: one warning line, no traceback, `component_missing` → the chat's Install offer. An optional pipeline stage (denoiser, diarization, a VAD model) is left out with a chat notice instead of failing the start
 - Installing a component (`components.py`, `component_installer.py`): only the app's own extras, pinned to the running version, argv without a shell; the app runs it only in a plain environment (pip, pipx, uv tool). A source checkout gets the `uv sync --inexact --extra` command (pip there would be undone by the next `uv sync`), a frozen build nothing. After an install `features.refresh()` drops the probe caches
 - Adding a backend means three edits, not one: the extra in `pyproject.toml`, the `Feature` in `features.py`, and the provider→feature entry in the matching `*_FEATURES` map. An extra that conflicts with another also goes in `[tool.uv].conflicts` AND `EXCLUSIVE_EXTRAS`. Probe what the code path *imports*, not what the extra installs — the realtime providers ride a raw websocket and never touch the vendor SDK, so requiring it would block a session that works

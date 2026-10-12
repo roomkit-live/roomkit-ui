@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict
+import json
+from typing import TYPE_CHECKING
 
 from PySide6.QtCore import (
     QEasingCurve,
@@ -20,11 +21,16 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from roomkit_ui.images import ImageAttachment
+from roomkit_ui.mcp_app_state import AppToolResults
 from roomkit_ui.theme_live import themed_style
 from roomkit_ui.tool_events import ToolCall, ToolResult
 from roomkit_ui.widgets.chat_bubble import ChatBubble
 from roomkit_ui.widgets.conversation_home import ConversationWelcome, LiveWelcome
 from roomkit_ui.widgets.tool_activity import ToolActivity
+
+if TYPE_CHECKING:
+    from roomkit_ui.widgets.mcp_app_widget import MCPAppWidget
 
 # Entrance fade for new rows (bubbles, tool/info pills).
 _FADE_IN_MS = 220
@@ -141,6 +147,13 @@ class ChatView(QScrollArea):
         if pending:
             self._text_pending = self._make_status_label("Thinking…", "TEXT_SECONDARY")
             self._insert_status_row(self._text_pending)
+
+    def add_image_message(self, text: str, images: tuple[ImageAttachment, ...]) -> None:
+        self._finalize_current_bubble()
+        bubble = ChatBubble(text, role="user", images=images)
+        bubble.finalize()
+        self._insert_bubble(bubble)
+        self._scroll_to_bottom()
 
     def add_text_reply(self, text: str, is_final: bool) -> None:
         """Show provider deltas immediately, without the voice playback pacing."""
@@ -321,16 +334,8 @@ class ChatView(QScrollArea):
         for i in range(self._layout.count()):
             item = self._layout.itemAt(i)
             widget = item.widget() if item else None
-            if isinstance(widget, ChatBubble):
+            if isinstance(widget, (ChatBubble, ToolActivity)):
                 entries.append(widget.snapshot())
-            elif isinstance(widget, ToolActivity):
-                entries.append(
-                    {
-                        "kind": "tool",
-                        "call": asdict(widget.call),
-                        "result": asdict(widget.result) if widget.result else None,
-                    }
-                )
         return entries
 
     def restore(self, entries: list[dict]) -> None:
@@ -346,6 +351,7 @@ class ChatView(QScrollArea):
             elif entry.get("kind") == "tool":
                 call = ToolCall(**entry["call"])
                 row = self.add_tool_call(call)
+                row.app_results = AppToolResults.restore(entry.get("app_results", []))
                 result = entry.get("result")
                 row.finish(
                     ToolResult(**result)
@@ -354,6 +360,7 @@ class ChatView(QScrollArea):
                         call.id, "cancelled", "This call ended before its result was saved."
                     )
                 )
+                self.attach_app(call.id, entry.get("app_html"), historical=True)
         self._scroll_to_bottom()
 
     def finish_text_turn(self) -> None:
@@ -365,7 +372,7 @@ class ChatView(QScrollArea):
                 row.finish(ToolResult(row.call.id, "cancelled", "The request ended."))
 
     def end_session(self) -> None:
-        """Keep the transcript, release live app resources and settle pending rows."""
+        """Keep displayed results, disconnect app actions and settle pending rows."""
         self.set_text_pending(False)
         self._finalize_current_bubble()
         for bubble in self._bubbles():
@@ -375,16 +382,21 @@ class ChatView(QScrollArea):
             bubble.voice = ""
         self._voice_names.clear()
         for row in self._tool_calls.values():
-            row.release_app()
+            row.freeze_app()
             if row.result is None:
                 row.finish(ToolResult(row.call.id, "cancelled", "The session ended."))
 
-    def attach_app(self, call_id: str, html_content: str | None) -> QWidget | None:
+    def attach_app(
+        self, call_id: str, html_content: str | None, *, historical: bool = False
+    ) -> MCPAppWidget | None:
         """Attach interactive output to its existing row, preserving its position."""
         from roomkit_ui.widgets.mcp_app_widget import MCPAppWidget, has_webengine
 
         row = self.tool_call(call_id)
-        if row is None or not html_content or not has_webengine():
+        if row is None or not html_content:
+            return None
+        row.app_html = html_content
+        if not has_webengine():
             return None
         # The web view renders through a QQuickWidget, which Qt does not
         # support under a graphics effect: a result back within the row's
@@ -392,6 +404,17 @@ class ChatView(QScrollArea):
         # under one.  The row appears at once instead.
         row.setGraphicsEffect(None)  # type: ignore[arg-type]
         widget = MCPAppWidget(row.call.name, row.call.server_name, parent=row)
+        if historical:
+            # Restoring a page can run its startup JS. No old tool may be
+            # invoked again just because its conversation was opened.
+            widget.set_read_only(row.app_results)
+            try:
+                arguments = json.loads(row.call.arguments_json)
+            except (ValueError, TypeError):
+                arguments = {}
+            widget.send_tool_input(arguments if isinstance(arguments, dict) else {})
+            if row.result is not None:
+                widget.send_tool_result(row.result.text)
         widget.load_html(html_content)
         row.attach_app(widget)
         return widget

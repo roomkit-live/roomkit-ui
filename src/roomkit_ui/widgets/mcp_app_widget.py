@@ -27,6 +27,7 @@ from PySide6.QtCore import QUrl, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QDialog, QFrame, QLabel, QSizePolicy, QVBoxLayout, QWidget
 
+from roomkit_ui.mcp_app_state import AppToolResults
 from roomkit_ui.theme import colors
 from roomkit_ui.theme_live import themed_style
 from roomkit_ui.widgets.mcp_app_server import get_http_server, release_content
@@ -233,6 +234,10 @@ class MCPAppWidget(QFrame):
         """Push tool-call arguments into the app."""
         if self._bridge is not None:
             self._bridge.send_tool_input(arguments)
+
+    def set_read_only(self, results: AppToolResults | None = None) -> None:
+        if self._bridge is not None:
+            self._bridge.set_read_only(results)
 
     def send_tool_result(self, result: Any) -> None:
         """Push tool-call result into the app."""

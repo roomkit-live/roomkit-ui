@@ -24,8 +24,9 @@ def test_text_is_unavailable_but_live_works_from_the_keyboard(qtbot):
     assert composer._input.toPlainText() == ""
     for button in (composer._attachment_button, composer._dictation_button):
         assert not button.isEnabled()
-        assert "coming soon" in button.accessibleName()
         button.click()
+    assert composer._attachment_button.accessibleName() == "Add images"
+    assert "coming soon" in composer._dictation_button.accessibleName()
     assert starts == []
 
     assert composer._live_button.text() == ""

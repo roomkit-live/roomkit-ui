@@ -32,6 +32,7 @@ from roomkit_ui.conversations import Conversation
 from roomkit_ui.icons import svg_icon
 from roomkit_ui.theme_live import bind_theme
 from roomkit_ui.widgets.buttons import KeyboardButton
+from roomkit_ui.widgets.menus import menu_action
 from roomkit_ui.widgets.settings.style import settings_colors
 from roomkit_ui.widgets.sliding_panel import SlidingPanel
 
@@ -240,8 +241,8 @@ class ConversationDrawer(SlidingPanel):
             return
         conversation_id = item.data(Qt.UserRole)
         menu = QMenu(self)
-        rename = menu.addAction("Rename")
-        delete = menu.addAction("Delete…")
+        rename = menu_action(menu, "Rename", "pencil")
+        delete = menu_action(menu, "Delete…", "trash", destructive=True)
         try:
             chosen = menu.exec(self._list.viewport().mapToGlobal(pos))
             if chosen == rename:

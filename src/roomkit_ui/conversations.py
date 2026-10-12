@@ -15,6 +15,8 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 from roomkit_ui import memory
+from roomkit_ui.images import restore_images
+from roomkit_ui.mcp_app_state import AppToolResults
 from roomkit_ui.tool_events import ToolCall, ToolResult
 
 logger = logging.getLogger(__name__)
@@ -31,6 +33,7 @@ def _decode_entries(raw: str) -> list[dict]:
         if not isinstance(entry, dict):
             raise ValueError("Invalid conversation entry")
         if entry.get("kind") == "message":
+            restore_images(entry.get("images", []))
             if entry.get("role") not in ("user", "assistant", "other"):
                 raise ValueError("Invalid message role")
             if not isinstance(entry.get("text"), str) or any(
@@ -38,6 +41,9 @@ def _decode_entries(raw: str) -> list[dict]:
             ):
                 raise ValueError("Invalid message text")
         elif entry.get("kind") == "tool":
+            AppToolResults.restore(entry.get("app_results", []))
+            if not isinstance(entry.get("app_html", ""), str):
+                raise ValueError("Invalid saved tool interface")
             call = ToolCall(**entry["call"])
             if not all(isinstance(value, str) for value in vars(call).values()):
                 raise ValueError("Invalid tool call")
@@ -85,8 +91,15 @@ class Conversation:
         self.title_source = source
 
     def _suggest_title(self) -> str:
-        first = next((e for e in self.entries if e.get("role") == "user" and e.get("text")), None)
-        text = " ".join(first["text"].split()) if first else ""
+        first = next(
+            (
+                e
+                for e in self.entries
+                if e.get("role") == "user" and (e.get("text") or e.get("images"))
+            ),
+            None,
+        )
+        text = " ".join((first["text"] or "Photo").split()) if first else ""
         return text[:64].rstrip() + ("…" if len(text) > 64 else "")
 
 
@@ -318,6 +331,7 @@ def conversation_context(entries: list[dict]) -> str:
     messages = [e for e in entries if e.get("kind") == "message" and e.get("role") != "other"]
     lines = [
         f"{e['role']}{' (interrupted)' if e.get('interrupted') else ''}: {e['text'][:4000]}"
+        + (f" [{len(e['images'])} attached image(s)]" if e.get("images") else "")
         for e in messages[-50:]
     ]
     return memory.resume_context(lines)

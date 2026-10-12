@@ -316,6 +316,12 @@ makes the assistant answer only utterances attributed to the enrolled primary sp
 - **MCP Apps**: tools that declare a `ui://` resource render their HTML UI inline in
   the chat (QWebEngineView + JSON-RPC bridge) and can call tools back through the app;
   they cannot reach local or LAN services. (`mcp_app_bridge.py`, `widgets/mcp_app_widget.py`)
+  Their pages and original results now reopen with saved conversations, including
+  after restarting RoomKit. History viewing needs no MCP connection and does not
+  repeat the tool call. Server actions remain available during the active session;
+  historical output stays readable after it ends.
+  Data fetched by the page itself is saved too, so views such as the dice tray
+  can retrieve their original display data when reopened.
 
 ### Skills & attitudes
 
@@ -393,8 +399,24 @@ missing. Closing Settings refreshes it immediately. This local check does not te
 credentials or contact a server. An empty draft keeps the Live button; while a written
 response streams, the button stops generation and retains all received text. A following
 draft can be prepared during generation. Text uses the selected thread's context, tools,
-instructions and history preference without opening microphone, STT or TTS. Attachments
-and in-composer dictation remain unavailable. MCP connections, session details and
+instructions and history preference without opening microphone, STT or TTS. The `+`
+menu offers **Choose images** and **Take a photo**. Images can also be pasted directly
+into the input with Cmd/Ctrl+V or dragged onto the composer. Up to four images appear
+as removable previews; click one to open it. Send images alone or with a message.
+The camera opens only on request, offers **Retake** and **Use photo**, and stops after
+capture or cancellation. Missing camera support offers the `camera` component; access
+denied and missing devices have explicit feedback. PDFs and in-composer dictation
+remain unavailable. Known text-only models show a setup hint; local endpoints decide
+whether their loaded model accepts images.
+
+Image imports accept PNG, JPEG, WebP, GIF, BMP and HEIC where Qt has the decoder.
+The first frame is normalized to PNG/JPEG, resized to a maximum 2048-pixel edge and
+stripped of embedded metadata. Sources are limited to 20 MB; each prepared image is
+at most 4 MB. Saved history contains the prepared bytes, so deleting the original file
+does not break the conversation; private threads never save images to disk. Resuming
+a typed session provides its four most recently shared images as visual context.
+
+MCP connections, session details and
 interactive tool outputs stay available between replies, including after stopping a
 generation. Changing conversations, opening Settings, starting Live or closing the app
 releases that text session and its embedded apps.
@@ -406,7 +428,9 @@ and shortcuts; Conversation groups voice setup and personality; Audio & voice gr
 devices, processing and speaker recognition. Providers & keys is the single editor for
 provider credentials, shared by conversation and dictation. The footer explains that
 Done, Escape and closing the window save pending edits. Light/dark theme changes apply
-and persist immediately across existing widgets and chat messages. Search (Ctrl/Cmd+K
+and persist immediately across existing widgets and chat messages. Popup menus share
+the Settings palette, rounded corners and violet selection, including the image menu,
+conversation actions and built-in editor context menus. Search (Ctrl/Cmd+K
 or Ctrl/Cmd+F) recognizes setting names and English/French aliases, opens the matching
 page/tab/disclosure, and focuses the control. Search indexes no entered values; dependent
 settings explain their prerequisites without changing a provider or mode. Escape clears

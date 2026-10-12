@@ -85,6 +85,7 @@ from roomkit_ui.theme import get_stylesheet  # noqa: E402
 from roomkit_ui.tray import TrayService  # noqa: E402
 from roomkit_ui.widgets.dictation_log import DictationLog  # noqa: E402
 from roomkit_ui.widgets.main_window import MainWindow  # noqa: E402
+from roomkit_ui.widgets.menus import install_menu_style  # noqa: E402
 
 
 def _configure_logging() -> None:
@@ -385,6 +386,7 @@ def main() -> None:
     app = _create_app()
     settings = load_settings()
     app.setStyleSheet(get_stylesheet(settings.get("theme", "dark")))
+    install_menu_style(app)
     loop = QEventLoop(app)
     asyncio.set_event_loop(loop)
     install_asyncgen_hooks(loop)

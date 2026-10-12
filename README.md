@@ -89,6 +89,13 @@ A bare `uv sync` installs the core only — the window, the microphone pipeline
 with WebRTC echo cancellation, MCP and CLI tools. Every AI backend arrives
 through an extra, so you install what you use.
 
+On macOS, **+ → Take a photo** opens an isolated camera window with the app bundle
+declaration required by the system. The main application keeps its original Python
+executable and Keychain access; the camera helper never loads API keys. A reviewed
+photo returns directly to your draft, without a temporary photo file. Camera access
+is requested on opening the camera, not at startup. If you previously refused it,
+the dialog links to **System Settings → Privacy & Security → Camera**.
+
 ## Optional features
 
 | Extra | What it adds |

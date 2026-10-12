@@ -12,6 +12,12 @@ Each released section is the source for that version's GitHub release notes.
 ## [Unreleased]
 
 ### Added
+- **Images in conversations** — choose files or take a photo from the composer's `+`,
+  paste a copied image directly into the input, or drop local images onto it. Preview,
+  open or remove up to four images before sending them with or without text. The camera
+  offers capture, retake and review, and stops on capture or dismissal. Images travel
+  through RoomKit's multimodal AI channel and stay with saved conversations; private
+  conversations keep them in memory. The new `camera` extra is included in `all`.
 - **Typed conversations** — send from the composer with Enter or the arrow;
   responses stream through RoomKit's AI channel into the selected conversation. Stop
   keeps the text already received. The composer is greyed out with a setup hint until
@@ -266,6 +272,10 @@ Each released section is the source for that version's GitHub release notes.
   canceller sees, for roomkit's offline AEC bench.
 
 ### Changed
+- **Popup menus** — image attachments, conversation actions and editor context menus
+  share the Settings palette, rounded corners, spacious rows and violet selection in
+  both themes. Attachment and conversation actions use matching outline icons; the
+  composer's menu opens above its button.
 - **Breaking: `pip install roomkit-ui` installs the core only** — the window, the
   microphone pipeline with WebRTC echo cancellation, MCP and CLI tools, and no AI
   backend. Each backend is an extra (`anthropic`, `openai`, `gemini`, `deepgram`,
@@ -334,6 +344,21 @@ Each released section is the source for that version's GitHub release notes.
   without it and says so; Voice Channel mode is unchanged.
 
 ### Fixed
+- **MCP App output in conversation history** — preserve the tool's page alongside its
+  input, result and the data fetched by the page itself. Restore them when reopening
+  a conversation or restarting the app, including views that use `tools/call` to
+  read display data such as `get_screen_data` for the dice tray.
+  Ending a session keeps its output visible. History does not reconnect servers or
+  rerun tools; private output stays in memory and navigation releases web resources.
+- **Crash opening MCP App output** — menu styling now uses Qt's widget style hook
+  instead of a Python application event filter that crashed while WebEngine created
+  internal request objects. Rounded menus, editor actions and live themes are preserved.
+- **Camera permission when running from source on macOS** — a camera-only helper
+  uses a cached app bundle so Qt can ask macOS for access on the first photo request.
+  The main app keeps its original executable and Keychain identity, avoiding repeated
+  password prompts for saved API keys. The helper never reads settings or secrets.
+  A launch problem is no longer presented as a permission refusal; genuine refusals
+  show a compact explanation and a button opening the camera privacy settings.
 - **Earlier history shows only conversation messages** — import uses RoomKit's
   `get_conversation()` instead of the raw event list. Existing imported snapshots
   are repaired once, retaining subsequent Live exchanges and tool results; source

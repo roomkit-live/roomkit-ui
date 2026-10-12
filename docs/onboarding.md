@@ -98,8 +98,13 @@ add logic that is testable without Qt, add a pytest target with it (see
    and the provider's entry in the matching `*_FEATURES` map; `tests/test_features.py`
    catches a drift. A new PyInstaller flag goes in `scripts/build_app.sh` and both steps
    of `build.yml` (`tests/test_build_flags.py`).
-10. **macOS permissions**: grant Microphone + Accessibility (for dictation paste) to your
-    terminal when running from source.
+10. **macOS permissions**: **Take a photo** uses a camera-only helper with a cached
+    app bundle for source launches missing the usage description. The main app keeps
+    its usual executable and Keychain identity; the helper never reads saved keys.
+    Allow the app shown in the camera prompt; a prior
+    refusal is managed in System Settings → Privacy & Security → Camera. Accessibility
+    (for dictation paste) remains a separate permission. Do not patch the shared Python
+    or reset system permission records to work around a missing app declaration.
 11. **CUDA wheels**: `uv sync` reinstalls the CPU sherpa-onnx wheel; use
     `uv run --no-sync` to keep a manually installed CUDA wheel.
 

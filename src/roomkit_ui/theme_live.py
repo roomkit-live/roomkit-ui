@@ -59,10 +59,12 @@ def themed_style(widget: QWidget, stylesheet: Callable[[dict[str, str]], str]) -
 def apply_theme(theme: str) -> None:
     """Persist and apply only the appearance preference, leaving other edits pending."""
     from roomkit_ui.settings import save_settings
+    from roomkit_ui.widgets.menus import install_menu_style
 
     save_settings({"theme": theme})
     app = QApplication.instance()
-    if app is not None:
+    if isinstance(app, QApplication):
+        install_menu_style(app)
         app.setStyleSheet(get_stylesheet(theme))
         theme_events().changed.emit()
         for widget in app.allWidgets():

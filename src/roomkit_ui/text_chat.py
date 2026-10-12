@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from importlib import import_module
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -45,4 +46,27 @@ def text_chat_unavailable(settings: dict) -> str:
     feature = AI_PROVIDER_FEATURES.get(provider)
     if feature and not is_available(feature):
         return "Install the chat provider in Settings…"
+    return ""
+
+
+def image_chat_unavailable(settings: dict) -> str:
+    """Use RoomKit's model metadata without opening a provider or making a request."""
+    if reason := text_chat_unavailable(settings):
+        return reason
+    name = settings.get("vc_llm_provider", "anthropic")
+    classes = {
+        "anthropic": "AnthropicAIProvider",
+        "openai": "OpenAIAIProvider",
+        "gemini": "GeminiAIProvider",
+    }
+    if name not in classes:
+        return ""  # Local endpoints report unsupported images in their response.
+    model = settings.get(_CLOUD[name][2], "")
+    try:
+        provider = getattr(import_module(f"roomkit.providers.{name}.ai"), classes[name])
+        entry = next((m for m in provider.available_models() if m.id == model), None)
+    except ImportError:
+        return "Install the chat provider in Settings…"
+    if entry is not None and entry.supports_vision is False:
+        return "This model does not accept images. Choose a vision model in Settings."
     return ""

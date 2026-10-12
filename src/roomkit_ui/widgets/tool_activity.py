@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import asdict
+from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QRectF, Qt, QTimer
 from PySide6.QtGui import QColor, QFontDatabase, QPainter, QPen
@@ -18,10 +20,14 @@ from PySide6.QtWidgets import (
 )
 
 from roomkit_ui.icons import svg_icon
+from roomkit_ui.mcp_app_state import AppToolResults
 from roomkit_ui.theme import colors
 from roomkit_ui.theme_live import bind_theme
 from roomkit_ui.tool_events import ToolCall, ToolResult
 from roomkit_ui.widgets.buttons import KeyboardButton
+
+if TYPE_CHECKING:
+    from roomkit_ui.widgets.mcp_app_widget import MCPAppWidget
 
 _TITLES = {
     "get_current_date": "Current date",
@@ -133,7 +139,9 @@ class ToolActivity(QFrame):
         self.call = call
         self.result: ToolResult | None = None
         self._details: QPlainTextEdit | None = None
-        self._app: QWidget | None = None
+        self._app: MCPAppWidget | None = None
+        self.app_html = ""
+        self.app_results = AppToolResults()
         self.setObjectName("toolActivity")
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
         self._layout = QVBoxLayout(self)
@@ -171,12 +179,31 @@ class ToolActivity(QFrame):
             self._fill_details()
         self._render_theme()
 
-    def attach_app(self, widget: QWidget) -> None:
+    def snapshot(self) -> dict:
+        entry: dict = {
+            "kind": "tool",
+            "call": asdict(self.call),
+            "result": asdict(self.result) if self.result else None,
+        }
+        if self.app_html:
+            entry["app_html"] = self.app_html
+        if responses := self.app_results.snapshot():
+            entry["app_results"] = responses
+        return entry
+
+    def attach_app(self, widget: MCPAppWidget) -> None:
+        self.release_app()
         self._app = widget
         self._layout.insertWidget(1, widget)
 
+    def freeze_app(self) -> None:
+        if self._app is not None:
+            self._app.set_read_only(self.app_results)
+
     def release_app(self) -> None:
         if self._app is not None:
+            self._layout.removeWidget(self._app)
+            self._app.hide()
             self._app.deleteLater()
             self._app = None
 

@@ -7,7 +7,7 @@ import json
 import logging
 import os
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QMainWindow, QStackedWidget, QVBoxLayout
@@ -16,7 +16,7 @@ from roomkit_ui.engine import Engine
 from roomkit_ui.engine_state import EngineState
 from roomkit_ui.idle_hangup import IdleHangup
 from roomkit_ui.settings import load_settings
-from roomkit_ui.text_chat import text_chat_unavailable
+from roomkit_ui.text_chat import image_chat_unavailable, text_chat_unavailable
 from roomkit_ui.tool_events import ToolCall, ToolResult
 from roomkit_ui.widgets.chat_view import ChatView
 from roomkit_ui.widgets.conversation_composer import ConversationComposer
@@ -29,6 +29,9 @@ from roomkit_ui.widgets.settings import SettingsPanel
 from roomkit_ui.widgets.skill_approval_dialog import show_skill_approval
 from roomkit_ui.widgets.voice_name_dialog import ask_voice_name
 from roomkit_ui.widgets.vu_meter import VUMeter
+
+if TYPE_CHECKING:
+    from roomkit_ui.widgets.mcp_app_widget import MCPAppWidget
 
 logger = logging.getLogger(__name__)
 
@@ -137,7 +140,7 @@ class MainWindow(QMainWindow):
         self._refresh_text_availability()
 
         # MCP App state
-        self._active_app_widgets: dict[str, Any] = {}  # invocation ID → MCPAppWidget
+        self._active_app_widgets: dict[str, MCPAppWidget] = {}  # invocation ID → widget
 
     def toggle_session(self) -> None:
         """Toggle the voice session on/off (used by global hotkey)."""
@@ -203,12 +206,15 @@ class MainWindow(QMainWindow):
             self._chat.add_error(str(e))
 
     def _refresh_text_availability(self) -> None:
-        self._controls.set_text_availability(text_chat_unavailable(load_settings()))
+        settings = load_settings()
+        self._controls.set_text_availability(text_chat_unavailable(settings))
+        self._controls.set_image_availability(image_chat_unavailable(settings))
 
     def _on_send(self, text: str) -> None:
         text = text.strip()
+        images = self._controls.images
         if (
-            not text
+            (not text and not images)
             or self._start_pending
             or self._engine.state not in (EngineState.IDLE, EngineState.ERROR, EngineState.READY)
         ):
@@ -217,6 +223,10 @@ class MainWindow(QMainWindow):
         reason = text_chat_unavailable(settings)
         self._controls.set_text_availability(reason)
         if reason:
+            return
+        image_reason = image_chat_unavailable(settings)
+        self._controls.set_image_availability(image_reason)
+        if images and image_reason:
             return
         # Title generation uses this same LLM even if Live uses a realtime provider.
         settings["conversation_mode"] = "voice_channel"
@@ -230,6 +240,10 @@ class MainWindow(QMainWindow):
                     conversation_id=conversation_id,
                     resume_context=context,
                     text=text,
+                    images=images,
+                    resume_image_entries=self._history.current.entries
+                    if self._history.current
+                    else [],
                 )
             )
             self._request_task = task
@@ -239,7 +253,10 @@ class MainWindow(QMainWindow):
             logger.exception("Failed to schedule text response")
             self._chat.add_error(str(exc))
             return
-        self._chat.add_transcription(text, "user", True)
+        if images:
+            self._chat.add_image_message(text, images)
+        else:
+            self._chat.add_transcription(text, "user", True)
         self._history.changed()
         self._controls.clear_draft()
         self._controls.set_state(EngineState.CONNECTING, text_mode=True)
@@ -461,6 +478,8 @@ class MainWindow(QMainWindow):
                 logger.debug("MCP App HTML cache write failed: %s", path, exc_info=True)
 
         widget = self._chat.attach_app(call.id, html)
+        # HTML may arrive after the reply (and its autosave) completed.
+        self._history.changed()
         if widget is None:
             return
 
@@ -525,12 +544,20 @@ class MainWindow(QMainWindow):
         origin_server: str,
     ) -> None:
         mcp = self._engine._mcp
-        if self._session_is_over(mcp) or widget_key not in self._active_app_widgets:
+        widget = self._active_app_widgets.get(widget_key)
+        row = self._chat.tool_call(widget_key)
+        if self._session_is_over(mcp) or widget is None or row is None:
             return  # A queued request must not run in a replacement session.
         result = await self._engine.handle_app_tool_call(origin_server, tool_name, arguments)
-        widget = self._active_app_widgets.get(widget_key)
-        if widget is not None:
-            widget.send_tool_call_response(request_id, result)
+        if (
+            self._session_is_over(mcp)
+            or self._active_app_widgets.get(widget_key) is not widget
+            or self._chat.tool_call(widget_key) is not row
+        ):
+            return  # Navigation may have replaced this view while its call ran.
+        if row.app_results.record(tool_name, arguments, result):
+            self._history.changed()
+        widget.send_tool_call_response(request_id, result)
 
     def _on_tool_finished(self, result: ToolResult) -> None:
         row = self._chat.tool_call(result.call_id)
@@ -548,6 +575,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event) -> None:  # noqa: N802
         self._closed = True
+        self._controls._attachments.close_camera()
         self._history.save()
         self._history.close()
         if (

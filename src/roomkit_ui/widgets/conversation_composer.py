@@ -13,10 +13,12 @@ from PySide6.QtWidgets import (
 
 from roomkit_ui.engine_state import EngineState
 from roomkit_ui.icons import svg_icon
+from roomkit_ui.images import ImageAttachment
 from roomkit_ui.text_chat import CONFIGURATION_HINT
 from roomkit_ui.theme import colors
 from roomkit_ui.theme_live import bind_theme
 from roomkit_ui.widgets.buttons import KeyboardButton
+from roomkit_ui.widgets.image_attachments import ImageAttachments
 from roomkit_ui.widgets.message_input import MessageInput
 
 
@@ -31,10 +33,12 @@ class ConversationComposer(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setStyleSheet("ConversationComposer { background: transparent; }")
+        self.setAcceptDrops(True)
         self._state: str = EngineState.IDLE
         self._text_mode = False
         self._expanded = False
         self._voice_controls = False
+        self._images_unavailable = ""
         self._unavailable = "Configure a chat model in Settings…"
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 12, 16, 18)
@@ -45,6 +49,8 @@ class ConversationComposer(QWidget):
         self._stack = QVBoxLayout(self._surface)
         self._stack.setContentsMargins(8, 8, 8, 8)
         self._stack.setSpacing(6)
+        self._attachments = ImageAttachments()
+        self._stack.addWidget(self._attachments)
         inner = QHBoxLayout()
         self._inner = inner
         self._stack.addLayout(inner)
@@ -52,13 +58,19 @@ class ConversationComposer(QWidget):
         inner.setSpacing(6)
         inner.addStretch(0)
 
-        self._attachment_button = self._future_button("Add photos or attachments — coming soon")
+        self._attachment_button = self._future_button("Add images")
+        self._attachment_button.setFocusPolicy(Qt.StrongFocus)
+        self._attachment_button.setCursor(Qt.PointingHandCursor)
+        self._attachment_button.clicked.connect(
+            lambda: self._attachments.menu(self._attachment_button)
+        )
         inner.addWidget(self._attachment_button, 0, Qt.AlignBottom)
 
         self._input = MessageInput()
         self._input.setAccessibleName("Message RoomKit")
         self._input.textChanged.connect(self._refresh)
         self._input.send_requested.connect(self._send)
+        self._input.images_inserted.connect(self._attachments.add_mime)
         inner.addWidget(self._input, 1)
 
         self._dictation_button = self._future_button("Dictate a message — coming soon")
@@ -79,6 +91,7 @@ class ConversationComposer(QWidget):
         self._live_button.clicked.connect(self._on_action)
         inner.addWidget(self._live_button, 0, Qt.AlignBottom)
         inner.addStretch(0)
+        self._attachments.changed.connect(self._refresh)
         bind_theme(self, self._refresh)
 
     @staticmethod
@@ -97,7 +110,16 @@ class ConversationComposer(QWidget):
         self._unavailable = reason
         self._refresh()
 
+    @property
+    def images(self) -> tuple[ImageAttachment, ...]:
+        return self._attachments.images
+
+    def set_image_availability(self, reason: str) -> None:
+        self._images_unavailable = reason
+        self._refresh()
+
     def clear_draft(self) -> None:
+        self._attachments.clear()
         self._input.clear()
 
     def focus_input(self) -> None:
@@ -115,7 +137,7 @@ class ConversationComposer(QWidget):
         )
         width -= 3 * 6 + 2 * self._input.document().documentMargin()
         text = self._input.toPlainText()
-        expanded = False
+        expanded = bool(self.images) and not self._voice_controls
         if text and not self._voice_controls:
             # Shift+Enter adds a line separator within the same Qt block.
             # toPlainText normalizes it to a newline, just like pasted breaks.
@@ -127,7 +149,7 @@ class ConversationComposer(QWidget):
                 measure.beginLayout()
                 line = measure.createLine()
                 line.setLineWidth(max(1, width))
-                expanded = measure.createLine().isValid()
+                expanded |= measure.createLine().isValid()
                 measure.endLayout()
         if expanded == self._expanded:
             return
@@ -135,7 +157,7 @@ class ConversationComposer(QWidget):
         if expanded:
             self._inner.removeWidget(self._input)
             self._inner.insertStretch(2, 1)
-            self._stack.insertWidget(0, self._input)
+            self._stack.insertWidget(1, self._input)
         else:
             self._stack.removeWidget(self._input)
             self._inner.takeAt(2)  # The spacer used by the expanded action row.
@@ -144,6 +166,23 @@ class ConversationComposer(QWidget):
     def resizeEvent(self, event) -> None:  # noqa: N802
         super().resizeEvent(event)
         self._arrange_input()
+
+    def dragEnterEvent(self, event) -> None:  # noqa: N802
+        if (
+            not self._voice_controls
+            and not self._unavailable
+            and MessageInput._has_images(event.mimeData())
+        ):
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event) -> None:  # noqa: N802
+        if not self._voice_controls and not self._unavailable:
+            self._attachments.add_mime(event.mimeData())
+            event.acceptProposedAction()
+        else:
+            event.ignore()
 
     def set_state(self, state: str, *, text_mode: bool = False) -> None:
         self._state = state
@@ -199,7 +238,11 @@ class ConversationComposer(QWidget):
             name, glyph = "Ending live conversation", "stop"
         if text_busy:
             name, glyph = "Stopping response" if stopping else "Stop response", "stop"
-        elif not busy and not self._unavailable and self._input.toPlainText().strip():
+        elif (
+            not busy
+            and not self._unavailable
+            and (self._input.toPlainText().strip() or self.images)
+        ):
             name, glyph = "Send message", "arrow-up"
         self._live_button.setAccessibleName(name)
         self._live_button.setToolTip(name)
@@ -236,6 +279,17 @@ class ConversationComposer(QWidget):
         self._surface.setToolTip(hint if self._unavailable else "")
         self._input.setAccessibleDescription(hint)
         self._attachment_button.setVisible(not busy)
+        image_reason = self._unavailable or self._images_unavailable
+        self._attachments.set_availability(
+            "End the live conversation to add images." if busy else image_reason
+        )
+        self._attachments.setVisible(
+            not busy and (bool(self.images) or bool(self._attachments._notice.text()))
+        )
+        self._attachment_button.setEnabled(not busy and not image_reason)
+        self._attachment_button.setToolTip(image_reason or "Add images from a file or camera")
+        if self.images and self._images_unavailable:
+            self._attachments.notice(self._images_unavailable)
         self._dictation_button.setVisible(not busy)
         self._attachment_button.setIcon(svg_icon("plus", c["TEXT_SECONDARY"], 20))
         self._dictation_button.setIcon(svg_icon("microphone", c["TEXT_SECONDARY"], 20))
@@ -271,7 +325,7 @@ class ConversationComposer(QWidget):
             if self._text_mode:
                 self.focus_input()
         elif self._state in (EngineState.IDLE, EngineState.ERROR, EngineState.READY):
-            if not self._unavailable and self._input.toPlainText().strip():
+            if not self._unavailable and (self._input.toPlainText().strip() or self.images):
                 self._send()
             else:
                 self.start_requested.emit()
@@ -283,7 +337,11 @@ class ConversationComposer(QWidget):
             EngineState.READY,
         ):
             return
-        if text := self._input.toPlainText().strip():
+        if self.images and self._images_unavailable:
+            self._attachments.notice(self._images_unavailable)
+            return
+        text = self._input.toPlainText().strip()
+        if text or self.images:
             self.send_requested.emit(text)
 
     def _on_mute(self, muted: bool) -> None:

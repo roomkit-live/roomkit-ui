@@ -9,8 +9,10 @@ from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QMouseEvent
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout
 
+from roomkit_ui.images import ImageAttachment, restore_images
 from roomkit_ui.theme import CHAT_FONT_SIZE_PX, colors, fixed_font_family
 from roomkit_ui.theme_live import bind_theme, themed_style
+from roomkit_ui.widgets.image_attachments import ImagePreview
 
 
 def _markdown_to_html(text: str, c: dict[str, str]) -> str:
@@ -127,6 +129,7 @@ class ChatBubble(QFrame):
         role: str = "assistant",
         parent=None,
         speaker_name: str = "",
+        images: tuple[ImageAttachment, ...] = (),
     ) -> None:
         super().__init__(parent)
         self._role = role
@@ -137,6 +140,7 @@ class ChatBubble(QFrame):
         self._finalized = False
         self.setToolTip(datetime.now().strftime("%H:%M"))
         self._raw_text = text
+        self._images = images
 
         # Word-by-word streaming state
         self._stream_words: list[str] = []
@@ -216,7 +220,13 @@ class ChatBubble(QFrame):
         bubble_layout = QVBoxLayout(self._bubble)
         bubble_layout.setContentsMargins(0, 0, 0, 0)
         bubble_layout.setSpacing(0)
+        self._image_layout = QVBoxLayout()
+        self._image_layout.setContentsMargins(8, 8, 8, 0)
+        self._image_layout.setSpacing(6)
+        bubble_layout.addLayout(self._image_layout)
+        self._render_images()
         bubble_layout.addWidget(self._label)
+        self._label.setVisible(bool(text) or not images)
         if not is_user:
             # Cap the measure on the container; the trailing row stretch
             # below pins it left when the window is wider than the measure.
@@ -295,7 +305,7 @@ class ChatBubble(QFrame):
         return self._finalized
 
     def snapshot(self) -> dict:
-        return {
+        entry = {
             "kind": "message",
             "role": self._role,
             "text": self._raw_text,
@@ -304,10 +314,30 @@ class ChatBubble(QFrame):
             "interrupted": self._interrupted_label is not None
             and not self._interrupted_label.isHidden(),
         }
+        if self._images:
+            entry["images"] = [image.snapshot() for image in self._images]
+        return entry
+
+    def _render_images(self) -> None:
+        while self._image_layout.count():
+            item = self._image_layout.takeAt(0)
+            if item is not None and (widget := item.widget()) is not None:
+                widget.deleteLater()
+        for image in self._images:
+            self._image_layout.addWidget(ImagePreview(image, size=240))
+        self._image_layout.setContentsMargins(
+            8 if self._images else 0,
+            8 if self._images else 0,
+            8 if self._images else 0,
+            8 if self._images and not self._raw_text else 0,
+        )
 
     def restore(self, entry: dict) -> None:
         """History is shown immediately, without replaying a speaking animation."""
         self._stream_timer.stop()
+        self._images = restore_images(entry.get("images", []))
+        self._render_images()
+        self._label.setVisible(bool(self._raw_text) or not self._images)
         self._complete_finalize()
         self.setToolTip(entry.get("time", ""))
         if self._interrupted_label is not None:

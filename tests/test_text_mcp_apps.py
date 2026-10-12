@@ -68,6 +68,11 @@ class DiceWidget(QWidget):
         super().__init__(parent)
         self.inputs, self.results, self.responses = [], [], []
         self.released = False
+        self.read_only = False
+
+    def set_read_only(self, results=None):
+        self.read_only = True
+        self.saved_results = results
 
     def load_html(self, html):
         self.html = html
@@ -120,6 +125,7 @@ async def test_app_remains_interactive_between_turns_and_closes_on_new_thread(
     mcp.resources.set()  # HTML can arrive after the final assistant token
     await until(lambda: bool(window._active_app_widgets))
     key, widget = next(iter(window._active_app_widgets.items()))
+    conversation_id = window._history.current.id
     assert widget.results == ['{"total":12}']
     assert not widget.released
     widget.tool_call_requested.emit("reroll", "roll_dice", {"notation": "1d20"})
@@ -140,6 +146,15 @@ async def test_app_remains_interactive_between_turns_and_closes_on_new_thread(
     assert mcp.closed == 1 and provider.closed
     assert widget.released and not window._active_app_widgets
     assert engine._kit is None and engine.state == EngineState.IDLE
+    window._history.select(conversation_id)
+    restored = window._chat.tool_call(key)._app
+    assert restored is not None and restored is not widget
+    assert restored.html == "<p>12</p>" and restored.read_only
+    assert restored.inputs == widget.inputs
+    assert restored.results == ['{"total":12}']
+    assert restored.saved_results.lookup("roll_dice", {"notation": "1d20"}) == '{"total":8}'
+    assert loads == [True] and len(mcp.app_calls) == 1
+    assert not window._active_app_widgets
 
 
 async def test_real_stdio_server_survives_followup_and_app_calls(

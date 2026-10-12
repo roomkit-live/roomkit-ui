@@ -4031,6 +4031,9 @@ anthropic = [
 azure-speech = [
     { name = "roomkit", extra = ["azure-speech"] },
 ]
+camera = [
+    { name = "pyside6-addons" },
+]
 cloud = [
     { name = "roomkit", extra = ["anthropic", "azure-speech", "deepgram", "elevenlabs", "gemini", "gradium", "meta-stt", "openai", "realtime-deepgram", "realtime-elevenlabs", "realtime-gemini", "realtime-openai", "typesafe"] },
 ]
@@ -4124,6 +4127,7 @@ requires-dist = [
     { name = "opentelemetry-sdk", marker = "extra == 'telemetry'", specifier = ">=1.20" },
     { name = "pyinstaller", marker = "extra == 'dev'", specifier = ">=6.0" },
     { name = "pynput", marker = "extra == 'dictation'", specifier = ">=1.7" },
+    { name = "pyside6-addons", marker = "extra == 'camera'", specifier = ">=6.7" },
     { name = "pyside6-addons", marker = "extra == 'mcp-apps'", specifier = ">=6.7" },
     { name = "pyside6-essentials", specifier = ">=6.7" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
@@ -4149,6 +4153,7 @@ requires-dist = [
     { name = "roomkit-ui", extras = ["all"], marker = "extra == 'dev'" },
     { name = "roomkit-ui", extras = ["anthropic"], marker = "extra == 'cloud'" },
     { name = "roomkit-ui", extras = ["azure-speech"], marker = "extra == 'cloud'" },
+    { name = "roomkit-ui", extras = ["camera"], marker = "extra == 'all'" },
     { name = "roomkit-ui", extras = ["cloud"], marker = "extra == 'all'" },
     { name = "roomkit-ui", extras = ["deepgram"], marker = "extra == 'cloud'" },
     { name = "roomkit-ui", extras = ["dictation"], marker = "extra == 'all'" },
@@ -4168,7 +4173,7 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6" },
     { name = "sherpa-onnx-core", marker = "extra == 'local-voice'", specifier = ">=1.13" },
 ]
-provides-extras = ["anthropic", "openai", "gemini", "deepgram", "elevenlabs", "gradium", "azure-speech", "meta-stt", "typesafe", "local-voice", "qwen3-tts", "neutts", "llamacpp", "pocket-tts", "smart-turn", "dictation", "mcp-apps", "wakeword", "telemetry", "cloud", "all", "dev"]
+provides-extras = ["anthropic", "openai", "gemini", "deepgram", "elevenlabs", "gradium", "azure-speech", "meta-stt", "typesafe", "local-voice", "qwen3-tts", "neutts", "llamacpp", "pocket-tts", "smart-turn", "dictation", "mcp-apps", "camera", "wakeword", "telemetry", "cloud", "all", "dev"]
 
 [[package]]
 name = "rpds-py"

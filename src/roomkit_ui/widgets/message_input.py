@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import math
 
-from PySide6.QtCore import QEvent, Qt, Signal
+from PySide6.QtCore import QEvent, QMimeData, Qt, Signal
 from PySide6.QtWidgets import QFrame, QPlainTextEdit
 
 
 class MessageInput(QPlainTextEdit):
     send_requested = Signal()
+    images_inserted = Signal(object)
     MAX_LINES = 8
 
     def __init__(self) -> None:
@@ -59,3 +60,18 @@ class MessageInput(QPlainTextEdit):
             event.accept()
             return
         super().keyPressEvent(event)
+
+    @staticmethod
+    def _has_images(source: QMimeData) -> bool:
+        return source.hasImage() or any(url.isLocalFile() for url in source.urls())
+
+    def canInsertFromMimeData(self, source: QMimeData) -> bool:  # noqa: N802
+        return self._has_images(source) or super().canInsertFromMimeData(source)
+
+    def insertFromMimeData(self, source: QMimeData) -> None:  # noqa: N802
+        if not self.isEnabled() or self.isReadOnly():
+            return
+        if self._has_images(source):
+            self.images_inserted.emit(source)
+        else:
+            super().insertFromMimeData(source)

@@ -10,13 +10,14 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import logging
-from datetime import UTC, datetime
 from typing import Any
 
 from roomkit_ui.engine_state import EngineState
 from roomkit_ui.engine_vc import LOCAL_LLMS, _model_pricing
 from roomkit_ui.engine_vc_helpers import reasoning_options, start_local_llm
 from roomkit_ui.features import FeatureUnavailableError
+from roomkit_ui.image_messages import ImageSessionWindow, message_content
+from roomkit_ui.images import ImageAttachment
 from roomkit_ui.providers import create_ai_provider
 from roomkit_ui.text_chat import text_chat_unavailable
 from roomkit_ui.toolset import tool_search_options
@@ -32,6 +33,9 @@ class TextMixin:
     _room_id: str
     _text_ready: bool
     _cancelling_text_response: bool
+    _text_images: tuple[ImageAttachment, ...]
+    _resume_image_entries: list[dict]
+    _text_vision: bool
 
     async def _start_text(self, settings: dict, text: str) -> None:
         from roomkit import RoomKit
@@ -40,7 +44,7 @@ class TextMixin:
         from roomkit.models import RetryPolicy
         from roomkit.models.enums import ChannelCategory, HookExecution, HookTrigger
 
-        from roomkit_ui.memory import ensure_room, session_window
+        from roomkit_ui.memory import ensure_room
 
         try:
             if reason := text_chat_unavailable(settings):
@@ -57,11 +61,18 @@ class TextMixin:
             )
             provider = create_ai_provider(provider_name, settings)
             try:
+                self._text_vision = provider.supports_vision
+                if self._text_images and not self._text_vision:
+                    raise ValueError(
+                        "This model does not accept images. Choose a vision model in Settings."
+                    )
                 ai = AIChannel(
                     "ai",
                     provider=provider,
                     system_prompt=prompt,
-                    memory=session_window(datetime.now(UTC)),
+                    memory=ImageSessionWindow(
+                        self._resume_image_entries, vision=self._text_vision
+                    ),
                     tool_handler=self._handle_tool_call,  # type: ignore[attr-defined]
                     config_provider=toolset.turn_config(),
                     skills=skills,
@@ -120,7 +131,6 @@ class TextMixin:
 
     async def _send_text_turn(self, text: str) -> None:
         from roomkit.models.delivery import InboundMessage
-        from roomkit.models.event import TextContent
 
         delivery = _TextDelivery(self)
         self._channel.register_connection(
@@ -131,9 +141,15 @@ class TextMixin:
         )
         self._enter_active()  # type: ignore[attr-defined]
         try:
+            if self._text_images and not self._text_vision:
+                raise ValueError(
+                    "This model does not accept images. Choose a vision model in Settings."
+                )
             result = await self._kit.process_inbound(
                 InboundMessage(
-                    channel_id="text", sender_id="user", content=TextContent(body=text)
+                    channel_id="text",
+                    sender_id="user",
+                    content=message_content(text, self._text_images),
                 ),
                 room_id=self._room_id,
             )

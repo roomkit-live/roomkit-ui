@@ -94,7 +94,10 @@ if [ -f "$APP_PLIST" ]; then
     /usr/libexec/PlistBuddy -c \
         "Add :NSMicrophoneUsageDescription string 'RoomKit UI needs microphone access for voice conversations.'" \
         "$APP_PLIST" 2>/dev/null || true
-    echo "==> Patched Info.plist (bundle ID + mic permission)"
+    /usr/libexec/PlistBuddy -c \
+        "Add :NSCameraUsageDescription string 'RoomKit UI uses your camera to take a photo you can attach to a message.'" \
+        "$APP_PLIST" 2>/dev/null || true
+    echo "==> Patched Info.plist (bundle ID, mic and camera permissions)"
 
     if [ -n "${CODESIGN_IDENTITY:-}" ]; then
         echo "==> Signing with: $CODESIGN_IDENTITY"

@@ -17,6 +17,20 @@ _SVG_TEMPLATE = (
 )
 
 _PATHS = {
+    "photo": (
+        '<rect x="3" y="3" width="18" height="18" rx="3"/>'
+        '<circle cx="8" cy="8" r="1.5"/>'
+        '<path stroke-linejoin="round" d="m3 17 5-5 4 4 4-6 5 7"/>'
+    ),
+    "camera": (
+        '<path stroke-linejoin="round" d="M8 5 9.5 3h5L16 5h3a2 2 0 0 1 2 2v12'
+        'a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"/>'
+        '<circle cx="12" cy="12" r="4"/>'
+    ),
+    "pencil": (
+        '<path stroke-linecap="round" stroke-linejoin="round" '
+        'd="m15 5 4 4M4 16 16 4a2.828 2.828 0 0 1 4 4L8 20l-5 1Z"/>'
+    ),
     "arrow-up": '<path stroke-linecap="round" stroke-linejoin="round" d="M12 20V4m-7 7 7-7 7 7"/>',
     "sidebar": '<rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/>',
     "x-mark": '<path stroke-linecap="round" d="m6 6 12 12M6 18 18 6"/>',
