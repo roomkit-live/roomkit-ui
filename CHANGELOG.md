@@ -372,6 +372,12 @@ Each released section is the source for that version's GitHub release notes.
   roomkit retried the stream. It now says "Speech recognition dropped and is
   reconnecting", and once Meta's voice labels start over, that a click on a voice's name
   names it again.
+- **Voice Channel fixes from roomkit 0.100** — the assistant's own voice, heard back while
+  the echo canceller is still learning the room at the start of a session, no longer cuts
+  its first reply or shows as your words. The sentence said before a tool call is spoken
+  before the call, not joined to the next one. Acknowledgements such as "ouh", "ah bon" or
+  "right" let the assistant go on under "Words only" barge-in. ElevenLabs v4 no longer
+  fails a reply on an audio tag sent alone (`input_text_empty`).
 - **MCP App output in conversation history** — preserve the tool's page alongside its
   input, result and the data fetched by the page itself. Restore them when reopening
   a conversation or restarting the app, including views that use `tools/call` to
