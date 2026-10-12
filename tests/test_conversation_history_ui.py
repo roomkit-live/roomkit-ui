@@ -373,3 +373,95 @@ async def test_generated_title_stays_in_memory_for_a_private_conversation(qtbot,
     history.suggest_title()
     history._start_title()
     generate.assert_awaited_once()
+
+
+async def test_deleting_asks_first_then_clears_the_open_thread(qtbot, monkeypatch):
+    window = _window(qtbot)
+    history = window._history
+    other = Conversation(
+        title="Another topic", entries=[{"kind": "message", "role": "user", "text": "Hi"}]
+    )
+    history.store.save(other)
+    history.prepare({})
+    window._chat.add_transcription("Let us plan a weekend", "user", True)
+    history.save()
+    conversation_id = history.current.id
+    history.show()
+    qtbot.waitUntil(lambda: history.drawer.pos().x() == 0)
+    asked: list[str] = []
+    answer = [False]
+
+    def confirm(title):
+        asked.append(title)
+        return answer[0]
+
+    monkeypatch.setattr(history, "_confirm_delete", confirm)
+    history.drawer._list.setFocus()
+    history.drawer._list.setCurrentRow(0)  # the open thread, the most recent
+    QTest.keyClick(history.drawer._list, Qt.Key_Delete)
+    assert asked == ["Let us plan a weekend"]
+    assert ConversationStore().get(conversation_id) is not None  # refused: kept
+
+    answer[0] = True
+    QTest.keyClick(history.drawer._list, Qt.Key_Backspace)  # the key macOS calls Delete
+    assert history.current is None
+    assert window._chat.snapshot() == []
+    await asyncio.wait_for(history._delete_task, timeout=5)
+    assert ConversationStore().get(conversation_id) is None
+    assert history.drawer._list.count() == 1
+    assert history.drawer._list.item(0).data(Qt.UserRole) == other.id
+    history.save()  # nothing left to save it again
+    assert ConversationStore().get(conversation_id) is None
+
+
+def test_ellipsis_offers_delete_without_opening_the_conversation(qtbot, monkeypatch):
+    from PySide6.QtCore import QPoint
+    from PySide6.QtWidgets import QMenu
+
+    import roomkit_ui.widgets.conversation_drawer as drawer_module
+
+    window = _window(qtbot)
+    history = window._history
+    conversation = Conversation(
+        title="A saved topic", entries=[{"kind": "message", "role": "user", "text": "Hello"}]
+    )
+    history.store.save(conversation)
+    history.drawer.delete_requested.disconnect(history.delete)
+    requested = []
+    history.drawer.delete_requested.connect(requested.append)
+
+    class DeleteMenu(QMenu):
+        def exec(self, *_):
+            return self.actions()[1]
+
+    monkeypatch.setattr(drawer_module, "QMenu", DeleteMenu)
+    history.show()
+    qtbot.waitUntil(lambda: history.drawer.pos().x() == 0)
+    listing = history.drawer._list
+    row = listing.visualItemRect(listing.item(0))
+    QTest.mouseClick(
+        listing.viewport(), Qt.LeftButton, pos=QPoint(row.right() - 20, row.center().y())
+    )
+    assert requested == [conversation.id]
+    assert history.current is None
+
+
+def test_the_delete_question_defaults_to_cancel(qtbot, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+
+    import roomkit_ui.widgets.conversation_history as history_module
+
+    window = _window(qtbot)
+    seen = {}
+
+    class Box(QMessageBox):
+        def exec(self):
+            seen["default"] = self.defaultButton().text()
+            seen["escape"] = self.escapeButton() is self.defaultButton()
+            seen["text"] = self.text()
+            return 0  # closed without a choice
+
+    monkeypatch.setattr(history_module, "QMessageBox", Box)
+
+    assert window._history._confirm_delete("Weekend") is False
+    assert seen == {"default": "Cancel", "escape": True, "text": "Delete “Weekend”?"}

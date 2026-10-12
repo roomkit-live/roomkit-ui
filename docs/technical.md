@@ -65,7 +65,9 @@ There is no server database. State lives in these places:
    UI-owned `ui_conversations` table (ID, title, title source, created/updated timestamps, JSON display
    snapshot). Each conversation uses a separate room; multiple Live calls can continue
    the same thread. The previous `main` room is exposed once as Earlier history without
-   rewriting its events. With history saving disabled, new events and snapshots stay
+   rewriting its events. Deleting a thread removes its room and its task rooms through
+   RoomKit's `delete_room` (task rooms carry `parent_room_id`), then its row, then runs
+   `VACUUM`: RoomKit's store does not set `secure_delete`. With history saving disabled, new events and snapshots stay
    in memory. The database lives in the
    platform data dir (`paths.data_dir()`: `~/Library/Application Support/RoomKit UI/` on
    macOS, `~/.local/share/roomkit-ui/` elsewhere), mode 0600. Every stored file lives

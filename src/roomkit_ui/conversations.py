@@ -6,7 +6,9 @@ Saving a snapshot is atomic; reading history never creates a database.
 
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 import sqlite3
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -14,6 +16,8 @@ from uuid import uuid4
 
 from roomkit_ui import memory
 from roomkit_ui.tool_events import ToolCall, ToolResult
+
+logger = logging.getLogger(__name__)
 
 _LEGACY_IMPORT = "legacy-messages-only-v1"
 
@@ -185,6 +189,38 @@ class ConversationStore:
             _decode_entries(row[4]),
             title_source=row[5] if len(row) > 5 else "fallback",
         )
+
+    async def delete(self, conversation_id: str) -> None:
+        """Remove a conversation from this computer: RoomKit's room for it
+        (every event, the search index the assistant recalls from) and the
+        rooms its background tasks ran in, then its catalogue entry and
+        snapshot.  The room goes first: an entry left behind can be deleted
+        again, events left behind would no longer show anywhere."""
+        self._temporary.pop(conversation_id, None)
+        if not self.path.exists():
+            return
+        await memory.delete_room(self.path, conversation_id)
+        await asyncio.to_thread(self._delete_saved, conversation_id)
+
+    def _delete_saved(self, conversation_id: str) -> None:
+        connection = sqlite3.connect(self.path, timeout=2)
+        try:
+            with connection:
+                if connection.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='ui_conversations'"
+                ).fetchone():
+                    connection.execute(
+                        "DELETE FROM ui_conversations WHERE id=?", (conversation_id,)
+                    )
+            try:
+                # Deleted rows stay readable in the file's free pages and its
+                # WAL until they are written over: compact them away.
+                connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                connection.execute("VACUUM")
+            except sqlite3.Error:
+                logger.warning("History compaction after a deletion failed", exc_info=True)
+        finally:
+            connection.close()
 
     def _legacy_import_done(self) -> bool:
         return bool(

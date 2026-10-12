@@ -207,6 +207,14 @@ keep the provisional title. **⋯ → Rename** or **F2** sets a name that automa
 cannot overwrite. Renaming does not reorder recent activity. Private threads keep
 their titles in memory too. (`conversation_titles.py`)
 
+**⋯ → Delete…** or the **Delete** key (Backspace on a Mac keyboard) removes a thread
+after a confirmation, Cancel by default: its snapshot, RoomKit's room for it (every
+event and the search index `recall_conversations` reads) and the rooms its background
+tasks ran in, then compacts the database so the deleted text does not linger in its
+free pages. Deleting the open thread empties the chat. A text session waiting for the
+next message is closed first; Live must end before. (`ConversationStore.delete`,
+`memory.delete_room`)
+
 Both modes receive a fenced recap of only the selected thread (up to 50 messages and
 24,000 characters), and `recall_conversations` searches only its room. Earlier requests
 are context rather than new commands; cut answers are marked interrupted. Voice Channel

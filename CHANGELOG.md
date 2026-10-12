@@ -32,7 +32,10 @@ Each released section is the source for that version's GitHub release notes.
   navigation and information actions; RoomKit branding stays in the panels.
 - **Conversation titles and recent history** — the configured text model summarizes
   the first exchanges into a short title when available; Rename lets you keep your own
-  name. The drawer shows 30 recent conversations and searches titles across all history.
+  name, and Delete (⋯ or the Delete key, after a confirmation) removes a conversation
+  from this computer: its messages, what the assistant can recall of it and its
+  background tasks. The drawer shows 30 recent conversations and searches titles across
+  all history.
   Settings moves to its footer, clearing space in the main conversation header.
   The drawer follows the Settings sidebar's palette, shared RoomKit wordmark, outlined
   search and compact navigation rows, with a soft violet selection in both themes.

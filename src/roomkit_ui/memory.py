@@ -113,6 +113,29 @@ def memory_active(settings: dict) -> bool:
     return True
 
 
+async def delete_room(path: Path, room_id: str) -> None:
+    """Delete *room_id* from the store at *path*, with the rooms its
+    background tasks ran in (roomkit marks them ``parent_room_id``).
+
+    roomkit's ``delete_room`` takes every table it keeps per room: events,
+    their search index, bindings, participants, tasks.
+    """
+    try:
+        from roomkit.store.sqlite import SQLiteStore
+    except ImportError:
+        return
+    _restrict_to_owner(path)
+    store = SQLiteStore(path)
+    store.is_process_local = True
+    try:
+        parent = {"parent_room_id": room_id}
+        for task in await store.find_rooms(metadata_filter=parent, limit=1_000_000):
+            await store.delete_room(task.id)
+        await store.delete_room(room_id)
+    finally:
+        await store.close()
+
+
 async def ensure_room(kit: Any, room_id: str, *, channels: Collection[str]) -> None:
     """Create the durable room once; later sessions reuse it, bound to the
     *channels* this session serves only.

@@ -192,6 +192,54 @@ async def test_roomkit_recap_and_search_are_scoped_to_the_selected_room():
     await kit.close()
 
 
+async def test_deleting_a_conversation_leaves_nothing_of_it_on_disk():
+    from roomkit import RoomKit
+
+    store = ConversationStore()
+    gone, kept = Conversation(), Conversation()
+    gone.update([message("My secret garden plan")])
+    kept.update([message("The library project")])
+    store.save(gone)
+    store.save(kept)
+    kit = RoomKit(store=memory.build_store({"conversation_memory": True}))
+    for room in (gone.id, kept.id):
+        await memory.ensure_room(kit, room, channels=())
+    await _append(kit, gone.id, "My secret garden plan")
+    await _append(kit, kept.id, "The library project")
+    # A background task ran in a room of its own, under the conversation's.
+    task_room = f"{gone.id}::task-1"
+    await kit.create_room(room_id=task_room, metadata={"parent_room_id": gone.id, "task_id": "t1"})
+    await _append(kit, task_room, "Secret garden research notes")
+    await kit.close()
+
+    await store.delete(gone.id)
+
+    assert store.get(gone.id) is None
+    assert [c.id for c in ConversationStore().list()] == [kept.id]
+    kit = RoomKit(store=memory.build_store({"conversation_memory": True}))
+    assert await kit.store.get_room(gone.id) is None
+    assert await kit.store.get_room(task_room) is None
+    assert len(await kit.store.list_events(kept.id)) == 1
+    found = json.loads(await memory.recall_conversations(kit, {"query": "garden"}, gone.id))
+    assert not found.get("results")
+    await kit.close()
+    # Not even in the file's free pages or its WAL.
+    for file in store.path.parent.glob(f"{store.path.name}*"):
+        assert b"ecret garden" not in file.read_bytes(), file.name
+
+
+async def test_deleting_a_private_conversation_writes_nothing():
+    store = ConversationStore()
+    private = Conversation(persistent=False)
+    private.update([message("Only for this app session")])
+    store.save(private)
+
+    await store.delete(private.id)
+
+    assert store.get(private.id) is None
+    assert not store.path.exists()
+
+
 def test_saved_history_has_private_file_permissions():
     import sys
 

@@ -90,6 +90,7 @@ class ConversationDrawer(SlidingPanel):
     new_requested = Signal()
     settings_requested = Signal()
     rename_requested = Signal(str)
+    delete_requested = Signal(str)
 
     def __init__(self, parent: QWidget) -> None:
         super().__init__("Conversations", parent)
@@ -136,6 +137,10 @@ class ConversationDrawer(SlidingPanel):
         self._list.customContextMenuRequested.connect(self._context_menu)
         rename = QShortcut(QKeySequence(Qt.Key_F2), self._list)
         rename.activated.connect(self._rename_current)
+        # Delete, and Backspace: the key macOS labels Delete.
+        for key in (Qt.Key_Delete, Qt.Key_Backspace):
+            delete = QShortcut(QKeySequence(key), self._list)
+            delete.activated.connect(self._delete_current)
         layout.addWidget(self._list, 1)
         self._empty = QLabel("Your conversations will appear here.")
         self._empty.setAlignment(Qt.AlignCenter)
@@ -208,7 +213,10 @@ class ConversationDrawer(SlidingPanel):
             item.setIcon(self._conversation_icon)
             item.setData(Qt.UserRole, conversation.id)
             item.setToolTip(conversation.title)
-            item.setData(Qt.AccessibleDescriptionRole, "Press F2 to rename this conversation.")
+            item.setData(
+                Qt.AccessibleDescriptionRole,
+                "Press F2 to rename this conversation, Delete to delete it.",
+            )
             self._list.addItem(item)
             if conversation.id == self._selected:
                 self._list.setCurrentItem(item)
@@ -222,6 +230,10 @@ class ConversationDrawer(SlidingPanel):
         if (item := self._list.currentItem()) is not None and not self._busy:
             self.rename_requested.emit(item.data(Qt.UserRole))
 
+    def _delete_current(self) -> None:
+        if (item := self._list.currentItem()) is not None and not self._busy:
+            self.delete_requested.emit(item.data(Qt.UserRole))
+
     def _context_menu(self, pos: QPoint) -> None:
         item = self._list.itemAt(pos)
         if item is None or self._busy:
@@ -229,9 +241,13 @@ class ConversationDrawer(SlidingPanel):
         conversation_id = item.data(Qt.UserRole)
         menu = QMenu(self)
         rename = menu.addAction("Rename")
+        delete = menu.addAction("Delete…")
         try:
-            if menu.exec(self._list.viewport().mapToGlobal(pos)) == rename:
+            chosen = menu.exec(self._list.viewport().mapToGlobal(pos))
+            if chosen == rename:
                 self.rename_requested.emit(conversation_id)
+            elif chosen == delete:
+                self.delete_requested.emit(conversation_id)
         finally:
             menu.deleteLater()
 

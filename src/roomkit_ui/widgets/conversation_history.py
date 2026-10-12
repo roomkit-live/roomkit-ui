@@ -6,8 +6,8 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING
 
-from PySide6.QtCore import QObject, QSettings, QTimer
-from PySide6.QtWidgets import QDialog, QInputDialog, QLineEdit
+from PySide6.QtCore import QObject, QSettings, Qt, QTimer
+from PySide6.QtWidgets import QDialog, QInputDialog, QLineEdit, QMessageBox
 from shiboken6 import isValid
 
 from roomkit_ui.conversation_titles import generate_title, title_transcript
@@ -31,8 +31,10 @@ class ConversationHistory(QObject):
         self.drawer.new_requested.connect(self.new)
         self.drawer.selected.connect(self.select)
         self.drawer.rename_requested.connect(self.rename)
+        self.drawer.delete_requested.connect(self.delete)
         self.drawer.closed.connect(self._closed)
         self._import_task: asyncio.Task | None = None
+        self._delete_task: asyncio.Task | None = None
         self._save_timer = QTimer(self)
         self._save_timer.setSingleShot(True)
         self._save_timer.setInterval(400)
@@ -169,6 +171,73 @@ class ConversationHistory(QObject):
         except Exception:
             logger.exception("Could not rename the conversation")
             self.drawer.set_notice("The conversation could not be renamed. Please try again.")
+
+    def delete(self, conversation_id: str) -> None:
+        """Ask, then remove a conversation and everything kept of it."""
+        if self.busy or (self._delete_task is not None and not self._delete_task.done()):
+            return
+        self.save()
+        try:
+            conversation = self.store.get(conversation_id)
+        except Exception:
+            logger.exception("Could not read the conversation to delete")
+            conversation = None
+        title = conversation.title if conversation is not None else "This conversation"
+        if self._confirm_delete(title):
+            self._delete_confirmed(conversation_id)
+
+    def _confirm_delete(self, title: str) -> bool:
+        box = QMessageBox(self.drawer)
+        box.setIcon(QMessageBox.Warning)
+        box.setWindowTitle("Delete conversation?")
+        box.setTextFormat(Qt.PlainText)
+        box.setText(f"Delete “{title}”?")
+        box.setInformativeText(
+            "Its messages, what the assistant can recall of it and its background tasks "
+            "are removed from this computer. This cannot be undone."
+        )
+        delete = box.addButton("Delete", QMessageBox.DestructiveRole)
+        cancel = box.addButton(QMessageBox.Cancel)
+        box.setDefaultButton(cancel)
+        box.setEscapeButton(cancel)
+        try:
+            box.exec()
+            return box.clickedButton() is delete
+        finally:
+            box.deleteLater()
+
+    def _delete_confirmed(self, conversation_id: str) -> None:
+        # A text session waiting for the next message holds this history open.
+        if self.window._finish_text_session(lambda: self._delete_confirmed(conversation_id)):
+            return
+        if self.current is not None and self.current.id == conversation_id:
+            # Nothing of it may be saved again: the chat starts empty.
+            self._save_timer.stop()
+            self.current = None
+            self.window._controls.clear_draft()
+            self.window._chat.reset()
+            self.window._active_app_widgets.clear()
+            self.window._header.set_conversation("")
+        if (task := self._title_tasks.pop(conversation_id, None)) is not None:
+            task.cancel()
+        if self._title_pending is not None and self._title_pending[0] == conversation_id:
+            self._title_pending = None
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return  # A synchronous widget preview has no qasync loop.
+        self._delete_task = loop.create_task(self._delete(conversation_id))
+
+    async def _delete(self, conversation_id: str) -> None:
+        try:
+            await self.store.delete(conversation_id)
+        except Exception:
+            logger.exception("Could not delete conversation %s", conversation_id)
+            if isValid(self.drawer):
+                self.drawer.set_notice("The conversation could not be deleted. Please try again.")
+            return
+        if isValid(self.drawer):
+            self._refresh()
 
     def close(self) -> None:
         self._title_timer.stop()
