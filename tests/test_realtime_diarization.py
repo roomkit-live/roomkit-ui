@@ -65,17 +65,13 @@ def test_the_realtime_pipeline_stays_at_the_provider_rate(engine):
     assert media.pipeline.contract is None  # no 16 kHz internal format
 
 
-# -- the pipeline-stage AEC stays on between replies ----------------------------
+# -- the pipeline-stage AEC is roomkit's own ------------------------------------
 
 
-def test_the_pipeline_stage_aec_is_kept_on(engine):
-    from roomkit_ui.engine_realtime import _KeptOnAEC
-
+def test_the_pipeline_stage_aec_is_the_one_built(engine):
     gemini = engine._build_realtime_media(_SETTINGS, "gemini", "webrtc")
-    deepgram = engine._build_realtime_media(
-        {**_SETTINGS, "deepgram_api_key": "test-key"}, "deepgram", "webrtc"
-    )
 
-    assert isinstance(gemini.pipeline.aec, _KeptOnAEC)
-    # The transport runs Deepgram's and keeps it on itself (LocalAudioBackend).
-    assert not isinstance(deepgram.aec, _KeptOnAEC)
+    # roomkit keeps it running between replies itself since 0.98 (RMK-678):
+    # LocalAudioBackend marks the silence it plays reference_continues.
+    assert gemini.pipeline.aec is gemini.aec
+    assert type(gemini.aec).__module__.startswith("roomkit.")

@@ -1,6 +1,6 @@
 # Technical Reference
 
-> _Generated: 2026-06-11 — updated 2026-10-11 for roomkit 0.97.0 — re-run /project-review to update_
+> _Generated: 2026-06-11 — updated 2026-10-12 for roomkit 0.98.0 — re-run /project-review to update_
 
 System context lives in [architecture.md](architecture.md); feature-to-code mapping in
 [features.md](features.md); setup steps in [onboarding.md](onboarding.md).
@@ -12,7 +12,7 @@ System context lives in [architecture.md](architecture.md); feature-to-code mapp
 | Language | Python | 3.12+ |
 | GUI | PySide6-Essentials (Qt 6); PySide6-Addons via the `mcp-apps` extra | 6.11.1 |
 | Async/Qt bridge | qasync | 0.28.0 |
-| Voice/AI framework | roomkit (core: `local-audio`, `webrtc-aec`; every backend through an app extra) | 0.97.0 |
+| Voice/AI framework | roomkit (core: `local-audio`, `webrtc-aec`; every backend through an app extra) | 0.98.0 |
 | Tool protocol | mcp | 2.0.0 |
 | HTTP | httpx | 0.28.1 |
 | Secrets | keyring | 25.7.0 |
@@ -34,9 +34,9 @@ src/roomkit_ui/
 ├── engine_audio.py             # Pipeline builders: AEC, denoise, VAD, diarization, recording, DSP pool
 ├── engine_callbacks.py, engine_tools.py, toolset.py, builtin_tools.py   # Callbacks, tool dispatch
 ├── hooks.py, watchdog.py, idle_hangup.py, cleanup.py, memory.py, aec_dump.py
-├── mcp_manager.py, mcp_config.py, mcp_auth.py, mcp_app_bridge.py, url_policy.py
+├── mcp_manager.py, mcp_config.py, mcp_auth.py, mcp_app_bridge.py, mcp_skills.py, url_policy.py
 ├── cli_tools.py, cli_exec.py, cli_help.py, cli_tools_config.py, env_config.py
-├── skill_manager.py, skill_git.py, skill_well_known.py, skills_sh_client.py
+├── skill_manager.py, skill_git.py, skill_well_known.py, skills_sh_client.py, skill_approval.py
 ├── stt_engine.py, stt_sessions.py, hotkey.py, paste.py, paste_windows.py, tray.py, sounds.py
 ├── speaker_manager.py, enrollment.py
 ├── speaker_roster.py, speaker_naming.py   # Voices Meta Muse tells apart: names, the user's voice, name_speaker
@@ -151,6 +151,28 @@ it was attached with, and a background task runs the agent in a room of its own.
 constructor's `tools=` would reach every room too, but it refuses the channel when a host
 tool is named like one the channel serves itself (skills, Tool Search); a turn config's
 tools are left out with a warning instead.
+
+### Skills from MCP servers
+
+An MCP session opens on the 2026 protocol when its server offers it (`server/discover`),
+on the initialize handshake otherwise (`mcp_manager.negotiate_era`, mcp's own
+`Client(mode="auto")` policy); a 2026 server declares its extensions there only. A server
+that declares the MCP Skills extension (`io.modelcontextprotocol/skills`, SEP-2640), with
+"Use its skills" on, is handed to roomkit once the servers are connected:
+`SkillRegistry.add_mcp_server` lists its skills under a label from the server's name
+(`hugging_face:hf-cli`) beside the user's own, in both modes. `mcp_skills.SessionSkillServer`
+is the app's session as roomkit reads a server: the declared extensions, raw
+`skills/list`/`skills/get` requests, `resources/read`. Nothing of a skill is read before
+the model activates it; roomkit then checks its `SKILL.md` and files against the listing
+(size, SHA-256, frontmatter) and gives the model their text as that server's data. A
+server whose listing fails, and an entry roomkit does not take (dynamic, past the
+extension's limits), are named in the chat.
+
+While a served skill is active, the CLI tools (roomkit's `execution_tools`) run only with
+the user's approval: `SkillApprovals` emits `skill_approval_requested`, the window asks
+(`skill_approval_dialog`, Refuse by default), and no answer within 60 s refuses. Calls
+waiting together share one question; roomkit keeps a yes for the conversation and that
+version of the skill's files. A session's end refuses and closes a question still open.
 
 ### Voice Channel agent
 

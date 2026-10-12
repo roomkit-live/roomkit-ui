@@ -1,6 +1,6 @@
 # Developer Onboarding
 
-> _Generated: 2026-06-11 — updated 2026-10-11 for roomkit 0.97.0 — re-run /project-review to update_
+> _Generated: 2026-06-11 — updated 2026-10-12 for roomkit 0.98.0 — re-run /project-review to update_
 
 Goal: productive in under 30 minutes. Deeper context:
 [architecture.md](architecture.md) · [technical.md](technical.md) · [features.md](features.md)

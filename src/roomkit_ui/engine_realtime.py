@@ -123,8 +123,9 @@ class RealtimeMixin:
             # Agent Skills — same registry the VC path loads.  The channel
             # resolves delivery per provider: reconfigurable sessions (Gemini,
             # OpenAI) get the skill list in the prompt plus an activate_skill
-            # tool; fixed sessions get every body inlined at connect.
-            skills_registry = self._load_skills(settings)  # type: ignore[attr-defined]
+            # tool; fixed sessions get every body inlined at connect (a skill
+            # an MCP server serves is then unavailable: it loads on demand).
+            skills_registry = await self._load_all_skills(settings, toolset)  # type: ignore[attr-defined]
 
             logger.info("Tools: %s", ", ".join(t["name"] for t in toolset.all))
             self.loading_status.emit("Connecting to provider…")  # type: ignore[attr-defined]
@@ -201,8 +202,6 @@ class RealtimeMixin:
         transport_aec, rt_denoiser, prebuffer_ms = transport_audio_profile(
             provider_name, aec, sample_rate
         )
-        if transport_aec is None:
-            aec = _kept_on(aec)  # the transport already keeps its own on
         if transport_aec is not None or rt_denoiser is not None:
             logger.info(
                 "Transport-level AEC=%s (%s) + webrtc NS, prebuffer=%dms",
@@ -458,39 +457,6 @@ def _with_aec_dump(aec: Any) -> Any:
 
     logger.warning("AEC dump recording enabled → %s", dump_dir)
     return AECDumpRecorder(aec, Path(dump_dir).expanduser())
-
-
-class _KeptOnAEC:
-    """A pipeline-stage AEC on from the first reply to the session's end.
-
-    roomkit 0.97's pipeline bypasses its AEC at the end of every reply and
-    resumes it at the next.  WebRTC AEC3 resumes misaligned and takes ~5 s
-    to cancel again, long enough for a realtime provider to hear its own
-    voice and cut itself off (an AEC dump replayed: the next reply's first
-    second at -5 then -0 dB, against -34 and -44 dB kept on; the user's
-    voice between replies loses ~1 dB).  ``LocalAudioBackend`` keeps a
-    transport AEC on this way already; the reference runs on, silence
-    included, so nothing is missing.  Teardown still resets the stream.
-    """
-
-    def __init__(self, inner: Any) -> None:
-        self._inner = inner
-
-    def set_stream_active(self, stream: str, active: bool) -> None:
-        if active:
-            self._inner.set_stream_active(stream, True)
-
-    def set_active(self, active: bool) -> None:
-        if active:
-            self._inner.set_active(True)
-
-    def __getattr__(self, item: str) -> Any:
-        return getattr(self._inner, item)
-
-
-def _kept_on(aec: Any) -> Any:
-    """*aec* kept on between replies (``_KeptOnAEC``); None stays None."""
-    return None if aec is None else _KeptOnAEC(aec)
 
 
 # ---------------------------------------------------------------------------

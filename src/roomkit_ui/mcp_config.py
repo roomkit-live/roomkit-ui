@@ -43,6 +43,12 @@ def enabled_mcp_servers(raw: Any) -> list[dict[str, Any]]:
     ]
 
 
+def uses_skills(server: dict[str, Any]) -> bool:
+    """Whether the skills this server publishes reach the assistant (on unless
+    the user turned them off for it)."""
+    return bool(server.get("skills", True))
+
+
 def has_enabled_mcp_servers(raw: Any) -> bool:
     """Return True if *raw* contains at least one enabled MCP server config."""
     return bool(enabled_mcp_servers(raw))

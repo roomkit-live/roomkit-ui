@@ -31,6 +31,14 @@ Each released section is the source for that version's GitHub release notes.
   room and saves text, interrupted replies, speaker names and tool results. The former
   shared timeline appears as Earlier history without altering its source. History saving
   off keeps new exchanges in memory, leaving existing saved conversations intact.
+- **Skills from MCP servers** (MCP Skills extension, SEP-2640) — a server that publishes
+  skills brings them beside its tools, named after it (`hugging_face:hf-cli`). The
+  assistant sees each one's name and description; a skill's text is read from its server
+  only when the assistant uses it, checked against what the server listed, and handed to
+  the model as that server's content, never as the app's instructions. While such a skill
+  is active, a CLI tool runs only once you allow it for the conversation (no answer within
+  60 s refuses). Settings → Integrations → MCP servers → "Use its skills" turns a server's
+  skills off.
 - **Spoken language in General** — the language you speak is set once, in Settings →
   General, for every conversation's transcription; Listen · STT links to it. Dictation
   follows it, or sets its own (another language or Auto-detect). A language chosen before
@@ -64,7 +72,8 @@ Each released section is the source for that version's GitHub release notes.
   what the selected model does differently (one that always thinks, one that takes no
   effort). Thinking on and Extra high/Max give the reply room under `max_tokens`. OpenAI
   has none: a voice turn carries tools, and with tools GPT-5.4 and later take no
-  reasoning. Claude's Off and Effort need roomkit 0.98.
+  reasoning. Claude's Off goes as each model turns its reasoning off, and an effort as
+  the nearest level the model takes (roomkit 0.98).
 - **Providers and Integrations alignment** — provider credentials use grouped cloud/local
   cards with status and Manage actions; key fields open on demand. Integrations follows
   MCP servers, CLI tools, Skills with large empty states and actions on each entry.
@@ -239,14 +248,18 @@ Each released section is the source for that version's GitHub release notes.
   skills, speakers and conversations in `~/Library/Application Support/RoomKit UI`. What
   older versions left in `~/.local/share/roomkit-ui` moves there once at startup; a
   folder already at its new home is never overwritten.
-- **roomkit `0.24.0` → `0.97.0`**, which brings the new providers, the model and voice
-  catalogs, the conversation store and the shared microphone above. The app absorbs its
+- **roomkit `0.24.0` → `0.98.0`**, which brings the new providers, the model and voice
+  catalogs, the conversation store, the shared microphone and the MCP servers' skills
+  above. The app absorbs its
   behaviour changes: roomkit's own tool-call timeouts give way to the app's (MCP 60 s,
   each CLI tool its own), the built-ins stay declared when Tool Search activates, failed
   tool calls are raised so every provider reads them as failures (Gemini read a returned
   error as a success), an MCP tool whose name is taken or invalid is left out and named
   in the chat, and a Voice Channel turn the provider refuses transiently is retried twice.
-- **mcp `1.x` → `2.0`.**
+- **mcp `1.x` → `2.0`.** A server is spoken to on the 2026 protocol when it offers it
+  (`server/discover`), on the initialize handshake otherwise, as mcp's own client does:
+  a server on the 2026 protocol declares its extensions there only. PyYAML joins the core
+  dependencies, for roomkit's check of a served skill's frontmatter.
 - **Model lists from roomkit's catalogs** — the realtime model and voice dropdowns (every
   Gemini Live voice, OpenAI's marin and cedar, Aura-2) and the Voice Channel's Claude,
   OpenAI and Gemini lists. A saved id outside the list is kept, never replaced.
@@ -318,7 +331,8 @@ Each released section is the source for that version's GitHub release notes.
   itself off** — roomkit's pipeline paused the echo canceller at the end of every reply;
   resumed at the next one, it took seconds to cancel again, and the provider heard its
   own voice as the user speaking. The canceller now stays on for the whole session, as
-  the transport already keeps its own (Deepgram, GPT-Live, Voice Channel).
+  the transport already keeps its own (Deepgram, GPT-Live, Voice Channel): roomkit 0.98
+  keeps it running between replies itself.
 - **A new session no longer takes up the last one** — the Voice Channel's AI read the
   durable room as its conversation, so at the first "hello" it went on with what the last
   session left open (an apology for ending it), and each such answer, stored, fed the next

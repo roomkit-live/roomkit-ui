@@ -1,6 +1,6 @@
 # Architecture
 
-> _Generated: 2026-06-11 — updated 2026-10-11 for roomkit 0.97.0 — re-run /project-review to update_
+> _Generated: 2026-06-11 — updated 2026-10-12 for roomkit 0.98.0 — re-run /project-review to update_
 
 RoomKit UI is a single-process desktop voice assistant. A PySide6 (Qt 6) GUI and an
 asyncio engine share one thread through [qasync](https://github.com/CabbageDevelopment/qasync),
@@ -99,8 +99,9 @@ graph TB
 | **Wake word** | `wakeword/`, `widgets/wakeword_wizard.py` | Shared microphone lifetime, VAD-gated capture, whisper-encoder embeddings matched by DTW against an enrolled fingerprint |
 | **Dictation** | `stt_engine.py`, `stt_sessions.py`, `hotkey.py`, `paste.py`, `paste_windows.py`, `tray.py` | Global hotkey → STT recording (OpenAI/local/Deepgram) → clipboard paste into the focused app |
 | **Speakers** | `speaker_manager.py`, `enrollment.py`, `speaker_roster.py`, `speaker_naming.py`, `widgets/voice_name_dialog.py` | Speaker profile persistence (JSON) and embedding extraction for the local diarization; with Meta Muse, the voices it labels, the names put on them (a click in the chat, or the assistant's `name_speaker`), the user's voice for primary-speaker mode, and who is who in each turn's prompt |
-| **MCP** | `mcp_manager.py`, `mcp_config.py`, `mcp_auth.py`, `mcp_app_bridge.py`, `url_policy.py`, `widgets/mcp_app_*.py` | MCP server connections (stdio/SSE/HTTP), OAuth2 flow, MCP App hosting (local server, request filter, JSON-RPC bridge) |
+| **MCP** | `mcp_manager.py`, `mcp_config.py`, `mcp_auth.py`, `mcp_app_bridge.py`, `url_policy.py`, `widgets/mcp_app_*.py` | MCP server connections (stdio/SSE/HTTP) on the 2026 protocol when the server offers it, OAuth2 flow, MCP App hosting (local server, request filter, JSON-RPC bridge) |
 | **Skills** | `skill_manager.py`, `skill_git.py`, `skill_well_known.py`, `skills_sh_client.py` | Skill discovery from git/local sources, skills.sh search and installs, registry building via `roomkit.skills` |
+| **MCP skills** | `mcp_skills.py`, `skill_approval.py`, `widgets/skill_approval_dialog.py` | Skills MCP servers publish (SEP-2640) handed to roomkit's registry beside the user's own; the user's yes before a CLI tool runs while one is active |
 | **Models** | `model_catalog.py`, `model_download.py`, `model_manager.py`, `download_flight.py` | Download/manage local STT/TTS/VAD/speaker/denoiser/turn models (GitHub LFS resolution, one download per model) |
 | **Settings & secrets** | `settings.py`, `settings_secrets.py`, `secret_store.py` | QSettings persistence; API keys and secret env values in the OS keyring |
 | **Providers** | `providers/`, `tts/` | Lazy factory registries for LLM providers and TTS backends |

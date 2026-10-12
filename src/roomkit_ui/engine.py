@@ -35,6 +35,7 @@ from roomkit_ui.engine_vc import VoiceChannelMixin
 from roomkit_ui.mcp_config import enabled_mcp_servers
 from roomkit_ui.mcp_manager import MCPManager
 from roomkit_ui.session_models import SessionModel
+from roomkit_ui.skill_approval import SkillApprovals
 from roomkit_ui.toolset import ToolSet, reachable_mcp_tools, tool_summaries
 from roomkit_ui.watchdog import SessionWatchdog
 
@@ -123,6 +124,7 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
     session_cost = Signal(dict)  # {cost_usd: float|None, input_tokens, output_tokens}
     attitude_changed = Signal(str)  # attitude name (empty string = cleared)
     speaker_named = Signal(str, str)  # voice ("Speaker A"), what it is called now
+    skill_approval_requested = Signal(object)  # SkillApproval: may a program run?
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -136,6 +138,11 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         self._tts: Any = None
         self._mcp: MCPManager | None = None
         self._cli: CliToolManager | None = None
+        # Questions before a program runs for a skill an MCP server serves.
+        self._skill_approvals = SkillApprovals(
+            lambda approval: self._safe_emit(self.skill_approval_requested, approval),
+            lambda text: self._safe_emit(self.session_notice, text),
+        )
         self._mic_muted = False
         self._state = EngineState.IDLE
         self._room_id = f"conversation-{uuid4().hex}"
@@ -589,6 +596,7 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
     async def _cleanup(self) -> None:
         """Tear the session down, in the order the fixes below depend on."""
         self._watchdog.stop()
+        self._skill_approvals.cancel_all()  # closes a question still open
         self._pending_tool_calls = 0
         self._background_tasks = 0
         self._spk_timer.stop()

@@ -1,6 +1,6 @@
 # Features
 
-> _Generated: 2026-06-11 — updated 2026-10-11 for roomkit 0.97.0 — re-run /project-review to update_
+> _Generated: 2026-06-11 — updated 2026-10-12 for roomkit 0.98.0 — re-run /project-review to update_
 
 Implementation details for each feature are in [technical.md](technical.md);
 system context in [architecture.md](architecture.md).
@@ -262,10 +262,21 @@ makes the assistant answer only utterances attributed to the enrolled primary sp
 - **CLI tools**: declare a local binary once (Settings → Integrations → CLI tools) and the model can run
   it, its `--help` seeded into the tool description. The page warns that a declared CLI
   runs with the user's permissions and any arguments the assistant chooses, without
-  asking. (`cli_tools.py`, `cli_help.py`)
+  asking — unless a skill an MCP server serves is active (below). (`cli_tools.py`,
+  `cli_help.py`)
 - **MCP servers**: stdio / SSE / streamable-HTTP transports, OAuth2 for HTTP servers,
   configured in Settings → Integrations → MCP servers. An MCP tool named like a built-in or CLI tool, or with a
-  name providers refuse, is left out and named in the chat. (`mcp_manager.py`)
+  name providers refuse, is left out and named in the chat. A session speaks the 2026
+  protocol when the server offers it, the initialize handshake otherwise. (`mcp_manager.py`)
+- **Skills from MCP servers** (MCP Skills extension, SEP-2640): a server that publishes
+  skills brings them beside the user's own, named after it (`hugging_face:hf-cli`), in
+  both modes. The model sees their names and descriptions; a skill's text is read from
+  its server when the model activates it, checked against the listing, and given as that
+  server's content. While one is active, a CLI tool runs only once the user allows it for
+  the conversation ("Allow this skill to run programs?", Refuse by default, refused after
+  60 s without an answer). "Use its skills" on a server's page turns them off; a listing
+  that fails or a skill roomkit refuses is named in the chat. (`mcp_skills.py`,
+  `skill_approval.py`, `widgets/skill_approval_dialog.py`)
 - Dispatch order: engine built-ins, built-ins, CLI tools, then the owning MCP session. A
   failed call is reported to the model as a failure on every provider.
 - **Tool search** (Settings → Integrations, below the tabs): with many tools, roomkit

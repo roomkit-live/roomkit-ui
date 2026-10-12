@@ -90,6 +90,7 @@ class VoiceChannelMixin:
     _kit: Any
     _session: Any
     _mcp: Any
+    _skill_approvals: Any
     _diarization: Any
     _primary_speaker_mode: bool
     _primary_speaker_name: str
@@ -332,7 +333,6 @@ class VoiceChannelMixin:
         if llm_provider_name == "local" and not settings.get("vc_local_tools", True):
             logger.info("Local model tool support disabled — skipping MCP/tools")
             return ToolSet(builtin=[], cli=[], mcp=[]), None
-        skills_registry = self._load_skills(settings)
         if mcp_servers_configured(settings):
             self.loading_status.emit("Connecting MCP servers…")  # type: ignore[attr-defined]
         session_builtins = []
@@ -343,7 +343,7 @@ class VoiceChannelMixin:
         toolset = await self._setup_tools(  # type: ignore[attr-defined]
             settings, session_builtins=session_builtins
         )
-        return toolset, skills_registry
+        return toolset, await self._load_all_skills(settings, toolset)
 
     async def _open_vc_room(
         self,
@@ -556,6 +556,27 @@ class VoiceChannelMixin:
         return detector
 
     # -- Skills + session info -------------------------------------------
+
+    async def _load_all_skills(self, settings: dict, toolset: ToolSet) -> Any:
+        """The session's skills: the user's own, then those its MCP servers
+        publish (``mcp_skills``), once they are connected.  None when none."""
+        registry = self._load_skills(settings)
+        servers = self._mcp.skill_servers() if self._mcp is not None else []
+        if not servers:
+            return registry
+        from roomkit_ui.mcp_skills import add_served_skills
+
+        self.loading_status.emit("Reading MCP skills…")  # type: ignore[attr-defined]
+        approvals = self._skill_approvals
+        approvals.set_servers({served.label: served.name for served in servers})
+        return await add_served_skills(
+            registry,
+            servers,
+            approve_execution=approvals.approve,
+            # A CLI tool starts a program: on a served skill's behalf, it asks first.
+            execution_tools=[tool["name"] for tool in toolset.cli],
+            notice=self.mcp_status.emit,  # type: ignore[attr-defined]
+        )
 
     def _load_skills(self, settings: dict) -> Any:
         try:

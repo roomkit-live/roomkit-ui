@@ -22,7 +22,14 @@ from typing import Any
 
 from roomkit_ui.cli_exec import resolve_command, search_path
 from roomkit_ui.env_config import parse_env_block
-from roomkit_ui.mcp_config import mcp_server_problem, validate_mcp_http_url
+from roomkit_ui.mcp_config import mcp_server_problem, uses_skills, validate_mcp_http_url
+from roomkit_ui.mcp_skills import (
+    SKILLS_EXTENSION,
+    SessionSkillServer,
+    SkillServer,
+    declares_skills,
+    skill_label,
+)
 
 _CONNECT_TIMEOUT = 10  # seconds per connection step, per server
 _MAX_TOOL_PAGES = 1000  # a server paging on past this is not listing anything
@@ -124,6 +131,20 @@ async def _list_all_tools(session: Any, name: str) -> list[Any]:
     return tools
 
 
+async def negotiate_era(session: Any) -> None:
+    """Open *session* on the newest protocol its server speaks.
+
+    ``server/discover`` first (the 2026 protocol), the ``initialize``
+    handshake when the server does not answer it: the policy of mcp's own
+    ``Client(mode="auto")``, which this app's sessions do not go through.
+    A server on the 2026 protocol declares its extensions there only — the
+    MCP Skills extension among them (FastMCP 4, mcp 2.x servers).
+    """
+    from mcp.client._probe import negotiate_auto
+
+    await negotiate_auto(session)
+
+
 def _parse_stdio_config(cfg: dict[str, Any]) -> tuple[str, list[str], dict[str, str]]:
     """Parse a stdio server config into (command, args, env).
 
@@ -158,6 +179,8 @@ class MCPManager:
         self._tool_to_session: dict[str, Any] = {}  # tool name → ClientSession
         self._tool_to_server: dict[str, str] = {}  # tool name → server name
         self._app_tools: dict[str, dict[str, str]] = {}  # tool name → {uri, server}
+        # Servers that publish skills (and may serve them), in connection order.
+        self._skill_sessions: list[tuple[str, Any]] = []
         self._close_event: asyncio.Event | None = None
         self._tasks: list[asyncio.Task] = []  # one long-lived task per server
         self._hook_installed = False
@@ -217,6 +240,8 @@ class MCPManager:
                 timeout=_CONNECT_TIMEOUT,
             )
             self._register_tools(session, tools, name)
+            if uses_skills(cfg) and declares_skills(session):
+                self._skill_sessions.append((name, session))
             connected = True
             logger.info("MCP server %r: %d tools", name, len(tools))
             ready.set()
@@ -368,10 +393,14 @@ class MCPManager:
         else:
             raise ValueError(f"Unknown MCP transport: {transport!r}")
 
-        session = await stack.enter_async_context(
-            ClientSession(read_stream, write_stream),
+        # A server may publish skills only to a client that says it reads them.
+        extensions: dict[str, dict[str, Any]] | None = (
+            {SKILLS_EXTENSION: {}} if uses_skills(cfg) else None
         )
-        await session.initialize()
+        session = await stack.enter_async_context(
+            ClientSession(read_stream, write_stream, extensions=extensions),
+        )
+        await negotiate_era(session)
         return session
 
     async def close_all(self) -> None:
@@ -411,6 +440,7 @@ class MCPManager:
         self._tool_to_session.clear()
         self._tool_to_server.clear()
         self._app_tools.clear()
+        self._skill_sessions.clear()
         if self._hook_installed:
             _uninstall_unraisable_hook()
             self._hook_installed = False
@@ -421,6 +451,16 @@ class MCPManager:
     def get_tools(self) -> list[dict[str, Any]]:
         """Return discovered tools in roomkit format."""
         return list(self._tools)
+
+    def skill_servers(self) -> list[SkillServer]:
+        """The connected servers that publish skills, each under its own label."""
+        taken: set[str] = set()
+        servers = []
+        for name, session in self._skill_sessions:
+            label = skill_label(name, taken)
+            taken.add(label)
+            servers.append(SkillServer(label=label, name=name, server=SessionSkillServer(session)))
+        return servers
 
     def get_app_tool_info(self, tool_name: str) -> dict[str, str] | None:
         """Return ``{uri, server}`` if *tool_name* is an MCP App tool."""

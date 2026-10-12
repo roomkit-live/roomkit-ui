@@ -24,6 +24,7 @@ from roomkit_ui.widgets.session_drawer import SessionDrawer
 from roomkit_ui.widgets.session_info import SessionInfoBar
 from roomkit_ui.widgets.session_loading import SessionLoading
 from roomkit_ui.widgets.settings import SettingsPanel
+from roomkit_ui.widgets.skill_approval_dialog import show_skill_approval
 from roomkit_ui.widgets.voice_name_dialog import ask_voice_name
 from roomkit_ui.widgets.vu_meter import VUMeter
 
@@ -114,6 +115,9 @@ class MainWindow(QMainWindow):
         self._engine.session_cost.connect(self._on_session_cost)
         self._engine.attitude_changed.connect(self._on_attitude_changed)
         self._engine.speaker_named.connect(self._chat.name_voice)
+        self._engine.skill_approval_requested.connect(
+            lambda approval: show_skill_approval(self, approval)
+        )
         self._chat.speaker_clicked.connect(self._ask_voice_name)
 
         # Closes a session nobody is using — armed from settings, and started
