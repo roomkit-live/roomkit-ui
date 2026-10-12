@@ -55,7 +55,7 @@ class ConversationSurface(QWidget):
 class ConversationHeader(QWidget):
     """Keep navigation within reach without taking space from the conversation."""
 
-    settings_requested = Signal()
+    history_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -63,31 +63,41 @@ class ConversationHeader(QWidget):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(24, 12, 16, 8)
         layout.setSpacing(4)
-        layout.addStretch()
-
-        self._settings = KeyboardButton()
-        self._settings.setFixedSize(40, 40)
-        self._settings.setIconSize(QSize(20, 20))
-        self._settings.setCursor(Qt.PointingHandCursor)
-        self._settings.setToolTip("Settings")
-        self._settings.setAccessibleName("Settings")
+        self._history = KeyboardButton()
+        self._history.setFixedSize(40, 40)
+        self._history.setIconSize(QSize(20, 20))
+        self._history.setAccessibleName("Conversations")
+        self._history.setToolTip("Conversations")
+        self._history.setCursor(Qt.PointingHandCursor)
+        self._history.clicked.connect(self.history_requested.emit)
         themed_style(
-            self._settings,
+            self._history,
             lambda c: (
                 "QPushButton { background: transparent; border: 1px solid transparent;"
-                " border-radius: 14px; padding: 0; }"
+                " border-radius: 12px; padding: 0; }"
                 f"QPushButton:hover {{ background: {c['BG_SECONDARY']}; }}"
                 'QPushButton[keyboardFocus="true"] {'
                 f" border-color: {c['ACCENT_BRAND']}; }}"
             ),
         )
-        layout.addWidget(self._settings)
-        self._settings.clicked.connect(self.settings_requested.emit)
+        layout.addWidget(self._history)
+        self._title = QLabel()
+        self._title.setTextFormat(Qt.PlainText)
+        themed_style(
+            self._title,
+            lambda c: f"color: {c['TEXT_PRIMARY']}; font-size: 14px; background: transparent;",
+        )
+        layout.addWidget(self._title, 1)
+        layout.addStretch()
+
         bind_theme(self, self._refresh_icon)
 
     def _refresh_icon(self) -> None:
-        color = colors()["TEXT_SECONDARY"]
-        self._settings.setIcon(svg_icon("cog-6-tooth", color, 20))
+        self._history.setIcon(svg_icon("sidebar", colors()["TEXT_SECONDARY"], 20))
+
+    def set_conversation(self, title: str) -> None:
+        self._title.setText(self._title.fontMetrics().elidedText(title, Qt.ElideRight, 310))
+        self._title.setToolTip(title)
 
 
 class ConversationWelcome(QWidget):

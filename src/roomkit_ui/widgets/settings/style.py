@@ -58,9 +58,6 @@ def settings_stylesheet(theme: str) -> str:
         QDialog#settingsPanel QWidget#settingsSidebar {{
             background: {c["sidebar"]}; border-right: 1px solid {c["border"]};
         }}
-        QDialog#settingsPanel QLabel#settingsBrand {{
-            font-size: 25px; font-weight: 600; letter-spacing: -1px;
-        }}
         QDialog#settingsPanel QLabel#settingsNavTitle {{
             font-size: 14px; font-weight: 600;
         }}

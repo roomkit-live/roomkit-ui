@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import asdict
+
 from PySide6.QtCore import (
     QEasingCurve,
     QPropertyAnimation,
@@ -282,6 +284,60 @@ class ChatView(QScrollArea):
     def finish_tool_call(self, result: ToolResult) -> None:
         if row := self.tool_call(result.call_id):
             row.finish(result)
+
+    def snapshot(self) -> list[dict]:
+        entries: list[dict] = []
+        for i in range(self._layout.count()):
+            item = self._layout.itemAt(i)
+            widget = item.widget() if item else None
+            if isinstance(widget, ChatBubble):
+                entries.append(widget.snapshot())
+            elif isinstance(widget, ToolActivity):
+                entries.append(
+                    {
+                        "kind": "tool",
+                        "call": asdict(widget.call),
+                        "result": asdict(widget.result) if widget.result else None,
+                    }
+                )
+        return entries
+
+    def restore(self, entries: list[dict]) -> None:
+        self.clear()
+        for entry in entries:
+            if entry.get("kind") == "message":
+                bubble = ChatBubble(
+                    entry["text"], role=entry["role"], speaker_name=entry.get("speaker", "")
+                )
+                bubble.restore(entry)
+                self._hide_live_prompt()
+                self._layout.insertWidget(max(self._layout.count() - 1, 0), bubble)
+            elif entry.get("kind") == "tool":
+                call = ToolCall(**entry["call"])
+                row = self.add_tool_call(call)
+                result = entry.get("result")
+                row.finish(
+                    ToolResult(**result)
+                    if result
+                    else ToolResult(
+                        call.id, "cancelled", "This call ended before its result was saved."
+                    )
+                )
+        self._scroll_to_bottom()
+
+    def end_session(self) -> None:
+        """Keep the transcript, release live app resources and settle pending rows."""
+        self._finalize_current_bubble()
+        for bubble in self._bubbles():
+            if not bubble.finalized:
+                bubble.restore(bubble.snapshot())
+            bubble.set_speaker_clickable(False)
+            bubble.voice = ""
+        self._voice_names.clear()
+        for row in self._tool_calls.values():
+            row.release_app()
+            if row.result is None:
+                row.finish(ToolResult(row.call.id, "cancelled", "The live session ended."))
 
     def attach_app(self, call_id: str, html_content: str | None) -> QWidget | None:
         """Attach interactive output to its existing row, preserving its position."""

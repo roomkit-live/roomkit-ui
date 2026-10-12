@@ -225,7 +225,7 @@ async def test_a_new_session_forgets_the_previous_app_widgets(window, monkeypatc
     stale = _FakeAppWidget()
     window._active_app_widgets["chart"] = stale
 
-    async def start(*_args):
+    async def start(*_args, **_kwargs):
         pass
 
     monkeypatch.setattr(window._engine, "start", start)

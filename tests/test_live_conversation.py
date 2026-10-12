@@ -42,19 +42,21 @@ def test_microphone_mute_preserves_playback_activity(qtbot):
     assert not window._chat._empty_state.isHidden()
 
 
-def test_first_words_replace_the_live_invitation_and_restart_clears_them(qtbot):
+def test_first_words_replace_the_invitation_and_survive_the_end_of_live(qtbot):
     window = MainWindow()
     qtbot.addWidget(window)
     window._chat.clear()
+    window._engine._state = EngineState.ACTIVE
     window._engine.transcription.emit("Let's plan a walk.", "user", True, "")
     assert window._chat._live_empty.isHidden()
     assert len(window._chat._bubbles()) == 1
     window._engine.state_changed.emit(EngineState.ERROR)
     assert not window._header.isHidden()
-    assert window._chat._bubbles() == []
-    window._chat.clear()
+    assert window._chat._bubbles()[0]._raw_text == "Let's plan a walk."
+    window._engine._state = EngineState.IDLE
+    window._history.new()
     window._engine.state_changed.emit(EngineState.ACTIVE)
-    assert not window._chat._live_empty.isHidden()
+    assert window._chat._bubbles() == []
 
 
 def test_session_details_work_from_the_keyboard_and_survive_theme_changes(qtbot):

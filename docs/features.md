@@ -179,15 +179,31 @@ transcription — so the phrase works in any language.
 
 ### Conversation memory
 
-Settings → Privacy & memory → "Remember conversations", on by default. Sessions
-share one persistent history (`conversations.db`, readable by its owner only). Each
-session is a new conversation: in both modes the model gets a recap of recent exchanges
-in its system prompt, quoted as the past and to be brought up only when the user refers
-to it (answers the user never heard are left out, cut answers are marked interrupted).
-The Voice Channel's AI reads only this session's turns as the conversation
-(`session_window`): reading the room, it took up what the last session left open at the
-user's first "hello". The recap stays through an attitude change. The
-`recall_conversations` tool lets the assistant search all of it. (`memory.py`)
+Settings → Privacy & memory → "Remember conversations", on by default. Each thread
+has its own room in `conversations.db` (readable by its owner only), title, transcript
+and tool results. Hanging up retains the thread. The top-left history icon opens a
+full-width sliding panel with **Recent** (the 30 most recently active threads), search
+across all conversation titles, **New conversation**, and **Settings** at the bottom;
+opening an existing thread never starts audio. Press Live to continue it. Switching
+threads is available once Live ends. Old shared history is imported once as **Earlier
+history**, without changing its source events.
+
+The first user message supplies a provisional title. After the first exchanges, one
+background request asks the configured text model for a short subject in the user's
+language: the selected LLM in Voice Channel, or the corresponding Gemini/OpenAI text
+model in Realtime. Other realtime providers, unavailable models and failed requests
+keep the provisional title. **⋯ → Rename** or **F2** sets a name that automatic titles
+cannot overwrite. Renaming does not reorder recent activity. Private threads keep
+their titles in memory too. (`conversation_titles.py`)
+
+Both modes receive a fenced recap of only the selected thread (up to 50 messages and
+24,000 characters), and `recall_conversations` searches only its room. Earlier requests
+are context rather than new commands; cut answers are marked interrupted. Voice Channel
+uses `session_window` for the current Live call, so older calls do not enter context
+twice. The recap survives attitude changes. With history saving off, new exchanges
+stay in memory until the app closes, including when continuing a saved thread; that
+thread's saved version stays intact. (`conversations.py`, `memory.py`,
+`widgets/conversation_history.py`)
 
 ### System-wide dictation
 

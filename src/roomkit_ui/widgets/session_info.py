@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QSize, Qt
+from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QFrame,
@@ -61,6 +61,8 @@ def _usage_summary(payload: dict) -> str:
 class SessionInfoBar(QWidget):
     """RoomKit identity stays visible; model, tools and usage stay one tap away."""
 
+    history_requested = Signal()
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -77,6 +79,25 @@ class SessionInfoBar(QWidget):
         outer.setSpacing(8)
         header = QHBoxLayout()
         header.setSpacing(10)
+        self._history = KeyboardButton()
+        self._history.setFixedSize(40, 40)
+        self._history.setIconSize(QSize(20, 20))
+        self._history.setAccessibleName("Conversations")
+        self._history.setToolTip("Conversations")
+        self._history.setCursor(Qt.PointingHandCursor)
+        self._history.clicked.connect(self.history_requested.emit)
+        themed_style(
+            self._history,
+            lambda c: (
+                "QPushButton { background: transparent; border: 1px solid transparent;"
+                " border-radius: 12px; padding: 0; }"
+                f"QPushButton:hover {{ background: {c['BG_SECONDARY']}; }}"
+                'QPushButton[keyboardFocus="true"] {'
+                f" border-color: {c['ACCENT_BRAND']}; }}"
+            ),
+        )
+        header.addWidget(self._history)
+
         mark = QLabel()
         logo = Path(__file__).resolve().parent.parent / "assets" / "logo.svg"
         mark.setPixmap(QIcon(str(logo)).pixmap(QSize(26, 26), self.devicePixelRatioF()))
@@ -149,6 +170,7 @@ class SessionInfoBar(QWidget):
         self.hide()
 
     def _refresh_icon(self) -> None:
+        self._history.setIcon(svg_icon("sidebar", colors()["TEXT_SECONDARY"], 20))
         self._toggle_button.setIcon(svg_icon("information-circle", colors()["TEXT_SECONDARY"], 20))
 
     def set_session(self, info: dict) -> None:

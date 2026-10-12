@@ -77,6 +77,7 @@ class RealtimeMixin:
     _attitude: str
     _attitude_name: str
     _base_system_prompt: str
+    _room_id: str
     _memory_recap: str
     _transport: Any
     _kit: Any
@@ -327,15 +328,15 @@ class RealtimeMixin:
         tool_options: dict[str, Any] | None = None,
     ) -> Any:
         """Create the room and start a realtime session; raise what refused it."""
-        from roomkit_ui.memory import ROOM_ID, ensure_room, memory_recap
+        from roomkit_ui.memory import ensure_room, memory_recap
 
         try:
             self._kit, store = self._build_kit(RoomKit, settings)  # type: ignore[attr-defined]
-            await ensure_room(self._kit, channels=("voice",))  # type: ignore[attr-defined]
-            if store is not None and system_prompt is not None:
+            await ensure_room(self._kit, self._room_id, channels=("voice",))  # type: ignore[attr-defined]
+            if store is not None and system_prompt is not None and not self._memory_recap:
                 # Realtime context lives server-side and starts blank — the
                 # recap is the only way previous sessions reach the provider.
-                self._memory_recap = await memory_recap(self._kit)  # type: ignore[attr-defined]
+                self._memory_recap = await memory_recap(self._kit, self._room_id)  # type: ignore[attr-defined]
                 system_prompt = self._session_prompt()  # type: ignore[attr-defined]
             self._channel = RealtimeVoiceChannel(  # type: ignore[attr-defined]
                 "voice",
@@ -354,7 +355,7 @@ class RealtimeMixin:
                 **(tool_options or {}),
             )
             self._kit.register_channel(self._channel)  # type: ignore[attr-defined]
-            await self._kit.attach_channel(ROOM_ID, "voice")  # type: ignore[attr-defined]
+            await self._kit.attach_channel(self._room_id, "voice")  # type: ignore[attr-defined]
             metadata: dict[str, Any] = {}
             if provider_config:
                 metadata["provider_config"] = provider_config
@@ -366,7 +367,7 @@ class RealtimeMixin:
             if capture_since is not None and not getattr(self, "_mic_muted", False):
                 metadata["capture_since"] = capture_since
             return await self._channel.start_session(  # type: ignore[attr-defined]
-                ROOM_ID,
+                self._room_id,
                 "local-user",
                 connection=None,
                 metadata=metadata or None,

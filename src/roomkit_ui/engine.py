@@ -19,6 +19,7 @@ import collections
 import logging
 import weakref
 from typing import Any
+from uuid import uuid4
 
 from PySide6.QtCore import QObject, QTimer, Signal
 
@@ -136,6 +137,8 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         self._cli: CliToolManager | None = None
         self._mic_muted = False
         self._state = EngineState.IDLE
+        self._room_id = f"conversation-{uuid4().hex}"
+        self._resume_context = ""
         self._attitude: str = ""  # full description text (injected into prompt)
         self._attitude_name: str = ""  # short display name for the header
         # User's base system prompt (without attitude) — captured at session
@@ -325,7 +328,14 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         """
         self._capture_source = source
 
-    async def start(self, settings: dict, capture_since: Any = None) -> None:
+    async def start(
+        self,
+        settings: dict,
+        capture_since: Any = None,
+        *,
+        conversation_id: str | None = None,
+        resume_context: str = "",
+    ) -> None:
         """Open a session.
 
         Args:
@@ -334,9 +344,13 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
                 session was opened by a wake word, so the words already
                 spoken reach the provider instead of being lost to the
                 handshake.
+            conversation_id: Room for this thread; omitted for a fresh one.
+            resume_context: Fenced transcript of earlier Live calls in this thread.
         """
         if self._state not in (EngineState.IDLE, EngineState.ERROR):
             return
+        self._room_id = conversation_id or f"conversation-{uuid4().hex}"
+        self._resume_context = resume_context
         # Claimed before any await: from here a second start() is refused.
         self._set_state(EngineState.CONNECTING)
         self._session_settings = settings
@@ -683,6 +697,7 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         self._partial_buffers.clear()
         self._base_system_prompt = ""
         self._memory_recap = ""
+        self._resume_context = ""
 
     async def _finalize_event_loop(self) -> None:
         """Let cancelled tasks finish, then clear what MCP/anyio left behind.

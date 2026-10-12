@@ -21,7 +21,6 @@ from roomkit.voice.stt.mock import MockSTTProvider
 
 from roomkit_ui.engine import Engine
 from roomkit_ui.engine_audio import local_audio_backend
-from roomkit_ui.memory import ROOM_ID
 
 
 @pytest.fixture
@@ -38,11 +37,11 @@ async def _sessions_after_start(engine: Engine, backend) -> list:
     )
     kit = RoomKit()
     kit.register_channel(voice)
-    await kit.create_room(room_id=ROOM_ID)
+    await kit.create_room(room_id=engine._room_id)
     try:
-        binding = await kit.attach_channel(ROOM_ID, "voice")
+        binding = await kit.attach_channel(engine._room_id, "voice")
         await engine._listen(backend, voice, binding)
-        return backend.list_sessions(ROOM_ID)
+        return backend.list_sessions(engine._room_id)
     finally:
         await kit.close()
 

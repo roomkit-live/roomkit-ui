@@ -63,6 +63,8 @@ class ToolMixin:
     _attitude: str
     _attitude_name: str
     _base_system_prompt: str
+    _room_id: str
+    _resume_context: str
     _memory_recap: str
     _session_settings: dict
     _ai_channel: Any
@@ -84,7 +86,7 @@ class ToolMixin:
         self._base_system_prompt = settings.get("system_prompt", _DEFAULT_SYSTEM_PROMPT)
         if voice_note:
             self._base_system_prompt = f"{self._base_system_prompt}\n\n{voice_note}"
-        self._memory_recap = ""  # known once the kit opens its store
+        self._memory_recap = self._resume_context
         attitude = self._attitude or resolve_attitude(settings)
         if attitude:
             self._attitude = attitude
@@ -198,7 +200,9 @@ class ToolMixin:
             # Past-conversation search needs the session's kit and store.
             from roomkit_ui.memory import recall_conversations
 
-            return await recall_conversations(getattr(self, "_kit", None), arguments)
+            return await recall_conversations(
+                getattr(self, "_kit", None), arguments, self._room_id
+            )
         return None
 
     def _schedule_end_conversation(self) -> str:

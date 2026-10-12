@@ -60,7 +60,12 @@ There is no server database. State lives in these places:
    sources, attitudes, wake word options. Renamed keys and retired defaults migrate on
    load. Secrets go through `settings_secrets.py` → `SecretStore` (OS keyring first,
    QSettings fallback).
-2. **Conversation history** — `conversations.db`, roomkit's `SQLiteStore`, in the
+2. **Conversation history** — `conversations.db`, RoomKit's `SQLiteStore` plus the
+   UI-owned `ui_conversations` table (ID, title, title source, created/updated timestamps, JSON display
+   snapshot). Each conversation uses a separate room; multiple Live calls can continue
+   the same thread. The previous `main` room is exposed once as Earlier history without
+   rewriting its events. With history saving disabled, new events and snapshots stay
+   in memory. The database lives in the
    platform data dir (`paths.data_dir()`: `~/Library/Application Support/RoomKit UI/` on
    macOS, `~/.local/share/roomkit-ui/` elsewhere), mode 0600. Every stored file lives
    under that one root; older macOS versions kept models, the wake word, recordings and

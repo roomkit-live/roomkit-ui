@@ -43,7 +43,7 @@ class PrivacyPage(QWidget):
         )
         memory.add_row(
             "Remember conversations",
-            "Keep local history so your assistant can recall previous sessions.",
+            "Save conversations on this device so you can reopen and continue each one.",
             self.conversation_memory,
         )
         hint = label(

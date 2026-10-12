@@ -94,7 +94,7 @@ graph TB
 | **Watchdog** | `watchdog.py` | Detects unanswered speech (8 s, 90 s when tools are pending) and nudges the model |
 | **Idle hang-up** | `idle_hangup.py` | Ends a session once the conversation goes quiet (never mid-tool-call, while a background task runs or while the assistant speaks) |
 | **Cleanup** | `cleanup.py` | Purge of orphaned qasync/anyio timers and of the FD notifiers a session registered (prevents 100 % CPU) |
-| **Memory** | `memory.py` | One durable room in a SQLite store (`conversations.db`, mode 0600), a recap for realtime sessions, the `recall_conversations` tool |
+| **Conversations** | `conversations.py`, `memory.py`, `widgets/conversation_history.py` | One RoomKit room per thread, local catalogue and transcript snapshots, selected-thread recap and recall, sliding history panel |
 | **Wake word** | `wakeword/`, `widgets/wakeword_wizard.py` | Shared microphone lifetime, VAD-gated capture, whisper-encoder embeddings matched by DTW against an enrolled fingerprint |
 | **Dictation** | `stt_engine.py`, `stt_sessions.py`, `hotkey.py`, `paste.py`, `paste_windows.py`, `tray.py` | Global hotkey → STT recording (OpenAI/local/Deepgram) → clipboard paste into the focused app |
 | **Speakers** | `speaker_manager.py`, `enrollment.py`, `speaker_roster.py`, `speaker_naming.py`, `widgets/voice_name_dialog.py` | Speaker profile persistence (JSON) and embedding extraction for the local diarization; with Meta Muse, the voices it labels, the names put on them (a click in the chat, or the assistant's `name_speaker`), the user's voice for primary-speaker mode, and who is who in each turn's prompt |
@@ -140,7 +140,37 @@ While enabled, `WakeWordController` keeps a shared roomkit `LocalMicSource` runn
 
 ### Conversation memory
 
-With **Remember conversations** on (default), every session joins one durable room in roomkit's `SQLiteStore`. Each session is a new conversation: both modes get a fenced recap of recent exchanges in the system prompt (`Engine._session_prompt`: user prompt, recap, attitude), and the Voice Channel's AIChannel reads only this session's events (`memory.session_window`, a `SlidingWindowMemory` filtered by the session start); the `recall_conversations` tool searches the whole history.
+With **Remember conversations** on (default), each conversation has its own durable
+RoomKit room. `Engine.start(conversation_id=..., resume_context=...)` either resumes
+that room or generates a new ID. Live calls within a thread share a room; unrelated
+threads never share context or recall results. Both modes receive a fenced recap in
+`Engine._session_prompt` (user prompt, recap, attitude). The Voice Channel's AIChannel
+reads only the current call's events through `memory.session_window`, avoiding duplicate
+history and treating old requests as quoted context. Recap input is bounded to 50
+messages and 24,000 characters. `recall_conversations` searches the selected room.
+
+`ConversationStore` owns the `ui_conversations` table alongside RoomKit's tables in
+`conversations.db`. It saves titles, their source (fallback/generated/manual), timestamps
+and display snapshots atomically, without
+changing RoomKit's schema or version. Snapshots retain interrupted text, speaker names
+and tool outcomes; replay never invokes tools or restores interactive app resources.
+`ConversationHistory` autosaves changes and flushes on hangup, navigation and close.
+It imports the former `main` room as **Earlier history** through RoomKit's
+`get_conversation()` (messages only, unlike `get_timeline()`). `ui_migrations` records
+the import version: earlier snapshots containing lifecycle/system events are repaired
+once, preserving subsequent Live exchanges, tool results and all source events.
+With history saving off, both the catalogue and new RoomKit events stay in memory;
+private continuations leave the saved thread unchanged. The drawer opens over the whole
+conversation surface and traps focus within it; switching threads requires Live to end.
+It displays 30 recent threads by default and searches the full catalogue by title.
+Settings lives in the drawer footer, available once Live ends.
+
+`conversation_titles.py` summarizes a bounded excerpt through the configured text
+provider, with no tools and a 15-second timeout. The engine owns title tasks so teardown
+cancels and awaits their clients before cleaning up file descriptors. A request deferred
+until hangup starts after the engine's final descriptor sweep. Results target the captured
+conversation ID; generated titles cannot overwrite a manual name or retitle another
+selected thread. Provider errors leave the first-message title intact.
 
 ### MCP Apps
 

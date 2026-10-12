@@ -2,15 +2,12 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from PySide6.QtCore import QEvent, QSettings, QSize, Qt, QTimer
 from PySide6.QtGui import QIcon, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QDialog,
     QFrame,
     QHBoxLayout,
-    QLabel,
     QLineEdit,
     QPushButton,
     QScrollArea,
@@ -22,6 +19,7 @@ from PySide6.QtWidgets import (
 from roomkit_ui.icons import svg_icon
 from roomkit_ui.settings import load_settings, save_settings
 from roomkit_ui.theme_live import apply_theme, bind_theme
+from roomkit_ui.widgets.navigation_brand import NavigationBrand
 from roomkit_ui.widgets.settings.controls import label
 from roomkit_ui.widgets.settings.navigation import SettingsNavigation
 from roomkit_ui.widgets.settings.page_registry import PAGE_SPECS
@@ -152,13 +150,7 @@ class SettingsPanel(QDialog):
         layout.setSpacing(0)
         brand = QHBoxLayout()
         brand.setContentsMargins(22, 25, 22, 21)
-        brand.setSpacing(10)
-        mark = QLabel()
-        asset = Path(__file__).resolve().parents[2] / "assets" / "logo.svg"
-        mark.setPixmap(QIcon(str(asset)).pixmap(34, 34))
-        brand.addWidget(mark)
-        brand.addWidget(label("roomkit.", "settingsBrand", wrap=False))
-        brand.addStretch()
+        brand.addWidget(NavigationBrand())
         layout.addLayout(brand)
         title = label("Settings", "settingsNavTitle", wrap=False)
         title.setContentsMargins(22, 0, 22, 6)

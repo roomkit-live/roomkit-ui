@@ -294,6 +294,25 @@ class ChatBubble(QFrame):
     def finalized(self) -> bool:
         return self._finalized
 
+    def snapshot(self) -> dict:
+        return {
+            "kind": "message",
+            "role": self._role,
+            "text": self._raw_text,
+            "speaker": self._speaker_name,
+            "time": self.toolTip(),
+            "interrupted": self._interrupted_label is not None
+            and not self._interrupted_label.isHidden(),
+        }
+
+    def restore(self, entry: dict) -> None:
+        """History is shown immediately, without replaying a speaking animation."""
+        self._stream_timer.stop()
+        self._complete_finalize()
+        self.setToolTip(entry.get("time", ""))
+        if self._interrupted_label is not None:
+            self._interrupted_label.setVisible(bool(entry.get("interrupted")))
+
     def set_speaker_name(self, name: str) -> None:
         self._speaker_name = name
         if self._speaker_label is not None:

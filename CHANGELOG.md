@@ -12,6 +12,18 @@ Each released section is the source for that version's GitHub release notes.
 ## [Unreleased]
 
 ### Added
+- **Conversation titles and recent history** — the configured text model summarizes
+  the first exchanges into a short title when available; Rename lets you keep your own
+  name. The drawer shows 30 recent conversations and searches titles across all history.
+  Settings moves to its footer, clearing space in the main conversation header.
+  The drawer follows the Settings sidebar's palette, shared RoomKit wordmark, outlined
+  search and compact navigation rows, with a soft violet selection in both themes.
+- **Separate conversations and sliding history** — the top-left icon opens a searchable
+  list with New conversation. Hanging up keeps the transcript; reopen a thread to read
+  it, then press Live to continue with only its context. Each thread has its own RoomKit
+  room and saves text, interrupted replies, speaker names and tool results. The former
+  shared timeline appears as Earlier history without altering its source. History saving
+  off keeps new exchanges in memory, leaving existing saved conversations intact.
 - **Spoken language in General** — the language you speak is set once, in Settings →
   General, for every conversation's transcription; Listen · STT links to it. Dictation
   follows it, or sets its own (another language or Auto-detect). A language chosen before
@@ -271,6 +283,10 @@ Each released section is the source for that version's GitHub release notes.
   without it and says so; Voice Channel mode is unchanged.
 
 ### Fixed
+- **Earlier history shows only conversation messages** — import uses RoomKit's
+  `get_conversation()` instead of the raw event list. Existing imported snapshots
+  are repaired once, retaining subsequent Live exchanges and tool results; source
+  events remain intact. Lifecycle/system events also stay out of recall context.
 - **The conversation area no longer goes blank or shows a shifted copy of the window**
   after a few MCP Apps (macOS) — the chat container was given a native window handle at
   startup, for Qt 5's native web view. Qt 6's web view renders through a QQuickWidget,

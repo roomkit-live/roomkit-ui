@@ -11,8 +11,11 @@ from roomkit_ui.secret_store import (
 
 
 @pytest.fixture(autouse=True)
-def isolated_qsettings(tmp_path):
+def isolated_qsettings(tmp_path, monkeypatch):
     """Point QSettings at a per-test temp ini file under a test-only org name."""
+    monkeypatch.setattr(
+        "roomkit_ui.memory.conversations_db_path", lambda: tmp_path / "conversations.db"
+    )
     QCoreApplication.setOrganizationName("RoomKitUI-Tests")
     QCoreApplication.setApplicationName("RoomKitUI-Tests")
     QSettings.setDefaultFormat(QSettings.Format.IniFormat)

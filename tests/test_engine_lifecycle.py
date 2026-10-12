@@ -86,6 +86,28 @@ async def test_a_second_start_while_connecting_is_refused(engine):
     await _soon(first)
 
 
+async def test_new_calls_use_distinct_rooms_and_explicit_resume_keeps_its_room(engine):
+    rooms = []
+    for conversation_id in (None, None, "selected-thread"):
+        engine.tools_reached.clear()
+        start = asyncio.create_task(
+            engine.start(
+                _SETTINGS, conversation_id=conversation_id, resume_context="Selected context"
+            )
+        )
+        await _soon(engine.tools_reached.wait())
+        rooms.append(engine._room_id)
+        assert "Selected context" in engine._compose_session_prompt(_SETTINGS)
+        # A refused concurrent start cannot switch the room underneath this call.
+        await engine.start(_SETTINGS, conversation_id="another-thread")
+        assert engine._room_id == rooms[-1]
+        await _soon(engine.stop())
+        await _soon(start)
+        assert engine._resume_context == ""
+    assert rooms[0] != rooms[1]
+    assert rooms[2] == "selected-thread"
+
+
 async def test_nothing_starts_while_a_failed_start_is_torn_down(engine, monkeypatch):
     in_cleanup = asyncio.Event()
     finish_cleanup = asyncio.Event()

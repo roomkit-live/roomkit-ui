@@ -58,7 +58,9 @@ src/roomkit_ui/
 ├── watchdog.py          # Unanswered-speech detector (8 s) + model nudge
 ├── idle_hangup.py       # Hangs up a session gone quiet (set on the Wake Word page, any session)
 ├── cleanup.py           # qasync timer/FD cleanup after MCP disconnect, registered_fds()
-├── memory.py            # Persistent conversations: SQLite store, realtime recap, recall_conversations tool
+├── memory.py            # Room-scoped SQLite store, fenced resume context, recall_conversations tool
+├── conversations.py     # Local catalogue + display snapshots; one RoomKit room per thread
+├── conversation_titles.py # Bounded title summary through the configured text provider
 ├── aec_dump.py          # AEC dump for roomkit's offline bench (ROOMKIT_AEC_DUMP=<dir>, realtime only)
 ├── cli_tools.py         # CLI tool manager: schema build + dispatch (mirrors MCPManager)
 ├── cli_exec.py          # Child-process primitives: PATH/env, Popen registry, timeout
@@ -100,7 +102,10 @@ src/roomkit_ui/
 │                        #  enroller, encoder_download, page_sensitivity
 └── widgets/
     ├── main_window.py     # Main window layout + Engine↔UI signal wiring
-    ├── conversation_home.py # Compact welcome, violet background + settings header
+    ├── conversation_home.py # Compact welcome, violet background + history header
+    ├── conversation_history.py # Thread selection, autosave, titles and legacy import
+    ├── conversation_drawer.py # Full-width sliding thread list, search and New conversation
+    ├── navigation_brand.py # Shared RoomKit wordmark for Settings and conversation navigation
     ├── conversation_composer.py # Reserved text input + Live / cancel / end / mute
     ├── chat_view.py       # Scrollable chat transcript
     ├── chat_bubble.py     # One chat entry: user bubble, typeset assistant text

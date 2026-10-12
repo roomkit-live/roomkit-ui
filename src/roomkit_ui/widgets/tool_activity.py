@@ -175,12 +175,15 @@ class ToolActivity(QFrame):
         self._app = widget
         self._layout.insertWidget(1, widget)
 
-    def deleteLater(self) -> None:  # noqa: N802
-        # Parent destruction alone does not call the Python MCPAppWidget
-        # override which releases its HTTP content and fullscreen window.
+    def release_app(self) -> None:
         if self._app is not None:
             self._app.deleteLater()
             self._app = None
+
+    def deleteLater(self) -> None:  # noqa: N802
+        # Parent destruction alone does not call the Python MCPAppWidget
+        # override which releases its HTTP content and fullscreen window.
+        self.release_app()
         self._icon._timer.stop()
         super().deleteLater()
 

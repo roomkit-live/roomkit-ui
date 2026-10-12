@@ -79,6 +79,7 @@ class VoiceChannelMixin:
     _attitude: str
     _attitude_name: str
     _base_system_prompt: str
+    _room_id: str
     _memory_recap: str
     _stt: Any
     _tts: Any
@@ -283,8 +284,8 @@ class VoiceChannelMixin:
             "ai",
             provider=ai_provider,
             system_prompt=system_prompt,
-            # Every session writes the one durable room: the AI's conversation
-            # is this session's, not the last one going on.
+            # Earlier Live calls in this room reach the model through the
+            # resume context; the rolling window contains this call only.
             memory=session_window(datetime.now(UTC)),
             tool_handler=self._handle_tool_call,  # type: ignore[attr-defined]
             config_provider=self._vc_turn_config(toolset),
@@ -347,7 +348,7 @@ class VoiceChannelMixin:
         from roomkit import RoomKit
         from roomkit.models.enums import ChannelCategory
 
-        from roomkit_ui.memory import ROOM_ID, ensure_room, memory_recap
+        from roomkit_ui.memory import ensure_room, memory_recap
 
         kit, store = self._build_kit(RoomKit, settings)  # type: ignore[attr-defined]
         self._kit = kit  # type: ignore[attr-defined]
@@ -358,17 +359,17 @@ class VoiceChannelMixin:
             # session's tools (ToolSet.turn_config); its result comes back as
             # a turn it speaks.
             kit.setup_background(ai_channel)
-        await ensure_room(kit, channels=("voice", "ai"))
-        if store is not None:
+        await ensure_room(kit, self._room_id, channels=("voice", "ai"))
+        if store is not None and not self._memory_recap:
             # The AI reads this session's turns only (memory.session_window):
             # past sessions reach it as the recap, quoted as the past.
-            self._memory_recap = await memory_recap(kit)
+            self._memory_recap = await memory_recap(kit, self._room_id)
             ai_channel.set_system_prompt(self._session_prompt())  # type: ignore[attr-defined]
 
-        voice_binding = await kit.attach_channel(ROOM_ID, "voice")
+        voice_binding = await kit.attach_channel(self._room_id, "voice")
         # No tools in the binding's metadata: they come with each turn
         # (ToolSet.turn_config), in this room and in a background task's.
-        await kit.attach_channel(ROOM_ID, "ai", category=ChannelCategory.INTELLIGENCE)
+        await kit.attach_channel(self._room_id, "ai", category=ChannelCategory.INTELLIGENCE)
         register_vc_hooks(kit, self, tts_filter=tts_filter)
         register_agent_hooks(kit, self)
         if llm_provider_name == "local":
@@ -401,14 +402,12 @@ class VoiceChannelMixin:
         starts — replay included — so one pressed while the session was
         connecting holds from the first frame.
         """
-        from roomkit_ui.memory import ROOM_ID
-
         mark = self._capture_since
         metadata = {"capture_since": mark} if mark is not None else None
-        session = await backend.connect(ROOM_ID, "local-user", "voice", metadata=metadata)
+        session = await backend.connect(self._room_id, "local-user", "voice", metadata=metadata)
         self._session = session
         self._apply_mic_mute(session)  # type: ignore[attr-defined]
-        voice.bind_session(session, ROOM_ID, voice_binding)
+        voice.bind_session(session, self._room_id, voice_binding)
         await backend.start_listening(session)
 
     # -- STT ---------------------------------------------------------------

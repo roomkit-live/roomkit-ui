@@ -48,7 +48,7 @@ xattr -cr "RoomKit UI.app"
 - **Local TTS** — offline text-to-speech with Piper, Pocket TTS (seven languages, voice clone), Qwen3-TTS (voice clone), and NeuTTS (voice clone)
 - **Who is speaking** — with Meta Muse as the STT, the voices are told apart live, no enrolment: click a speaker in the chat to name them, the assistant names those who introduce themselves, and "Listen only to primary speaker" follows your name. With local STT, enrolled voices are recognised offline
 - **Wake word** — say an enrolled phrase to open a session; detection runs locally and nothing leaves the machine until it fires. Optional hang-up once the conversation goes quiet
-- **Conversation memory** — sessions share a persistent history; the assistant can search past conversations
+- **Conversation history** — separate threads you can reopen and continue; each keeps its own context and tool results
 - **Real-time voice** — full-duplex voice conversation with interruption support; in Voice Channel mode, barge-in can be off, on any speech, or on words only (an "ok" or "mm-hmm" lets the assistant go on)
 - **Clean speech** — the Voice Channel voice skips emoji, tool JSON and stage directions
 - **Animated VU meter** — ambient glow visualization for mic and speaker audio levels
@@ -167,7 +167,7 @@ writes, so a CUDA wheel of another version mixes two builds' libraries.
 
 ## Usage
 
-1. Click the gear icon to open **Settings**
+1. Open **Conversations** with the top-left icon, then click **Settings** at the bottom
 2. Add your API key in **Providers & keys**, then choose your mode and provider in **Conversation**
 3. Close **Settings** — other edits save whenever the dialog closes, Esc included;
    the light/dark theme applies immediately — then press the **Live waveform icon** at the right of the input to start a
@@ -182,9 +182,19 @@ reserved for a future update.
 During Live, the microphone and hang-up controls stay below the transcript.
 The violet waveform follows voice activity; muting the microphone keeps playback
 audible. Use the **information icon** for model, tools, skills and usage details.
-Settings returns when the session ends.
+Settings is available in the conversation panel once the session ends.
 Home, startup and conversation share the same background. Startup progress appears
 in the conversation area with Cancel below it; speaking decisions stay in the logs.
+
+The **top-left history icon** opens a sliding panel with **Recent** (the 30 most recently
+active conversations), search across all conversation titles, and **New conversation**.
+Titles start with your first message, then the configured text model summarizes the
+subject when available. Use **⋯ → Rename** or **F2** to choose your own title.
+Hanging up keeps the transcript on screen. Open a saved
+conversation to read it, then press Live to continue that thread; the microphone stays
+off while browsing. End Live before switching conversations. Earlier shared history
+appears as **Earlier history**. With **Remember conversations** off, new exchanges
+remain available only until the application closes.
 
 Search Settings with **Ctrl/Cmd+K** or **Ctrl/Cmd+F**. Results open the matching
 page and focus its control; Escape clears the search.
