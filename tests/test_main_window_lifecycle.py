@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 
 import pytest
-from PySide6.QtCore import QCoreApplication, QEvent
+from PySide6.QtCore import QCoreApplication, QEvent, Qt
 from PySide6.QtWidgets import QLabel
 from shiboken6 import isValid
 
@@ -246,3 +246,12 @@ async def test_an_app_request_queued_before_teardown_cannot_run_in_a_new_session
     window._engine._state = EngineState.ACTIVE
     await window._proxy_app_tool_call("req", "chart", {}, "cleared-call", "viz")
     handler.assert_not_awaited()
+
+
+def test_the_chat_holds_no_native_window(window):
+    """MCP Apps render through a QQuickWidget, which breaks under a native
+    ancestor (QTBUG-40765): the conversation area went blank, or showed a
+    shifted copy of the window, mid-session."""
+    chat = window._chat
+    for widget in (chat.widget(), chat.viewport(), chat, window):
+        assert not widget.testAttribute(Qt.WA_NativeWindow)

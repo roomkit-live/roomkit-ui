@@ -64,18 +64,12 @@ class MainWindow(QMainWindow):
         self._conversation_stack.addWidget(self._chat)
         self._conversation_stack.addWidget(self._loading)
         root.addWidget(self._conversation_stack, 1)
-
-        # QWebEngineView is a native widget — when first inserted into the
-        # chat, Qt must convert every ancestor to use native window handles.
-        # That destroy-and-recreate cycle causes a visible flash across the
-        # entire application.  Pre-creating the handles here (before show())
-        # means the chain is already native when QWebEngineView appears later.
-        from roomkit_ui.widgets.mcp_app_widget import has_webengine
-
-        if has_webengine():
-            w = self._chat.widget()
-            if w is not None:
-                w.winId()
+        # No native handle anywhere in the chat: Qt 6's QWebEngineView renders
+        # through a QQuickWidget, which stops rendering correctly once it or
+        # an ancestor has one (QTBUG-40765).  The chat container was made
+        # native here for Qt 5's native web view; on macOS that left MCP Apps
+        # in native child views inside the scroll area, and the conversation
+        # area showed blank or a shifted copy of the window mid-session.
 
         # ── VU Meter ──
         self._vu = VUMeter()
