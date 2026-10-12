@@ -145,6 +145,73 @@ def test_failure_message_names_the_platform_shortcut(monkeypatch):
     assert "⌘V" in paste.paste_failure_message()
 
 
+# -- macOS: copy succeeded, but System Events did not confirm the keystroke ----
+
+
+@pytest.mark.parametrize("failure", ["timeout", "refused", "empty_stderr"])
+async def test_macos_paste_failure_keeps_the_copy_and_explains_permissions(monkeypatch, failure):
+    monkeypatch.setattr(sys, "platform", "darwin")
+    calls = []
+
+    def run(argv, **kwargs):
+        calls.append(argv[0])
+        if argv[0] == "pbcopy":
+            assert kwargs["input"] == "Bonjour à tous".encode()
+            return subprocess.CompletedProcess(argv, 0)
+        assert argv[0] == "osascript"
+        if failure == "timeout":
+            raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
+        stderr = None if failure == "empty_stderr" else b"Not authorized (-1743)"
+        raise subprocess.CalledProcessError(1, argv, stderr=stderr)
+
+    monkeypatch.setattr(subprocess, "run", run)
+    with pytest.raises(paste.PasteError) as caught:
+        await paste.paste_into_focused("Bonjour à tous")
+    message = str(caught.value)
+    assert "Text copied to clipboard" in message
+    assert "⌘V" in message
+    assert "Accessibility" in message and "Automation → System Events" in message
+    assert "terminal" in message
+    assert ("timeout" in message) == (failure == "timeout")
+    assert "osascript" not in message
+    assert calls == ["pbcopy", "osascript"]  # Never retry a possibly delivered keystroke.
+
+
+async def test_macos_success_copies_once_then_pastes_once(monkeypatch):
+    monkeypatch.setattr(sys, "platform", "darwin")
+    calls = []
+
+    def run(argv, **kwargs):
+        calls.append(argv[0])
+        return subprocess.CompletedProcess(argv, 0)
+
+    monkeypatch.setattr(subprocess, "run", run)
+    await paste.paste_into_focused("hello")
+    assert calls == ["pbcopy", "osascript"]
+
+
+@pytest.mark.parametrize("failure", ["timeout", "refused"])
+async def test_a_failed_copy_never_claims_clipboard_success_or_attempts_paste(
+    monkeypatch, failure
+):
+    def copy(text):
+        # Some helpers carry the content in argv; never expose it in the error/log.
+        argv = ["wl-copy", "--", text]
+        if failure == "timeout":
+            raise subprocess.TimeoutExpired(argv, 5)
+        raise subprocess.CalledProcessError(1, argv)
+
+    def forbidden():
+        raise AssertionError("Must not paste the clipboard's previous content")
+
+    monkeypatch.setattr(paste, "_copy_to_clipboard", copy)
+    monkeypatch.setattr(paste, "_simulate_paste", forbidden)
+    with pytest.raises(paste.PasteError, match="Could not copy") as caught:
+        await paste.paste_into_focused("private transcription")
+    assert "Text copied" not in str(caught.value)
+    assert "private transcription" not in str(caught.value)
+
+
 # -- the voice tool ----------------------------------------------------------
 
 

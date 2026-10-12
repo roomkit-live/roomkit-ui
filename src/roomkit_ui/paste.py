@@ -158,7 +158,7 @@ def _paste_macos() -> bool:
         logger.warning(
             "AppleScript paste failed (rc=%d): %s",
             exc.returncode,
-            exc.stderr.decode(errors="replace").strip(),
+            (exc.stderr or b"").decode(errors="replace").strip(),
         )
         return False
 
@@ -172,21 +172,22 @@ def _run_paste_command(argv: list[str]) -> bool:
     return True
 
 
-def paste_failure_message() -> str:
-    """What to tell the user when :func:`_simulate_paste` returned False."""
+def paste_failure_message(*, timed_out: bool = False) -> str:
+    """A failed keystroke after a successful copy; never claim the text is lost."""
+    prefix = "Automatic paste was not confirmed before the timeout. " if timed_out else ""
     if sys.platform == "darwin":
-        return (
-            "Accessibility permission required for auto-paste. "
-            "Text copied to clipboard — paste manually with ⌘V.\n"
-            "Grant access in System Settings → Privacy & Security → Accessibility."
+        return prefix + (
+            "Text copied to clipboard — use ⌘V if it was not inserted.\n"
+            "Check System Settings → Privacy & Security → Accessibility, and "
+            "Automation → System Events, for RoomKit UI or the terminal used to launch it."
         )
     if sys.platform == "win32":
-        return (
+        return prefix + (
             "Windows refused the paste keystroke — the focused window may be "
             "running as administrator. Text copied to clipboard — paste manually "
             "with Ctrl+V."
         )
-    return "Auto-paste failed. Text copied to clipboard — paste manually with Ctrl+V."
+    return prefix + "Auto-paste failed. Text copied to clipboard — paste manually with Ctrl+V."
 
 
 class PasteError(Exception):
@@ -203,12 +204,29 @@ async def paste_into_focused(text: str) -> None:
     loop = asyncio.get_running_loop()
     try:
         await loop.run_in_executor(None, _copy_to_clipboard, text)
-        pasted = await loop.run_in_executor(None, _simulate_paste)
     except FileNotFoundError as exc:
         raise PasteError(_missing_helper_message(exc.filename)) from exc
     except (OSError, subprocess.SubprocessError) as exc:
         # OSError also covers the Win32 clipboard refusing the text.
-        raise PasteError(f"Paste failed: {exc}") from exc
+        logger.warning("Clipboard copy failed (%s)", type(exc).__name__)
+        raise PasteError(
+            "Could not copy text to the clipboard. Automatic paste was skipped."
+        ) from exc
+
+    # Copy has succeeded. A keystroke timeout is not a lost transcription, and
+    # must not trigger an automatic retry: the target may have pasted already.
+    try:
+        pasted = await loop.run_in_executor(None, _simulate_paste)
+    except subprocess.TimeoutExpired as exc:
+        logger.warning("Automatic paste was not confirmed within %s seconds", exc.timeout)
+        raise PasteError(paste_failure_message(timed_out=True)) from exc
+    except FileNotFoundError as exc:
+        raise PasteError(
+            _missing_helper_message(exc.filename) + " " + paste_failure_message()
+        ) from exc
+    except (OSError, subprocess.SubprocessError) as exc:
+        logger.warning("Automatic paste failed (%s)", type(exc).__name__)
+        raise PasteError(paste_failure_message()) from exc
     if not pasted:
         raise PasteError(paste_failure_message())
 

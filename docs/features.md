@@ -233,6 +233,12 @@ during a start or a stop is replayed once it settles. A single-modifier hotkey f
 on a tap, not when the modifier is part of a chord. (`stt_engine.py`, `hotkey.py`,
 `paste.py`, `paste_windows.py`)
 
+On macOS, automatic paste uses System Events and may need permission in Privacy &
+Security → Accessibility and Automation → System Events for RoomKit UI (or the terminal
+launching a checkout). If the paste is refused or times out after copying, the transcript
+remains on the clipboard for manual ⌘V. The app reports this and does not retry the
+keystroke automatically, because a timeout does not prove that nothing was inserted.
+
 ### Speaker diarization & primary-speaker mode (Voice Channel only)
 
 **With Meta Muse as the STT**, Muse tells the voices apart itself, live: no speaker

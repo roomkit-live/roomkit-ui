@@ -349,6 +349,10 @@ Each released section is the source for that version's GitHub release notes.
   without it and says so; Voice Channel mode is unchanged.
 
 ### Fixed
+- **macOS dictation paste feedback** — a System Events timeout now explains that the
+  transcript was copied and can be pasted manually, with the Accessibility and
+  Automation settings to check. No automatic retry risks inserting it twice; an
+  unsuccessful clipboard copy is reported separately and skips the paste entirely.
 - **Streaming dictation latency** — Kroko, other local streaming models and Deepgram
   process speech during capture, then finalize the last words when recording stops.
   The message microphone no longer forces them into batch mode. Local models load
