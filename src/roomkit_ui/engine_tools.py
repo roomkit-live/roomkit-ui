@@ -69,17 +69,21 @@ class ToolMixin:
     _channel: Any
     _session: Any
 
-    def _compose_session_prompt(self, settings: dict) -> str:
+    def _compose_session_prompt(self, settings: dict, *, voice_note: str = "") -> str:
         """The session's system prompt: the user's, plus the attitude section.
 
         The user's base prompt is kept apart so set_attitude can rebuild the
         full prompt mid-session (AIChannel.set_system_prompt in the voice
         channel, reconfigure_session in realtime) without stripping the old
-        attitude out of it.
+        attitude out of it.  *voice_note* says what the session's voice can
+        do (the audio tags its TTS performs): it holds for the whole session,
+        so it joins the base.
         """
         from roomkit_ui.engine_audio import resolve_attitude
 
         self._base_system_prompt = settings.get("system_prompt", _DEFAULT_SYSTEM_PROMPT)
+        if voice_note:
+            self._base_system_prompt = f"{self._base_system_prompt}\n\n{voice_note}"
         self._memory_recap = ""  # known once the kit opens its store
         attitude = self._attitude or resolve_attitude(settings)
         if attitude:

@@ -12,6 +12,14 @@ Each released section is the source for that version's GitHub release notes.
 ## [Unreleased]
 
 ### Added
+- **Google Gemini STT and TTS in the Voice Channel** (Listen · STT and Speak · TTS), on
+  the Gemini key the LLM and Gemini Live already use. The STT is Google's live
+  recogniser: words while the user speaks, its own end of turn, an optional vocabulary.
+  The TTS defaults to Flash Lite, built for voice agents, with a voice and an optional
+  delivery style.
+- **Audio tags** (Speak · TTS → "Let the assistant direct its voice") — on a voice that
+  performs them (Google Gemini, ElevenLabs v3/v4), the model is handed the tags it may
+  use, such as [whispers], [laughs] or [sighs], to vary its delivery. Off by default.
 - **Compact home and Live conversation redesign** — one input row with an icon to
   start Live, a shared violet background, quieter conversation text, and large mute
   and hang-up controls. Session details open on demand; startup progress stays inside

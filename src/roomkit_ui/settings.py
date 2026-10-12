@@ -91,8 +91,8 @@ _DEFAULTS = {
     "vc_anthropic_model": "claude-sonnet-5-5",
     "vc_openai_model": "gpt-4o",
     "vc_gemini_model": "gemini-3.8-flash",
-    "vc_stt_provider": "local",  # "local" | "gradium"
-    "vc_tts_provider": "piper",  # "piper" | "qwen3" | "neutts" | "gradium" | "elevenlabs"
+    "vc_stt_provider": "local",  # voice_setup.VC_STT_PROVIDERS
+    "vc_tts_provider": "piper",  # voice_setup.VC_TTS_PROVIDERS
     "elevenlabs_api_key": "",
     "elevenlabs_voice_id": "",  # Empty = Rachel default (21m00Tcm4TlvDq8ikWAM)
     "elevenlabs_model": "",  # Empty = eleven_v4
@@ -211,6 +211,13 @@ _DEFAULTS = {
     # Meta Muse Voice Transcribe (roomkit 0.92+): the Meta Model API key
     "meta_api_key": "",  # secret — keyring, never QSettings
     "meta_stt_keywords": "",  # comma-separated terms to bias recognition toward
+    # Google Gemini STT (gemini-3.5-transcribe-live) and TTS; the key is "api_key"
+    "gemini_stt_vocabulary": "",  # comma-separated terms to bias recognition toward
+    "gemini_tts_model": "",  # empty = gemini-3.8-flash-lite-tts
+    "gemini_tts_voice": "",  # empty = Kore
+    "gemini_tts_style": "",  # delivery direction for every reply, e.g. "warm and calm"
+    # Hand the model the audio tags its TTS performs (audio_tags.py)
+    "vc_tts_audio_tags": False,
     # OpenAI GPT-Live (roomkit 0.70+, full-duplex): the live model talks, a backend
     # model OpenAI hosts reasons and calls the tools
     "openai_live_model": "gpt-live-1",

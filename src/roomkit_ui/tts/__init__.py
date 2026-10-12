@@ -15,6 +15,7 @@ _REGISTRY: dict[str, str] = {
     "elevenlabs": "roomkit_ui.tts.elevenlabs",
     "pocket": "roomkit_ui.tts.pocket",
     "azure": "roomkit_ui.tts.azure",
+    "gemini": "roomkit_ui.tts.gemini",
 }
 
 # Local models, expensive to load: the engine keeps the last one built for

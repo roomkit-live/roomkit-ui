@@ -1,4 +1,5 @@
-"""Voice Channel cloud provider fields: cloud LLM, cloud STT, cloud TTS, Gradium Advanced."""
+"""Voice Channel cloud provider fields: cloud LLM, cloud STT, cloud TTS, audio tags,
+Gradium Advanced."""
 
 from __future__ import annotations
 
@@ -16,8 +17,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from roomkit_ui.audio_tags import performed_tags
 from roomkit_ui.widgets.settings.controls import AdvancedSection, SettingsForm
 from roomkit_ui.widgets.settings.vc_azure_fields import AzureSpeechFields
+from roomkit_ui.widgets.settings.vc_google_fields import GeminiSpeechFields
 from roomkit_ui.widgets.settings.vc_meta_fields import MetaSTTFields
 
 _ANTHROPIC_CATALOG = "roomkit.providers.anthropic.models"
@@ -178,6 +181,19 @@ ELEVENLABS_MODELS = [
 ]
 
 
+def audio_tags_hint(tags: tuple[str, ...]) -> str:
+    """What the audio-tag option does with this voice, or why it cannot."""
+    if not tags:
+        return (
+            "Google Gemini voices and ElevenLabs v3 or v4 perform audio tags. "
+            "This voice would read them aloud."
+        )
+    return (
+        f"The assistant varies its delivery with {', '.join(tags)} where they fit. "
+        "The voice performs them and the chat shows them."
+    )
+
+
 def _select_model(combo: QComboBox, model_id: str, label: str | None = None) -> None:
     """Select *model_id* in a fixed model dropdown.
 
@@ -225,6 +241,8 @@ class VCCloudFields:
         self._settings = settings
         self.azure = AzureSpeechFields(settings)
         self.meta = MetaSTTFields(settings)
+        self.google = GeminiSpeechFields(settings)
+        self._tts_provider = ""
 
     # ── LLM ──
 
@@ -327,12 +345,14 @@ class VCCloudFields:
 
         self.azure.add_stt_rows(form)
         self.meta.add_stt_rows(form)
+        self.google.add_stt_rows(form)
 
     # ── TTS ──
 
     def add_tts_fields(self, form: QFormLayout) -> None:
         s = self._settings
         self.azure.add_tts_rows(form)
+        self.google.add_tts_rows(form)
 
         # Gradium voice
         self.vc_gradium_voice = QLineEdit(s.get("vc_gradium_voice", ""))
@@ -362,6 +382,37 @@ class VCCloudFields:
         )
         self._elevenlabs_stream_label = QLabel("")
         form.addRow(self._elevenlabs_stream_label, self.elevenlabs_stream_input)
+
+        self._add_audio_tag_fields(form)
+
+    def _add_audio_tag_fields(self, form: QFormLayout) -> None:
+        """Hand the model the audio tags the voice performs (audio_tags.py).
+
+        Shown for every voice, so it can be found; enabled where the voice
+        performs tags.  Disabled, it keeps its value for when one does.
+        """
+        self.vc_tts_audio_tags = QCheckBox("Let the assistant direct its voice")
+        self.vc_tts_audio_tags.setChecked(bool(self._settings.get("vc_tts_audio_tags", False)))
+        self.vc_tts_audio_tags.setToolTip(
+            "The model writes tags such as [whispers] or [laughs] into its replies, "
+            "and the voice acts them out: more varied delivery."
+        )
+        form.addRow("Audio tags", self.vc_tts_audio_tags)
+        self._audio_tags_note = QLabel()
+        self._audio_tags_note.setWordWrap(True)
+        self._audio_tags_note.setObjectName("settingsHint")
+        form.addRow("", self._audio_tags_note)
+        self.elevenlabs_model.currentIndexChanged.connect(self._update_audio_tags)
+
+    def _update_audio_tags(self) -> None:
+        tags = performed_tags(
+            {
+                "vc_tts_provider": self._tts_provider,
+                "elevenlabs_model": self.elevenlabs_model.currentData() or "",
+            }
+        )
+        self.vc_tts_audio_tags.setEnabled(bool(tags))
+        self._audio_tags_note.setText(audio_tags_hint(tags))
 
     # ── Gradium Advanced (collapsible) ──
 
@@ -499,12 +550,14 @@ class VCCloudFields:
     def update_stt_visibility(self, provider: str) -> None:
         self.azure.update_stt_visibility(provider)
         self.meta.update_stt_visibility(provider)
+        self.google.update_stt_visibility(provider)
         is_deepgram = provider == "deepgram"
         self._deepgram_model_label.setVisible(is_deepgram)
         self.deepgram_model.setVisible(is_deepgram)
 
     def update_tts_visibility(self, provider: str) -> None:
         self.azure.update_tts_visibility(provider)
+        self.google.update_tts_visibility(provider)
         is_gradium = provider == "gradium"
         is_elevenlabs = provider == "elevenlabs"
         self._vc_gradium_voice_label.setVisible(is_gradium)
@@ -515,6 +568,8 @@ class VCCloudFields:
         self.elevenlabs_model.setVisible(is_elevenlabs)
         self._elevenlabs_stream_label.setVisible(is_elevenlabs)
         self.elevenlabs_stream_input.setVisible(is_elevenlabs)
+        self._tts_provider = provider
+        self._update_audio_tags()
 
     def update_gradium_visibility(self, stt_provider: str, tts_provider: str) -> None:
         needs_gradium = stt_provider == "gradium" or tts_provider == "gradium"
@@ -540,6 +595,7 @@ class VCCloudFields:
             "elevenlabs_voice_id": self.elevenlabs_voice_id.text().strip(),
             "elevenlabs_model": self.elevenlabs_model.currentData() or "",
             "elevenlabs_stream_input": self.elevenlabs_stream_input.isChecked(),
+            "vc_tts_audio_tags": self.vc_tts_audio_tags.isChecked(),
             "gradium_language": self.gradium_language.currentData() or "",
             "gradium_stt_model": self.gradium_stt_model.text().strip(),
             "gradium_stt_delay": self.gradium_stt_delay.currentData() or "",
@@ -553,4 +609,5 @@ class VCCloudFields:
             "gradium_rewrite_rules": self.gradium_rewrite_rules.text().strip(),
             **self.azure.get_settings(),
             **self.meta.get_settings(),
+            **self.google.get_settings(),
         }

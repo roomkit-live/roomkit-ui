@@ -8,19 +8,10 @@ from typing import Any
 # sentence is spoken as soon as the model writes it.
 DEFAULT_MODEL = "eleven_v4"
 
-# The model families that read inline audio tags ([laughs], [whispers]) as
-# delivery cues instead of words — roomkit's _AUDIO_TAG_MODELS.
-_AUDIO_TAG_MODELS = ("eleven_v3", "eleven_v4")
-
 
 def model_id(settings: dict) -> str:
     """The ElevenLabs model a session uses: the saved one, or the default."""
     return str(settings.get("elevenlabs_model", "") or DEFAULT_MODEL)
-
-
-def reads_audio_tags(model: str) -> bool:
-    """Whether *model* renders ``[laughs]``-style tags rather than reading them."""
-    return model.startswith(_AUDIO_TAG_MODELS)
 
 
 def create(settings: dict) -> tuple[Any, int]:

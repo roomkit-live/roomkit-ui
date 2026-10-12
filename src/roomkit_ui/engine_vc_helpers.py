@@ -144,10 +144,10 @@ def build_tts_filter(settings: dict) -> Any:
     - Technical text: a JSON object the model wrote instead of calling a tool,
       a ``(Note: ...)`` to itself, a ``---`` separator.
     - Bracketed stage directions (``[smiles]``, ``[Respond in French]``) —
-      except on an ElevenLabs model that renders audio tags, where
-      ``[laughs]`` is a cue the voice performs.  Its tags are open-ended, so
-      no keep-list would cover them: brackets all pass there, as roomkit
-      advises for expressive ElevenLabs.
+      except on a TTS that performs audio tags (ElevenLabs v3/v4, Gemini),
+      where ``[laughs]`` is a cue the voice acts out.  Their tags are
+      open-ended, so no keep-list would cover them: brackets all pass there,
+      as roomkit advises for both (``audio_tags.performed_tags``).
     - Emoji, which a TTS names or garbles.
 
     AFTER_TTS gets the filtered text, and the assistant bubble filters what
@@ -161,20 +161,14 @@ def build_tts_filter(settings: dict) -> Any:
         TTSFilterChain,
     )
 
+    from roomkit_ui.audio_tags import performed_tags
+
     # Technical text first: brackets left around a removed JSON array go next.
     filters: list[Any] = [StripTechnicalText()]
-    if not _tts_reads_audio_tags(settings):
+    if not performed_tags(settings):
         filters.append(StripBrackets())
     filters.append(StripEmoji())
     return TTSFilterChain(*filters)
-
-
-def _tts_reads_audio_tags(settings: dict) -> bool:
-    if settings.get("vc_tts_provider") != "elevenlabs":
-        return False
-    from roomkit_ui.tts.elevenlabs import model_id, reads_audio_tags
-
-    return reads_audio_tags(model_id(settings))
 
 
 def smart_turn_config(settings: dict, inference_device: str) -> Any:

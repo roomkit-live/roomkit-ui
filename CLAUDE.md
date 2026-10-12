@@ -41,6 +41,7 @@ src/roomkit_ui/
 ├── engine_vc.py         # Voice Channel start (STT → LLM → TTS) — mixin
 ├── engine_vc_helpers.py # Stateless VC builders: barge-in, TTS filter, Smart Turn, local LLM
 ├── vc_stt.py            # VC cloud STT builders (dispatch table) + the turn VAD a turnless STT needs
+├── audio_tags.py        # Tags a VC TTS performs ([whispers]) and the prompt section handing them over — leaf
 ├── vc_agent.py          # VC agent from the Agent tab: speak policy (classifier), thinker, background flag
 ├── agent_hooks.py       # VC decision logs, background-task chat notices and running-task count
 ├── speaker_roster.py    # Voices Muse tells apart + their names, the user's voice, primary gate, prompt note — leaf
@@ -93,7 +94,7 @@ src/roomkit_ui/
 ├── icons.py             # Heroicons SVG rendering
 ├── theme.py             # Dark/Light theme stylesheets
 ├── providers/           # LLM factories, lazy registry: anthropic, openai, gemini, local (vLLM/Ollama), llamacpp
-├── tts/                 # TTS factories, lazy registry: piper, qwen3, neutts, pocket, gradium, elevenlabs, azure, _util
+├── tts/                 # TTS factories, lazy registry: piper, qwen3, neutts, pocket, gradium, elevenlabs, azure, gemini, _util
 ├── wakeword/            # controller (shared mic + listener lifetime), listener, capture (mic → VAD → segments),
 │                        #  resample, jobs (SerialWorker), detector, features (whisper encoder), dtw, fingerprint,
 │                        #  enroller, encoder_download, page_sensitivity
@@ -135,7 +136,8 @@ src/roomkit_ui/
                            #  integration_controls.py shares searchable lists and detail views.
                            #  Other pages: dictation, wakeword, about. Voice parts:
                            #  realtime_section, realtime_catalogs, realtime_gemini_live, realtime_gpt_live,
-                           #  vc_local_fields, vc_cloud_fields, vc_azure_fields, vc_meta_fields, vc_agent_fields;
+                           #  vc_local_fields, vc_cloud_fields, vc_azure_fields, vc_meta_fields, vc_google_fields,
+                           #  vc_agent_fields;
                            #  also models_widgets, speakers_dialogs, speakers_muse, feature_hints
 ```
 

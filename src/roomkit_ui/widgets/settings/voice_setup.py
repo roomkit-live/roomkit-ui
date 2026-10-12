@@ -41,6 +41,7 @@ VC_STT_PROVIDERS: list[tuple[str, str]] = [
     ("Deepgram", "deepgram"),
     ("Azure MAI-Transcribe", "azure_mai"),
     ("Meta Muse Voice Transcribe", "meta"),
+    ("Google Gemini", "gemini"),
 ]
 
 VC_TTS_PROVIDERS: list[tuple[str, str]] = [
@@ -51,6 +52,7 @@ VC_TTS_PROVIDERS: list[tuple[str, str]] = [
     ("ElevenLabs", "elevenlabs"),
     ("Pocket TTS (local, voice clone)", "pocket"),
     ("Azure MAI-Voice", "azure"),
+    ("Google Gemini", "gemini"),
 ]
 
 # Barge-in: how the user's speech may cut the assistant off (build_interruption).
@@ -64,7 +66,7 @@ _INTERRUPTION_HINT = (
     "Words only lets acknowledgements (“ok”, “mm-hmm”, "
     "“d’accord”, “merci”) through and stops for anything else. "
     "It needs an STT that hears words while you speak (Deepgram, Gradium, Meta Muse, "
-    "a streaming local model): a Whisper-type local model only gives them once you "
+    "Gemini, a streaming local model): a Whisper-type local model only gives them once you "
     "stop, so with one any speech that lasts stops the assistant."
 )
 
@@ -282,14 +284,15 @@ class VoiceSetup(QWidget):
         self._update_pipeline_summary()
 
     def _update_pipeline_summary(self) -> None:
-        stt = {"local": "Local", "azure_mai": "Azure MAI", "meta": "Meta Muse"}
-        llm = {"local": "Local", "llamacpp": "llama.cpp"}
+        stt = {"local": "Local", "azure_mai": "Azure MAI", "meta": "Meta Muse", "gemini": "Gemini"}
+        llm = {"local": "Local", "llamacpp": "llama.cpp", "gemini": "Gemini"}
         tts = {
             "piper": "Piper",
             "qwen3": "Qwen3-TTS",
             "neutts": "NeuTTS",
             "pocket": "Pocket TTS",
             "azure": "Azure MAI",
+            "gemini": "Gemini",
         }
         providers = (
             (self.vc_stt_provider, VC_STT_PROVIDERS, stt),

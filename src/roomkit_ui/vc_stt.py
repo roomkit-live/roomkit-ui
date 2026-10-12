@@ -179,12 +179,49 @@ def build_meta_stt(settings: dict, emit_status: Callable[[str], None]) -> Any:
     return MetaSTTProvider(config)
 
 
+def build_gemini_stt(settings: dict, emit_status: Callable[[str], None]) -> Any:
+    """Google's live recogniser (``gemini-3.5-transcribe-live``) over the Gemini API.
+
+    It ends each turn itself, like Deepgram: the channel gets no pipeline
+    VAD and streams all the audio to it, and roomkit reconnects when Google
+    closes a session at its ten-minute cap.  The app's STT language is its
+    one hint; with none set it detects the language among the 85+ it takes.
+    The key is the one Gemini Live and the LLM use.
+    """
+    from roomkit.voice.stt.gemini_transcribe import (
+        GeminiTranscribeConfig,
+        GeminiTranscribeProvider,
+    )
+
+    emit_status("Connecting Gemini STT…")
+    api_key = str(settings.get("api_key", "") or "").strip()
+    if not api_key:
+        raise ValueError("Google API key is required for Gemini STT. Open Settings to enter it.")
+    language = str(settings.get("stt_language", "") or "").strip()
+    vocabulary = [
+        term.strip() for term in str(settings.get("gemini_stt_vocabulary", "") or "").split(",")
+    ]
+    config = GeminiTranscribeConfig(
+        api_key=api_key,
+        language_codes=[language] if language else [],
+        custom_vocabulary=[term for term in vocabulary if term],
+    )
+    logger.info(
+        "STT: gemini, model=%s, language=%s, %d vocabulary terms",
+        config.model,
+        language or "detected",
+        len(config.custom_vocabulary),
+    )
+    return GeminiTranscribeProvider(config)
+
+
 # vc_stt_provider → its builder.  A provider absent here is the local one.
 CLOUD_STT_BUILDERS: dict[str, Callable[[dict, Callable[[str], None]], Any]] = {
     "gradium": build_gradium_stt,
     "deepgram": build_deepgram_stt,
     "azure_mai": build_azure_mai_stt,
     "meta": build_meta_stt,
+    "gemini": build_gemini_stt,
 }
 
 

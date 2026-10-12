@@ -136,6 +136,7 @@ STT_PROVIDER_FEATURES: dict[str, str] = {
     "deepgram": "deepgram",
     "azure_mai": "azure-stt",
     "meta": "meta-stt",
+    "gemini": "gemini",
 }
 
 TTS_PROVIDER_FEATURES: dict[str, str] = {
@@ -146,6 +147,7 @@ TTS_PROVIDER_FEATURES: dict[str, str] = {
     "elevenlabs": "elevenlabs",
     "pocket": "pocket-tts",
     "azure": "azure-tts",
+    "gemini": "gemini",
 }
 
 REALTIME_PROVIDER_FEATURES: dict[str, str] = {

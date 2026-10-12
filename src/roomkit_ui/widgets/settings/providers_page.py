@@ -25,7 +25,11 @@ PROVIDERS = (
         "OpenAI",
         "Realtime, GPT-Live, conversation, dictation and speaking decisions",
     ),
-    ("api_key", "Google Gemini", "Gemini Live and conversation"),
+    (
+        "api_key",
+        "Google Gemini",
+        "Gemini Live, conversation, transcription and speech synthesis",
+    ),
     ("anthropic_api_key", "Anthropic", "Conversation and Deepgram agent reasoning"),
     ("deepgram_api_key", "Deepgram", "Voice Agent, transcription and dictation"),
     ("elevenlabs_api_key", "ElevenLabs", "Conversational AI and speech synthesis"),

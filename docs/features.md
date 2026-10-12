@@ -12,8 +12,8 @@ system context in [architecture.md](architecture.md).
 | | Realtime (speech-to-speech) | Voice Channel (STT → LLM → TTS) |
 |---|---|---|
 | Providers | Gemini Live, OpenAI Realtime, OpenAI GPT-Live, Deepgram Voice Agent, ElevenLabs ConvAI, xAI Grok | LLM: Anthropic, OpenAI, Gemini, local (vLLM/Ollama), llama.cpp |
-| STT | provider-native | sherpa-onnx (local), Gradium, Deepgram, Azure MAI-Transcribe, Meta Muse |
-| TTS | provider-native | Piper and Pocket TTS (local), Qwen3-TTS & NeuTTS (voice clone), Gradium, ElevenLabs, Azure MAI-Voice |
+| STT | provider-native | sherpa-onnx (local), Gradium, Deepgram, Azure MAI-Transcribe, Meta Muse, Google Gemini |
+| TTS | provider-native | Piper and Pocket TTS (local), Qwen3-TTS & NeuTTS (voice clone), Gradium, ElevenLabs, Azure MAI-Voice, Google Gemini |
 | Latency | lowest | depends on the three stages |
 | Offline capable | no | yes (local STT + local LLM + Piper or Pocket TTS) |
 | Usage shown | tokens | tokens + cost estimate (catalog pricing) |
@@ -84,6 +84,15 @@ kept, never replaced. Agent Skills reach realtime sessions as well as Voice Chan
   so the session gets no VAD. The speech-recognition language becomes a bias (none
   set: Muse takes what it hears); a language Muse does not list (Russian) is refused
   at start. Optional keywords bias it toward names and terms.
+- **Google Gemini STT / TTS** — on the Gemini key Gemini Live and the LLM use, so one
+  key can run the whole pipeline. The STT is Google's live recogniser
+  (`gemini-3.5-transcribe-live`): it streams words while the user speaks and ends each
+  turn itself, so the session gets no VAD; the speech-recognition language is its hint
+  (none set: it detects among 85+), and an optional vocabulary biases it toward names.
+  The TTS defaults to `gemini-3.8-flash-lite-tts`, built for voice agents (3.8 Flash
+  acts more, about half a second later), with the 30 prebuilt voices or any id from
+  Google's catalogue and an optional style ("warm and calm"). It takes the whole reply,
+  not each sentence as it is written, and speaks the reply's language.
 - **ElevenLabs streamed input** — "Stream text to ElevenLabs (lower latency)", on by
   default: each sentence is synthesized as soon as it is written (v4 / v4 Turbo and the
   v2 / v2.5 models). v4 is the default model; v3 has no streaming socket and keeps
@@ -97,8 +106,14 @@ kept, never replaced. Agent Skills reach realtime sessions as well as Voice Chan
   the STT because what it can do depends on the STT.
 - **TTS filtering** — the voice skips emoji, a JSON object the model wrote instead of
   calling a tool, notes to itself ("(Note: …)"), separators and bracketed stage
-  directions; the chat shows the same filtered text. On an ElevenLabs model that performs
-  audio tags (v3, v4, v4 Turbo), brackets pass through: "[laughs]" is a cue there.
+  directions; the chat shows the same filtered text. On a voice that performs audio tags
+  (ElevenLabs v3, v4, v4 Turbo; Google Gemini), brackets pass through: "[laughs]" is a
+  cue there.
+- **Audio tags** (Speak · TTS → "Let the assistant direct its voice", off by default) —
+  the system prompt hands the model the tags its voice performs ([laughs], [sighs],
+  [whispers], [excited]…; `audio_tags.py`) to use where they fit, so the delivery varies.
+  Enabled only for a voice that performs them; any other would read them aloud. The chat
+  shows the tags as written.
 - **Smart Turn** (`smart-turn` extra) — a turn detector that judges from the audio whether
   the user has finished; "Unfinished Wait (ms)" sets how long an unfinished turn waits for
   more speech. Without the extra the setting reads "not installed", and a session runs
@@ -387,7 +402,7 @@ sequenceDiagram
 | Gemini Live / OpenAI Realtime / GPT-Live / Deepgram Agent / ElevenLabs / Grok | bidirectional WS | speech-to-speech |
 | Anthropic / OpenAI / Gemini / vLLM / Ollama APIs | outbound | voice-channel LLM turn |
 | llama-server (local) | local HTTP | roomkit downloads the server build and the GGUF model |
-| ElevenLabs / Gradium / Deepgram / Azure MAI | outbound | cloud TTS / STT |
+| ElevenLabs / Gradium / Deepgram / Azure MAI / Gemini | outbound | cloud TTS / STT |
 | MCP servers | bidirectional | user-configured, OAuth2 for HTTP |
 | skills.sh | outbound HTTPS / browser | skill search; GitHub sources install as Git, well-known sources as local folders |
 | edge-ai-models GitHub repo, Hugging Face | outbound | model downloads (LFS; Smart Turn and the wake-word encoder pinned by SHA-256) |
@@ -404,7 +419,7 @@ sequenceDiagram
   background task runs cancels it.
 - The pre-built binaries carry Smart Turn but neither Pocket TTS, Qwen3-TTS nor NeuTTS
   (outside the `all` extra); install from source for those.
-- Azure MAI-Transcribe and Meta Muse are not offered for dictation.
+- Azure MAI-Transcribe, Meta Muse and Gemini STT are not offered for dictation.
 - MCP Apps require QtWebEngine (the tool's activity and text result remain available without it).
 - Window size fixed; no chat search/export.
 - French-centric Piper catalog (all three Piper voices are French); Pocket TTS covers six

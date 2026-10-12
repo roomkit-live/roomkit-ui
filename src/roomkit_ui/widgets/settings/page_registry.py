@@ -123,6 +123,14 @@ PAGE_SPECS = (
                 unavailable="Select Voice Channel mode to configure speech synthesis.",
             ),
             SearchTarget(
+                "Audio tags",
+                "expressive voice whisper laugh sigh tags delivery elevenlabs gemini",
+                "voice._cloud.vc_tts_audio_tags",
+                (("tabs", 0), ("voice.pipeline_tabs", 2)),
+                fallback="voice.mode_picker",
+                unavailable="Select Voice Channel mode to let the assistant direct its voice.",
+            ),
+            SearchTarget(
                 "Agent behavior",
                 "turn taking jev thinker background speaking decision",
                 "voice._agent.speak_policy",

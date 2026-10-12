@@ -16,6 +16,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from roomkit_ui.agent_hooks import register_agent_hooks
+from roomkit_ui.audio_tags import audio_tags_note
 from roomkit_ui.engine_audio import (
     DSP_THREADS,
     VC_INPUT_SAMPLE_RATE,
@@ -130,7 +131,11 @@ class VoiceChannelMixin:
 
     async def _start_voice_channel(self, settings: dict) -> None:
         try:
-            system_prompt = self._compose_session_prompt(settings)  # type: ignore[attr-defined]
+            voice_note = audio_tags_note(settings)
+            logger.info("Audio tags: %s", "in the prompt" if voice_note else "off")
+            system_prompt = self._compose_session_prompt(  # type: ignore[attr-defined]
+                settings, voice_note=voice_note
+            )
             inference_device = settings.get("inference_device", "cpu")
             aec_mode = settings.get("aec_mode", "webrtc")
             denoise_mode = settings.get("denoise", "none")
