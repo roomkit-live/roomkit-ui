@@ -53,7 +53,7 @@ xattr -cr "RoomKit UI.app"
 - **Clean speech** — the Voice Channel voice skips emoji, tool JSON and stage directions
 - **Animated VU meter** — ambient glow visualization for mic and speaker audio levels
 - **Chat transcript** — the assistant's text rolls out with its voice, markdown rendered; streaming transcriptions
-- **Session usage** — token counts in the info bar, with a cost estimate in Voice Channel mode
+- **Session usage** — token counts in the session panel, with a cost estimate in Voice Channel mode
 - **System-wide dictation** — global hotkey triggers STT and pastes text into the focused app (macOS, Linux, Windows)
 - **Local STT models** — offline dictation with downloadable sherpa-onnx models (Whisper, Parakeet, Zipformer)
 - **MCP tool support** — connect external tools via Model Context Protocol (stdio, SSE, HTTP) with OAuth2 authentication
@@ -181,7 +181,10 @@ reserved for a future update.
 
 During Live, the microphone and hang-up controls stay below the transcript.
 The violet waveform follows voice activity; muting the microphone keeps playback
-audible. Use the **information icon** for model, tools, skills and usage details.
+audible. The **information icon** opens a sliding panel with active models by role and voice,
+personality, tools, skills and reported usage. Search tools and skills by name or
+description, then expand an entry to read it. Usage updates while the panel is open;
+the conversation continues. Close it with Escape, the cross or **Back to conversation**.
 Settings is available in the conversation panel once the session ends.
 Home, startup and conversation share the same background. Startup progress appears
 in the conversation area with Cancel below it; speaking decisions stay in the logs.

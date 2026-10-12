@@ -43,6 +43,7 @@ src/roomkit_ui/
 ├── vc_stt.py            # VC cloud STT builders (dispatch table) + the turn VAD a turnless STT needs
 ├── audio_tags.py        # Tags a VC TTS performs ([whispers]) and the prompt section handing them over — leaf
 ├── vc_agent.py          # VC agent from the Agent tab: speak policy (classifier), thinker, background flag
+├── session_models.py    # Display-only model inventory from resolved VC/Realtime backends; explicit safe fields
 ├── agent_hooks.py       # VC decision logs, background-task chat notices and running-task count
 ├── speaker_roster.py    # Voices Muse tells apart + their names, the user's voice, primary gate, prompt note — leaf
 ├── speaker_naming.py    # Muse speaker hook, name_voice (chat click), name_speaker tool, per-turn speaker note
@@ -106,6 +107,7 @@ src/roomkit_ui/
     ├── conversation_history.py # Thread selection, autosave, titles and legacy import
     ├── conversation_drawer.py # Full-width sliding thread list, search and New conversation
     ├── navigation_brand.py # Shared RoomKit wordmark for Settings and conversation navigation
+    ├── sliding_panel.py   # Shared panel shell, animation, focus and theme; one overlay at a time
     ├── conversation_composer.py # Reserved text input + Live / cancel / end / mute
     ├── chat_view.py       # Scrollable chat transcript
     ├── chat_bubble.py     # One chat entry: user bubble, typeset assistant text
@@ -116,7 +118,8 @@ src/roomkit_ui/
     ├── mcp_app_server.py  # 127.0.0.1 server + CSP for MCP App content
     ├── mcp_app_wrapper.py # Wrapper page: QWebChannel bridge + app iframe
     ├── vu_meter.py        # Compact violet waveform; mic mute preserves playback activity
-    ├── session_info.py    # Live identity header + session details on demand
+    ├── session_info.py    # Minimal Live header with history and session-panel actions
+    ├── session_drawer.py  # Active models by role, usage and searchable tools/skills; live updates
     ├── hotkey_button.py   # Interactive hotkey capture widget
     ├── dictation_log.py   # Dictation event log window
     ├── wakeword_wizard.py # Guided wake-word enrolment

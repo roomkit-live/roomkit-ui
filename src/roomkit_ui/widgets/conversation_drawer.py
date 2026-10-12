@@ -5,10 +5,8 @@ from __future__ import annotations
 from datetime import datetime
 
 from PySide6.QtCore import (
-    QEasingCurve,
     QEvent,
     QPoint,
-    QPropertyAnimation,
     QRect,
     QSize,
     Qt,
@@ -34,8 +32,8 @@ from roomkit_ui.conversations import Conversation
 from roomkit_ui.icons import svg_icon
 from roomkit_ui.theme_live import bind_theme
 from roomkit_ui.widgets.buttons import KeyboardButton
-from roomkit_ui.widgets.navigation_brand import NavigationBrand
 from roomkit_ui.widgets.settings.style import settings_colors
+from roomkit_ui.widgets.sliding_panel import SlidingPanel
 
 
 class _ConversationDelegate(QStyledItemDelegate):
@@ -87,37 +85,15 @@ class _ConversationDelegate(QStyledItemDelegate):
         painter.restore()
 
 
-class ConversationDrawer(QWidget):
-    closed = Signal()
+class ConversationDrawer(SlidingPanel):
     selected = Signal(str)
     new_requested = Signal()
     settings_requested = Signal()
     rename_requested = Signal(str)
 
     def __init__(self, parent: QWidget) -> None:
-        super().__init__(parent)
-        self._surface = parent
-        self.setObjectName("conversationDrawer")
-        self.setAttribute(Qt.WA_StyledBackground)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 0, 12, 16)
-        layout.setSpacing(0)
-        header = QHBoxLayout()
-        header.setContentsMargins(10, 25, 0, 21)
-        header.addWidget(NavigationBrand(), 1)
-        self._close = KeyboardButton()
-        self._close.setObjectName("drawerClose")
-        self._close.setFixedSize(34, 34)
-        self._close.setIconSize(QSize(20, 20))
-        self._close.setAccessibleName("Close conversations")
-        self._close.setToolTip("Close conversations")
-        self._close.clicked.connect(self.dismiss)
-        header.addWidget(self._close)
-        layout.addLayout(header)
-        title = QLabel("Conversations")
-        title.setObjectName("drawerTitle")
-        title.setContentsMargins(10, 0, 10, 10)
-        layout.addWidget(title)
+        super().__init__("Conversations", parent)
+        layout = self.body
         self._search = QLineEdit()
         self._search.setPlaceholderText("Search conversations…")
         self._search.setAccessibleName("Search conversations")
@@ -192,46 +168,7 @@ class ConversationDrawer(QWidget):
         self._conversations: list[Conversation] = []
         self._selected = ""
         self._busy = False
-        self._opening = False
-        self._animation = QPropertyAnimation(self, b"pos", self)
-        self._animation.setDuration(200)
-        self._animation.setEasingCurve(QEasingCurve.OutCubic)
-        self._animation.finished.connect(self._animation_finished)
-        shortcut = QShortcut(QKeySequence(Qt.Key_Escape), self)
-        shortcut.setContext(Qt.WidgetWithChildrenShortcut)
-        shortcut.activated.connect(self.dismiss)
         bind_theme(self, self._render_theme)
-        self.hide()
-
-    def present(self) -> None:
-        self._animation.stop()
-        self.resize(self._surface.size())
-        self._opening = True
-        self.move(-self.width(), 0)
-        self.show()
-        self.raise_()
-        self._close.setFocus()
-        self._animation.setStartValue(self.pos())
-        self._animation.setEndValue(QPoint(0, 0))
-        self._animation.start()
-
-    def dismiss(self) -> None:
-        self._opening = False
-        self._animation.stop()
-        self._animation.setStartValue(self.pos())
-        self._animation.setEndValue(QPoint(-self.width(), 0))
-        self._animation.start()
-
-    def _animation_finished(self) -> None:
-        if not self._opening:
-            self.hide()
-            self.closed.emit()
-
-    def resize_to_parent(self) -> None:
-        self.resize(self._surface.size())
-        if self._opening:
-            self._animation.stop()
-            self.move(0, 0)
 
     def set_busy(self, busy: bool) -> None:
         self._busy = busy
@@ -320,39 +257,20 @@ class ConversationDrawer(QWidget):
         if not self._busy:
             self.selected.emit(item.data(Qt.UserRole))
 
-    def _render_theme(self) -> None:
-        c = settings_colors()
-        self.setStyleSheet(
-            f"QWidget#conversationDrawer {{ background: {c['sidebar']}; }}"
-            f"QLabel {{ background: transparent; color: {c['text']}; font-size: 12px; }}"
-            "QLabel#drawerTitle { font-size: 14px; font-weight: 600; }"
-            f"QLabel#drawerSection {{ color: {c['muted']}; font-size: 10px; font-weight: 600; }}"
+    def _styles(self, c: dict[str, str]) -> str:
+        return super()._styles(c) + (
             f"QLabel#drawerNotice {{ color: {c['muted']}; padding: 10px; }}"
             f"QLabel#drawerSettingsLabel {{ color: {c['muted']};"
             " font-size: 13px; font-weight: 500; }"
-            f"QPushButton {{ border: 1px solid transparent; border-radius: 7px;"
-            f" background: transparent; color: {c['muted']}; padding: 8px 10px;"
-            " text-align: left; font-size: 13px; font-weight: 500; }"
             f"QPushButton#newConversation {{ background: {c['soft']}; color: {c['accent']}; }}"
-            "QPushButton#drawerClose { padding: 0; }"
-            f"QPushButton:hover:enabled {{ background: {c['soft']}; }}"
-            f"QPushButton:pressed:enabled {{ background: {c['selected']}; }}"
-            'QPushButton[keyboardFocus="true"] {'
-            f" border-color: {c['accent']}; }}"
-            f"QPushButton:disabled {{ color: {c['muted']}; }}"
-            f"QLineEdit {{ background: {c['soft']}; color: {c['text']};"
-            f" border: 1px solid {c['outline']}; border-radius: 7px;"
-            f" selection-background-color: {c['accent']};"
-            " padding: 8px 10px; font-size: 13px; }"
-            f"QLineEdit:focus {{ border-color: {c['accent']}; }}"
             "QListWidget { background: transparent; border: none; outline: none;"
             f" color: {c['text']}; font-size: 13px; }}"
-            f"QFrame#drawerFooter {{ background: transparent; border: none;"
-            f" border-top: 1px solid {c['border']}; }}"
-            f"QScrollBar::handle:vertical {{ background: {c['border']}; }}"
         )
+
+    def _render_theme(self) -> None:
+        super()._render_theme()
+        c = settings_colors()
         self._search_icon.setIcon(svg_icon("magnifying-glass", c["muted"], 18))
-        self._close.setIcon(svg_icon("x-mark", c["muted"], 20))
         self._new.setIcon(svg_icon("plus", c["accent"], 18))
         self._settings_icon.setPixmap(svg_icon("cog-6-tooth", c["muted"], 18).pixmap(18, 18))
         self._conversation_icon = svg_icon("chat-bubble", c["muted"], 18)

@@ -20,6 +20,7 @@ from roomkit_ui.widgets.chat_view import ChatView
 from roomkit_ui.widgets.conversation_composer import ConversationComposer
 from roomkit_ui.widgets.conversation_history import ConversationHistory
 from roomkit_ui.widgets.conversation_home import ConversationHeader, ConversationSurface
+from roomkit_ui.widgets.session_drawer import SessionDrawer
 from roomkit_ui.widgets.session_info import SessionInfoBar
 from roomkit_ui.widgets.session_loading import SessionLoading
 from roomkit_ui.widgets.settings import SettingsPanel
@@ -82,8 +83,10 @@ class MainWindow(QMainWindow):
         root.addWidget(self._controls)
         self._start_pending = False
         self._history = ConversationHistory(self)
+        self._session_drawer = SessionDrawer(self._surface)
         self._header.history_requested.connect(self._history.show)
         self._info_bar.history_requested.connect(self._history.show)
+        self._info_bar.details_requested.connect(self._show_session_details)
 
         # ── Signals ──
         self._controls.start_requested.connect(self._on_start)
@@ -108,8 +111,8 @@ class MainWindow(QMainWindow):
         self._engine.session_notice.connect(self._chat.add_info)
         self._engine.loading_status.connect(self._on_loading_status)
         self._engine.session_info.connect(self._on_session_info)
-        self._engine.session_cost.connect(self._info_bar.update_cost)
-        self._engine.attitude_changed.connect(self._info_bar.set_attitude)
+        self._engine.session_cost.connect(self._on_session_cost)
+        self._engine.attitude_changed.connect(self._on_attitude_changed)
         self._engine.speaker_named.connect(self._chat.name_voice)
         self._chat.speaker_clicked.connect(self._ask_voice_name)
 
@@ -207,6 +210,7 @@ class MainWindow(QMainWindow):
         welcome_visible = state in (EngineState.IDLE, EngineState.ERROR)
         self._header.setVisible(welcome_visible)
         if state == EngineState.CONNECTING:
+            self._session_drawer.clear_session()
             self._loading.start()
             self._conversation_stack.setCurrentWidget(self._loading)
         elif state == EngineState.ACTIVE:
@@ -230,7 +234,11 @@ class MainWindow(QMainWindow):
             self._end_notice = ""
             self._vu.stop()
             self._vu.hide()
-            self._info_bar.clear_session()
+            self._info_bar.hide()
+            was_open = not self._session_drawer.isHidden()
+            self._session_drawer.clear_session()
+            if was_open:
+                self._header._history.setFocus()
             self._active_app_widgets.clear()
             self.session_active_changed.emit(False)
         elif state == EngineState.STOPPING:
@@ -266,7 +274,24 @@ class MainWindow(QMainWindow):
             self._engine.name_speaker(voice, name)
 
     def _on_session_info(self, info: dict) -> None:
-        self._info_bar.set_session(info)
+        if self._engine.state in (EngineState.CONNECTING, EngineState.ACTIVE):
+            self._session_drawer.set_session(info)
+
+    def _show_session_details(self) -> None:
+        if self._engine.state == EngineState.ACTIVE:
+            self._session_drawer.present(self._info_bar._details_button)
+
+    def _on_session_cost(self, payload: dict) -> None:
+        if self._engine.state in (
+            EngineState.CONNECTING,
+            EngineState.ACTIVE,
+            EngineState.STOPPING,
+        ):
+            self._session_drawer.update_cost(payload)
+
+    def _on_attitude_changed(self, description: str) -> None:
+        if self._engine.state in (EngineState.CONNECTING, EngineState.ACTIVE):
+            self._session_drawer.set_attitude(description)
 
     def _on_mcp_status(self, message: str) -> None:
         self._chat.add_info(message)
@@ -409,3 +434,5 @@ class MainWindow(QMainWindow):
         super().resizeEvent(event)
         if hasattr(self, "_history"):
             self._history.drawer.resize_to_parent()
+        if hasattr(self, "_session_drawer"):
+            self._session_drawer.resize_to_parent()

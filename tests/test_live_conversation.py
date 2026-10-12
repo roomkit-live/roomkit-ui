@@ -1,12 +1,7 @@
 """The Live surface reflects real session events without changing voice controls."""
 
-from PySide6.QtCore import Qt
-from PySide6.QtTest import QTest
-
 from roomkit_ui.engine_state import EngineState
-from roomkit_ui.theme_live import apply_theme
 from roomkit_ui.widgets.main_window import MainWindow
-from roomkit_ui.widgets.session_info import SessionInfoBar
 
 
 def test_microphone_mute_preserves_playback_activity(qtbot):
@@ -57,39 +52,6 @@ def test_first_words_replace_the_invitation_and_survive_the_end_of_live(qtbot):
     window._history.new()
     window._engine.state_changed.emit(EngineState.ACTIVE)
     assert window._chat._bubbles() == []
-
-
-def test_session_details_work_from_the_keyboard_and_survive_theme_changes(qtbot):
-    bar = SessionInfoBar()
-    qtbot.addWidget(bar)
-    bar.set_session(
-        {
-            "provider": "gemini",
-            "model": "a-long-model-name-that-must-stay-readable",
-            "tools": [{"name": "Weather", "description": "Look up the forecast"}],
-            "failed_servers": ["Calendar"],
-        }
-    )
-    bar.resize(420, bar.sizeHint().height())
-    bar.show()
-    assert bar._detail_area.isHidden()
-    QTest.keyClick(bar._toggle_button, Qt.Key_Space)
-    assert not bar._detail_area.isHidden()
-    bar.update_cost({"input_tokens": 1200, "output_tokens": 500, "cost_usd": 0.0123})
-    bar.set_attitude("Warm and concise")
-    for theme in ("light", "dark"):
-        apply_theme(theme)
-        assert bar._toggle_button.isChecked()
-        assert "a-long-model-name-that-must-stay-readable" in bar._summary_label.text()
-        assert "$0.0123" in bar._summary_label.text()
-        assert "Warm and concise" in bar._summary_label.text()
-    bar.clear_session()
-    assert bar.isHidden()
-    assert not bar._toggle_button.isChecked()
-    bar.set_session({"provider": "openai", "model": "another-model"})
-    assert bar._detail_area.isHidden()
-    assert "$0.0123" not in bar._summary_label.text()
-    assert "Warm and concise" not in bar._summary_label.text()
 
 
 def test_new_turns_preserve_reading_position_until_the_user_returns_to_bottom(qtbot):

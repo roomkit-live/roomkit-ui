@@ -32,7 +32,6 @@ class ConversationHistory(QObject):
         self.drawer.selected.connect(self.select)
         self.drawer.rename_requested.connect(self.rename)
         self.drawer.closed.connect(self._closed)
-        self._disabled: list = []
         self._import_task: asyncio.Task | None = None
         self._save_timer = QTimer(self)
         self._save_timer.setSingleShot(True)
@@ -208,16 +207,6 @@ class ConversationHistory(QObject):
         self.save()
         self.drawer.set_busy(self.busy)
         self._refresh()
-        layout = self.window._surface.layout()
-        assert layout is not None
-        self._disabled = []
-        for i in range(layout.count()):
-            item = layout.itemAt(i)
-            widget = item.widget() if item else None
-            if widget is not None and widget.isEnabled():
-                self._disabled.append(widget)
-        for widget in self._disabled:
-            widget.setEnabled(False)
         self.drawer.present()
         if not QSettings().value("room/conversation_memory", True, type=bool) and not self.busy:
             self.drawer.set_notice("History saving is off. New messages stay in this app session.")
@@ -252,10 +241,6 @@ class ConversationHistory(QObject):
         self.drawer.set_conversations(items, self.current.id if self.current else "")
 
     def _closed(self) -> None:
-        for widget in self._disabled:
-            if isValid(widget):
-                widget.setEnabled(True)
-        self._disabled.clear()
         header = self.window._header if self.window._header.isVisible() else self.window._info_bar
         header._history.setFocus()
 

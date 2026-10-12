@@ -12,6 +12,13 @@ Each released section is the source for that version's GitHub release notes.
 ## [Unreleased]
 
 ### Added
+- **Live session details panel** — the information icon opens a sliding panel matching
+  conversation history, with STT/LLM/TTS models, voice, speaking decision, thinker,
+  Realtime audio and delegated models, personality, reported usage and searchable
+  tools/skills. Descriptions expand on demand; live updates retain the search and reading
+  state. The conversation keeps running behind it. Shared panel navigation replaces the
+  old inline details area and duplicate slide/focus code. The Live header keeps only
+  navigation and information actions; RoomKit branding stays in the panels.
 - **Conversation titles and recent history** — the configured text model summarizes
   the first exchanges into a short title when available; Rename lets you keep your own
   name. The drawer shows 30 recent conversations and searches titles across all history.

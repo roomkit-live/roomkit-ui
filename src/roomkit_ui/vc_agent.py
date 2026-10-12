@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from roomkit_ui.features import SPEAK_POLICY_FEATURES, unavailable_reason
+from roomkit_ui.session_models import SessionModel, decision_model
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +57,7 @@ class VCAgent:
     # Set up on the kit, not given to the channel (kit.setup_background).
     background: bool = False
     summary: list[dict] = field(default_factory=list)
+    decision: SessionModel | None = None
     _closables: list[Any] = field(default_factory=list)
 
     def channel_options(self) -> dict[str, Any]:
@@ -106,6 +108,9 @@ def _add_speak_policy(agent: VCAgent, settings: dict, ai_provider: Any) -> None:
     classifier = _CLASSIFIER_BUILDERS[policy](settings, ai_provider)
     agent._closables.append(classifier)
     agent.speak_policy = ClassifierSpeakPolicy(classifier, agent_name=agent_name(settings))
+    agent.decision = decision_model(
+        policy, classifier, ai_provider, settings.get("vc_llm_provider", "anthropic")
+    )
     agent.summary.append(
         {
             "name": "Decides when to speak",

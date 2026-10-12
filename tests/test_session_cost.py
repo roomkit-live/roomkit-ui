@@ -5,7 +5,7 @@ from datetime import date
 from roomkit.providers.ai.base import ModelPricing
 
 from roomkit_ui.engine_vc import VoiceChannelMixin, _model_pricing, _usage_int
-from roomkit_ui.widgets.session_info import _usage_summary
+from roomkit_ui.widgets.session_drawer import _usage_summary
 
 PRICING = ModelPricing(
     input_per_million=3.0,

@@ -246,6 +246,12 @@ makes the assistant answer only utterances attributed to the enrolled primary sp
 
 ### Tools: MCP + CLI + built-ins + MCP Apps
 
+- **Session details**: the Live header's information icon opens a full-width panel
+  matching conversation history. It groups the current model/personality, reported
+  token usage and cost, tools, skills, assistant behavior and unavailable integrations.
+  Search names or descriptions; expand entries to read their full descriptions.
+  Updates preserve the search and expanded entries. Opening the panel leaves audio
+  running and the transcript's layout intact; hangup closes and clears it.
 - **Activity in Live**: compact rows show each tool's readable name and actual state
   (working, done, failed or stopped). Click a row to inspect its input and result;
   details are selectable plain text, with a bounded preview for large outputs.
@@ -329,14 +335,20 @@ support, links to the project website and keeps the complete MIT license in a di
 
 ### UI
 
-Fixed-size (420×700) chat window: the user's turns in a subtle bubble, the assistant's
+Compact chat window (420 px wide, height resizable): the user's turns in a subtle bubble, the assistant's
 text typeset in the column and rolling out with its voice, cut back to what had been said
 (estimated from the audio played) with an "— interrupted" mark when roomkit's barge-in
 stops the voice (speech it lets through, with barge-in off or an "ok", leaves the reply
-whole); markdown; animated VU meter; collapsible session-info
-bar with token usage; a full-window loading curtain with a Cancel button while a session
-connects; dark/light themes; synthesized start/stop sounds; a watchdog that nudges a model
-that left the user's speech unanswered. Settings is a resizable workspace with grouped navigation. General contains appearance
+whole); markdown; animated VU meter; a sliding session panel with tools, skills and
+reported usage. The panel lists the active STT, LLM, TTS, voice, speaking decision and
+thinker models. Realtime shows integrated audio, separate transcription or delegated
+reasoning when used, and Deepgram's three stages. ElevenLabs agent models managed remotely
+are identified as not reported. Model details come from the resolved backends, including
+their defaults; searching tools hides the overview until the search is cleared.
+The Live header contains only history and information actions. Startup progress appears
+within the conversation area, with a Cancel button. Other features include dark/light
+themes, synthesized start/stop sounds and a watchdog that nudges a model that left the
+user's speech unanswered. Settings is a resizable workspace with grouped navigation. General contains appearance
 and shortcuts; Conversation groups voice setup and personality; Audio & voice groups
 devices, processing and speaker recognition. Providers & keys is the single editor for
 provider credentials, shared by conversation and dictation. The footer explains that

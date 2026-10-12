@@ -30,12 +30,14 @@ out `qwen3-tts`, `neutts`, `smart-turn` and `pocket-tts`; add at most one of the
 three (they pin conflicting `transformers` versions), e.g.
 `uv sync --extra dev --extra smart-turn`.
 
-First run: gear icon → **Providers & keys** → paste your API key → **Conversation** →
+First run: top-left history icon → **Settings** → **Providers & keys** → paste your API key → **Conversation** →
 pick your mode and provider → close Settings (other edits save on close, Esc included; themes apply immediately) → **Live waveform icon** at the right of the input →
 talk.
 
 During Live, use the large microphone button to mute and the red hang-up button
-to finish. The information icon reveals session details; Settings stays on the home screen.
+to finish. The information icon opens the session panel with every active model by role,
+the selected voice, usage, tools and skills.
+Settings is in the conversation panel's footer, available once Live ends.
 
 ## Environment variables
 

@@ -52,6 +52,7 @@ from roomkit_ui.features import (
 from roomkit_ui.hooks import register_vc_hooks
 from roomkit_ui.memory import session_window
 from roomkit_ui.providers import create_ai_provider
+from roomkit_ui.session_models import voice_channel_models
 from roomkit_ui.speaker_naming import (
     NAME_SPEAKER_TOOL,
     build_roster,
@@ -207,6 +208,15 @@ class VoiceChannelMixin:
                 model=model,
                 tools=tools,
                 skills_registry=skills_registry,
+                mode="voice_channel",
+                models=voice_channel_models(
+                    settings,
+                    stt=stt,
+                    stt_provider=stt_provider_name,
+                    llm=ai_provider,
+                    tts=tts,
+                    agent=self._vc_agent,
+                ),
                 agent=self._vc_agent.summary,
             )
 

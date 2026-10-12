@@ -34,6 +34,7 @@ from roomkit_ui.engine_tools import ToolMixin
 from roomkit_ui.engine_vc import VoiceChannelMixin
 from roomkit_ui.mcp_config import enabled_mcp_servers
 from roomkit_ui.mcp_manager import MCPManager
+from roomkit_ui.session_models import SessionModel
 from roomkit_ui.toolset import ToolSet, reachable_mcp_tools, tool_summaries
 from roomkit_ui.watchdog import SessionWatchdog
 
@@ -400,9 +401,11 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         model: str,
         tools: list[dict],
         skills_registry: Any,
+        mode: str,
+        models: list[SessionModel],
         agent: list[dict] | None = None,
     ) -> None:
-        """Tell the UI's info bar what this session runs: provider, model,
+        """Tell the UI's session panel what this session runs: models by role,
         tools, skills, the agent's turn-taking, the MCP servers that failed —
         and the attitude."""
         skill_info: list[dict] = []
@@ -414,6 +417,8 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, QObject
         info: dict = {
             "provider": provider,
             "model": model,
+            "mode": mode,
+            "models": models,
             "tools": tool_summaries(tools),
             "skills": skill_info,
         }

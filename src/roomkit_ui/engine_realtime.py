@@ -36,6 +36,7 @@ from roomkit_ui.realtime_providers import (
     realtime_sample_rate,
     transport_audio_profile,
 )
+from roomkit_ui.session_models import realtime_models
 from roomkit_ui.toolset import ToolSet, tool_search_options
 
 logger = logging.getLogger(__name__)
@@ -153,6 +154,15 @@ class RealtimeMixin:
                 model=media.model,
                 tools=tools,
                 skills_registry=skills_registry,
+                mode="realtime",
+                models=realtime_models(
+                    provider_name,
+                    media.provider,
+                    model=media.model,
+                    voice=media.voice,
+                    settings=settings,
+                    provider_config=provider_config,
+                ),
             )
 
         except FeatureUnavailableError as e:

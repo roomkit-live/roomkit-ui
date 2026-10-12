@@ -180,13 +180,15 @@ def test_the_agent_tab_saves_its_choices(qapp):
     assert page.get_settings()["vc_speak_policy"] == "off"
 
 
-def test_the_info_bar_lists_the_agent(qapp):
-    from PySide6.QtWidgets import QLabel
+def test_the_session_drawer_lists_the_agent(qtbot):
+    from PySide6.QtWidgets import QLabel, QWidget
 
-    from roomkit_ui.widgets.session_info import SessionInfoBar
+    from roomkit_ui.widgets.session_drawer import SessionDrawer
 
-    bar = SessionInfoBar()
-    bar.set_session(
+    surface = QWidget()
+    qtbot.addWidget(surface)
+    drawer = SessionDrawer(surface)
+    drawer.set_session(
         {
             "provider": "anthropic",
             "model": "claude",
@@ -195,9 +197,9 @@ def test_the_info_bar_lists_the_agent(qapp):
         }
     )
 
-    rows = [label.text() for label in bar.findChildren(QLabel)]
-    assert any("Decides when to speak" in row and "Jev, as Nova" in row for row in rows)
-    bar.deleteLater()
+    rows = [label.text() for label in drawer.findChildren(QLabel)]
+    assert "Decides when to speak" in rows
+    assert "Jev, as Nova" in rows
 
 
 def test_the_thinker_thinks_with_the_conversation_model_beside_a_policy():

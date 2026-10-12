@@ -131,6 +131,15 @@ def test_session_info_reports_tools_skills_and_failed_servers(qapp):
     engine._emit_session_info(
         provider="gemini",
         model="gemini-2.5",
+        mode="realtime",
+        models=[
+            {
+                "role": "Live audio",
+                "provider": "gemini",
+                "model": "gemini-2.5",
+                "description": "Voice · Aoede",
+            }
+        ],
         tools=[{"name": "now", "description": "Time.\nMore."}],
         skills_registry=skills,
     )
@@ -140,6 +149,15 @@ def test_session_info_reports_tools_skills_and_failed_servers(qapp):
         {
             "provider": "gemini",
             "model": "gemini-2.5",
+            "mode": "realtime",
+            "models": [
+                {
+                    "role": "Live audio",
+                    "provider": "gemini",
+                    "model": "gemini-2.5",
+                    "description": "Voice · Aoede",
+                }
+            ],
             "tools": [{"name": "now", "description": "Time."}],
             "skills": [{"name": "pdf", "description": "Read PDFs"}],
             "failed_servers": ["broken"],
