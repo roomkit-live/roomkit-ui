@@ -181,8 +181,10 @@ class ConversationDrawer(SlidingPanel):
         self._new.setEnabled(not busy)
         self._list.setEnabled(not busy)
         self._settings.setEnabled(not busy)
-        self._settings.setToolTip("End Live to open Settings." if busy else "Settings")
-        self.set_notice("End Live to switch conversations." if busy else "")
+        self._settings.setToolTip(
+            "Finish the current activity to open Settings." if busy else "Settings"
+        )
+        self.set_notice("Finish the current activity to switch conversations." if busy else "")
 
     def set_notice(self, text: str) -> None:
         self._notice.setText(text)

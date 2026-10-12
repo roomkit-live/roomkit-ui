@@ -12,6 +12,11 @@ Each released section is the source for that version's GitHub release notes.
 ## [Unreleased]
 
 ### Added
+- **Dictation in the message input** — the small microphone uses Settings → Dictation
+  to capture speech, then inserts the transcript at the cursor for review before sending.
+  Draft text and images survive cancellation; missing configuration and microphone errors
+  have feedback. It shares capture with the global shortcut, waits for cleanup before Live
+  or navigation, and does not paste, change application focus or send automatically.
 - **Images in conversations** — choose files or take a photo from the composer's `+`,
   paste a copied image directly into the input, or drop local images onto it. Preview,
   open or remove up to four images before sending them with or without text. The camera

@@ -39,12 +39,16 @@ class _DictationPage(QWidget):
         layout = page_layout(
             self,
             "Dictation",
-            "Speak, then paste the transcription into the app you are using.",
+            "Dictate into a message, or use a shortcut to paste into another app.",
         )
         activation = SettingsSection("Activation & shortcut")
-        self.enabled = SettingsToggle("Enable dictation", bool(settings.get("stt_enabled", True)))
+        self.enabled = SettingsToggle(
+            "Enable global shortcut", bool(settings.get("stt_enabled", True))
+        )
         activation.add_row(
-            "Enable dictation", "Use a global shortcut to start and stop recording.", self.enabled
+            "Enable global shortcut",
+            "Use a global shortcut to start and stop recording.",
+            self.enabled,
         )
         self.hotkey = HotkeyButton()
         self.hotkey.setAutoDefault(False)

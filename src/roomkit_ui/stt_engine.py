@@ -18,7 +18,7 @@ from roomkit_ui.paste import (
     paste_into_focused,
 )
 from roomkit_ui.settings import load_settings
-from roomkit_ui.stt_sessions import DictationSessionMixin
+from roomkit_ui.stt_sessions import DictationSessionMixin, dictation_unavailable
 
 __all__ = ["DictationState", "STTEngine"]
 
@@ -74,12 +74,20 @@ class STTEngine(DictationSessionMixin, QObject):
     """
 
     recording_changed = Signal(bool)
+    state_changed = Signal(object)
+    busy_changed = Signal(bool)
     text_ready = Signal(str)
+    draft_ready = Signal(str)
     error_occurred = Signal(str)
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
         self._state = DictationState.IDLE
+        self._task: asyncio.Task | None = None
+        self._cleanup_tasks: set[asyncio.Task] = set()
+        self._to_input = False
+        self._discard = False
+        self._start_blocked = ""
         # A press received mid-transition, replayed once it settles.
         self._toggle_pending = False
         self._kit: Any = None
@@ -98,6 +106,45 @@ class STTEngine(DictationSessionMixin, QObject):
         self._batch_mode: bool = False
 
     @property
+    def state(self) -> DictationState:
+        return self._state
+
+    @property
+    def busy(self) -> bool:
+        return self._state is not DictationState.IDLE
+
+    @property
+    def to_input(self) -> bool:
+        return self._to_input
+
+    def set_start_blocked(self, reason: str) -> None:
+        self._start_blocked = reason
+
+    def start_input(self) -> bool:
+        """Claim the shared microphone for a draft, without focus or clipboard changes."""
+        if self.busy or self._start_blocked:
+            return False
+        self._begin(to_input=True)
+        return True
+
+    def _begin(self, *, to_input: bool = False) -> None:
+        self._to_input = to_input
+        self._discard = False
+        self._accumulated_text = []  # Hooks from a previous session keep their own list.
+        self._set_state(DictationState.STARTING)
+        self._task = asyncio.ensure_future(self._start_recording())
+
+    def _set_state(self, state: DictationState) -> None:
+        was_busy = self.busy
+        self._state = state
+        try:
+            self.state_changed.emit(state)
+            if was_busy != self.busy:
+                self.busy_changed.emit(self.busy)
+        except RuntimeError:
+            pass  # Qt may have destroyed the window during shutdown.
+
+    @property
     def recording(self) -> bool:
         return self._state in (DictationState.STARTING, DictationState.RECORDING)
 
@@ -108,19 +155,45 @@ class STTEngine(DictationSessionMixin, QObject):
             self._toggle_pending,
         )
         if self._state is DictationState.IDLE:
-            asyncio.ensure_future(self._start_recording())
+            if self._start_blocked:
+                self.error_occurred.emit(self._start_blocked)
+                return
+            self._begin()
         elif self._state is DictationState.RECORDING:
-            asyncio.ensure_future(self._stop_recording())
+            self._set_state(DictationState.STOPPING)
+            self._task = asyncio.ensure_future(self._stop_recording())
+        elif self._to_input and self._state is DictationState.STOPPING:
+            return  # Finishing a draft must never queue a system-wide paste.
         else:
             # Mid-transition: a second press cancels the first.
             self._toggle_pending = not self._toggle_pending
 
     def _settle(self, state: DictationState) -> None:
         """End a transition, then replay a press that arrived during it."""
-        self._state = state
+        self._set_state(state)
         if self._toggle_pending:
             self._toggle_pending = False
             self.toggle_recording()
+
+    def cancel(self) -> None:
+        """Discard this capture, including a result still arriving from the provider."""
+        if not self.busy or self._discard:
+            return
+        self._discard = True
+        self._toggle_pending = False
+        if self._state is DictationState.RECORDING:
+            self._set_state(DictationState.STOPPING)
+            self._task = asyncio.ensure_future(self._stop_recording())
+        elif self._task is not None:
+            # Let the lifecycle enter its try/finally even on an immediate cancel.
+            asyncio.get_running_loop().call_soon(self._task.cancel)
+
+    async def shutdown(self) -> None:
+        self.cancel()
+        if self._task is not None:
+            await asyncio.gather(self._task, return_exceptions=True)
+        if self._cleanup_tasks:
+            await asyncio.gather(*self._cleanup_tasks, return_exceptions=True)
 
     # -- transcription callback ------------------------------------------------
 
@@ -135,21 +208,19 @@ class STTEngine(DictationSessionMixin, QObject):
     # -- lifecycle -------------------------------------------------------------
 
     async def _start_recording(self) -> None:
-        if self._state is not DictationState.IDLE:
-            logger.warning("_start_recording skipped: state=%s", self._state.name)
-            return
-
-        self._state = DictationState.STARTING
         self.recording_changed.emit(True)
-        self._accumulated_text.clear()
-        self._prev_app = _get_frontmost_bundle()
+        self._prev_app = None if self._to_input else _get_frontmost_bundle()
         logger.info("Saved frontmost app: %s", self._prev_app)
 
         started = False
         try:
-            started = await self._open_session()
+            if not self._discard:
+                started = await self._open_session()
+        except Exception as exc:
+            logger.exception("Could not start dictation")
+            self._fail_start(str(exc))
         finally:
-            if started:
+            if started and not self._discard:
                 self._settle(DictationState.RECORDING)
             else:
                 # Nothing is left to stop: a press made while connecting
@@ -157,7 +228,10 @@ class STTEngine(DictationSessionMixin, QObject):
                 self._discard_session()
                 self._toggle_pending = False
                 self.recording_changed.emit(False)
-                self._settle(DictationState.IDLE)
+                try:
+                    await self._wait_cleanup()
+                finally:
+                    self._settle(DictationState.IDLE)
 
     async def _open_session(self) -> bool:
         """Bring up the configured provider. False after reporting why not."""
@@ -166,6 +240,9 @@ class STTEngine(DictationSessionMixin, QObject):
             return True
 
         settings = load_settings()
+        if reason := dictation_unavailable(settings):
+            self._fail_start(reason)
+            return False
         stt_provider = settings.get("stt_provider", "openai")
         if stt_provider == "local":
             return await self._start_local_recording(settings)
@@ -182,21 +259,28 @@ class STTEngine(DictationSessionMixin, QObject):
         self.error_occurred.emit(message)
 
     async def _stop_recording(self) -> None:
-        if self._state is not DictationState.RECORDING:
-            return
-
-        self._state = DictationState.STOPPING
         self.recording_changed.emit(False)
         logger.info("STT recording stopped")
         # This stop owns these objects from here on: whatever runs while it
         # waits for the last words, its teardown reaches them and only them.
         objects = self._take_session()
+        collected = False
         try:
-            await self._collect_final_text(objects)
-            await self._deliver_text()
+            if not self._discard:
+                await self._collect_final_text(objects)
+                collected = True
+        except Exception as exc:
+            logger.exception("Could not finish dictation")
+            self._fail_start(str(exc))
         finally:
+            # Keep the microphone claimed until it has actually been released.
             self._dispose(objects)
-            self._settle(DictationState.IDLE)
+            try:
+                await self._wait_cleanup()
+                if collected:
+                    await self._deliver_text()
+            finally:
+                self._settle(DictationState.IDLE)
 
     async def _collect_final_text(self, objects: _SessionObjects) -> None:
         """Wait for whatever the provider still owes for this dictation."""
@@ -204,16 +288,26 @@ class STTEngine(DictationSessionMixin, QObject):
             self._accumulated_text.append("Hello, this is a test transcription.")
         elif objects.is_local:
             await self._stop_local_recording(objects)
-        elif not self._accumulated_text:
-            # Only commit if we don't already have text from VAD —
-            # committing an empty buffer causes a harmless but noisy error.
-            await self._commit_and_wait(objects)
+        else:
+            if self._to_input and objects.transport is not None and objects.session is not None:
+                await objects.transport.stop_listening(objects.session)
+            if not self._accumulated_text:
+                # Composer sessions disable server VAD and commit once, on
+                # Finish. Global dictation may already have a final from VAD.
+                await self._commit_and_wait(objects)
 
     async def _deliver_text(self) -> None:
         """Emit the transcript, after handing focus back to where it goes."""
         text = " ".join(self._accumulated_text).strip()
         if not text:
             logger.info("No transcription captured")
+            if self._to_input and not self._discard:
+                self.error_occurred.emit("No speech detected. Try dictating again.")
+            return
+        if self._discard:
+            return
+        if self._to_input:
+            self.draft_ready.emit(text)
             return
         logger.info("Emitting text_ready: %d chars", len(text))
         logger.debug("text_ready payload: %s", text)
@@ -306,14 +400,29 @@ class STTEngine(DictationSessionMixin, QObject):
         self._batch_mode = False
         return objects
 
-    def _dispose(self, objects: _SessionObjects) -> None:
+    def _dispose(self, objects: _SessionObjects) -> asyncio.Task | None:
         """Close *objects* in the background — cleanup is slow."""
         if not objects.empty:
-            asyncio.ensure_future(self._close_session(objects))
+            task = asyncio.ensure_future(self._close_session(objects))
+            self._cleanup_tasks.add(task)
+            task.add_done_callback(self._cleanup_tasks.discard)
+            return task
+        return None
 
     def _discard_session(self) -> None:
         """Tear down whatever a failed start managed to open."""
         self._dispose(self._take_session())
+
+    async def _wait_cleanup(self) -> None:
+        if not self._cleanup_tasks:
+            return
+        cleanup = asyncio.gather(*self._cleanup_tasks, return_exceptions=True)
+        try:
+            await asyncio.shield(cleanup)
+        except asyncio.CancelledError:
+            # Cancelling a transcription must not cancel release of its device.
+            await cleanup
+            raise
 
     async def _close_session(self, objects: _SessionObjects) -> None:
         """Clean up a detached session without touching ``self``."""
@@ -332,6 +441,15 @@ class STTEngine(DictationSessionMixin, QObject):
                     logger.debug("dictation teardown: kit.close() failed", exc_info=True)
         except Exception:
             logger.exception("Error during STT cleanup")
+        finally:
+            # A cancelled start may own audio before a kit registered it.
+            if objects.kit is None:
+                backend = objects.local_backend or objects.transport
+                if backend is not None:
+                    try:
+                        await backend.close()
+                    except Exception:
+                        logger.debug("dictation teardown: backend.close failed", exc_info=True)
 
     @staticmethod
     async def _close_local_session(objects: _SessionObjects) -> None:

@@ -49,10 +49,15 @@ class ConversationHistory(QObject):
 
     @property
     def busy(self) -> bool:
-        return self.window._start_pending or self.window._engine.state not in (
-            EngineState.IDLE,
-            EngineState.READY,
-            EngineState.ERROR,
+        return (
+            self.window._stt.busy
+            or self.window._start_pending
+            or self.window._engine.state
+            not in (
+                EngineState.IDLE,
+                EngineState.READY,
+                EngineState.ERROR,
+            )
         )
 
     def prepare(self, settings: dict) -> tuple[str, str]:

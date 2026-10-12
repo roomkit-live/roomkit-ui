@@ -20,6 +20,29 @@ from roomkit_ui.model_manager import build_stt_config, is_model_downloaded, is_s
 logger = logging.getLogger(__name__)
 
 
+def dictation_unavailable(settings: dict) -> str:
+    """Check the saved dictation setup without opening a provider or microphone."""
+    provider = settings.get("stt_provider", "openai")
+    feature = {"openai": "openai-realtime", "deepgram": "deepgram", "local": "local-voice"}.get(
+        provider
+    )
+    if feature is None:
+        return "Choose a speech recognition provider in Settings → Dictation."
+    if reason := unavailable_reason(feature):
+        return reason
+    if provider == "local":
+        model = settings.get("stt_model", "")
+        if not model or not is_model_downloaded(model):
+            return (
+                "Download a speech model in Settings → Models & components, "
+                "then select it in Dictation."
+            )
+    elif not str(settings.get(f"{provider}_api_key", "") or "").strip():
+        name = "OpenAI" if provider == "openai" else "Deepgram"
+        return f"Add your {name} key in Settings → Providers & keys to dictate a message."
+    return ""
+
+
 def dictation_language(settings: dict) -> str:
     """The language dictation transcribes: its own setting, else the spoken
     language (Settings → General).  "" means detected."""
@@ -48,6 +71,7 @@ class DictationSessionMixin:
     _local_session: Any
     _local_flush_event: asyncio.Event | None
     _batch_mode: bool
+    _to_input: bool
 
     async def _start_openai_recording(self, settings: dict) -> bool:
         api_key = settings.get("openai_api_key", "")
@@ -69,7 +93,15 @@ class DictationSessionMixin:
                 api_key=api_key,
                 model=settings.get("openai_model", "gpt-realtime-2.1"),
             )
-            self._provider.on_transcription(self._on_transcription)
+            # A provider may finish after cancellation. Its callback belongs to
+            # this capture, never to the draft that starts afterwards.
+            accumulated = self._accumulated_text
+
+            def on_transcription(session, text, role, is_final):
+                if accumulated is self._accumulated_text:
+                    self._on_transcription(session, text, role, is_final)
+
+            self._provider.on_transcription(on_transcription)
             provider = self._provider
 
             sample_rate = 24000
@@ -101,28 +133,12 @@ class DictationSessionMixin:
                 connection=None,
                 metadata={
                     "provider_config": {
-                        "turn_detection_type": "server_vad",
+                        "turn_detection_type": None if self._to_input else "server_vad",
                         "create_response": False,
+                        "language": dictation_language(settings),
                     },
                 },
             )
-
-            # Set transcription language if configured.
-            stt_language = dictation_language(settings)
-            if stt_language:
-                await self._provider.send_event(
-                    self._session,
-                    {
-                        "type": "session.update",
-                        "session": {
-                            "input_audio_transcription": {
-                                "model": "gpt-4o-transcribe",
-                                "language": stt_language,
-                            },
-                        },
-                    },
-                )
-                logger.info("Set STT language: %s", stt_language)
 
             logger.info(
                 "Dictation started: provider=openai, model=%s, rate=%dHz",
@@ -269,10 +285,14 @@ class DictationSessionMixin:
         try:
             await self._open_vc_dictation_session(
                 stt=stt,
-                batch_mode=batch_mode,
+                # Draft dictation is explicitly finished by its button. Both
+                # providers implement transcribe(); flush the entire recording
+                # rather than waiting for streaming endpoint detection after
+                # the mic stops (local transducers have endpoints disabled).
+                batch_mode=batch_mode or self._to_input,
                 settings=settings,
                 log_partials=log_partials,
-                log_extra=log_extra,
+                log_extra={**log_extra, "mode": "batch"} if self._to_input else log_extra,
                 provider_label=error_context,
             )
         except Exception as exc:

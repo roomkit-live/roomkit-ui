@@ -117,6 +117,7 @@ src/roomkit_ui/
     ├── navigation_brand.py # Shared RoomKit wordmark for Settings and conversation navigation
     ├── sliding_panel.py   # Shared panel shell, animation, focus and theme; one overlay at a time
     ├── conversation_composer.py # Text send/stop + Live / cancel / end / mute
+    ├── composer_dictation.py # Shared STTEngine → draft at cursor, no clipboard or automatic send
     ├── message_input.py    # Draft grows to eight visual lines, then scrolls; Shift+Enter newline
     ├── menus.py            # Shared rounded popup style, themed action icons and composer anchoring
     ├── image_attachments.py # File/clipboard/drop previews, remove/open, camera entry point
@@ -195,6 +196,7 @@ Every AI backend lives behind an extra declared in `pyproject.toml` AND mirrored
 - Secrets go through `settings_secrets.py` (keyring via `SecretStore`): API keys, MCP OAuth client secrets, and secret-looking env values of MCP servers AND CLI tools. Never write one to QSettings directly
 
 ### Session lifecycle
+- `MainWindow._stt` is shared by the composer and global dictation. `start_input()` fixes the destination before scheduling capture; only `draft_ready` goes to the composer, never the `text_ready` paste/log path. Keep `busy` true through final transcription AND device cleanup; it gates sending/navigation/Live and wake word. Cancel suppresses pending text, including during startup; app shutdown awaits cleanup. Draft OpenAI sessions commit manually (VAD off, language in provider_config); local/Deepgram use RoomKit batch capture and `flush_stt()` so Finish does not depend on silence or streaming endpoint detection. Never read/restore frontmost application focus for a draft.
 - One microphone session per voice channel, the app's own: roomkit's `LocalAudioBackend` declares `auto_connect`, so `attach_channel` would join a session and start the mic before the app opens its own (`_listen`: replay mark, mute before the first frame). Build every local backend a `VoiceChannel` uses with `engine_audio.local_audio_backend()` (it opts out) — two sessions mean every sentence heard, answered and spoken twice
 - qasync installs no async generator hooks: `app.install_asyncgen_hooks()` does, right after the loop is created. Without them a generator left with `break` (roomkit's continuous STT, to drop an echo) is closed by the GC, its `finally` cannot await, and a streaming STT's websocket stays open
 - `start()` claims CONNECTING before its first await and runs the start as its own task (`_start_task`); `stop()` publishes STOPPING, cancels that task and tears down once it has unwound. A failed start goes STOPPING → cleanup → ERROR (`_fail_start`). A stop before the kit exists closes the transport/backend itself (`_close_unowned_backends`)

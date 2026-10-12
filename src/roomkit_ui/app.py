@@ -334,7 +334,7 @@ def _wire_wake_word(
     window.session_active_changed.connect(
         lambda active: wake.suspend("session") if active else wake.resume("session")
     )
-    stt.recording_changed.connect(
+    stt.busy_changed.connect(
         lambda rec: wake.suspend("dictation") if rec else wake.resume("dictation")
     )
     wake.detected.connect(window.start_from_wake_word)
@@ -395,7 +395,7 @@ def main() -> None:
     window.show()
     QTimer.singleShot(200, _prewarm_webengine)
 
-    stt = STTEngine()
+    stt = window._stt
     tray = TrayService()
     if sys.platform == "darwin":
         QTimer.singleShot(2000, lambda: _check_macos_permissions(tray))
@@ -407,4 +407,7 @@ def main() -> None:
     sigint_timer = _quit_on_sigint(app)  # noqa: F841
 
     with loop:
-        loop.run_forever()
+        try:
+            loop.run_forever()
+        finally:
+            loop.run_until_complete(stt.shutdown())

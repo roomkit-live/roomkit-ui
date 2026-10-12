@@ -182,6 +182,18 @@ packaged builds keep the dialog in process.
 
 Global hotkey (NSEvent on macOS, pynput elsewhere) → `STTEngine` records through a short-lived RoomKit session → final transcription → clipboard copy + paste keystroke into whatever app has focus (AppleScript on macOS; xdotool or wtype on Linux; Win32 `SendInput` on Windows). A press during a start or a stop is replayed once the transition settles.
 
+The composer uses the same `STTEngine`, owned by `MainWindow`, through
+`widgets/composer_dictation.py`. `start_input()` claims its destination synchronously;
+`draft_ready` inserts at the saved QTextCursor without emitting the global `text_ready`
+paste signal or restoring another application's focus. Navigation and sending are blocked
+until the engine returns to IDLE **after** microphone cleanup. Cancellation suppresses a
+pending result and waits for teardown, including during startup; window/app close drains
+it. Wake word suspension follows `busy_changed`, through final transcription and cleanup.
+For drafts, OpenAI disables server VAD and commits once after stopping capture, with the
+dictation language passed in RoomKit's provider configuration. Local and Deepgram providers
+use RoomKit batch capture and `flush_stt()` so pressing Finish includes the final words
+without requiring a provider endpoint. Their global-shortcut path retains streaming.
+
 ### Wake word
 
 While enabled, `WakeWordController` keeps a shared roomkit `LocalMicSource` running at the rate the next session needs. `SegmentCapture` resamples it to 16 kHz and cuts speech segments with a local VAD on a thread of its own; each segment goes to a serial worker that embeds it with whisper-tiny's encoder and matches it by DTW against the enrolled fingerprint. A match starts a session with a replay mark, so the request said right after the phrase reaches the provider. The listener stands down during sessions, dictation and while Settings is open. When the wake word is off, the source stops and sessions open the device themselves.

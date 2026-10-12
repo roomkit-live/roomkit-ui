@@ -182,9 +182,13 @@ writes, so a CUDA wheel of another version mixes two builds' libraries.
 4. Speak naturally — the AI will respond in real-time
 5. Press the **red hang-up icon** to end the session
 
-The compact home has one input row: **+** for attachments, text, a dictation microphone,
-and the Live icon. Only **Live** is enabled in this first step; the other inputs are
-reserved for a future update.
+The compact home has one input row: **+** for images and camera photos, text, a dictation
+microphone, and the Live icon. Configure a chat model to send text and images. Click the
+small microphone to dictate with the provider and language in **Settings → Dictation**;
+click it again to finish. The transcription is inserted at the cursor for review before
+sending. The cross cancels dictation and keeps the existing draft and images. This works
+independently of the global dictation shortcut and needs no clipboard or Accessibility
+access. Missing speech configuration is explained in the microphone tooltip.
 
 During Live, the microphone and hang-up controls stay below the transcript.
 The violet waveform follows voice activity; muting the microphone keeps playback

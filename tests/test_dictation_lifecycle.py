@@ -25,6 +25,9 @@ class World:
     def __init__(self) -> None:
         self.kits: list[FakeKit] = []
         self.commits = 0
+        self.microphone_stops = 0
+        self.metadata = []
+        self.callbacks = []
         # Held closed to keep a start "connecting" for as long as a test needs.
         self.start_gate = asyncio.Event()
 
@@ -56,6 +59,7 @@ def world(monkeypatch):
             pass
 
         async def start_session(self, *_a, **_kw):
+            w.metadata.append(_kw.get("metadata"))
             await w.start_gate.wait()
             return object()
 
@@ -67,7 +71,7 @@ def world(monkeypatch):
             pass
 
         def on_transcription(self, _callback) -> None:
-            pass
+            w.callbacks.append(_callback)
 
         async def send_event(self, _session, event: dict) -> None:
             if event["type"] == "input_audio_buffer.commit":
@@ -76,7 +80,15 @@ def world(monkeypatch):
     monkeypatch.setattr(roomkit, "RoomKit", lambda: FakeKit(w))
     monkeypatch.setattr(roomkit, "RealtimeVoiceChannel", Channel)
     monkeypatch.setattr(openai_realtime, "OpenAIRealtimeProvider", Provider)
-    monkeypatch.setattr(local_backend, "LocalAudioBackend", lambda **_kw: object())
+
+    class Backend:
+        def __init__(self, **_kw):
+            pass
+
+        async def stop_listening(self, _session):
+            w.microphone_stops += 1
+
+    monkeypatch.setattr(local_backend, "LocalAudioBackend", Backend)
     monkeypatch.setattr(stt_sessions, "unavailable_reason", lambda _feature: None)
     monkeypatch.setattr(
         stt_engine, "load_settings", lambda: {"stt_provider": "openai", "openai_api_key": "k"}
@@ -165,3 +177,45 @@ async def test_a_failed_start_drops_a_pending_press(world, engine, monkeypatch):
     assert errors  # missing API key
     assert not engine.recording
     assert world.kits == []
+
+
+async def test_openai_draft_commits_once_with_language_and_ignores_previous_callbacks(
+    world, engine, monkeypatch
+):
+    from roomkit_ui.stt_engine import DictationState
+
+    monkeypatch.setattr(
+        stt_engine,
+        "load_settings",
+        lambda: {
+            "stt_provider": "openai",
+            "openai_api_key": "test-only",
+            "dictation_language": "fr",
+        },
+    )
+    drafts, pasted = [], []
+    engine.draft_ready.connect(drafts.append)
+    engine.text_ready.connect(pasted.append)
+    world.start_gate.set()
+    assert engine.start_input()
+    await _until(lambda: engine.state is DictationState.RECORDING)
+    assert world.metadata[0]["provider_config"] == {
+        "turn_detection_type": None,
+        "create_response": False,
+        "language": "fr",
+    }
+    engine.toggle_recording()
+    await _until(lambda: world.commits == 1)
+    assert world.microphone_stops == 1
+    world.callbacks[0](None, "Bonjour à tous", "user", True)
+    await _until(lambda: not engine.busy)
+    assert drafts == ["Bonjour à tous"] and pasted == []
+    assert world.kits[0].closed
+
+    assert engine.start_input()
+    await _until(lambda: engine.state is DictationState.RECORDING)
+    world.callbacks[0](None, "Stale transcript", "user", True)
+    assert engine._accumulated_text == []
+    await engine.shutdown()
+    assert drafts == ["Bonjour à tous"]
+    assert world.kits[1].closed

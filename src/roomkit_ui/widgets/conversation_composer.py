@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QSize, Qt, Signal
-from PySide6.QtGui import QColor, QPalette, QTextLayout
+from PySide6.QtGui import QColor, QPalette, QTextCursor, QTextLayout
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
+    QLabel,
     QVBoxLayout,
     QWidget,
 )
@@ -14,6 +15,7 @@ from PySide6.QtWidgets import (
 from roomkit_ui.engine_state import EngineState
 from roomkit_ui.icons import svg_icon
 from roomkit_ui.images import ImageAttachment
+from roomkit_ui.stt_engine import DictationState
 from roomkit_ui.text_chat import CONFIGURATION_HINT
 from roomkit_ui.theme import colors
 from roomkit_ui.theme_live import bind_theme
@@ -29,6 +31,9 @@ class ConversationComposer(QWidget):
     send_requested = Signal(str)
     stop_requested = Signal()
     mute_toggled = Signal(bool)
+    dictation_requested = Signal()
+    dictation_cancelled = Signal()
+    draft_cleared = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -39,10 +44,27 @@ class ConversationComposer(QWidget):
         self._expanded = False
         self._voice_controls = False
         self._images_unavailable = ""
+        self._dictation_unavailable = "Configure speech recognition in Settings → Dictation."
+        self._dictation_state = DictationState.IDLE
+        self._external_dictation = False
+        self._dictation_error = ""
+        self._dictation_cursor: QTextCursor | None = None
         self._unavailable = "Configure a chat model in Settings…"
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 12, 16, 18)
         layout.setSpacing(12)
+        self._dictation_feedback = QWidget()
+        self._dictation_feedback.setStyleSheet("QWidget { background: transparent; }")
+        feedback = QHBoxLayout(self._dictation_feedback)
+        feedback.setContentsMargins(12, 0, 8, 0)
+        self._dictation_label = QLabel()
+        self._dictation_label.setWordWrap(True)
+        self._dictation_label.setTextFormat(Qt.PlainText)
+        feedback.addWidget(self._dictation_label, 1)
+        self._cancel_dictation = self._icon_button("Cancel dictation")
+        self._cancel_dictation.clicked.connect(self._dismiss_dictation)
+        feedback.addWidget(self._cancel_dictation)
+        layout.addWidget(self._dictation_feedback)
         self._surface = QFrame()
         self._surface.setObjectName("conversationComposer")
         layout.addWidget(self._surface)
@@ -58,9 +80,7 @@ class ConversationComposer(QWidget):
         inner.setSpacing(6)
         inner.addStretch(0)
 
-        self._attachment_button = self._future_button("Add images")
-        self._attachment_button.setFocusPolicy(Qt.StrongFocus)
-        self._attachment_button.setCursor(Qt.PointingHandCursor)
+        self._attachment_button = self._icon_button("Add images")
         self._attachment_button.clicked.connect(
             lambda: self._attachments.menu(self._attachment_button)
         )
@@ -73,7 +93,8 @@ class ConversationComposer(QWidget):
         self._input.images_inserted.connect(self._attachments.add_mime)
         inner.addWidget(self._input, 1)
 
-        self._dictation_button = self._future_button("Dictate a message — coming soon")
+        self._dictation_button = self._icon_button("Dictate a message")
+        self._dictation_button.clicked.connect(self.dictation_requested.emit)
         inner.addWidget(self._dictation_button, 0, Qt.AlignBottom)
 
         self._mute_button = KeyboardButton()
@@ -95,14 +116,14 @@ class ConversationComposer(QWidget):
         bind_theme(self, self._refresh)
 
     @staticmethod
-    def _future_button(name: str) -> KeyboardButton:
+    def _icon_button(name: str) -> KeyboardButton:
         button = KeyboardButton()
         button.setFixedSize(36, 44)
         button.setIconSize(QSize(20, 20))
         button.setAccessibleName(name)
         button.setToolTip(name)
-        button.setEnabled(False)
-        button.setFocusPolicy(Qt.NoFocus)
+        button.setFocusPolicy(Qt.StrongFocus)
+        button.setCursor(Qt.PointingHandCursor)
         button.setStyleSheet("QPushButton { background: transparent; border: none; padding: 0; }")
         return button
 
@@ -119,8 +140,56 @@ class ConversationComposer(QWidget):
         self._refresh()
 
     def clear_draft(self) -> None:
+        self.draft_cleared.emit()
+        self._dictation_cursor = None
+        self._dictation_error = ""
         self._attachments.clear()
         self._input.clear()
+
+    def set_dictation_availability(self, reason: str) -> None:
+        self._dictation_unavailable = reason
+        self._refresh()
+
+    def set_dictation_state(self, state: DictationState, *, external: bool = False) -> None:
+        if state is DictationState.STARTING and not external:
+            self._dictation_error = ""
+            self._dictation_cursor = QTextCursor(self._input.textCursor())
+        self._dictation_state = state if not external else DictationState.IDLE
+        self._external_dictation = external and state is not DictationState.IDLE
+        self._refresh()
+
+    def show_dictation_error(self, message: str) -> None:
+        self._dictation_error = message
+        self._refresh()
+
+    def insert_dictation(self, text: str) -> None:
+        cursor = self._dictation_cursor
+        if cursor is None or not text.strip():
+            return
+        # QTextCursor positions count UTF-16 units, unlike Python string indices.
+        document = self._input.document()
+        before = document.characterAt(cursor.selectionStart() - 1)
+        after = document.characterAt(cursor.selectionEnd())
+        text = text.strip()
+        if cursor.selectionStart() > 0 and not before.isspace():
+            text = " " + text
+        if (
+            cursor.selectionEnd() < document.characterCount() - 1
+            and not after.isspace()
+            and after not in ".,!?;:)]}"
+        ):
+            text += " "
+        cursor.beginEditBlock()
+        cursor.insertText(text)
+        cursor.endEditBlock()
+        self._input.setTextCursor(cursor)
+        self._dictation_cursor = None
+
+    def _dismiss_dictation(self) -> None:
+        self._dictation_cursor = None
+        self._dictation_error = ""
+        self.dictation_cancelled.emit()
+        self._refresh()
 
     def focus_input(self) -> None:
         if self._input.isEnabled() and not self._input.isHidden():
@@ -206,6 +275,7 @@ class ConversationComposer(QWidget):
         connecting = not self._text_mode and self._state == EngineState.CONNECTING
         stopping = self._state == EngineState.STOPPING
         busy = not self._text_mode and (live or connecting or stopping)
+        dictating = self._dictation_state is not DictationState.IDLE
         self._voice_controls = busy
         muted = self._mute_button.isChecked()
         self._surface.setStyleSheet(
@@ -246,7 +316,9 @@ class ConversationComposer(QWidget):
             name, glyph = "Send message", "arrow-up"
         self._live_button.setAccessibleName(name)
         self._live_button.setToolTip(name)
-        self._live_button.setEnabled(not stopping)
+        self._live_button.setEnabled(
+            not stopping and not dictating and not self._external_dictation
+        )
         accent = c["ACCENT_RED"] if live else c["ACCENT_BRAND"]
         foreground = "#FFFFFF" if live else c["BG_PRIMARY"]
         if busy and (connecting or stopping):
@@ -265,7 +337,7 @@ class ConversationComposer(QWidget):
         self._input.setVisible(not busy)
         ready = not self._unavailable
         self._input.setEnabled(ready)
-        self._input.setReadOnly(not ready)
+        self._input.setReadOnly(not ready or dictating)
         self._input.setFocusPolicy(Qt.StrongFocus if ready else Qt.NoFocus)
         self._input.setPlaceholderText(
             "Configure chat in Settings…" if self._unavailable else "Message RoomKit…"
@@ -292,7 +364,7 @@ class ConversationComposer(QWidget):
             self._attachments.notice(self._images_unavailable)
         self._dictation_button.setVisible(not busy)
         self._attachment_button.setIcon(svg_icon("plus", c["TEXT_SECONDARY"], 20))
-        self._dictation_button.setIcon(svg_icon("microphone", c["TEXT_SECONDARY"], 20))
+        self._refresh_dictation(c, busy or text_busy or not ready)
         self._mute_button.setVisible(live)
         self._mute_button.setEnabled(live)
         mute_name = "Unmute microphone" if muted else "Mute microphone"
@@ -320,6 +392,8 @@ class ConversationComposer(QWidget):
         self._arrange_input()
 
     def _on_action(self) -> None:
+        if self._dictation_state is not DictationState.IDLE or self._external_dictation:
+            return
         if self._state in (EngineState.ACTIVE, EngineState.CONNECTING):
             self.stop_requested.emit()
             if self._text_mode:
@@ -331,6 +405,8 @@ class ConversationComposer(QWidget):
                 self.start_requested.emit()
 
     def _send(self) -> None:
+        if self._dictation_state is not DictationState.IDLE or self._external_dictation:
+            return
         if self._unavailable or self._state not in (
             EngineState.IDLE,
             EngineState.ERROR,
@@ -347,3 +423,50 @@ class ConversationComposer(QWidget):
     def _on_mute(self, muted: bool) -> None:
         self._refresh()
         self.mute_toggled.emit(muted)
+
+    def _refresh_dictation(self, c: dict, blocked: bool) -> None:
+        state = self._dictation_state
+        active = state is not DictationState.IDLE
+        recording = state is DictationState.RECORDING
+        label = {
+            DictationState.STARTING: "Preparing microphone…",
+            DictationState.RECORDING: "Listening…",
+            DictationState.STOPPING: "Transcribing…",
+        }.get(state, self._dictation_error)
+        self._dictation_feedback.setVisible(bool(label))
+        self._dictation_label.setText(label)
+        self._dictation_label.setStyleSheet(
+            f"color: {c['ACCENT_BRAND'] if active else c['TEXT_SECONDARY']}; font-size: 13px;"
+        )
+        self._cancel_dictation.setIcon(svg_icon("x-mark", c["TEXT_SECONDARY"], 18))
+        cancel_name = "Cancel dictation" if active else "Dismiss dictation message"
+        self._cancel_dictation.setAccessibleName(cancel_name)
+        self._cancel_dictation.setToolTip(cancel_name)
+        name = "Finish dictation" if recording else "Dictate a message"
+        self._dictation_button.setAccessibleName(name)
+        self._dictation_button.setToolTip(
+            label if active else self._unavailable or self._dictation_unavailable or name
+        )
+        self._dictation_button.setEnabled(
+            recording
+            or (
+                not active
+                and not blocked
+                and not self._dictation_unavailable
+                and not self._external_dictation
+            )
+        )
+        self._dictation_button.setIcon(
+            svg_icon(
+                "stop" if active else "microphone",
+                c["ACCENT_BRAND"] if active else c["TEXT_SECONDARY"],
+                20,
+            )
+        )
+        self._dictation_button.setStyleSheet(
+            "QPushButton { border: 1px solid transparent; border-radius: 18px; padding: 0;"
+            f" background: {c['BG_TERTIARY'] if active else 'transparent'}; }}"
+            f"QPushButton:hover {{ background: {c['BG_TERTIARY']}; }}"
+            'QPushButton[keyboardFocus="true"] {'
+            f" border-color: {c['ACCENT_BRAND']}; }}"
+        )

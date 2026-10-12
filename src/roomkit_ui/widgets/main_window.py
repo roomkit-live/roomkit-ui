@@ -16,9 +16,11 @@ from roomkit_ui.engine import Engine
 from roomkit_ui.engine_state import EngineState
 from roomkit_ui.idle_hangup import IdleHangup
 from roomkit_ui.settings import load_settings
+from roomkit_ui.stt_engine import STTEngine
 from roomkit_ui.text_chat import image_chat_unavailable, text_chat_unavailable
 from roomkit_ui.tool_events import ToolCall, ToolResult
 from roomkit_ui.widgets.chat_view import ChatView
+from roomkit_ui.widgets.composer_dictation import ComposerDictation
 from roomkit_ui.widgets.conversation_composer import ConversationComposer
 from roomkit_ui.widgets.conversation_history import ConversationHistory
 from roomkit_ui.widgets.conversation_home import ConversationHeader, ConversationSurface
@@ -49,6 +51,7 @@ class MainWindow(QMainWindow):
         self.resize(420, 740)
 
         self._engine = Engine(self)
+        self._stt = STTEngine(self)
 
         self._surface = ConversationSurface()
         central = self._surface
@@ -141,6 +144,7 @@ class MainWindow(QMainWindow):
 
         # MCP App state
         self._active_app_widgets: dict[str, MCPAppWidget] = {}  # invocation ID → widget
+        self._dictation = ComposerDictation(self)
 
     def toggle_session(self) -> None:
         """Toggle the voice session on/off (used by global hotkey)."""
@@ -150,6 +154,8 @@ class MainWindow(QMainWindow):
             self._on_start()
 
     def _open_settings(self) -> None:
+        if self._stt.busy:
+            return
         if self._finish_text_session(self._open_settings):
             return
         dlg = SettingsPanel(self)
@@ -178,10 +184,15 @@ class MainWindow(QMainWindow):
         return True
 
     def _on_start(self, capture_since: Any = None) -> None:
-        if self._start_pending or self._engine.state not in (
-            EngineState.IDLE,
-            EngineState.ERROR,
-            EngineState.READY,
+        if (
+            self._stt.busy
+            or self._start_pending
+            or self._engine.state
+            not in (
+                EngineState.IDLE,
+                EngineState.ERROR,
+                EngineState.READY,
+            )
         ):
             return  # the engine refuses it: keep the chat of the session ending
         settings = load_settings()
@@ -190,6 +201,7 @@ class MainWindow(QMainWindow):
         self._active_app_widgets.clear()
         try:
             self._start_pending = True
+            self._dictation.refresh()
             task = asyncio.ensure_future(
                 self._engine.start(
                     settings,
@@ -215,6 +227,7 @@ class MainWindow(QMainWindow):
         images = self._controls.images
         if (
             (not text and not images)
+            or self._stt.busy
             or self._start_pending
             or self._engine.state not in (EngineState.IDLE, EngineState.ERROR, EngineState.READY)
         ):
@@ -234,6 +247,7 @@ class MainWindow(QMainWindow):
         conversation_id, context = self._history.prepare(settings)
         try:
             self._start_pending = True
+            self._dictation.refresh()
             task = asyncio.ensure_future(
                 self._engine.start(
                     settings,
@@ -267,6 +281,7 @@ class MainWindow(QMainWindow):
     def _start_finished(self, task: asyncio.Future) -> None:
         self._request_task = None
         self._start_pending = False
+        self._dictation.refresh()
         idle = self._engine.state in (EngineState.IDLE, EngineState.ERROR, EngineState.READY)
         self._history.drawer.set_busy(not idle)
         if idle:
@@ -575,6 +590,8 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event) -> None:  # noqa: N802
         self._closed = True
+        self._stt.cancel()
+        self._dictation.refresh()
         self._controls._attachments.close_camera()
         self._history.save()
         self._history.close()

@@ -405,9 +405,20 @@ into the input with Cmd/Ctrl+V or dragged onto the composer. Up to four images a
 as removable previews; click one to open it. Send images alone or with a message.
 The camera opens only on request, offers **Retake** and **Use photo**, and stops after
 capture or cancellation. Missing camera support offers the `camera` component; access
-denied and missing devices have explicit feedback. PDFs and in-composer dictation
-remain unavailable. Known text-only models show a setup hint; local endpoints decide
+denied and missing devices have explicit feedback. PDFs remain unavailable.
+Known text-only models show a setup hint; local endpoints decide
 whether their loaded model accepts images.
+
+The small microphone dictates into the draft using **Settings → Dictation** (OpenAI,
+Deepgram or a downloaded local model), its language and the selected input device.
+Click to start, then click again to finish; the text is inserted at the cursor or replaces
+the selection, with an ordinary Undo. It remains editable before sending with any images.
+Preparing, listening and transcribing have compact feedback and a cancel button. Cancel
+retains the existing draft; errors leave it editable. Missing STT setup disables only
+the microphone. A chat model is required, as for typing. Dictation shares the microphone
+with the global shortcut; Live, sending, Settings and thread changes wait until capture
+and cleanup finish. It never sends a message, touches the clipboard or uses Accessibility,
+and works even with the global shortcut disabled.
 
 Image imports accept PNG, JPEG, WebP, GIF, BMP and HEIC where Qt has the decoder.
 The first frame is normalized to PNG/JPEG, resized to a maximum 2048-pixel edge and
