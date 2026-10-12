@@ -367,6 +367,11 @@ Each released section is the source for that version's GitHub release notes.
   The message microphone no longer forces them into batch mode. Local models load
   before recording; streaming models stay warm between completed dictations with
   unchanged settings, avoiding a model reload for every message.
+- **A dropped speech recognition stream is a notice, not an error** — when a streaming STT
+  dropped (Meta's "backend temporarily unavailable"), the chat showed a raw error while
+  roomkit retried the stream. It now says "Speech recognition dropped and is
+  reconnecting", and once Meta's voice labels start over, that a click on a voice's name
+  names it again.
 - **MCP App output in conversation history** — preserve the tool's page alongside its
   input, result and the data fetched by the page itself. Restore them when reopening
   a conversation or restarting the app, including views that use `tools/call` to

@@ -50,11 +50,18 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
+# roomkit's continuous STT logs this when its stream drops, then opens another:
+# the session goes on, so the chat says so rather than showing an error.
+_STT_STREAM_DROPPED = "Continuous STT stream error for session %s"
+STT_RECONNECT_NOTICE = "Speech recognition dropped and is reconnecting: {cause}"
+
+
 class _VoiceErrorLogHandler(logging.Handler):
     """Intercept ERROR logs from roomkit.voice and emit on the engine signal.
 
     This lets the UI show STT/TTS connection errors (e.g. "insufficient
-    credits") that roomkit catches internally and retries silently.
+    credits") that roomkit catches internally and retries silently.  A
+    streaming STT that dropped is a notice: roomkit reconnects it.
     Debounces repeated identical messages.
     """
 
@@ -86,7 +93,10 @@ class _VoiceErrorLogHandler(logging.Handler):
             if msg == self._last_msg:
                 return
             self._last_msg = msg
-            engine.error_occurred.emit(msg)
+            if record.msg == _STT_STREAM_DROPPED:
+                engine.session_notice.emit(STT_RECONNECT_NOTICE.format(cause=msg))
+            else:
+                engine.error_occurred.emit(msg)
             # Voice errors (especially TTS WebSocket disconnects) can leave
             # orphaned anyio timer callbacks in qasync → 100% CPU.
             # Schedule a lightweight cleanup (timers only — FDs still needed).

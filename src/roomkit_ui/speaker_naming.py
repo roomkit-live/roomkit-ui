@@ -47,7 +47,7 @@ PRIMARY_UNKNOWN_NOTICE = (
 
 RESTART_NOTICE = (
     "Speaker labels started over: the transcription stream reconnected, and the "
-    "voices are told apart afresh."
+    "voices are told apart afresh. Click a voice's name to name it again."
 )
 
 RECLAIM_NOTICE = (
