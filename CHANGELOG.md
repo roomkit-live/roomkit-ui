@@ -12,6 +12,11 @@ Each released section is the source for that version's GitHub release notes.
 ## [Unreleased]
 
 ### Added
+- **Tool search settings** (Settings → Integrations → Tool search) — when the assistant
+  sees its tools in the prompt and when it finds them with `find_tools`. Automatic
+  keeps roomkit's thresholds, each editable: the tool count a realtime model searches
+  above (20), and the schema-token budget (8000) and context-window share (10 %) past
+  which the Voice Channel's model searches. Always search and Never force it.
 - **Google Gemini STT and TTS in the Voice Channel** (Listen · STT and Speak · TTS), on
   the Gemini key the LLM and Gemini Live already use. The STT is Google's live
   recogniser: words while the user speaks, its own end of turn, an optional vocabulary.

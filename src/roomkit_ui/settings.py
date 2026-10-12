@@ -84,6 +84,12 @@ _DEFAULTS = {
     "mcp_servers": "[]",
     # JSON array of {enabled, name, command, description, seed_help, help_depth, timeout}
     "cli_tools": "[]",
+    # Tool Search (toolset.tool_search_options): "auto" | "on" | "off", and the
+    # thresholds "auto" decides on; roomkit's defaults
+    "tool_search_mode": "auto",
+    "tool_search_threshold": 20,  # tools: realtime, and a model whose window is unknown
+    "tool_search_threshold_tokens": 8000,  # Voice Channel: the tools' schema tokens
+    "tool_search_window_pct": 10,  # Voice Channel: % of the model's context window
     # Voice channel (STT → LLM → TTS) settings
     "conversation_mode": "realtime",  # "realtime" | "voice_channel"
     "vc_llm_provider": "anthropic",  # "anthropic" | "openai" | "gemini"

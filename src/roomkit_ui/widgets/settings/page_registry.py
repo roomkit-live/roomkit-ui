@@ -405,6 +405,11 @@ PAGE_SPECS = (
                 (("tabs", 1),),
                 fallback="cli.catalog.empty.button",
             ),
+            SearchTarget(
+                "Tool search",
+                "find_tools threshold tool count tokens context window catalogue",
+                "tool_search.mode",
+            ),
         ),
     ),
     PageSpec(

@@ -353,6 +353,10 @@ def test_integrations_contributes_each_nested_page_once(panel):
         "mcp_servers",
         "skill_sources",
         "enabled_skills",
+        "tool_search_mode",
+        "tool_search_threshold",
+        "tool_search_threshold_tokens",
+        "tool_search_window_pct",
     }
 
 

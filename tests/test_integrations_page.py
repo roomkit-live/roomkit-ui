@@ -160,6 +160,7 @@ def test_all_integration_edits_survive_tabs_live_theme_and_close(panel, qapp):
     group.skills._label_edit.setText("My sources")
     group.skills._url_edit.setText("https://example.com/skills.git")
     group.skills._on_skill_toggled("Notes", True)
+    group.tool_search.threshold.setValue(12)
     expected = group.get_settings()
     cli_field = group.cli._env_edit
     for index in (1, 0, 2):
@@ -171,7 +172,11 @@ def test_all_integration_edits_survive_tabs_live_theme_and_close(panel, qapp):
     panel.reject()
     saved = load_settings()
     for key, value in expected.items():
-        assert json.loads(saved[key]) == json.loads(value)
+        if key.startswith("tool_search"):  # numbers and a mode, not JSON
+            assert str(saved[key]) == str(value)
+        else:
+            assert json.loads(saved[key]) == json.loads(value)
+    assert str(saved["tool_search_threshold"]) == "12"
 
 
 @pytest.mark.parametrize("kind", ["mcp", "cli", "sources"])

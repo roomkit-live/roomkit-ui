@@ -36,7 +36,7 @@ from roomkit_ui.realtime_providers import (
     realtime_sample_rate,
     transport_audio_profile,
 )
-from roomkit_ui.toolset import ToolSet
+from roomkit_ui.toolset import ToolSet, tool_search_options
 
 logger = logging.getLogger(__name__)
 
@@ -284,7 +284,10 @@ class RealtimeMixin:
                 settings=settings,
                 pipeline=media.pipeline,
                 skills=skills,
-                tool_options=toolset.channel_options(),
+                tool_options={
+                    **toolset.channel_options(),
+                    **tool_search_options(settings, realtime=True),
+                },
             )
 
         try:

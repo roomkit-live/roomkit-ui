@@ -244,6 +244,13 @@ makes the assistant answer only utterances attributed to the enrolled primary sp
   name providers refuse, is left out and named in the chat. (`mcp_manager.py`)
 - Dispatch order: engine built-ins, built-ins, CLI tools, then the owning MCP session. A
   failed call is reported to the model as a failure on every provider.
+- **Tool search** (Settings → Integrations, below the tabs): with many tools, roomkit
+  shows the model a few and hides the rest behind `find_tools`. Automatic (the default)
+  decides on roomkit's thresholds, each editable: a realtime model searches above 20
+  tools and sees at most that many at once; the Voice Channel's model searches once the
+  tools' schemas pass 8000 tokens or 10 % of its context window (the tool count when the
+  window is unknown, a local model). Always search and Never force it either way. The
+  built-ins always stay visible. (`toolset.tool_search_options`)
 - **MCP Apps**: tools that declare a `ui://` resource render their HTML UI inline in
   the chat (QWebEngineView + JSON-RPC bridge) and can call tools back through the app;
   they cannot reach local or LAN services. (`mcp_app_bridge.py`, `widgets/mcp_app_widget.py`)

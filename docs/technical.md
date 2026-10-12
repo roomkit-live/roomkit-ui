@@ -127,7 +127,10 @@ Settings → Models & components → Components, the line under a combo whose ch
 Tools are grouped by source (`ToolSet`: built-in, CLI, MCP). Every channel built with tools
 takes `toolset.channel_options()`, which turns off roomkit's own per-call timeout (the app
 bounds MCP calls at 60 s and each CLI tool at its own timeout) and pins the built-ins
-against Tool Search. A failed call raises `roomkit.ToolFailedError` or `ToolRefusedError`,
+against Tool Search. `toolset.tool_search_options(settings, realtime=...)` adds the Tool
+Search mode and thresholds from Settings → Integrations: a realtime channel takes the
+tool count, an AIChannel the schema-token budget and the share of its model's context
+window too (the count only when the window is unknown). A failed call raises `roomkit.ToolFailedError` or `ToolRefusedError`,
 which every provider reads as a failure — Gemini reads any returned body as a success.
 
 The dispatch wrapper emits `ToolCall` / `ToolResult` events through `tool_started` and

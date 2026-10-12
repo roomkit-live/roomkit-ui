@@ -6,6 +6,7 @@ from roomkit_ui.widgets.settings.cli_tools_page import _CliToolsPage
 from roomkit_ui.widgets.settings.controls import SettingsTabs, page_layout
 from roomkit_ui.widgets.settings.mcp_page import _MCPPage
 from roomkit_ui.widgets.settings.skills import _SkillsPage
+from roomkit_ui.widgets.settings.tool_search_section import ToolSearchSection
 
 
 class IntegrationsPage(QWidget):
@@ -25,6 +26,9 @@ class IntegrationsPage(QWidget):
             ]
         )
         layout.addWidget(self.tabs)
+        # Every tool counts, whatever its source: one setting below the tabs.
+        self.tool_search = ToolSearchSection(settings)
+        layout.addWidget(self.tool_search)
         layout.addStretch()
 
     def refresh(self) -> None:
@@ -51,4 +55,5 @@ class IntegrationsPage(QWidget):
             **self.skills.get_settings(),
             **self.mcp.get_settings(),
             **self.cli.get_settings(),
+            **self.tool_search.get_settings(),
         }

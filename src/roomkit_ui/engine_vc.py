@@ -58,7 +58,7 @@ from roomkit_ui.speaker_naming import (
     start_notices,
     with_speaker_note,
 )
-from roomkit_ui.toolset import ToolSet
+from roomkit_ui.toolset import ToolSet, tool_search_options
 from roomkit_ui.tts import create_tts_provider, is_cached_tts, tts_cache_fields
 from roomkit_ui.vc_agent import build_vc_agent
 from roomkit_ui.vc_stt import CLOUD_STT_BUILDERS, build_turn_vad, stt_needs_turn_vad
@@ -295,6 +295,7 @@ class VoiceChannelMixin:
             retry_policy=RetryPolicy(max_retries=2, base_delay_seconds=0.5, max_delay_seconds=4.0),
             **reasoning,
             **toolset.channel_options(),
+            **tool_search_options(settings, realtime=False),
             **self._vc_agent.channel_options(),
         )
         return ai_channel, toolset.all, skills_registry
