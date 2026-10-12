@@ -290,6 +290,11 @@ class ChatView(QScrollArea):
         row = self.tool_call(call_id)
         if row is None or not html_content or not has_webengine():
             return None
+        # The web view renders through a QQuickWidget, which Qt does not
+        # support under a graphics effect: a result back within the row's
+        # entrance fade (220 ms; MCP tools answer in about 50) would put it
+        # under one.  The row appears at once instead.
+        row.setGraphicsEffect(None)  # type: ignore[arg-type]
         widget = MCPAppWidget(row.call.name, row.call.server_name, parent=row)
         widget.load_html(html_content)
         row.attach_app(widget)

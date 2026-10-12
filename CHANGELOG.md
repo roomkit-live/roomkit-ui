@@ -267,6 +267,11 @@ Each released section is the source for that version's GitHub release notes.
   without it and says so; Voice Channel mode is unchanged.
 
 ### Fixed
+- **A tool's interactive app no longer arrives under a fade** — an MCP App row faded in
+  for 220 ms and its result usually arrives within 50, so its web view (a QQuickWidget,
+  which Qt does not support under a graphics effect) was created under the fade. The
+  likely cause of a conversation area left blank mid-session. The row now appears at
+  once when an app attaches to it.
 - **Voice Channel replies and tool calls are no longer cut off** — every cloud LLM turn
   (Claude, Gemini, OpenAI) now gets 16k output tokens instead of roomkit's 1024. Claude
   5.x and Gemini 3.x reason when nothing is set, and their reasoning counts against that

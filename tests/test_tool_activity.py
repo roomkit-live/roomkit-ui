@@ -75,3 +75,31 @@ def test_clearing_chat_releases_embedded_app_resources(qtbot):
     row.attach_app(App())
     chat.clear()
     assert released == [True]
+
+
+def test_a_row_drops_its_fade_before_it_hosts_a_web_view(qtbot, monkeypatch):
+    """A web view renders through a QQuickWidget, which Qt does not support
+    under a graphics effect; an MCP tool's app arrives while its row fades in."""
+    from roomkit_ui.widgets import mcp_app_widget
+
+    effects = []
+
+    class App(QWidget):
+        def __init__(self, _tool, _server, parent=None):
+            super().__init__(parent)
+            effects.append(parent.graphicsEffect())
+
+        def load_html(self, _html):
+            pass
+
+    monkeypatch.setattr(mcp_app_widget, "MCPAppWidget", App)
+    monkeypatch.setattr(mcp_app_widget, "has_webengine", lambda: True)
+    chat = ChatView()
+    qtbot.addWidget(chat)
+    row = chat.add_tool_call(ToolCall("1", "roll_dice", "{}"))
+    assert row.graphicsEffect() is not None  # still fading in
+
+    chat.attach_app("1", "<p>d20</p>")
+
+    assert effects == [None]
+    assert row.graphicsEffect() is None
