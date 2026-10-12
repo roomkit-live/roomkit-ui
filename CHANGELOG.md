@@ -267,6 +267,12 @@ Each released section is the source for that version's GitHub release notes.
   without it and says so; Voice Channel mode is unchanged.
 
 ### Fixed
+- **Voice Channel replies and tool calls are no longer cut off** — every cloud LLM turn
+  (Claude, Gemini, OpenAI) now gets 16k output tokens instead of roomkit's 1024. Claude
+  5.x and Gemini 3.x reason when nothing is set, and their reasoning counts against that
+  budget: replies stopped mid-sentence, a round of tool calls lost its last call
+  ("Provider cut tool call"), and the assistant fell silent for 10 to 20 seconds while it
+  ran out. Local models keep their server's budget.
 - **Numeric fields in Settings on Linux** — spin boxes reserve enough height for
   their text and avoid applying input padding twice to their internal editor.
 - **No more "Channel ai not found in registry" in realtime sessions** — the durable room

@@ -4,6 +4,7 @@ import pytest
 import shiboken6
 from roomkit.channels.ai import AIChannel
 from roomkit.providers.ai.mock import MockAIProvider
+from vc_harness import StreamingInputTTS, open_session, until
 
 from roomkit_ui.engine_vc_helpers import (
     CLAUDE_EFFORTS,
@@ -24,9 +25,16 @@ from roomkit_ui.widgets.settings.voice_setup import VC_LLM_PROVIDERS, VoiceSetup
 # -- settings → AIChannel ------------------------------------------------------
 
 
-def test_the_models_defaults_send_nothing():
-    for provider in ("anthropic", "gemini", "openai", "local"):
-        assert reasoning_options(dict(_DEFAULTS), provider) == {}
+@pytest.mark.parametrize("provider", ["anthropic", "gemini", "openai"])
+def test_a_cloud_model_gets_room_for_its_reply_and_nothing_else(provider):
+    """roomkit's 1024 tokens cut replies and tool calls: Claude 5.x and
+    Gemini 3.x reason when the turn says nothing, and that counts."""
+    assert reasoning_options(dict(_DEFAULTS), provider) == {"max_tokens": 16_000}
+
+
+@pytest.mark.parametrize("provider", ["local", "llamacpp"])
+def test_a_local_model_keeps_its_servers_budget(provider):
+    assert reasoning_options(dict(_DEFAULTS), provider) == {}
 
 
 def test_claude_takes_thinking_and_effort_apart():
@@ -35,11 +43,11 @@ def test_claude_takes_thinking_and_effort_apart():
     assert reasoning_options(settings, "anthropic") == {
         "enable_thinking": False,
         "reasoning_effort": "low",
+        "max_tokens": 16_000,
     }
 
 
 def test_claude_on_gets_room_to_think():
-    # Thinking counts against max_tokens: the provider's 1024 cuts a reply off.
     assert reasoning_options({"vc_anthropic_thinking": "on"}, "anthropic") == {
         "enable_thinking": True,
         "max_tokens": 16_000,
@@ -58,7 +66,8 @@ def test_a_deep_claude_effort_gets_room_to_think(effort, thinking):
 
 def test_gemini_off_is_roomkits_none():
     assert reasoning_options({"vc_gemini_thinking": "none"}, "gemini") == {
-        "reasoning_effort": "none"
+        "reasoning_effort": "none",
+        "max_tokens": 16_000,
     }
 
 
@@ -69,15 +78,18 @@ def test_each_provider_reads_only_its_own_settings():
         "vc_gemini_thinking": "high",
     }
 
-    assert reasoning_options(settings, "gemini") == {"reasoning_effort": "high"}
-    assert reasoning_options(settings, "openai") == {}
+    assert reasoning_options(settings, "gemini") == {
+        "reasoning_effort": "high",
+        "max_tokens": 16_000,
+    }
+    assert reasoning_options(settings, "openai") == {"max_tokens": 16_000}
 
 
 def test_a_value_roomkit_does_not_know_is_left_out():
     settings = {"vc_anthropic_thinking": "yes", "vc_anthropic_effort": "turbo"}
 
-    assert reasoning_options(settings, "anthropic") == {}
-    assert reasoning_options({"vc_gemini_thinking": "max"}, "gemini") == {}
+    assert reasoning_options(settings, "anthropic") == {"max_tokens": 16_000}
+    assert reasoning_options({"vc_gemini_thinking": "max"}, "gemini") == {"max_tokens": 16_000}
 
 
 @pytest.mark.parametrize(
@@ -219,3 +231,18 @@ def test_every_caveat_of_a_claude_model_is_said(page_over, monkeypatch):
 
     assert "between tool calls" in note
     assert "Extra high and Max run as High" in note
+
+
+async def test_the_model_is_asked_with_room_for_its_turn(qapp):
+    vc = await open_session(
+        tts=StreamingInputTTS(),
+        reply=["Hi!"],
+        ai_options=reasoning_options(dict(_DEFAULTS), "anthropic"),
+    )
+    try:
+        await vc.speak()
+        await until(lambda: vc.ai.contexts)
+
+        assert vc.ai.contexts[0].max_tokens == 16_000
+    finally:
+        await vc.kit.close()

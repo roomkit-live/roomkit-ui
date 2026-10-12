@@ -68,8 +68,10 @@ kept, never replaced. Agent Skills reach realtime sessions as well as Voice Chan
   shapes the answer with thinking off. Gemini: one thinking level, Off included. They
   reach roomkit's `AIChannel` as `enable_thinking` / `reasoning_effort`
   (`engine_vc_helpers.reasoning_options`), and roomkit sends each model what it takes: a
-  model that always thinks runs at its lowest level for Off. On, Extra high and Max raise
-  `max_tokens` (16k, 64k), since thinking counts against it. The note under the fields
+  model that always thinks runs at its lowest level for Off. Every cloud LLM turn gets
+  `max_tokens` 16k (64k at Extra high and Max): roomkit's 1024 cut replies and tool
+  calls, since reasoning counts against it and Claude 5.x and Gemini 3.x reason when
+  nothing is set. A local model keeps its server's budget. The note under the fields
   reads roomkit's catalog for what the selected model does differently. OpenAI has none:
   a voice turn carries tools, and with tools roomkit sends GPT-5.4 and later no reasoning.
 - **Pocket TTS** — Kyutai's local voice, CPU-friendly, in English, French, German,

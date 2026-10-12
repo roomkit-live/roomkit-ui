@@ -103,29 +103,36 @@ CLAUDE_THINKING = ("on", "off")
 CLAUDE_EFFORTS = ("low", "medium", "high", "xhigh", "max")
 GEMINI_THINKING_LEVELS = ("none", "minimal", "low", "medium", "high")
 
-# Thinking counts against max_tokens, and the provider's 1024 would cut a
-# reply off mid-thought.  64k is Anthropic's starting point at xhigh and max.
-_CLAUDE_THINKING_MAX_TOKENS = 16_000
+# A turn's output budget.  roomkit's providers default to 1024 tokens, and
+# reasoning counts against it: Claude 5.x and Gemini 3.x reason when the turn
+# says nothing, so a reply was cut mid-sentence and a round of tool calls lost
+# its last call ("Provider cut tool call").  Every cloud model the app offers
+# writes 16 384 tokens at least (gpt-4o the fewest); 64k is Anthropic's
+# starting point at xhigh and max.  A cap, not a cost: unused tokens are free.
+_CLOUD_LLMS = ("anthropic", "gemini", "openai")
+_CLOUD_MAX_TOKENS = 16_000
 _CLAUDE_DEEP_MAX_TOKENS = 64_000
 
 
 def reasoning_options(settings: dict, llm_provider: str) -> dict[str, Any]:
-    """The ``AIChannel`` reasoning arguments for the session's LLM.
+    """The ``AIChannel`` reasoning arguments for the session's LLM, and the
+    room its turn gets.
 
     Claude takes thinking and effort apart: with thinking off, the effort
     still sets how much it writes and how readily it calls tools.  Gemini has
     one level, off included.  roomkit sends each model what it takes, and a
     model that cannot stop thinking its lowest level for off.  OpenAI gets
     none: a voice turn always carries tools, and with tools roomkit sends
-    GPT-5.4 and later no reasoning whatever is asked.
+    GPT-5.4 and later no reasoning whatever is asked.  A local model keeps
+    its server's budget: its context window may be smaller than ours.
     """
     options: dict[str, Any] = {}
+    if llm_provider in _CLOUD_LLMS:
+        options["max_tokens"] = _CLOUD_MAX_TOKENS
     if llm_provider == "anthropic":
         thinking = settings.get("vc_anthropic_thinking", "")
         if thinking in CLAUDE_THINKING:
             options["enable_thinking"] = thinking == "on"
-            if thinking == "on":
-                options["max_tokens"] = _CLAUDE_THINKING_MAX_TOKENS
         effort = settings.get("vc_anthropic_effort", "")
         if effort in CLAUDE_EFFORTS:
             options["reasoning_effort"] = effort
