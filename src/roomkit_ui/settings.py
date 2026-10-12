@@ -256,6 +256,12 @@ _DEFAULTS = {
     "vc_agent_name": "",  # what people call the assistant (empty = "Assistant")
     "vc_thinker": False,  # think while listening (needs a speak policy)
     "vc_background": False,  # long requests run as background tasks (roomkit 0.97)
+    # The LLM those tasks run on: "" (the conversation model) | "llamacpp", with its
+    # GGUF and context ("" = Think · LLM's) and its thinking (on: nobody waits on a task)
+    "vc_background_model": "",
+    "vc_background_llamacpp_model": "",
+    "vc_background_llamacpp_context": "",
+    "vc_background_llamacpp_thinking": True,
     "typesafe_api_key": "",  # secret — keyring, never QSettings
 }
 

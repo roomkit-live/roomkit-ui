@@ -172,6 +172,10 @@ def test_the_agent_tab_saves_its_choices(qapp):
         "vc_agent_name": "Nova",
         "vc_thinker": False,
         "vc_background": False,
+        "vc_background_model": "",
+        "vc_background_llamacpp_model": "",
+        "vc_background_llamacpp_context": "",
+        "vc_background_llamacpp_thinking": True,
     }
     assert not page.agent_name.isHidden()
 
@@ -367,3 +371,174 @@ def test_the_agent_tab_saves_background_work(qapp):
     page = VCAgentPage({"vc_background": True})
 
     assert page.get_settings()["vc_background"] is True
+
+
+# -- a model of its own for the tasks -----------------------------------------------------
+
+
+@pytest.fixture
+def made(monkeypatch):
+    """The llama.cpp providers the agent creates for its tasks: mocks, with
+    the settings and role each was made from."""
+    created: list[tuple[dict, str, MockAIProvider]] = []
+
+    def create(settings, *, role="conversation"):
+        provider = MockAIProvider(responses=["done"])
+        created.append((settings, role, provider))
+        return provider
+
+    monkeypatch.setattr("roomkit_ui.providers.llamacpp.create", create)
+    return created
+
+
+def test_tasks_run_on_the_llamacpp_model_set_for_them(made):
+    agent, notices = _build(
+        {
+            "vc_background": True,
+            "vc_background_model": "llamacpp",
+            "vc_background_llamacpp_model": "/models/b.gguf",
+            "vc_llm_provider": "anthropic",
+        }
+    )
+
+    ((settings, role, provider),) = made
+    assert agent.background
+    assert agent.worker is provider
+    assert agent.worker_provider == "llamacpp"
+    assert role == "background"
+    assert settings["vc_llamacpp_model"] == "/models/b.gguf"
+    assert settings["vc_llamacpp_thinking"] is True
+    assert agent.summary == [
+        {"name": "Works in the background", "description": "long requests run as tasks, on mock"}
+    ]
+    assert notices == []
+
+
+@pytest.mark.parametrize("picked", ["", "anthropic"])
+def test_otherwise_the_conversation_model_is_its_own_worker(made, picked):
+    agent, _ = _build({"vc_background": True, "vc_background_model": picked})
+
+    assert agent.background
+    assert agent.worker is None
+    assert made == []
+
+
+def test_a_model_that_cannot_run_leaves_the_tasks_on_the_conversation_model(monkeypatch):
+    from roomkit_ui.features import FeatureUnavailableError
+
+    def create(_settings, *, role):
+        raise FeatureUnavailableError("llama.cpp is not installed.", "llamacpp")
+
+    monkeypatch.setattr("roomkit_ui.providers.llamacpp.create", create)
+    agent, notices = _build({"vc_background": True, "vc_background_model": "llamacpp"})
+
+    assert agent.background
+    assert agent.worker is None
+    assert notices == [
+        "Background tasks run on the conversation model: llama.cpp is not installed."
+    ]
+
+
+def test_a_gguf_is_named_by_its_file():
+    model = SimpleNamespace(model_name="/models/Ornith-1.5-35B-Q8_0.gguf")
+
+    assert vc_agent._model_label(model) == "Ornith-1.5-35B-Q8_0.gguf"
+
+
+def test_the_agent_tab_sets_the_tasks_model(qapp):
+    from roomkit_ui.widgets.settings.vc_agent_fields import VCAgentPage
+
+    page = VCAgentPage(
+        {
+            "vc_background": False,
+            "vc_background_model": "llamacpp",
+            "vc_llamacpp_model": "/models/a.gguf",
+        }
+    )
+
+    assert page.background_model.currentText() == "llama.cpp (local GGUF)"
+    assert not page.background_model.isEnabled()  # waits for background work
+    assert not page.task_gguf.isHidden()
+    assert "a.gguf" in page.task_gguf.placeholderText()  # Think · LLM's, until set
+    page.background.setChecked(True)
+    assert page.background_model.isEnabled() and page.task_gguf.isEnabled()
+    page.task_gguf.setText(" /models/b.gguf ")
+    page.task_context.setText("32768")
+    page.task_thinking.setChecked(False)
+    out = page.get_settings()
+    assert out["vc_background_model"] == "llamacpp"
+    assert out["vc_background_llamacpp_model"] == "/models/b.gguf"
+    assert out["vc_background_llamacpp_context"] == "32768"
+    assert out["vc_background_llamacpp_thinking"] is False
+
+    page.background_model.setCurrentIndex(0)  # the conversation model
+    assert page.task_gguf.isHidden()
+    assert page.get_settings()["vc_background_model"] == ""
+
+
+async def test_a_task_runs_on_its_own_model_with_the_session_tools(qapp, monkeypatch):
+    from roomkit import ChannelCategory, RoomKit, SMSChannel
+    from roomkit.providers.ai.base import AIResponse
+    from roomkit.providers.sms.mock import MockSMSProvider
+    from vc_harness import FakeEngine
+
+    from roomkit_ui.engine import Engine
+    from roomkit_ui.hooks import register_vc_hooks
+    from roomkit_ui.settings import _DEFAULTS
+    from roomkit_ui.toolset import ToolSet
+
+    worker = MockAIProvider(
+        ai_responses=[AIResponse(content="Three mails.", usage={"input_tokens": 900})]
+    )
+    conversation = MockAIProvider(
+        ai_responses=[AIResponse(content="You have three.", usage={"input_tokens": 7})]
+    )
+    monkeypatch.setattr("roomkit_ui.providers.llamacpp.create", lambda _s, *, role: worker)
+    engine = Engine()
+
+    async def tools(_settings, _provider):
+        builtin = [{"name": "get_current_time", "description": "Time.", "parameters": {}}]
+        return ToolSet(builtin=builtin, cli=[], mcp=[]), None
+
+    monkeypatch.setattr(engine, "_load_vc_tools", tools)
+    settings = {
+        **_DEFAULTS,
+        "vc_llm_provider": "anthropic",
+        "vc_background": True,
+        "vc_background_model": "llamacpp",
+    }
+    ai, _, _ = await engine._build_vc_ai_channel(settings, conversation, "anthropic", "Be brief.")
+    background = engine._vc_agent.worker_channel
+    # A local model: every tool in its prompt, as for a local conversation model.
+    assert background._tool_search is False
+
+    kit = RoomKit()
+    kit.register_channel(SMSChannel("sms", provider=MockSMSProvider()))
+    kit.register_channel(ai)
+    engine._vc_agent.setup_background(kit, ai)
+    await kit.create_room(room_id="main")
+    await kit.attach_channel("main", "sms")
+    await kit.attach_channel("main", "ai", category=ChannelCategory.INTELLIGENCE)
+
+    class Usage(FakeEngine):
+        def __init__(self):
+            super().__init__()
+            self.usage: list[dict] = []
+
+        def _accumulate_usage(self, usage):
+            self.usage.append(usage)
+
+    hooks = Usage()
+    register_vc_hooks(kit, hooks)
+
+    await kit.start_task("main", "ai", "Summarize this week's mails")
+    await until(lambda: worker.calls and conversation.calls and hooks.usage)
+    await kit.close()
+
+    assert "get_current_time" in {t.name for t in worker.calls[0].tools}
+    relay = "\n".join(str(m.content) for m in conversation.calls[0].messages)
+    assert "Three mails." in relay
+    # Never attached to the session room, where it would answer every turn.
+    assert await kit.store.get_binding("main", "background") is None
+    # Its tokens are another model's: not priced as the conversation's.
+    assert [usage["input_tokens"] for usage in hooks.usage] == [7]

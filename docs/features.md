@@ -145,13 +145,18 @@ and logs; the other add-ons report their absence in the chat.
   stays quiet, the conversation model rewrites its thought (what is said, what it could
   add); with something worth saying it may offer it. Thoughts go to the log only.
 - **Background work** — the assistant gets roomkit's `work_in_background` tool: a long
-  request runs as a task, in a room of its own, with the same model and tools, while the
+  request runs as a task, in a room of its own, with the same tools, while the
   conversation goes on; the result comes back as a turn it speaks. The chat shows when a
   task starts and how it ended, and the idle hang-up waits for running tasks. Needs a model
-  given tools (not a local model set without tool use).
+  given tools (not a local model set without tool use). "Tasks run on" picks the model:
+  the conversation's (the default), or a llama.cpp model set below it — a GGUF and a
+  context (empty: Think · LLM's, and one server serves both), and Model thinking, on by
+  default since nobody waits on a task's first word. Its server starts at the first
+  task, and a different GGUF or context runs a second server beside the conversation's.
+  Not installed, the tasks stay on the conversation model, and the chat says why.
 
-The session's cost counts the background task's turns (they are AI responses), not the
-classifier's or the thinker's calls.
+The session's cost counts the background task's turns when they run on the conversation
+model (they are AI responses), never another model's, the classifier's or the thinker's.
 
 ### Wake word
 

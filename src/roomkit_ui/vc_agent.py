@@ -10,7 +10,9 @@ turns it stays silent on; back with something worth saying, the policy
 decides again and the agent may offer.  A thinker needs a speak policy.
 roomkit 0.97's ``setup_background`` gives the agent ``work_in_background``:
 long work runs as a task, in a room of its own, while the conversation goes
-on, and its result comes back as a turn the agent speaks.
+on, and its result comes back as a turn the agent speaks.  The task runs on
+the agent itself, or on a worker channel with a llama.cpp model of its own,
+on this computer.
 
 Both are add-ons: one that cannot run is left out of the session. Speaking
 policy problems go to session details and logs; other add-ons explain their
@@ -22,6 +24,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from roomkit_ui.features import SPEAK_POLICY_FEATURES, unavailable_reason
@@ -44,6 +47,11 @@ SPEAK_POLICIES: list[tuple[str, str]] = [
 
 DEFAULT_AGENT_NAME = "Assistant"
 
+# The channel background tasks run on when they have a model of their own.
+# Registered on the kit, never attached to the session room: there it would
+# answer every turn.
+BACKGROUND_WORKER = "background"
+
 # The settings key holding each classifier's API key.
 _CLASSIFIER_KEYS = {"openai": "openai_api_key", "jev": "typesafe_api_key"}
 
@@ -56,6 +64,11 @@ class VCAgent:
     thinker: Any = None
     # Set up on the kit, not given to the channel (kit.setup_background).
     background: bool = False
+    # The model background tasks run on, when not the conversation's: its
+    # provider name and provider; the engine builds its channel.
+    worker_provider: str = ""
+    worker: Any = None
+    worker_channel: Any = None
     summary: list[dict] = field(default_factory=list)
     decision: SessionModel | None = None
     _closables: list[Any] = field(default_factory=list)
@@ -64,6 +77,16 @@ class VCAgent:
         """``AIChannel`` keyword arguments; empty when nothing is enabled."""
         options = {"speak_policy": self.speak_policy, "thinker": self.thinker}
         return {name: part for name, part in options.items() if part is not None}
+
+    def setup_background(self, kit: Any, ai_channel: Any) -> None:
+        """Give *ai_channel* ``work_in_background`` on *kit*, its tasks run on
+        the worker channel when there is one (the kit then closes it)."""
+        if not self.background:
+            return
+        worker = self.worker_channel
+        if worker is not None:
+            kit.register_channel(worker)
+        kit.setup_background(ai_channel, worker=None if worker is None else worker.channel_id)
 
     async def close(self) -> None:
         """Close the clients this agent opened (roomkit closes none of them)."""
@@ -159,9 +182,36 @@ def _add_background(
         )
         return
     agent.background = True
-    agent.summary.append(
-        {"name": "Works in the background", "description": "long requests run as tasks"}
-    )
+    description = "long requests run as tasks"
+    _add_worker(agent, settings, notice)
+    if agent.worker is not None:
+        description += f", on {_model_label(agent.worker)}"
+    agent.summary.append({"name": "Works in the background", "description": description})
+
+
+def _add_worker(agent: VCAgent, settings: dict, notice: Callable[[str], None]) -> None:
+    """The model the tasks run on when it is not the conversation's (Agent
+    tab → Tasks run on): llama.cpp, set there.  One that cannot run leaves
+    them on the conversation model, and the chat says why."""
+    if settings.get("vc_background_model") != "llamacpp":
+        return
+    from roomkit_ui.features import AI_PROVIDER_FEATURES, require
+    from roomkit_ui.providers import llamacpp
+
+    try:
+        require(AI_PROVIDER_FEATURES["llamacpp"])
+        agent.worker = llamacpp.create(llamacpp.background_settings(settings), role="background")
+    except Exception as exc:  # not installed, a bad setting: said in the chat
+        logger.warning("Background model unavailable: %s", exc)
+        notice(f"Background tasks run on the conversation model: {exc}")
+        return
+    agent.worker_provider = "llamacpp"
+
+
+def _model_label(provider: Any) -> str:
+    """A model as the session details name it: a GGUF file by its name."""
+    model = str(getattr(provider, "model_name", "") or "")
+    return Path(model).name if model.endswith(".gguf") else model or "another model"
 
 
 def _classifier_unavailable(policy: str, settings: dict, ai_provider: Any) -> str | None:

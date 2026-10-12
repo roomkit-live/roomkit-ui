@@ -41,11 +41,11 @@ class _FakeServer:
 def fake_server(monkeypatch):
     monkeypatch.setattr("roomkit.providers.llamacpp.server.LlamaServer", _FakeServer)
     _FakeServer.instances = []
-    factory._shared = None
+    factory._servers.clear()
     yield
-    if factory._shared is not None:
-        factory._shared[1].shutdown()
-    factory._shared = None
+    for server in {id(s): s for _, s in factory._servers.values()}.values():
+        server.shutdown()
+    factory._servers.clear()
 
 
 def _provider(**settings):
@@ -159,6 +159,66 @@ async def test_switching_thinking_keeps_the_running_server():
     await _provider(vc_llamacpp_thinking=True).start()
 
     assert len(_FakeServer.instances) == 1
+
+
+# -- the background tasks' model ------------------------------------------------------
+
+
+def _tasks_provider(**settings):
+    return factory.create(factory.background_settings(settings), role="background")
+
+
+async def test_the_tasks_share_the_conversations_server_when_they_run_the_same():
+    await _provider(vc_llamacpp_model="me/model-GGUF:Q8_0").start()
+    await _tasks_provider(vc_llamacpp_model="me/model-GGUF:Q8_0").start()
+
+    assert len(_FakeServer.instances) == 1
+
+
+async def test_the_tasks_get_their_own_server_and_the_conversation_keeps_its():
+    conversation = _provider(vc_llamacpp_model="a/model-GGUF:Q4_K_M")
+    await conversation.start()
+    await _tasks_provider(vc_background_llamacpp_model="b/model-GGUF:Q8_0").start()
+    await _settle()
+
+    first, second = _FakeServer.instances
+    assert first.running and second.running
+    assert second.config.model == "b/model-GGUF:Q8_0"
+    assert conversation.base_url == f"http://127.0.0.1:{first.config.port}/v1"
+
+
+async def test_a_server_another_role_still_uses_is_not_stopped():
+    await _provider(vc_llamacpp_model="a/model-GGUF:Q4_K_M").start()
+    await _tasks_provider(vc_llamacpp_model="a/model-GGUF:Q4_K_M").start()
+    # The conversation moves to another model: the tasks still run on the first.
+    await _provider(vc_llamacpp_model="b/model-GGUF:Q4_K_M").start()
+    await _settle()
+
+    shared, new = _FakeServer.instances
+    assert shared.stops == 0
+    assert new.running
+
+
+def test_the_tasks_take_think_llms_gguf_and_context_unless_set_and_think():
+    inherited = factory.background_settings(
+        {"vc_llamacpp_model": "/m/a.gguf", "vc_llamacpp_context": "16384"}
+    )
+    own = factory.background_settings(
+        {
+            "vc_llamacpp_model": "/m/a.gguf",
+            "vc_background_llamacpp_model": "/m/b.gguf",
+            "vc_background_llamacpp_context": "32768",
+            "vc_background_llamacpp_thinking": False,
+            "vc_llamacpp_thinking": True,
+        }
+    )
+
+    assert inherited["vc_llamacpp_model"] == "/m/a.gguf"
+    assert inherited["vc_llamacpp_context"] == "16384"
+    assert inherited["vc_llamacpp_thinking"] is True  # nobody waits on a task
+    assert own["vc_llamacpp_model"] == "/m/b.gguf"
+    assert own["vc_llamacpp_context"] == "32768"
+    assert own["vc_llamacpp_thinking"] is False
 
 
 async def test_a_session_starts_the_server_before_it_opens_the_mic():

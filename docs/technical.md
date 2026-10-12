@@ -180,7 +180,15 @@ version of the skill's files. A session's end refuses and closes a question stil
 `vc_agent.build_vc_agent()` turns the Agent tab's settings into the AIChannel's
 `speak_policy` (`ClassifierSpeakPolicy` on `OpenAIClassifier`, `JevClassifier` or
 `LLMClassifier`) and `thinker` (`LLMThinker` on the conversation model), and a `background`
-flag the engine turns into `kit.setup_background(ai_channel)`. roomkit closes neither the
+flag `VCAgent.setup_background` turns into `kit.setup_background(ai_channel, worker=...)`.
+With llama.cpp picked for the tasks (`vc_background_model`), the engine builds a
+second AIChannel, `background` (the session's prompt, tools and skills, that model's
+reasoning and Tool Search), registered on the kit but never attached to the session
+room, where it would answer every turn; the kit closes it. Its model comes from
+`llamacpp.background_settings()` (the Agent tab's GGUF and context, Think · LLM's when
+empty, its own thinking), and `providers/llamacpp.py` keeps a server per role
+(conversation, background), one when both run the same configuration. Its usage is left out of the
+session cost, which prices the conversation model. roomkit closes neither the
 classifier nor the thinker: `Engine._close_vc_agent()` does, after the kit.
 `agent_hooks.py` logs `ON_SPEAK_DECISION` and `ON_THOUGHT`; those diagnostics stay out
 of the transcript. `ON_TASK_DELEGATED` and `ON_TASK_COMPLETED` produce chat notices

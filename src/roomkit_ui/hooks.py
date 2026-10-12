@@ -7,6 +7,7 @@ from typing import Any
 from roomkit_ui.engine_state import EngineState
 from roomkit_ui.engine_vc_helpers import LOCAL_TOOL_REFUSAL
 from roomkit_ui.speaker_naming import labelled_turn
+from roomkit_ui.vc_agent import BACKGROUND_WORKER
 
 
 def register_audio_hooks(kit: Any, engine: Any) -> None:
@@ -193,7 +194,11 @@ def _register_vc_assistant_hooks(kit: Any, engine: Any, tts_filter: Any) -> None
     @kit.hook(HookTrigger.ON_AI_RESPONSE, HookExecution.ASYNC)
     async def _on_ai_usage(event, context):
         # AIResponseEvent.usage carries the provider's token counters
-        # (input/output + cache counters since roomkit 0.42).
+        # (input/output + cache counters since roomkit 0.42).  A background
+        # worker's model is another one: priced as the conversation's, its
+        # tokens would be wrong.
+        if getattr(event, "channel_id", "") == BACKGROUND_WORKER:
+            return
         try:
             usage = dict(getattr(event, "usage", {}) or {})
             if usage:

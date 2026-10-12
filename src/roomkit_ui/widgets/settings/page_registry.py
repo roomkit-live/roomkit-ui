@@ -137,7 +137,7 @@ PAGE_SPECS = (
             ),
             SearchTarget(
                 "Agent behavior",
-                "turn taking jev thinker background speaking decision",
+                "turn taking jev thinker background tasks worker llama.cpp speaking decision",
                 "voice._agent.speak_policy",
                 (("tabs", 0), ("voice.pipeline_tabs", 3)),
                 fallback="voice.mode_picker",

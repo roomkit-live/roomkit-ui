@@ -4,8 +4,9 @@ roomkit's ``LlamaCppAIProvider`` downloads a pinned ``llama-server`` build
 and the model, starts the server on first use and stops it on ``close()``.
 A session closes its AI provider when it ends, so used as is, every session
 would pay the model load again.  Here the server outlives the session: one
-per configuration, kept until the configuration changes or the app quits
-(roomkit kills a server still running at interpreter exit).
+per role (the conversation, the background tasks), one server when both run
+the same configuration, kept until its role's configuration changes or the
+app quits (roomkit kills a server still running at interpreter exit).
 
 The server runs on a thread and event loop of its own.  When a session ends
 the engine strips the app's loop of every file descriptor the session
@@ -31,15 +32,17 @@ DEFAULT_MODEL = "unsloth/Qwen3-4B-Instruct-2507-GGUF:Q4_K_M"
 # A spoken reply's output cap without reasoning: LlamaCppConfig's default.
 _REPLY_MAX_TOKENS = 1024
 
-_shared: tuple[tuple, _ServerThread] | None = None
+# role → (configuration, its server): "conversation" (Think · LLM) and
+# "background" (Agent tab → Tasks run on).
+_servers: dict[str, tuple[tuple, _ServerThread]] = {}
 
 
-def create(settings: dict) -> Any:
-    """Create this session's llama.cpp provider, a client of the shared server."""
+def create(settings: dict, *, role: str = "conversation") -> Any:
+    """Create this session's llama.cpp provider, a client of *role*'s server."""
     from roomkit.providers.llamacpp import LlamaCppAIProvider, LlamaCppConfig
 
     model = (settings.get("vc_llamacpp_model", "") or "").strip() or DEFAULT_MODEL
-    server = _shared_server(model, _context_size(settings))
+    server = _shared_server(model, _context_size(settings), role)
     thinking = bool(settings.get("vc_llamacpp_thinking", False))
 
     class _SessionLlamaCpp(LlamaCppAIProvider):
@@ -67,6 +70,21 @@ def create(settings: dict) -> Any:
     )
 
 
+def background_settings(settings: dict) -> dict:
+    """*settings* as the background tasks' model reads them: the Agent tab's
+    GGUF and context, each left empty taking Think · LLM's (one server then
+    serves both), and its own thinking, on unless turned off: a task waits on
+    nobody's first word."""
+    return {
+        **settings,
+        "vc_llamacpp_model": settings.get("vc_background_llamacpp_model")
+        or settings.get("vc_llamacpp_model", ""),
+        "vc_llamacpp_context": settings.get("vc_background_llamacpp_context")
+        or settings.get("vc_llamacpp_context", ""),
+        "vc_llamacpp_thinking": bool(settings.get("vc_background_llamacpp_thinking", True)),
+    }
+
+
 def _max_tokens(context_size: int, *, thinking: bool) -> int:
     """A turn's output cap.  The reasoning counts against it: at roomkit's
     1024, a model that thinks could spend them all and say nothing.  Thinking,
@@ -85,16 +103,19 @@ def _context_size(settings: dict) -> int | None:
     return value if value > 0 else None
 
 
-def _shared_server(model: str, context_size: int | None) -> _ServerThread:
-    """The server for this configuration; one built for another is stopped."""
-    global _shared
+def _shared_server(model: str, context_size: int | None, role: str) -> _ServerThread:
+    """*role*'s server for this configuration, the other role's when it runs
+    the same; the one the role had before is stopped once no role uses it."""
     key = (model, context_size)
-    if _shared is not None and _shared[0] == key:
-        return _shared[1]
-    if _shared is not None:
-        _shared[1].shutdown()
-    server = _ServerThread(model, context_size)
-    _shared = (key, server)
+    held = _servers.get(role)
+    if held is not None and held[0] == key:
+        return held[1]
+    server = next((s for k, s in _servers.values() if k == key), None)
+    if server is None:
+        server = _ServerThread(model, context_size)
+    _servers[role] = (key, server)
+    if held is not None and all(s is not held[1] for _, s in _servers.values()):
+        held[1].shutdown()
     return server
 
 

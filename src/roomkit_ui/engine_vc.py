@@ -62,7 +62,7 @@ from roomkit_ui.speaker_naming import (
 )
 from roomkit_ui.toolset import ToolSet, tool_search_options
 from roomkit_ui.tts import create_tts_provider, is_cached_tts, tts_cache_fields
-from roomkit_ui.vc_agent import build_vc_agent
+from roomkit_ui.vc_agent import BACKGROUND_WORKER, build_vc_agent
 from roomkit_ui.vc_stt import CLOUD_STT_BUILDERS, build_turn_vad, stt_needs_turn_vad
 
 logger = logging.getLogger(__name__)
@@ -280,7 +280,6 @@ class VoiceChannelMixin:
         Returns ``(ai_channel, tools, skills_registry)``.
         """
         from roomkit.channels.ai import AIChannel
-        from roomkit.models import RetryPolicy
 
         toolset, skills_registry = await self._load_vc_tools(settings, llm_provider_name)
         self._vc_agent = build_vc_agent(
@@ -302,10 +301,7 @@ class VoiceChannelMixin:
             tool_handler=self._handle_tool_call,  # type: ignore[attr-defined]
             config_provider=self._vc_turn_config(toolset),
             skills=skills_registry,
-            # Provider SDKs no longer retry (Anthropic stopped in roomkit
-            # 0.96); a 429/529 would fail the turn into silence.  Retries
-            # only run while nothing has been streamed, so none is heard.
-            retry_policy=RetryPolicy(max_retries=2, base_delay_seconds=0.5, max_delay_seconds=4.0),
+            retry_policy=_turn_retry_policy(),
             **reasoning,
             **toolset.channel_options(),
             **tool_search_options(
@@ -313,6 +309,10 @@ class VoiceChannelMixin:
             ),
             **self._vc_agent.channel_options(),
         )
+        if self._vc_agent.worker is not None:
+            self._vc_agent.worker_channel = _background_worker_channel(
+                settings, self._vc_agent, system_prompt, toolset, skills_registry, self
+            )
         return ai_channel, toolset.all, skills_registry
 
     def _vc_turn_config(self, toolset: ToolSet) -> Any:
@@ -367,17 +367,19 @@ class VoiceChannelMixin:
         self._kit = kit  # type: ignore[attr-defined]
         kit.register_channel(voice)
         kit.register_channel(ai_channel)
-        if self._vc_agent.background:
-            # The agent itself does the work, in a room of its own, with the
-            # session's tools (ToolSet.turn_config); its result comes back as
-            # a turn it speaks.
-            kit.setup_background(ai_channel)
+        # The agent itself does the work, or its worker, in a room of its
+        # own, with the session's tools (ToolSet.turn_config); its result
+        # comes back as a turn the agent speaks.
+        self._vc_agent.setup_background(kit, ai_channel)
         await ensure_room(kit, self._room_id, channels=("voice", "ai"))
         if store is not None and not self._memory_recap:
             # The AI reads this session's turns only (memory.session_window):
             # past sessions reach it as the recap, quoted as the past.
             self._memory_recap = await memory_recap(kit, self._room_id)
-            ai_channel.set_system_prompt(self._session_prompt())  # type: ignore[attr-defined]
+            prompt = self._session_prompt()  # type: ignore[attr-defined]
+            ai_channel.set_system_prompt(prompt)
+            if self._vc_agent.worker_channel is not None:
+                self._vc_agent.worker_channel.set_system_prompt(prompt)
 
         voice_binding = await kit.attach_channel(self._room_id, "voice")
         # No tools in the binding's metadata: they come with each turn
@@ -678,3 +680,40 @@ def _model_pricing(provider: Any) -> Any:
     except Exception:
         return None
     return getattr(entry, "pricing", None) if entry is not None else None
+
+
+def _turn_retry_policy() -> Any:
+    """Provider SDKs no longer retry (Anthropic stopped in roomkit 0.96); a
+    429/529 would fail the turn into silence.  Retries only run while
+    nothing has been streamed, so none is heard."""
+    from roomkit.models import RetryPolicy
+
+    return RetryPolicy(max_retries=2, base_delay_seconds=0.5, max_delay_seconds=4.0)
+
+
+def _background_worker_channel(
+    settings: dict,
+    agent: Any,
+    system_prompt: str,
+    toolset: ToolSet,
+    skills_registry: Any,
+    engine: Any,
+) -> Any:
+    """The AIChannel background tasks run on when they have a model of their
+    own: the session's prompt, tools and skills, that model's reasoning and
+    Tool Search.  No speak policy: it talks to nobody."""
+    from roomkit.channels.ai import AIChannel
+
+    name = agent.worker_provider
+    return AIChannel(
+        BACKGROUND_WORKER,
+        provider=agent.worker,
+        system_prompt=system_prompt,
+        tool_handler=engine._handle_tool_call,
+        config_provider=toolset.turn_config(),
+        skills=skills_registry,
+        retry_policy=_turn_retry_policy(),
+        **reasoning_options(settings, name),
+        **toolset.channel_options(),
+        **tool_search_options(settings, realtime=False, local_model=name in LOCAL_LLMS),
+    )
