@@ -188,7 +188,10 @@ reasoning and Tool Search), registered on the kit but never attached to the sess
 room, where it would answer every turn; the kit closes it. Its model comes from
 `llamacpp.background_settings()` (the Agent tab's GGUF and context, Think · LLM's when
 empty, its own thinking), and `providers/llamacpp.py` keeps a server per role
-(conversation, background), one when both run the same configuration. Its usage is left out of the
+(conversation, background), one when both run the same configuration; an owned task
+starts it while the session opens (`vc_agent.warm_up_worker`). A task's room, marked by
+roomkit with `task_id`, gets no `toolset.SESSION_TOOLS` from `ToolSet.turn_config()`,
+and roomkit refuses a tool its turn did not declare. Its usage is left out of the
 session cost, which prices the conversation model. roomkit closes neither the
 classifier nor the thinker: `Engine._close_vc_agent()` does, after the kit.
 `agent_hooks.py` logs `ON_SPEAK_DECISION` and `ON_THOUGHT`; those diagnostics stay out

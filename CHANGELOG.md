@@ -187,8 +187,10 @@ Each released section is the source for that version's GitHub release notes.
   then speaks its result. "Tasks run on" picks the model: the conversation's, or a
   llama.cpp model set right there (its GGUF and context, Think · LLM's when left empty,
   and thinking, on by default), which keeps the work on this computer while a cloud
-  model talks. The chat shows when a task starts and ends, and an idle session is not
-  hung up while one runs.
+  model talks; it loads while the session opens, and the session details list it. A
+  task is not given the tools that act on the live conversation or the desktop (hang
+  up, the assistant's manner, voices' names, paste). The chat shows when a task starts
+  and ends, and an idle session is not hung up while one runs.
 - **Hang up when the conversation goes quiet** — optional, after a set delay (15 s by
   default), never during a tool call or while the assistant speaks; the chat says why
   the session closed.

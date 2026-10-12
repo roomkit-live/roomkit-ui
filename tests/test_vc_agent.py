@@ -332,7 +332,10 @@ async def test_a_background_task_works_with_the_session_tools_and_comes_back():
     from roomkit_ui.toolset import ToolSet
 
     tools = ToolSet(
-        builtin=[{"name": "get_current_time", "description": "Time.", "parameters": {}}],
+        builtin=[
+            {"name": "get_current_time", "description": "Time.", "parameters": {}},
+            {"name": "end_conversation", "description": "Hang up.", "parameters": {}},
+        ],
         cli=[],
         mcp=[],
     )
@@ -359,6 +362,8 @@ async def test_a_background_task_works_with_the_session_tools_and_comes_back():
 
     worker, relay = provider.calls
     assert "get_current_time" in {t.name for t in worker.tools}
+    # Away from the conversation, a task cannot hang it up.
+    assert "end_conversation" not in {t.name for t in worker.tools}
     assert "Three mails need an answer." in "\n".join(str(m.content) for m in relay.messages)
     assert said[0] == "Working in the background: Summarize this week's mails"
     assert said[1].startswith("Background work done")
@@ -478,7 +483,7 @@ def test_the_agent_tab_sets_the_tasks_model(qapp):
 
 async def test_a_task_runs_on_its_own_model_with_the_session_tools(qapp, monkeypatch):
     from roomkit import ChannelCategory, RoomKit, SMSChannel
-    from roomkit.providers.ai.base import AIResponse
+    from roomkit.providers.ai.base import AIResponse, AIToolCall
     from roomkit.providers.sms.mock import MockSMSProvider
     from vc_harness import FakeEngine
 
@@ -487,8 +492,18 @@ async def test_a_task_runs_on_its_own_model_with_the_session_tools(qapp, monkeyp
     from roomkit_ui.settings import _DEFAULTS
     from roomkit_ui.toolset import ToolSet
 
-    worker = MockAIProvider(
-        ai_responses=[AIResponse(content="Three mails.", usage={"input_tokens": 900})]
+    class Worker(MockAIProvider):
+        started = False
+
+        async def start(self):
+            self.started = True
+
+    hang_up = AIToolCall(id="c1", name="end_conversation", arguments={})
+    worker = Worker(
+        ai_responses=[
+            AIResponse(content="", tool_calls=[hang_up], usage={"input_tokens": 800}),
+            AIResponse(content="Three mails.", usage={"input_tokens": 900}),
+        ]
     )
     conversation = MockAIProvider(
         ai_responses=[AIResponse(content="You have three.", usage={"input_tokens": 7})]
@@ -497,7 +512,10 @@ async def test_a_task_runs_on_its_own_model_with_the_session_tools(qapp, monkeyp
     engine = Engine()
 
     async def tools(_settings, _provider):
-        builtin = [{"name": "get_current_time", "description": "Time.", "parameters": {}}]
+        builtin = [
+            {"name": "get_current_time", "description": "Time.", "parameters": {}},
+            {"name": "end_conversation", "description": "Hang up.", "parameters": {}},
+        ]
         return ToolSet(builtin=builtin, cli=[], mcp=[]), None
 
     monkeypatch.setattr(engine, "_load_vc_tools", tools)
@@ -511,6 +529,7 @@ async def test_a_task_runs_on_its_own_model_with_the_session_tools(qapp, monkeyp
     background = engine._vc_agent.worker_channel
     # A local model: every tool in its prompt, as for a local conversation model.
     assert background._tool_search is False
+    await until(lambda: worker.started)  # loaded while the session opens
 
     kit = RoomKit()
     kit.register_channel(SMSChannel("sms", provider=MockSMSProvider()))
@@ -532,13 +551,66 @@ async def test_a_task_runs_on_its_own_model_with_the_session_tools(qapp, monkeyp
     register_vc_hooks(kit, hooks)
 
     await kit.start_task("main", "ai", "Summarize this week's mails")
-    await until(lambda: worker.calls and conversation.calls and hooks.usage)
+    await until(lambda: len(worker.calls) == 2 and conversation.calls and hooks.usage)
     await kit.close()
 
     assert "get_current_time" in {t.name for t in worker.calls[0].tools}
+    assert "end_conversation" not in {t.name for t in worker.calls[0].tools}
+    # Called anyway, roomkit refuses it: never run.
+    told = "\n".join(str(m.content) for m in worker.calls[1].messages)
+    assert "end_conversation" in told and "is not declared" in told
     relay = "\n".join(str(m.content) for m in conversation.calls[0].messages)
     assert "Three mails." in relay
     # Never attached to the session room, where it would answer every turn.
     assert await kit.store.get_binding("main", "background") is None
     # Its tokens are another model's: not priced as the conversation's.
     assert [usage["input_tokens"] for usage in hooks.usage] == [7]
+
+
+async def test_the_tasks_model_loads_while_the_session_opens_and_says_if_it_cannot():
+    class Server:
+        def __init__(self, error=None):
+            self.error = error
+
+        async def start(self):
+            if self.error:
+                raise self.error
+
+    said: list[str] = []
+    await vc_agent.warm_up_worker(Server(), said.append)
+    assert said == []
+
+    await vc_agent.warm_up_worker(Server(RuntimeError("no space left")), said.append)
+    assert said == ["The background tasks' model did not start: no space left"]
+
+
+def test_the_session_details_list_the_tasks_model(monkeypatch):
+    from roomkit_ui.session_models import voice_channel_models
+
+    gguf = "/private/models/Ornith-Q8_0.gguf"
+    monkeypatch.setattr(
+        "roomkit_ui.providers.llamacpp.create",
+        lambda _settings, *, role: SimpleNamespace(model_name=gguf),
+    )
+    settings = {
+        "vc_background": True,
+        "vc_background_model": "llamacpp",
+        "vc_background_llamacpp_thinking": False,
+    }
+    agent, _ = _build(settings)
+
+    row = voice_channel_models(
+        settings,
+        stt=SimpleNamespace(),
+        stt_provider="local",
+        llm=MockAIProvider(),
+        tts=SimpleNamespace(),
+        agent=agent,
+    )[-1]
+
+    assert row == {
+        "role": "Background tasks · LLM",
+        "provider": "llamacpp",
+        "model": "Ornith-Q8_0.gguf",  # no private path in the details
+        "description": "Runs the background tasks. Thinking off.",
+    }

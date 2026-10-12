@@ -97,6 +97,15 @@ def voice_channel_models(
                 "Requires an active speaking decision and a model with structured responses.",
             )
         )
+    if agent.worker is not None:
+        models.append(
+            _part(
+                "Background tasks · LLM",
+                agent.worker_provider,
+                agent.worker_model,
+                agent.worker_note,
+            )
+        )
     return models
 
 

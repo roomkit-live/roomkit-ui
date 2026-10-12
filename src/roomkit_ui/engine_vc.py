@@ -62,7 +62,7 @@ from roomkit_ui.speaker_naming import (
 )
 from roomkit_ui.toolset import ToolSet, tool_search_options
 from roomkit_ui.tts import create_tts_provider, is_cached_tts, tts_cache_fields
-from roomkit_ui.vc_agent import BACKGROUND_WORKER, build_vc_agent
+from roomkit_ui.vc_agent import BACKGROUND_WORKER, build_vc_agent, warm_up_worker
 from roomkit_ui.vc_stt import CLOUD_STT_BUILDERS, build_turn_vad, stt_needs_turn_vad
 
 logger = logging.getLogger(__name__)
@@ -312,6 +312,11 @@ class VoiceChannelMixin:
         if self._vc_agent.worker is not None:
             self._vc_agent.worker_channel = _background_worker_channel(
                 settings, self._vc_agent, system_prompt, toolset, skills_registry, self
+            )
+            # Not awaited: the session opens while the tasks' model loads.
+            self._create_owned_task(  # type: ignore[attr-defined]
+                warm_up_worker(self._vc_agent.worker, self.session_notice.emit),  # type: ignore[attr-defined]
+                name="background-model",
             )
         return ai_channel, toolset.all, skills_registry
 

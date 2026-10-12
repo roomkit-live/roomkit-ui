@@ -151,9 +151,13 @@ and logs; the other add-ons report their absence in the chat.
   given tools (not a local model set without tool use). "Tasks run on" picks the model:
   the conversation's (the default), or a llama.cpp model set below it — a GGUF and a
   context (empty: Think · LLM's, and one server serves both), and Model thinking, on by
-  default since nobody waits on a task's first word. Its server starts at the first
-  task, and a different GGUF or context runs a second server beside the conversation's.
-  Not installed, the tasks stay on the conversation model, and the chat says why.
+  default since nobody waits on a task's first word. Its server starts while the
+  session opens, without holding it up (the chat says if it cannot), and a different
+  GGUF or context runs a second server beside the conversation's; the session details
+  list it as "Background tasks · LLM". Not installed, the tasks stay on the
+  conversation model, and the chat says why. Whatever the model, a task is not given
+  the tools that act on the live conversation or the desktop (`toolset.SESSION_TOOLS`:
+  hang up, attitudes, voices' names, paste); roomkit refuses one called anyway.
 
 The session's cost counts the background task's turns when they run on the conversation
 model (they are AI responses), never another model's, the classifier's or the thinker's.

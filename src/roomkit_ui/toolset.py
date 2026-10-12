@@ -35,6 +35,19 @@ DEFAULT_TOOL_SEARCH_TOKENS = 8000
 DEFAULT_TOOL_SEARCH_WINDOW_PCT = 10
 
 
+# Built-ins that act on the live conversation or the desktop: hang up, the
+# assistant's voice and manner, the voices' names, a paste into the focused
+# app.  A background task runs away from the conversation: it is given none.
+SESSION_TOOLS = frozenset(
+    {"end_conversation", "set_attitude", "list_attitudes", "name_speaker", "paste_text"}
+)
+
+
+def is_task_room(room: Any) -> bool:
+    """Whether *room* is one roomkit runs a background task in."""
+    return bool((getattr(room, "metadata", None) or {}).get("task_id"))
+
+
 @dataclass(frozen=True)
 class ToolSet:
     """The tools advertised to a provider, grouped by source."""
@@ -64,7 +77,8 @@ class ToolSet:
         it, where the agent would have no tool at all.  A turn config's tools
         reach every room and are checked as the metadata's are: one named
         like a tool the channel serves itself (skills, Tool Search) is left
-        out, where the constructor's ``tools=`` would refuse the channel.
+        out, where the constructor's ``tools=`` would refuse the channel.  A
+        task's room gets none of the ``SESSION_TOOLS``.
         """
         from roomkit import AIChannelTurnConfig
         from roomkit.providers.ai.base import AITool
@@ -78,8 +92,11 @@ class ToolSet:
             for t in self.all
         ]
 
-        async def provide(_binding: Any, _context: Any) -> Any:
-            return AIChannelTurnConfig(tools=list(tools))
+        task_tools = [tool for tool in tools if tool.name not in SESSION_TOOLS]
+
+        async def provide(_binding: Any, context: Any) -> Any:
+            in_task = is_task_room(getattr(context, "room", None))
+            return AIChannelTurnConfig(tools=list(task_tools if in_task else tools))
 
         return provide
 

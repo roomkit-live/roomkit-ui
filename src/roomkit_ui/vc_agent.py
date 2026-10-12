@@ -21,7 +21,9 @@ absence in the chat.
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -69,6 +71,8 @@ class VCAgent:
     worker_provider: str = ""
     worker: Any = None
     worker_channel: Any = None
+    worker_model: str = ""  # its model as the session details name it
+    worker_note: str = ""
     summary: list[dict] = field(default_factory=list)
     decision: SessionModel | None = None
     _closables: list[Any] = field(default_factory=list)
@@ -185,7 +189,7 @@ def _add_background(
     description = "long requests run as tasks"
     _add_worker(agent, settings, notice)
     if agent.worker is not None:
-        description += f", on {_model_label(agent.worker)}"
+        description += f", on {agent.worker_model}"
     agent.summary.append({"name": "Works in the background", "description": description})
 
 
@@ -198,14 +202,38 @@ def _add_worker(agent: VCAgent, settings: dict, notice: Callable[[str], None]) -
     from roomkit_ui.features import AI_PROVIDER_FEATURES, require
     from roomkit_ui.providers import llamacpp
 
+    task_settings = llamacpp.background_settings(settings)
     try:
         require(AI_PROVIDER_FEATURES["llamacpp"])
-        agent.worker = llamacpp.create(llamacpp.background_settings(settings), role="background")
+        agent.worker = llamacpp.create(task_settings, role="background")
     except Exception as exc:  # not installed, a bad setting: said in the chat
         logger.warning("Background model unavailable: %s", exc)
         notice(f"Background tasks run on the conversation model: {exc}")
         return
     agent.worker_provider = "llamacpp"
+    agent.worker_model = _model_label(agent.worker)
+    thinking = "on" if task_settings["vc_llamacpp_thinking"] else "off"
+    agent.worker_note = f"Runs the background tasks. Thinking {thinking}."
+
+
+async def warm_up_worker(worker: Any, notice: Callable[[str], None]) -> None:
+    """Start the tasks' model while the conversation goes on, so the first
+    task finds it loaded: llama.cpp loads it at each server start, and
+    downloads it on a first run.  A failure is said in the chat: the tasks
+    would fail on it too."""
+    start = getattr(worker, "start", None)
+    if start is None:  # a model with nothing to load
+        return
+    started = time.monotonic()
+    try:
+        await start()
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        logger.warning("Background model did not start: %s", exc)
+        notice(f"The background tasks' model did not start: {exc}")
+        return
+    logger.info("Background model ready in %.1f s", time.monotonic() - started)
 
 
 def _model_label(provider: Any) -> str:
