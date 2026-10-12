@@ -5,12 +5,14 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import time
 from dataclasses import dataclass
 from enum import Enum, auto
 from typing import Any
 
 from PySide6.QtCore import QObject, Signal
 
+from roomkit_ui.dictation_stream import DictationStream
 from roomkit_ui.paste import (
     PasteError,
     _activate_bundle,
@@ -53,7 +55,7 @@ class _SessionObjects:
     local_provider: Any = None
     local_backend: Any = None
     local_session: Any = None
-    local_flush_event: asyncio.Event | None = None
+    local_stream: DictationStream | None = None
     batch_mode: bool = False
 
     @property
@@ -62,15 +64,18 @@ class _SessionObjects:
 
     @property
     def empty(self) -> bool:
-        return not any((self.kit, self.channel, self.session, self.local_backend))
+        return not any(
+            (self.kit, self.channel, self.session, self.local_backend, self.local_provider)
+        )
 
 
 class STTEngine(DictationSessionMixin, QObject):
     """Records speech via a roomkit STT room and pastes the result.
 
-    Supports two providers:
+    Supports three providers:
     - **OpenAI**: ``RealtimeVoiceChannel`` with ``create_response=False``
-    - **Local**: ``VoiceChannel`` with ``SherpaOnnxSTTProvider`` + ``LocalAudioBackend``
+    - **Local**: warmed Sherpa-Onnx, streaming or offline (``VoiceChannel.flush_stt``)
+    - **Deepgram**: streaming, with explicit end of audio on Stop
     """
 
     recording_changed = Signal(bool)
@@ -98,11 +103,13 @@ class STTEngine(DictationSessionMixin, QObject):
         self._accumulated_text: list[str] = []
         self._transcription_event: asyncio.Event | None = None
         self._prev_app: str | None = None  # bundle ID of app that was focused before recording
-        # Local STT state (VoiceChannel + LocalAudioBackend)
+        # STT capture state (local/Deepgram, with a VoiceChannel for offline models)
         self._local_provider: Any = None
         self._local_backend: Any = None
         self._local_session: Any = None
-        self._local_flush_event: asyncio.Event | None = None
+        self._local_stream: DictationStream | None = None
+        self._cached_local_provider: Any = None
+        self._cached_local_key: tuple | None = None
         self._batch_mode: bool = False
 
     @property
@@ -194,6 +201,13 @@ class STTEngine(DictationSessionMixin, QObject):
             await asyncio.gather(self._task, return_exceptions=True)
         if self._cleanup_tasks:
             await asyncio.gather(*self._cleanup_tasks, return_exceptions=True)
+        await self._close_cached_local_stt()
+
+    async def _close_cached_local_stt(self) -> None:
+        provider, self._cached_local_provider = self._cached_local_provider, None
+        self._cached_local_key = None
+        if provider is not None:
+            await provider.close()
 
     # -- transcription callback ------------------------------------------------
 
@@ -325,9 +339,16 @@ class STTEngine(DictationSessionMixin, QObject):
         backend, session = objects.local_backend, objects.local_session
         if not (backend and session):
             return
+        started = time.monotonic()
         await backend.stop_listening(session)
+        # Capture delivers on the loop. Drain frames queued before the device
+        # stopped before sending EOF, so the very last syllable is included.
+        await asyncio.sleep(0)
 
-        if objects.batch_mode:
+        if objects.local_stream is not None:
+            self._accumulated_text.extend(await objects.local_stream.finish())
+            logger.info("Streaming STT finalized in %.0f ms", (time.monotonic() - started) * 1000)
+        elif objects.batch_mode:
             # Batch mode: flush accumulated audio through offline STT
             try:
                 result = await asyncio.wait_for(
@@ -340,13 +361,6 @@ class STTEngine(DictationSessionMixin, QObject):
                     self._accumulated_text.append(result.text.strip())
             except TimeoutError:
                 logger.warning("Batch STT timed out")
-        elif objects.local_flush_event is not None:
-            # Streaming mode: wait for final transcription from hook
-            objects.local_flush_event.clear()
-            try:
-                await asyncio.wait_for(objects.local_flush_event.wait(), timeout=3.0)
-            except TimeoutError:
-                logger.info("No final transcription received within timeout")
 
     async def _commit_and_wait(self, objects: _SessionObjects) -> None:
         """Send input_audio_buffer.commit and wait for the transcription."""
@@ -390,13 +404,13 @@ class STTEngine(DictationSessionMixin, QObject):
             local_provider=self._local_provider,
             local_backend=self._local_backend,
             local_session=self._local_session,
-            local_flush_event=self._local_flush_event,
+            local_stream=self._local_stream,
             batch_mode=self._batch_mode,
         )
         self._kit = self._channel = self._session = None
         self._provider = self._transport = None
         self._local_provider = self._local_backend = self._local_session = None
-        self._local_flush_event = None
+        self._local_stream = None
         self._batch_mode = False
         return objects
 
@@ -425,10 +439,19 @@ class STTEngine(DictationSessionMixin, QObject):
             raise
 
     async def _close_session(self, objects: _SessionObjects) -> None:
-        """Clean up a detached session without touching ``self``."""
+        """Clean up a detached session, retaining only a reusable warmed model."""
         try:
             if objects.is_local:
                 await self._close_local_session(objects)
+                if objects.local_stream is not None:
+                    await objects.local_stream.close()
+                    if (
+                        objects.local_stream.task.cancelled()
+                        and objects.local_provider is self._cached_local_provider
+                    ):
+                        # Cancelling asyncio.to_thread cannot stop a native
+                        # decoder. A new capture gets a fresh recognizer.
+                        self._cached_local_provider = self._cached_local_key = None
             elif objects.channel and objects.session:
                 try:
                     await objects.channel.end_session(objects.session)
@@ -450,6 +473,14 @@ class STTEngine(DictationSessionMixin, QObject):
                         await backend.close()
                     except Exception:
                         logger.debug("dictation teardown: backend.close failed", exc_info=True)
+                if (
+                    objects.local_provider is not None
+                    and objects.local_provider is not self._cached_local_provider
+                ):
+                    try:
+                        await objects.local_provider.close()
+                    except Exception:
+                        logger.debug("dictation teardown: provider.close failed", exc_info=True)
 
     @staticmethod
     async def _close_local_session(objects: _SessionObjects) -> None:

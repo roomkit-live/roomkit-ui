@@ -13,6 +13,7 @@ import logging
 from typing import Any
 
 from roomkit_ui.constants import DICTATION_DETECTS
+from roomkit_ui.dictation_stream import DictationStream
 from roomkit_ui.engine_audio import local_audio_backend
 from roomkit_ui.features import unavailable_reason
 from roomkit_ui.model_manager import build_stt_config, is_model_downloaded, is_streaming_model
@@ -69,7 +70,9 @@ class DictationSessionMixin:
     _local_provider: Any
     _local_backend: Any
     _local_session: Any
-    _local_flush_event: asyncio.Event | None
+    _local_stream: DictationStream | None
+    _cached_local_provider: Any
+    _cached_local_key: tuple | None
     _batch_mode: bool
     _to_input: bool
 
@@ -153,11 +156,11 @@ class DictationSessionMixin:
             self._discard_session()  # type: ignore[attr-defined]
             return False
 
-    # -- VoiceChannel dictation (shared by local + Deepgram) ------------------
+    # -- STT dictation (shared by local + Deepgram) ---------------------------
 
     async def _start_local_recording(self, settings: dict) -> bool:
-        """Sherpa-Onnx STT via VoiceChannel + LocalAudioBackend."""
-        built = self._build_local_stt(settings)
+        """Warm a Sherpa-Onnx model, then capture with its streaming/offline mode."""
+        built = await self._build_local_stt(settings)
         if built is None:
             return False
         stt, batch_mode, log_extra = built
@@ -166,12 +169,11 @@ class DictationSessionMixin:
             batch_mode=batch_mode,
             log_extra=log_extra,
             settings=settings,
-            log_partials=True,
             error_context="local",
         )
 
     async def _start_deepgram_recording(self, settings: dict) -> bool:
-        """Deepgram streaming STT via VoiceChannel + LocalAudioBackend."""
+        """Deepgram streaming STT over RoomKit's LocalAudioBackend."""
         built = self._build_deepgram_stt(settings)
         if built is None:
             return False
@@ -181,11 +183,10 @@ class DictationSessionMixin:
             batch_mode=batch_mode,
             log_extra=log_extra,
             settings=settings,
-            log_partials=False,
             error_context="deepgram",
         )
 
-    def _build_local_stt(self, settings: dict) -> tuple[Any, bool, dict[str, str]] | None:
+    async def _build_local_stt(self, settings: dict) -> tuple[Any, bool, dict[str, str]] | None:
         """Build a Sherpa-Onnx STT provider. Returns ``(stt, batch_mode, log_extra)``
         or ``None`` after emitting a user-facing error."""
         model_id = settings.get("stt_model", "")
@@ -216,15 +217,29 @@ class DictationSessionMixin:
         language = dictation_language(settings) or "en"
         translate = bool(settings.get("stt_translate", False))
         inference_device = settings.get("inference_device", "cpu")
-        config = build_stt_config(
-            model_id, language, translate=translate, provider=inference_device
-        )
-        # Dictation: the user controls start/stop, so disable endpoint
-        # detection — we get one final result on flush instead of splitting
-        # the transcription into segments at pauses.
-        config.enable_endpoint_detection = False
-        stt = SherpaOnnxSTTProvider(config)
         batch_mode = not is_streaming_model(model_id)
+        key = (model_id, language, translate, inference_device)
+        if self._cached_local_key == key:
+            stt = self._cached_local_provider
+        else:
+            await self._close_cached_local_stt()
+            config = build_stt_config(
+                model_id, language, translate=translate, provider=inference_device
+            )
+            # Explicit EOF finishes a dictation; pauses must not reset its decoder.
+            config.enable_endpoint_detection = False
+            stt = SherpaOnnxSTTProvider(config)
+            self._local_provider = stt  # Failed/cancelled warmup still owns cleanup.
+            warmup = asyncio.create_task(stt.warmup())
+            try:
+                await asyncio.shield(warmup)
+            except asyncio.CancelledError:
+                # Native model loading cannot be cancelled; let it finish before
+                # releasing the provider or allowing another capture to start.
+                await warmup
+                raise
+            if not batch_mode:
+                self._cached_local_key, self._cached_local_provider = key, stt
         log_extra = {
             "model": model_id,
             "mode": "batch" if batch_mode else "streaming",
@@ -269,31 +284,24 @@ class DictationSessionMixin:
         batch_mode: bool,
         log_extra: dict[str, str],
         settings: dict,
-        log_partials: bool,
         error_context: str,
     ) -> bool:
-        """Shared VoiceChannel session bring-up for dictation.
-
-        Creates the 16 kHz ``LocalAudioBackend``, wraps the STT provider in
-        a ``VoiceChannel``, registers the transcription hook, then wires
-        the session via ``backend.connect`` → ``bind_session`` →
-        ``start_listening``.
+        """Open 16 kHz capture with a finite stream or an offline VoiceChannel.
 
         Failures during this phase emit an error signal and discard the
         partially opened session so a retry can start fresh.
         """
         try:
-            await self._open_vc_dictation_session(
-                stt=stt,
-                # Draft dictation is explicitly finished by its button. Both
-                # providers implement transcribe(); flush the entire recording
-                # rather than waiting for streaming endpoint detection after
-                # the mic stops (local transducers have endpoints disabled).
-                batch_mode=batch_mode or self._to_input,
-                settings=settings,
-                log_partials=log_partials,
-                log_extra={**log_extra, "mode": "batch"} if self._to_input else log_extra,
-                provider_label=error_context,
+            if batch_mode:
+                await self._open_vc_dictation_session(stt=stt, settings=settings)
+            else:
+                await self._open_streaming_dictation(stt=stt, settings=settings)
+            extras = ", ".join(f"{k}={v}" for k, v in log_extra.items() if k != "mode")
+            logger.info(
+                "Dictation started: provider=%s, mode=%s, %s, rate=16000Hz",
+                error_context,
+                "batch" if batch_mode else "streaming",
+                extras,
             )
         except Exception as exc:
             logger.exception("Failed to start %s STT session", error_context)
@@ -302,39 +310,52 @@ class DictationSessionMixin:
             return False
         return True
 
-    async def _open_vc_dictation_session(
-        self,
-        *,
-        stt: Any,
-        batch_mode: bool,
-        settings: dict,
-        log_partials: bool,
-        log_extra: dict[str, str],
-        provider_label: str,
-    ) -> None:
-        """Create the VoiceChannel + backend + hooks and begin listening."""
-        from roomkit import (
-            ChannelBinding,
-            ChannelType,
-            HookExecution,
-            HookResult,
-            HookTrigger,
-            RoomKit,
-            VoiceChannel,
-        )
-        from roomkit.voice.pipeline import AudioPipelineConfig
-
+    async def _open_streaming_dictation(self, *, stt: Any, settings: dict) -> None:
+        """RoomKit capture → one provider stream whose input this app can finish."""
         self._local_provider = stt
-        self._batch_mode = batch_mode
+        backend = self._dictation_backend(settings)
+        self._local_backend = backend
+        stream = DictationStream(stt, lambda error: self._stream_failed(stream, error))
+        self._local_stream = stream
+        backend.on_audio_received(stream.feed)
+        self._local_session = await backend.connect("stt-room", "stt-user", "stt")
+        await backend.start_listening(self._local_session)
 
-        # The session is opened below, not by attach_channel (auto_connect).
-        backend = local_audio_backend(
+    def _stream_failed(self, stream: DictationStream, error: str) -> None:
+        if self._local_stream is stream:
+            self._fail_start(error)
+            self.cancel()
+
+    @staticmethod
+    def _dictation_backend(settings: dict) -> Any:
+        return local_audio_backend(
             input_sample_rate=16000,
             output_sample_rate=16000,
             channels=1,
             block_duration_ms=20,
             input_device=settings.get("input_device"),
         )
+
+    async def _open_vc_dictation_session(
+        self,
+        *,
+        stt: Any,
+        settings: dict,
+    ) -> None:
+        """Begin offline capture through a VoiceChannel with public flush_stt()."""
+        from roomkit import (
+            ChannelBinding,
+            ChannelType,
+            RoomKit,
+            VoiceChannel,
+        )
+        from roomkit.voice.pipeline import AudioPipelineConfig
+
+        self._local_provider = stt
+        self._batch_mode = True
+
+        # The session is opened below, not by attach_channel (auto_connect).
+        backend = self._dictation_backend(settings)
         self._local_backend = backend
 
         voice = VoiceChannel(
@@ -342,7 +363,7 @@ class DictationSessionMixin:
             stt=stt,
             backend=backend,
             pipeline=AudioPipelineConfig(),
-            batch_mode=batch_mode,
+            batch_mode=True,
         )
         self._channel = voice
 
@@ -351,36 +372,6 @@ class DictationSessionMixin:
         kit.register_channel(voice)
         await kit.create_room(room_id="stt-room")
         await kit.attach_channel("stt-room", "stt")
-
-        # Hooks: streaming mode only.  Batch mode flushes on stop via
-        # channel.flush_stt(), so no hook is needed during capture.
-        if not batch_mode:
-            accumulated = self._accumulated_text
-            self._local_flush_event = asyncio.Event()
-            flush_event = self._local_flush_event
-
-            if log_partials:
-
-                @kit.hook(
-                    HookTrigger.ON_PARTIAL_TRANSCRIPTION,
-                    execution=HookExecution.ASYNC,
-                )
-                async def _on_partial(result, ctx):
-                    text = result.text or ""
-                    logger.info("%s STT partial: %d chars", provider_label, len(text))
-                    logger.debug("%s STT partial text: %s", provider_label, text)
-
-            @kit.hook(HookTrigger.ON_TRANSCRIPTION)
-            async def _on_transcription(event, ctx):
-                # roomkit 0.10.0 passes a TranscriptionEvent (with .text),
-                # not the raw string it used to hand ON_TRANSCRIPTION hooks.
-                text = event.text
-                if text and text.strip():
-                    logger.info("%s STT final: %d chars", provider_label, len(text))
-                    logger.debug("%s STT final text: %s", provider_label, text)
-                    accumulated.append(text.strip())
-                flush_event.set()
-                return HookResult.block("dictation-only")
 
         # Connect backend, bind session, start listening.
         self._local_session = await backend.connect("stt-room", "stt-user", "stt")
@@ -391,10 +382,3 @@ class DictationSessionMixin:
         )
         voice.bind_session(self._local_session, "stt-room", binding)
         await backend.start_listening(self._local_session)
-
-        extras = ", ".join(f"{k}={v}" for k, v in log_extra.items())
-        logger.info(
-            "Dictation started: provider=%s, %s, rate=16000Hz",
-            provider_label,
-            extras,
-        )

@@ -256,10 +256,9 @@ def test_live_and_text_replies_prevent_dictation(window, state):
     window._on_state_changed(EngineState.IDLE)
 
 
-@pytest.mark.parametrize("streaming", [False, True])
-async def test_real_roomkit_capture_flushes_all_audio_on_finish(qapp, monkeypatch, streaming):
+async def test_offline_roomkit_capture_flushes_all_audio_on_finish(qapp, monkeypatch):
     source = MockCaptureSource()
-    provider = MockSTTProvider(["les derniers mots"], streaming=streaming)
+    provider = MockSTTProvider(["les derniers mots"], streaming=False)
     backend = local_audio_backend(input_sample_rate=16000, source=source)
     monkeypatch.setattr(stt_sessions, "local_audio_backend", lambda **_: backend)
     engine = STTEngine()
@@ -269,10 +268,9 @@ async def test_real_roomkit_capture_flushes_all_audio_on_finish(qapp, monkeypatc
     async def open_session():
         return await engine._start_vc_dictation(
             stt=provider,
-            batch_mode=not streaming,
+            batch_mode=True,
             log_extra={},
             settings={},
-            log_partials=False,
             error_context="test",
         )
 

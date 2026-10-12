@@ -349,6 +349,11 @@ Each released section is the source for that version's GitHub release notes.
   without it and says so; Voice Channel mode is unchanged.
 
 ### Fixed
+- **Streaming dictation latency** — Kroko, other local streaming models and Deepgram
+  process speech during capture, then finalize the last words when recording stops.
+  The message microphone no longer forces them into batch mode. Local models load
+  before recording; streaming models stay warm between completed dictations with
+  unchanged settings, avoiding a model reload for every message.
 - **MCP App output in conversation history** — preserve the tool's page alongside its
   input, result and the data fetched by the page itself. Restore them when reopening
   a conversation or restarting the app, including views that use `tools/call` to

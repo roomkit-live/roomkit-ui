@@ -97,7 +97,7 @@ graph TB
 | **Conversations** | `conversations.py`, `memory.py`, `widgets/conversation_history.py` | One RoomKit room per thread, local catalogue and transcript snapshots, selected-thread recap and recall, sliding history panel |
 | **Navigation panels** | `widgets/sliding_panel.py`, `widgets/conversation_drawer.py`, `widgets/session_drawer.py`, `session_models.py` | Shared branded shell, animation and focus restoration; history or current session details over the unchanged transcript layout. Session signals carry the active models by role (resolved STT/LLM/TTS, decision, thinker, Realtime stages), tools, skills, usage and personality. Model metadata reads only named safe fields from SDK configurations; hangup clears the panel. |
 | **Wake word** | `wakeword/`, `widgets/wakeword_wizard.py` | Shared microphone lifetime, VAD-gated capture, whisper-encoder embeddings matched by DTW against an enrolled fingerprint |
-| **Dictation** | `stt_engine.py`, `stt_sessions.py`, `hotkey.py`, `paste.py`, `paste_windows.py`, `tray.py` | Global hotkey → STT recording (OpenAI/local/Deepgram) → clipboard paste into the focused app |
+| **Dictation** | `stt_engine.py`, `stt_sessions.py`, `dictation_stream.py`, `hotkey.py`, `paste.py`, `paste_windows.py`, `tray.py` | Composer or global hotkey → STT recording (OpenAI/local/Deepgram) → draft insertion or paste into the focused app |
 | **Speakers** | `speaker_manager.py`, `enrollment.py`, `speaker_roster.py`, `speaker_naming.py`, `widgets/voice_name_dialog.py` | Speaker profile persistence (JSON) and embedding extraction for the local diarization; with Meta Muse, the voices it labels, the names put on them (a click in the chat, or the assistant's `name_speaker`), the user's voice for primary-speaker mode, and who is who in each turn's prompt |
 | **MCP** | `mcp_manager.py`, `mcp_config.py`, `mcp_auth.py`, `mcp_app_bridge.py`, `url_policy.py`, `widgets/mcp_app_*.py` | MCP server connections (stdio/SSE/HTTP) on the 2026 protocol when the server offers it, the instructions each server publishes (handed to roomkit's `server_instructions=` with the tools), OAuth2 flow, MCP App hosting (local server, request filter, JSON-RPC bridge) |
 | **Skills** | `skill_manager.py`, `skill_git.py`, `skill_well_known.py`, `skills_sh_client.py` | Skill discovery from git/local sources, skills.sh search and installs, registry building via `roomkit.skills` |
@@ -190,9 +190,17 @@ until the engine returns to IDLE **after** microphone cleanup. Cancellation supp
 pending result and waits for teardown, including during startup; window/app close drains
 it. Wake word suspension follows `busy_changed`, through final transcription and cleanup.
 For drafts, OpenAI disables server VAD and commits once after stopping capture, with the
-dictation language passed in RoomKit's provider configuration. Local and Deepgram providers
-use RoomKit batch capture and `flush_stt()` so pressing Finish includes the final words
-without requiring a provider endpoint. Their global-shortcut path retains streaming.
+dictation language passed in RoomKit's provider configuration. Local streaming models and
+Deepgram use `DictationStream` for both destinations: RoomKit's `LocalAudioBackend` feeds
+`STTProvider.transcribe_stream()` during capture. Stop drains captured frames then sends
+EOF to finalize the last words without waiting for silence. The bounded queue reports
+overflow instead of dropping speech. Offline models keep `VoiceChannel.flush_stt()`.
+Local models warm up before recording. A completed streaming dictation keeps its model
+loaded for the next capture, with a fresh decoder stream; changing the model, language,
+translation task or inference device rebuilds it. Cancellation invalidates this cache,
+since cancelling an asyncio task cannot stop native decoding already running in a thread.
+Cancelling model warmup waits for that thread before releasing the provider. Shutdown
+closes the retained provider as well as any capture still in progress.
 
 ### Wake word
 
