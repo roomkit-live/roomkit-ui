@@ -22,8 +22,12 @@ def test_all_concatenates_every_source_in_dispatch_order():
 
 def test_without_mcp_keeps_the_hand_authored_sources():
     # Built-in and CLI schemas are ours and known-good; only MCP's are
-    # server-supplied, so only MCP gets shed on retry.
-    assert ToolSet(builtin=BUILTIN, cli=CLI, mcp=MCP).without_mcp == [*BUILTIN, *CLI]
+    # server-supplied, so only MCP gets shed on retry — and with them, what
+    # their servers said about using them.
+    toolset = ToolSet(builtin=BUILTIN, cli=CLI, mcp=MCP, instructions={"fs": "Read first."})
+
+    assert toolset.without_mcp.all == [*BUILTIN, *CLI]
+    assert "server_instructions" not in toolset.without_mcp.channel_options()
 
 
 def test_has_mcp_is_false_when_only_cli_tools_are_declared():

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 # session_info truncates for display anyway; this just keeps a seeded --help
@@ -50,20 +50,27 @@ def is_task_room(room: Any) -> bool:
 
 @dataclass(frozen=True)
 class ToolSet:
-    """The tools advertised to a provider, grouped by source."""
+    """The tools advertised to a provider, grouped by source.
+
+    *instructions* are what the MCP servers published on using their tools,
+    by the label the model reads them under (``MCPManager.instructions``):
+    they go wherever the MCP tools go.
+    """
 
     builtin: list[dict]
     cli: list[dict]
     mcp: list[dict]
+    instructions: dict[str, str] = field(default_factory=dict)
 
     @property
     def all(self) -> list[dict]:
         return [*self.builtin, *self.cli, *self.mcp]
 
     @property
-    def without_mcp(self) -> list[dict]:
-        """The set to retry with when MCP schemas break a provider's session."""
-        return [*self.builtin, *self.cli]
+    def without_mcp(self) -> ToolSet:
+        """The set to retry with when MCP schemas break a provider's session:
+        no MCP tool, so none of their servers' instructions either."""
+        return ToolSet(builtin=self.builtin, cli=self.cli, mcp=[])
 
     @property
     def has_mcp(self) -> bool:
@@ -109,11 +116,19 @@ class ToolSet:
         Search hides tools behind ``find_tools`` once the catalogue is large;
         the built-ins are what the model calls unprompted (end_conversation,
         set_attitude), so they always stay declared.
+
+        With MCP tools come their servers' instructions: roomkit adds them to
+        every system prompt the channel composes (after the app's own, before
+        the skills), so a prompt the app sets again (an attitude, the memory
+        recap) keeps them once, and Tool Search does not hide them.
         """
-        return {
+        options: dict[str, Any] = {
             "tool_timeout_seconds": None,
             "tool_search_pinned": [t["name"] for t in self.builtin],
         }
+        if self.mcp and self.instructions:
+            options["server_instructions"] = dict(self.instructions)
+        return options
 
 
 def tool_search_options(

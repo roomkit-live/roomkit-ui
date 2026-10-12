@@ -398,7 +398,8 @@ PAGE_SPECS = (
             ),
             SearchTarget(
                 "MCP servers",
-                "serveurs outils integrations OAuth autorisation skills compétences publiées",
+                "serveurs outils integrations OAuth autorisation skills compétences publiées "
+                "instructions consignes",
                 "mcp.catalog.search",
                 (("tabs", 0),),
                 fallback="mcp.catalog.empty.button",

@@ -49,6 +49,12 @@ def uses_skills(server: dict[str, Any]) -> bool:
     return bool(server.get("skills", True))
 
 
+def uses_instructions(server: dict[str, Any]) -> bool:
+    """Whether what this server publishes on using its tools reaches the model
+    (on unless the user turned it off for it)."""
+    return bool(server.get("instructions", True))
+
+
 def has_enabled_mcp_servers(raw: Any) -> bool:
     """Return True if *raw* contains at least one enabled MCP server config."""
     return bool(enabled_mcp_servers(raw))

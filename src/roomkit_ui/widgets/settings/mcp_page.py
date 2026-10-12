@@ -22,6 +22,7 @@ from roomkit_ui.mcp_config import (
     is_blank_mcp_server,
     mcp_server_problem,
     parse_mcp_servers,
+    uses_instructions,
     uses_skills,
     validate_mcp_http_url,
 )
@@ -101,6 +102,13 @@ class _MCPPage(QWidget):
             "Skills the server publishes reach the assistant, which reads one when it needs "
             "it. Before a CLI tool runs on a skill's behalf, you are asked.",
             self._skills_check,
+        )
+        self._instructions_check = SettingsToggle("Pass its instructions to the model", True)
+        enabled.add_row(
+            "Pass its instructions to the model",
+            "What the server says about using its tools joins the assistant's instructions, "
+            "marked as the server's text. Very long instructions are cut; the log says so.",
+            self._instructions_check,
         )
         edit_layout.addWidget(enabled)
         section = SettingsSection("Connection")
@@ -183,6 +191,7 @@ class _MCPPage(QWidget):
         self._auth_combo.currentIndexChanged.connect(self._on_auth_changed)
         self._enabled_check.toggled.connect(self._sync_to_model)
         self._skills_check.toggled.connect(self._sync_to_model)
+        self._instructions_check.toggled.connect(self._sync_to_model)
         for field in (
             self._name_edit,
             self._command_edit,
@@ -240,6 +249,7 @@ class _MCPPage(QWidget):
         for w in (
             self._enabled_check,
             self._skills_check,
+            self._instructions_check,
             self._name_edit,
             self._command_edit,
             self._args_edit,
@@ -255,6 +265,7 @@ class _MCPPage(QWidget):
 
         self._enabled_check.setChecked(srv.get("enabled", True))
         self._skills_check.setChecked(uses_skills(srv))
+        self._instructions_check.setChecked(uses_instructions(srv))
         self._name_edit.setText(srv.get("name", ""))
         self._command_edit.setText(srv.get("command", ""))
         self._args_edit.setText(srv.get("args", ""))
@@ -280,6 +291,7 @@ class _MCPPage(QWidget):
         for w in (
             self._enabled_check,
             self._skills_check,
+            self._instructions_check,
             self._name_edit,
             self._command_edit,
             self._args_edit,
@@ -307,6 +319,7 @@ class _MCPPage(QWidget):
             "id": uuid.uuid4().hex,
             "enabled": True,
             "skills": True,
+            "instructions": True,
             "name": "",
             "transport": "stdio",
             "command": "",
@@ -374,6 +387,7 @@ class _MCPPage(QWidget):
         srv = self._servers[row]
         srv["enabled"] = self._enabled_check.isChecked()
         srv["skills"] = self._skills_check.isChecked()
+        srv["instructions"] = self._instructions_check.isChecked()
         srv["name"] = self._name_edit.text().strip()
         srv["transport"] = MCP_TRANSPORTS[self._transport_combo.currentIndex()][1]
         srv["command"] = self._command_edit.text().strip()

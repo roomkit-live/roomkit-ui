@@ -53,6 +53,14 @@ Each released section is the source for that version's GitHub release notes.
   is active, a CLI tool runs only once you allow it for the conversation (no answer within
   60 s refuses). Settings → Integrations → MCP servers → "Use its skills" turns a server's
   skills off.
+- **Instructions from MCP servers** — what a server publishes on using its tools when it
+  connects (resolve the dice rolls itself, the names it accepts, which skill unlocks which
+  tools) now reaches the model, in the Voice Channel, its background tasks, typed turns
+  and realtime sessions. They come after your own prompt, under the server's name and set
+  apart as that server's content, and stay there once through an attitude change, the
+  memory recap and Tool Search. A server's text past 8192 characters is cut, and the log
+  says so. Settings → Integrations → MCP servers → "Pass its instructions to the model"
+  turns them off for a server.
 - **Spoken language in General** — the language you speak is set once, in Settings →
   General, for every conversation's transcription; Listen · STT links to it. Dictation
   follows it, or sets its own (another language or Auto-detect). A language chosen before
@@ -271,9 +279,9 @@ Each released section is the source for that version's GitHub release notes.
   skills, speakers and conversations in `~/Library/Application Support/RoomKit UI`. What
   older versions left in `~/.local/share/roomkit-ui` moves there once at startup; a
   folder already at its new home is never overwritten.
-- **roomkit `0.24.0` → `0.98.0`**, which brings the new providers, the model and voice
+- **roomkit `0.24.0` → `0.99.0`**, which brings the new providers, the model and voice
   catalogs, the conversation store, the shared microphone and the MCP servers' skills
-  above. The app absorbs its
+  and instructions above. The app absorbs its
   behaviour changes: roomkit's own tool-call timeouts give way to the app's (MCP 60 s,
   each CLI tool its own), the built-ins stay declared when Tool Search activates, failed
   tool calls are raised so every provider reads them as failures (Gemini read a returned
@@ -281,8 +289,8 @@ Each released section is the source for that version's GitHub release notes.
   in the chat, and a Voice Channel turn the provider refuses transiently is retried twice.
 - **mcp `1.x` → `2.0`.** A server is spoken to on the 2026 protocol when it offers it
   (`server/discover`), on the initialize handshake otherwise, as mcp's own client does:
-  a server on the 2026 protocol declares its extensions there only. PyYAML joins the core
-  dependencies, for roomkit's check of a served skill's frontmatter.
+  a server on the 2026 protocol declares its extensions there only. PyYAML, which roomkit
+  reads a skill's frontmatter with, comes with roomkit's core.
 - **Model lists from roomkit's catalogs** — the realtime model and voice dropdowns (every
   Gemini Live voice, OpenAI's marin and cedar, Aura-2) and the Voice Channel's Claude,
   OpenAI and Gemini lists. A saved id outside the list is kept, never replaced.

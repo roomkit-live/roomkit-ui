@@ -17,11 +17,8 @@ requires-python = ">=3.12"
 dependencies = [
     "PySide6-Essentials>=6.7",
     "qasync>=0.27",
-    "roomkit[local-audio,webrtc-aec]>=0.98.0",
+    "roomkit[local-audio,webrtc-aec]>=0.99.0",
     "mcp>=2.0",
-    # roomkit checks a skill an MCP server serves against its YAML frontmatter;
-    # its own `mcp` extra, which brings it, pins mcp below 2.
-    "pyyaml>=6",
     "markdown-it-py>=3.0",
     "httpx>=0.27",
     "keyring>=25.0",
@@ -29,23 +26,23 @@ dependencies = [
 
 [project.optional-dependencies]
 # ── Cloud backends ────────────────────────────────────────────────────────
-anthropic = ["roomkit[anthropic]>=0.98.0"]
+anthropic = ["roomkit[anthropic]>=0.99.0"]
 # Also covers the "Local (vLLM / Ollama)" LLM provider and xAI Grok realtime,
 # both of which speak the OpenAI wire protocol through the `openai` SDK.
-openai = ["roomkit[openai,realtime-openai]>=0.98.0"]
-gemini = ["roomkit[gemini,realtime-gemini]>=0.98.0"]
+openai = ["roomkit[openai,realtime-openai]>=0.99.0"]
+gemini = ["roomkit[gemini,realtime-gemini]>=0.99.0"]
 # `deepgram` is the STT SDK (dictation + Voice Channel), `realtime-deepgram`
 # the websocket transport for the Voice Agent.  Both ship in this extra.
-deepgram = ["roomkit[deepgram,realtime-deepgram]>=0.98.0"]
-elevenlabs = ["roomkit[elevenlabs,realtime-elevenlabs]>=0.98.0"]
-gradium = ["roomkit[gradium]>=0.98.0"]
+deepgram = ["roomkit[deepgram,realtime-deepgram]>=0.99.0"]
+elevenlabs = ["roomkit[elevenlabs,realtime-elevenlabs]>=0.99.0"]
+gradium = ["roomkit[gradium]>=0.99.0"]
 # Microsoft Foundry speech: MAI-Transcribe (websocket) and Azure Speech TTS,
 # MAI-Voice included (REST).  No Azure SDK: roomkit speaks the wire protocol.
-azure-speech = ["roomkit[azure-speech]>=0.98.0"]
+azure-speech = ["roomkit[azure-speech]>=0.99.0"]
 # Meta Muse Voice Transcribe: streaming STT over Meta's websocket, no SDK.
-meta-stt = ["roomkit[meta-stt]>=0.98.0"]
+meta-stt = ["roomkit[meta-stt]>=0.99.0"]
 # TypeSafe's Jev answers the Voice Channel's speaking decision (~150 ms a call).
-typesafe = ["roomkit[typesafe]>=0.98.0"]
+typesafe = ["roomkit[typesafe]>=0.99.0"]
 
 # ── Local inference ───────────────────────────────────────────────────────
 # sherpa-onnx powers local STT, Piper TTS, VAD and speaker diarization.
@@ -54,7 +51,7 @@ typesafe = ["roomkit[typesafe]>=0.98.0"]
 # without it and every `uv sync` uninstalls the libraries.  Declare it
 # explicitly until the upstream metadata is fixed.
 local-voice = [
-    "roomkit[sherpa-onnx]>=0.98.0",
+    "roomkit[sherpa-onnx]>=0.99.0",
     "sherpa-onnx-core>=1.13",
 ]
 
@@ -63,22 +60,22 @@ local-voice = [
 # Same reasoning roomkit applies to its own `buzz` / `livekit` extras.
 # pocket-tts and smart-turn (below) stay out too; qwen3-tts, neutts and
 # smart-turn pin conflicting transformers versions ([tool.uv] conflicts).
-qwen3-tts = ["roomkit[qwen-tts]>=0.98.0"]
-neutts = ["roomkit[neutts]>=0.98.0"]
+qwen3-tts = ["roomkit[qwen-tts]>=0.99.0"]
+neutts = ["roomkit[neutts]>=0.99.0"]
 
 # A local GGUF model with nothing else to install: roomkit downloads a pinned
 # llama-server build (SHA-256 checked) and the model at first use, and speaks
 # to it over the OpenAI API.  The extra itself is light (openai, httpx).
-llamacpp = ["roomkit[llamacpp]>=0.98.0"]
+llamacpp = ["roomkit[llamacpp]>=0.99.0"]
 
 # Kyutai's Pocket TTS: local, CPU-friendly, voice cloning from a clip.  Outside
 # `all` like the two above: pocket-tts pulls torch (the CUDA build on Linux).
-pocket-tts = ["roomkit[pocket-tts]>=0.98.0"]
+pocket-tts = ["roomkit[pocket-tts]>=0.99.0"]
 
 # Smart Turn turn detector (Voice Channel): onnxruntime runs the model and
 # transformers' WhisperFeatureExtractor feeds it. Outside `all`: it needs
 # transformers>=5.5, which qwen-tts's 4.57.3 pin and neutts's 5.1.0 refuse.
-smart-turn = ["roomkit[smart-turn]>=0.98.0"]
+smart-turn = ["roomkit[smart-turn]>=0.99.0"]
 
 # ── Desktop features ──────────────────────────────────────────────────────
 # Global hotkey + system-wide dictation. Needs a local STT model to transcribe.

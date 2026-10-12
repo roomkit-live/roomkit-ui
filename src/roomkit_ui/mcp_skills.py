@@ -29,6 +29,9 @@ _REQUEST_TIMEOUT = 10
 # Unavailable skills named in the chat at most; the log has them all.
 _NAMED_UNAVAILABLE = 5
 
+# Characters of a server's label at most: roomkit refuses a longer one.
+_MAX_LABEL = 64
+
 
 def declares_skills(session: Any) -> bool:
     """Whether a connected session's server declared the skills extension."""
@@ -93,12 +96,15 @@ class SkillServer:
 
 
 def skill_label(name: str, taken: set[str]) -> str:
-    """The label a server's skills are named under (``hugging_face:hf-cli``):
-    its name as an identifier, never one another server holds."""
+    """The label a server goes by with the model: its skills are named under
+    it (``hugging_face:hf-cli``), its instructions headed by it.  Its name as
+    an identifier of 64 characters at most, as roomkit takes one, never one
+    another server holds."""
     base = slugify_tool_name(name) or "mcp"
     label, n = base, 2
     while label in taken:
-        label = f"{base}_{n}"
+        suffix = f"_{n}"
+        label = base[: _MAX_LABEL - len(suffix)] + suffix
         n += 1
     return label
 

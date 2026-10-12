@@ -1,6 +1,6 @@
 # Features
 
-> _Generated: 2026-06-11 — updated 2026-10-12 for roomkit 0.98.0 — re-run /project-review to update_
+> _Generated: 2026-06-11 — updated 2026-10-12 for roomkit 0.99.0 — re-run /project-review to update_
 
 Implementation details for each feature are in [technical.md](technical.md);
 system context in [architecture.md](architecture.md).
@@ -296,6 +296,13 @@ makes the assistant answer only utterances attributed to the enrolled primary sp
   60 s without an answer). "Use its skills" on a server's page turns them off; a listing
   that fails or a skill roomkit refuses is named in the chat. (`mcp_skills.py`,
   `skill_approval.py`, `widgets/skill_approval_dialog.py`)
+- **Instructions from MCP servers**: what a server publishes on using its tools (dice to
+  resolve, names it accepts, which skill unlocks which tools) reaches the model in every
+  mode the server's tools do — Voice Channel, its background tasks, typed turns,
+  realtime — after the user's prompt, under the server's label and set apart as that
+  server's content. An attitude or the memory recap leaves them in place, once, and Tool
+  Search does not hide them. "Pass its instructions to the model" on a server's page
+  turns them off. (`mcp_manager.py`, `toolset.py`)
 - Dispatch order: engine built-ins, built-ins, CLI tools, then the owning MCP session. A
   failed call is reported to the model as a failure on every provider.
 - **Tool search** (Settings → Integrations, below the tabs): with many tools, roomkit

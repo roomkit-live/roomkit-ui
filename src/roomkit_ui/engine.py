@@ -534,6 +534,7 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, TextMix
 
         *session_builtins* are built-ins only this session serves (the
         engine handles them), declared before MCP tools claim their names.
+        What the servers published on using their tools comes with them.
         """
         cli_tools = await self._setup_cli_tools(settings)
         mcp_tools = await self._setup_mcp_tools(settings)
@@ -549,7 +550,8 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, TextMix
             self.mcp_status.emit(
                 f"MCP tools not offered (name taken or invalid): {', '.join(dropped)}"
             )
-        return ToolSet(builtin=builtin, cli=cli_tools, mcp=mcp_tools)
+        instructions = self._mcp.instructions() if self._mcp is not None else {}
+        return ToolSet(builtin=builtin, cli=cli_tools, mcp=mcp_tools, instructions=instructions)
 
     async def _setup_cli_tools(self, settings: dict) -> list[dict]:
         """Build tools for each declared CLI binary."""

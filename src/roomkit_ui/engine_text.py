@@ -8,6 +8,7 @@ WebSocketChannel delivers through in-process callbacks, with no socket opened.
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import logging
 from datetime import UTC, datetime
 from typing import Any
@@ -50,10 +51,9 @@ class TextMixin:
             self._kit = kit
             toolset, skills = await self._load_vc_tools(settings, provider_name)  # type: ignore[attr-defined]
             # Hangup is a voice action. It must not cut off a written goodbye.
-            toolset = type(toolset)(
+            toolset = dataclasses.replace(
+                toolset,
                 builtin=[t for t in toolset.builtin if t["name"] != "end_conversation"],
-                cli=toolset.cli,
-                mcp=toolset.mcp,
             )
             provider = create_ai_provider(provider_name, settings)
             try:

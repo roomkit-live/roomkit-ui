@@ -217,6 +217,8 @@ by name, use **Manage** on an entry to edit it, or add a new one. Skills shows i
 skills with a **Browse skills.sh** button at the top and a **Manage sources** link for
 folders/repositories. MCP and CLI editors keep
 environment variables and other advanced options in a disclosure below the main fields.
+An MCP server's page also says whether its skills and the instructions it publishes on
+using its tools reach the assistant (both on by default).
 
 **Diagnostics** groups **Recorded audio**, **Pipeline capture** and **Telemetry**.
 Filter WAV files by name or source, play them, or open either output folder. Deletion

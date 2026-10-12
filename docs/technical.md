@@ -1,6 +1,6 @@
 # Technical Reference
 
-> _Generated: 2026-06-11 — updated 2026-10-12 for roomkit 0.98.0 — re-run /project-review to update_
+> _Generated: 2026-06-11 — updated 2026-10-12 for roomkit 0.99.0 — re-run /project-review to update_
 
 System context lives in [architecture.md](architecture.md); feature-to-code mapping in
 [features.md](features.md); setup steps in [onboarding.md](onboarding.md).
@@ -12,7 +12,7 @@ System context lives in [architecture.md](architecture.md); feature-to-code mapp
 | Language | Python | 3.12+ |
 | GUI | PySide6-Essentials (Qt 6); PySide6-Addons via the `mcp-apps` extra | 6.11.1 |
 | Async/Qt bridge | qasync | 0.28.0 |
-| Voice/AI framework | roomkit (core: `local-audio`, `webrtc-aec`; every backend through an app extra) | 0.98.0 |
+| Voice/AI framework | roomkit (core: `local-audio`, `webrtc-aec`; every backend through an app extra) | 0.99.0 |
 | Tool protocol | mcp | 2.0.0 |
 | HTTP | httpx | 0.28.1 |
 | Secrets | keyring | 25.7.0 |
@@ -177,6 +177,24 @@ the user's approval: `SkillApprovals` emits `skill_approval_requested`, the wind
 (`skill_approval_dialog`, Refuse by default), and no answer within 60 s refuses. Calls
 waiting together share one question; roomkit keeps a yes for the conversation and that
 version of the skill's files. A session's end refuses and closes a question still open.
+
+### Instructions from MCP servers
+
+A server may publish how to use its tools in the handshake: `session.instructions` reads
+the one `negotiate_era` settled (`DiscoverResult.instructions` on the 2026 protocol,
+`InitializeResult.instructions` otherwise). `MCPManager` keeps it per server (its id,
+else its name: a reconnection replaces it), unless "Pass its instructions to the model"
+is off for that server (the entry's `instructions` key, `mcp_config.uses_instructions`);
+`instructions()` gives them by the server's label (`skill_label`, the label its skills
+carry). `ToolSet.instructions` carries them with the MCP tools, and
+`ToolSet.channel_options()` hands them to every channel built with those tools as
+roomkit's `server_instructions=` (0.99, RMK-692): the Voice Channel's AIChannel, its
+background worker, the typed turns' AIChannel and the RealtimeVoiceChannel. The app never
+writes them into its own prompt: roomkit adds them to each system prompt it composes,
+after the app's and before the skills, fenced in `<server_instructions>` and cut at 8192
+characters with a warning in the log. `set_system_prompt` and `reconfigure_session` (an
+attitude, the memory recap) therefore keep them once, and Tool Search leaves them in the
+prompt. The no-MCP realtime retry (`ToolSet.without_mcp`) sheds them with the tools.
 
 ### Voice Channel agent
 

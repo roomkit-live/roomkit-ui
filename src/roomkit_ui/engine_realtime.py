@@ -269,6 +269,8 @@ class RealtimeMixin:
 
         Only MCP is shed: its schemas are server-supplied and arbitrary,
         whereas built-in and CLI schemas are hand-authored and known-good.
+        Its servers' instructions go with it: they say how to use tools the
+        retried session no longer has.
         And only when the provider refused what the session declared
         (``_refuses_session_config``): a bad key, the network or a quota is
         the session's real error, which shedding MCP would only hide behind a
@@ -279,7 +281,7 @@ class RealtimeMixin:
         """
         from roomkit import RealtimeVoiceChannel, RoomKit
 
-        async def attempt(media: _RealtimeMedia, tools: list[dict]) -> None:
+        async def attempt(media: _RealtimeMedia, tools: ToolSet) -> None:
             self._session = await self._start_session(
                 RoomKit,
                 RealtimeVoiceChannel,
@@ -288,20 +290,20 @@ class RealtimeMixin:
                 system_prompt,
                 media.voice,
                 media.sample_rate,
-                tools,
+                tools.all,
                 self._handle_tool_call,  # type: ignore[attr-defined]
                 provider_config=provider_config,
                 settings=settings,
                 pipeline=media.pipeline,
                 skills=skills,
                 tool_options={
-                    **toolset.channel_options(),
+                    **tools.channel_options(),
                     **tool_search_options(settings, realtime=True),
                 },
             )
 
         try:
-            await attempt(media, toolset.all)
+            await attempt(media, toolset)
             return media, toolset.all
         except Exception as exc:
             if not (toolset.has_mcp and _refuses_session_config(exc)):
@@ -317,7 +319,7 @@ class RealtimeMixin:
         self.mcp_status.emit(  # type: ignore[attr-defined]
             f"MCP tools disabled — the provider refused them: {_brief(refusal)}"
         )
-        return media, toolset.without_mcp
+        return media, toolset.without_mcp.all
 
     async def _start_session(
         self,

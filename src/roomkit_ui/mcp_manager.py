@@ -22,7 +22,12 @@ from typing import Any
 
 from roomkit_ui.cli_exec import resolve_command, search_path
 from roomkit_ui.env_config import parse_env_block
-from roomkit_ui.mcp_config import mcp_server_problem, uses_skills, validate_mcp_http_url
+from roomkit_ui.mcp_config import (
+    mcp_server_problem,
+    uses_instructions,
+    uses_skills,
+    validate_mcp_http_url,
+)
 from roomkit_ui.mcp_skills import (
     SKILLS_EXTENSION,
     SessionSkillServer,
@@ -181,6 +186,8 @@ class MCPManager:
         self._app_tools: dict[str, dict[str, str]] = {}  # tool name → {uri, server}
         # Servers that publish skills (and may serve them), in connection order.
         self._skill_sessions: list[tuple[str, Any]] = []
+        # What each server published on using its tools: its id → (name, text).
+        self._instructions: dict[str, tuple[str, str]] = {}
         self._close_event: asyncio.Event | None = None
         self._tasks: list[asyncio.Task] = []  # one long-lived task per server
         self._hook_installed = False
@@ -242,6 +249,7 @@ class MCPManager:
             self._register_tools(session, tools, name)
             if uses_skills(cfg) and declares_skills(session):
                 self._skill_sessions.append((name, session))
+            self._keep_instructions(cfg, session, name)
             connected = True
             logger.info("MCP server %r: %d tools", name, len(tools))
             ready.set()
@@ -309,6 +317,27 @@ class MCPManager:
                             "uri": resource_uri,
                             "server": name,
                         }
+
+    def _keep_instructions(self, cfg: dict[str, Any], session: Any, name: str) -> None:
+        """Keep what *session*'s server published on using its tools.
+
+        Read from the handshake ``negotiate_era`` settled: ``server/discover``
+        on the 2026 protocol, ``initialize`` otherwise.  Kept by server (its
+        id, else its name), so connecting it again replaces what it said
+        before.  Nothing is kept when it published nothing, or when its user
+        keeps it from the model.
+        """
+        key = str(cfg.get("id") or name)
+        text = getattr(session, "instructions", None)
+        if not isinstance(text, str) or not text.strip():
+            self._instructions.pop(key, None)
+            return
+        if not uses_instructions(cfg):
+            logger.info("MCP server %r: its instructions are not passed on (turned off)", name)
+            self._instructions.pop(key, None)
+            return
+        self._instructions[key] = (name, text)
+        logger.info("MCP server %r: %d characters of instructions", name, len(text))
 
     @staticmethod
     async def _safe_close_stack(stack: AsyncExitStack, name: str) -> None:
@@ -441,6 +470,7 @@ class MCPManager:
         self._tool_to_server.clear()
         self._app_tools.clear()
         self._skill_sessions.clear()
+        self._instructions.clear()
         if self._hook_installed:
             _uninstall_unraisable_hook()
             self._hook_installed = False
@@ -461,6 +491,20 @@ class MCPManager:
             taken.add(label)
             servers.append(SkillServer(label=label, name=name, server=SessionSkillServer(session)))
         return servers
+
+    def instructions(self) -> dict[str, str]:
+        """What the connected servers published on using their tools, each
+        under the label the model reads it by (``skill_label``): roomkit's
+        ``server_instructions=``, which sets each apart, bounds it and logs a
+        cut.  A server that published none, or whose instructions its user
+        turned off, is not there."""
+        taken: set[str] = set()
+        labelled: dict[str, str] = {}
+        for name, text in self._instructions.values():
+            label = skill_label(name, taken)
+            taken.add(label)
+            labelled[label] = text
+        return labelled
 
     def get_app_tool_info(self, tool_name: str) -> dict[str, str] | None:
         """Return ``{uri, server}`` if *tool_name* is an MCP App tool."""
