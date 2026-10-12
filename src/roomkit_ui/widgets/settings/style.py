@@ -251,7 +251,8 @@ def settings_stylesheet(theme: str) -> str:
             border: none; padding: 0; background: transparent;
         }}
         QDialog#settingsPanel QAbstractSpinBox:focus {{ border-color: {c["accent"]}; }}
-        QDialog#settingsPanel QComboBox:disabled, QDialog#settingsPanel QLineEdit:disabled {{
+        QDialog#settingsPanel QComboBox:disabled, QDialog#settingsPanel QLineEdit:disabled,
+        QDialog#settingsPanel QAbstractSpinBox:disabled {{
             color: {c["muted"]}; border-color: {c["border"]};
         }}
         /* macOS menu frames follow the OS appearance; use a themed list popup. */
