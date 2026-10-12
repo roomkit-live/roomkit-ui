@@ -242,6 +242,13 @@ QCheckBox::indicator:checked {{
     background: {c["ACCENT_BLUE"]};
     border-color: {c["ACCENT_BLUE"]};
 }}
+QCheckBox:disabled {{
+    color: {c["TEXT_SECONDARY"]};
+}}
+QCheckBox::indicator:checked:disabled {{
+    background: {c["TEXT_SECONDARY"]};
+    border-color: {c["TEXT_SECONDARY"]};
+}}
 """
 
 
