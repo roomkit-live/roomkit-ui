@@ -19,6 +19,16 @@ uv run mypy src/                 # Type check
 uv run bandit -r src/ -c pyproject.toml  # Security scan
 ```
 
+To try a roomkit change before its release, `--with-editable` overlays the checkout
+next door (`../roomkit`) for one command. Use `--no-sync` to preserve optional backends
+and custom wheels in the existing environment; this does not update the project's
+dependency declaration. Omit `--with-editable` to use the installed RoomKit version.
+
+```bash
+uv run --no-sync --with-editable ../roomkit python -m roomkit_ui
+QT_QPA_PLATFORM=offscreen uv run --no-sync --with-editable ../roomkit pytest -q
+```
+
 `all` leaves four extras out. `qwen3-tts`, `neutts` and `smart-turn` pin conflicting
 `transformers` versions: they are declared in `[tool.uv].conflicts`, mirrored by
 `features.EXCLUSIVE_EXTRAS` (a test keeps the two equal), and at most one goes in an
