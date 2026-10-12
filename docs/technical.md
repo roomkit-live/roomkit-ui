@@ -36,10 +36,10 @@ src/roomkit_ui/
 ├── engine_audio.py             # Pipeline builders: AEC, denoise, VAD, diarization, recording, DSP pool
 ├── engine_callbacks.py, engine_tools.py, toolset.py, builtin_tools.py   # Callbacks, tool dispatch
 ├── hooks.py, watchdog.py, idle_hangup.py, cleanup.py, memory.py, aec_dump.py
-├── mcp_manager.py, mcp_config.py, mcp_auth.py, mcp_app_bridge.py, mcp_skills.py, url_policy.py
+├── mcp_manager.py, mcp_config.py, mcp_http_auth.py, mcp_auth.py, mcp_app_bridge.py, mcp_skills.py, url_policy.py
 ├── cli_tools.py, cli_exec.py, cli_help.py, cli_tools_config.py, env_config.py
 ├── skill_manager.py, skill_git.py, skill_well_known.py, skills_sh_client.py, skill_approval.py
-├── stt_engine.py, stt_sessions.py, hotkey.py, paste.py, paste_windows.py, tray.py, sounds.py
+├── stt_engine.py, stt_sessions.py, dictation_stream.py, hotkey.py, paste.py, paste_windows.py, tray.py, sounds.py
 ├── speaker_manager.py, enrollment.py
 ├── speaker_roster.py, speaker_naming.py   # Voices Meta Muse tells apart: names, the user's voice, name_speaker
 ├── model_catalog.py, model_download.py, model_manager.py, download_flight.py
@@ -249,9 +249,17 @@ Settings dialog (destroyed on close) checks its widget still exists before touch
 
 ## Security implementation
 
+- **MCP HTTP authentication** — `mcp_http_auth.HTTPAuthentication` maps the five form
+  choices to the existing protected header block. Bearer adds its prefix, raw API key
+  preserves the exact Authorization value, and Basic encodes username/password together.
+  None and OAuth remove manual Authorization; the OAuth transport supplies it itself.
+  Loading a legacy None + Authorization configuration recognizes Bearer or valid Basic,
+  preserving unrecognized values as raw keys. Removing Authorization deletes its stored
+  secret too. `mcp_server_problem` validates required credentials before connection.
 - **Secrets** — API keys, MCP OAuth client secrets and secret-looking env values of MCP
   servers and CLI tools are stored in the keyring (`cli_tool:<id>:env:<KEY>` for CLI
-  tools); QSettings keeps `KEY=`. A URL carrying credentials counts as a secret whatever
+  tools); QSettings keeps `KEY=`. Every header value of an MCP HTTP server is a secret
+  (`mcp_server:<id>:header:<name, lowercased>`); QSettings keeps `Name:`. A URL carrying credentials counts as a secret whatever
   the variable is called. A value written to the QSettings fallback while the keyring was
   locked is read first and moved back into the keyring once it works.
 - **MCP OAuth** — stored tokens record the server URL they were issued for; when the

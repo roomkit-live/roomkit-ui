@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import json
 import uuid
+from urllib.parse import urlparse
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSignalBlocker, Qt
 from PySide6.QtWidgets import (
     QComboBox,
     QHBoxLayout,
@@ -19,12 +20,18 @@ from PySide6.QtWidgets import (
 from shiboken6 import isValid
 
 from roomkit_ui.mcp_config import (
+    invalid_header_lines,
     is_blank_mcp_server,
     mcp_server_problem,
     parse_mcp_servers,
     uses_instructions,
     uses_skills,
     validate_mcp_http_url,
+)
+from roomkit_ui.mcp_http_auth import (
+    MCP_AUTH_MODES,
+    HTTPAuthentication,
+    separate_authorization,
 )
 from roomkit_ui.widgets.settings.catalog_controls import CatalogNotice
 from roomkit_ui.widgets.settings.controls import (
@@ -46,7 +53,6 @@ MCP_TRANSPORTS = [
     ("Server-sent events (SSE)", "sse"),
     ("Streamable HTTP", "streamable_http"),
 ]
-MCP_AUTH_MODES = [("None", "none"), ("OAuth2", "oauth2")]
 
 
 class _MCPPage(QWidget):
@@ -135,11 +141,27 @@ class _MCPPage(QWidget):
         self._url_label = QLabel("Server URL")
         form.addRow(self._url_label, self._url_edit)
         self._auth_combo = QComboBox()
-        for title, _value in MCP_AUTH_MODES:
-            self._auth_combo.addItem(title)
+        for title, value in MCP_AUTH_MODES:
+            self._auth_combo.addItem(title, value)
         self._auth_label = QLabel("Authentication")
         form.addRow(self._auth_label, self._auth_combo)
+        self._auth_credential = QLineEdit()
+        self._auth_credential.setEchoMode(QLineEdit.Password)
+        self._auth_credential_label = QLabel("API token")
+        form.addRow(self._auth_credential_label, self._auth_credential)
+        self._auth_username = QLineEdit()
+        self._auth_username.setPlaceholderText("Your username")
+        self._auth_username_label = QLabel("Username")
+        form.addRow(self._auth_username_label, self._auth_username)
+        self._auth_password = QLineEdit()
+        self._auth_password.setEchoMode(QLineEdit.Password)
+        self._auth_password.setPlaceholderText("Your password")
+        self._auth_password_label = QLabel("Password")
+        form.addRow(self._auth_password_label, self._auth_password)
         section.content.addLayout(form)
+        self._auth_hint = label("", "settingsHint")
+        self._auth_hint.setWordWrap(True)
+        section.content.addWidget(self._auth_hint)
         self._connection_status = FeedbackLabel()
         section.content.addWidget(self._connection_status)
         edit_layout.addWidget(section)
@@ -168,7 +190,14 @@ class _MCPPage(QWidget):
         self._env_edit.setAcceptRichText(False)
         self._env_edit.setPlaceholderText("KEY=VALUE (one per line)")
         self._env_edit.setFixedHeight(90)
-        details.addRow("Environment variables", self._env_edit)
+        self._env_label = QLabel("Environment variables")
+        details.addRow(self._env_label, self._env_edit)
+        self._headers_edit = QTextEdit()
+        self._headers_edit.setAcceptRichText(False)
+        self._headers_edit.setPlaceholderText("X-Workspace: my-workspace (one header per line)")
+        self._headers_edit.setFixedHeight(72)
+        self._headers_label = QLabel("Additional HTTP headers")
+        details.addRow(self._headers_label, self._headers_edit)
         self._oauth_client_id = QLineEdit()
         self._oauth_client_id.setPlaceholderText("Auto-detected via dynamic registration")
         self._oauth_client_id_label = QLabel("OAuth client ID")
@@ -197,12 +226,16 @@ class _MCPPage(QWidget):
             self._command_edit,
             self._args_edit,
             self._url_edit,
+            self._auth_credential,
+            self._auth_username,
+            self._auth_password,
             self._oauth_client_id,
             self._oauth_client_secret,
             self._oauth_scopes,
         ):
             field.textChanged.connect(self._sync_to_model)
         self._env_edit.textChanged.connect(self._sync_to_model)
+        self._headers_edit.textChanged.connect(self._on_headers_changed)
 
     @staticmethod
     def _entry(server: dict) -> tuple[str, str, str, str]:
@@ -255,6 +288,7 @@ class _MCPPage(QWidget):
             self._args_edit,
             self._url_edit,
             self._env_edit,
+            self._headers_edit,
             self._transport_combo,
             self._auth_combo,
             self._oauth_client_id,
@@ -271,17 +305,12 @@ class _MCPPage(QWidget):
         self._args_edit.setText(srv.get("args", ""))
         self._url_edit.setText(srv.get("url", ""))
         self._env_edit.setPlainText(srv.get("env", ""))
+        self._fill_authentication(HTTPAuthentication.from_server(srv))
 
         transport = srv.get("transport", "stdio")
         for i, (_label, val) in enumerate(MCP_TRANSPORTS):
             if val == transport:
                 self._transport_combo.setCurrentIndex(i)
-                break
-
-        auth = srv.get("auth", "none")
-        for i, (_label, val) in enumerate(MCP_AUTH_MODES):
-            if val == auth:
-                self._auth_combo.setCurrentIndex(i)
                 break
 
         self._oauth_client_id.setText(srv.get("oauth_client_id", ""))
@@ -297,6 +326,7 @@ class _MCPPage(QWidget):
             self._args_edit,
             self._url_edit,
             self._env_edit,
+            self._headers_edit,
             self._transport_combo,
             self._auth_combo,
             self._oauth_client_id,
@@ -310,7 +340,7 @@ class _MCPPage(QWidget):
             str(srv.get("id", "") or srv.get("name", "")), str(srv.get("url", ""))
         )
         self._stack.setCurrentIndex(1)
-        self._refresh_connection_status()
+        self._sync_to_model()
 
     # -- add / remove --------------------------------------------------------
 
@@ -326,6 +356,7 @@ class _MCPPage(QWidget):
             "args": "",
             "url": "",
             "env": "",
+            "headers": "",
             "auth": "none",
             "oauth_client_id": "",
             # Empty until the user supplies their own client secret.
@@ -346,6 +377,42 @@ class _MCPPage(QWidget):
 
     # -- edit form -----------------------------------------------------------
 
+    def _fill_authentication(self, auth: HTTPAuthentication) -> None:
+        fields = (
+            self._auth_combo,
+            self._auth_credential,
+            self._auth_username,
+            self._auth_password,
+            self._headers_edit,
+        )
+        blockers = [QSignalBlocker(field) for field in fields]
+        try:
+            self._auth_combo.setCurrentIndex(max(0, self._auth_combo.findData(auth.mode)))
+            self._auth_credential.setText(auth.credential)
+            self._auth_username.setText(auth.username)
+            self._auth_password.setText(auth.password)
+            self._headers_edit.setPlainText(auth.headers)
+        finally:
+            del blockers
+
+    def _authentication(self) -> HTTPAuthentication:
+        return HTTPAuthentication(
+            mode=self._auth_combo.currentData(),
+            credential=self._auth_credential.text(),
+            username=self._auth_username.text(),
+            password=self._auth_password.text(),
+            headers=self._headers_edit.toPlainText(),
+        )
+
+    def _on_headers_changed(self) -> None:
+        # Pasting an old Authorization line adopts its explicit authentication
+        # method instead of leaving a misleading None next to credentials.
+        raw = self._headers_edit.toPlainText()
+        if separate_authorization(raw)[0]:
+            self._fill_authentication(HTTPAuthentication.from_server({"headers": raw}))
+            self._update_field_visibility(MCP_TRANSPORTS[self._transport_combo.currentIndex()][1])
+        self._sync_to_model()
+
     def _on_transport_changed(self, _index: int) -> None:
         transport = MCP_TRANSPORTS[self._transport_combo.currentIndex()][1]
         self._update_field_visibility(transport)
@@ -364,6 +431,8 @@ class _MCPPage(QWidget):
         self._args_edit.setVisible(is_stdio)
         self._url_label.setVisible(not is_stdio)
         self._url_edit.setVisible(not is_stdio)
+        self._env_label.setVisible(is_stdio)
+        self._env_edit.setVisible(is_stdio)
 
         # Auth fields: only for HTTP transports
         is_http = not is_stdio
@@ -372,6 +441,30 @@ class _MCPPage(QWidget):
 
         self._auth_label.setVisible(is_http)
         self._auth_combo.setVisible(is_http)
+        for widget in (self._auth_credential_label, self._auth_credential):
+            widget.setVisible(is_http and auth in {"bearer", "api_key"})
+        for widget in (
+            self._auth_username_label,
+            self._auth_username,
+            self._auth_password_label,
+            self._auth_password,
+        ):
+            widget.setVisible(is_http and auth == "basic")
+        self._auth_credential_label.setText("API token" if auth == "bearer" else "API key")
+        self._auth_credential.setPlaceholderText(
+            "Paste your token" if auth == "bearer" else "Paste the full Authorization value"
+        )
+        hints = {
+            "none": "No Authorization header is sent. Optional headers are in Advanced options.",
+            "bearer": "The Bearer prefix is added automatically. Your token is stored securely.",
+            "api_key": "Sent as the Authorization value, with no prefix. Stored securely.",
+            "basic": "Your credentials are stored securely and sent using Basic authentication.",
+            "oauth2": "Authorize this server in your browser. RoomKit manages its access token.",
+        }
+        self._auth_hint.setText(hints.get(auth, ""))
+        self._auth_hint.setVisible(is_http)
+        self._headers_label.setVisible(is_http)
+        self._headers_edit.setVisible(is_http)
         self._oauth_client_id_label.setVisible(is_oauth)
         self._oauth_client_id.setVisible(is_oauth)
         self._oauth_client_secret_label.setVisible(is_oauth)
@@ -394,6 +487,7 @@ class _MCPPage(QWidget):
         srv["args"] = self._args_edit.text().strip()
         srv["url"] = self._url_edit.text().strip()
         srv["env"] = self._env_edit.toPlainText()
+        srv["headers"] = self._authentication().header_block()
         srv["auth"] = MCP_AUTH_MODES[self._auth_combo.currentIndex()][1]
         srv["oauth_client_id"] = self._oauth_client_id.text().strip()
         srv["oauth_client_secret"] = self._oauth_client_secret.text().strip()
@@ -408,17 +502,24 @@ class _MCPPage(QWidget):
             return
         server = self._servers[self._editing_row]
         problem = mcp_server_problem(server)
-        if not problem and server.get("transport") != "stdio":
+        is_http = server.get("transport") != "stdio"
+        if not problem and is_http:
             try:
                 validate_mcp_http_url(server.get("url"))
             except ValueError as exc:
                 problem = str(exc)
-        self._connection_status.set_status(
-            f"Check connection settings: {problem}"
-            if problem
-            else "Connection will be attempted when a conversation starts.",
-            "error" if problem else "neutral",
-        )
+        if not problem and is_http:
+            problem = self._authentication().problem()
+        headers = str(server.get("headers") or "") if is_http else ""
+        if not problem and (ignored := invalid_header_lines(headers)):
+            problem = f'{ignored} header line(s) are not "Name: value" and will not be sent'
+        if problem:
+            self._connection_status.set_status(f"Check connection settings: {problem}", "error")
+            return
+        status = "Connection will be attempted when a conversation starts."
+        if headers.strip() and urlparse(str(server.get("url") or "")).scheme == "http":
+            status += " Its headers travel unencrypted over http."
+        self._connection_status.set_status(status, "neutral")
 
     # -- OAuth actions -------------------------------------------------------
 

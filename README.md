@@ -4,14 +4,22 @@
   <img src="assets/logo.svg" width="80" height="80" alt="RoomKit UI">
 </p>
 
-A desktop voice assistant built with [PySide6](https://doc.qt.io/qtforpython-6/) and [RoomKit](https://github.com/roomkit-live/roomkit). Supports real-time voice conversations with **Google Gemini**, **OpenAI**, **Anthropic**, **Deepgram**, **ElevenLabs**, **xAI Grok**, and **local LLMs**.
+A native desktop assistant for **text, images and Live voice**, built with [PySide6](https://doc.qt.io/qtforpython-6/) and [RoomKit](https://github.com/roomkit-live/roomkit). Keep separate conversations, bring your own tools, and choose cloud or local models.
 
 ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue)
 ![License MIT](https://img.shields.io/badge/license-MIT-green)
 
 <p align="center">
-  <img src="assets/screenshot.png" width="300" alt="RoomKit UI screenshot">
+  <img src="assets/screenshots/conversation-dark.png" width="280" alt="A conversation with an image attachment in RoomKit UI">
+  <img src="assets/screenshots/live-light.png" width="280" alt="Live voice with a transcript and tool activity in the light theme">
 </p>
+
+[Explore the interface](https://www.roomkit.live/roomkit-ui/) ·
+[Feature guide](docs/features.md) · [Changelog](CHANGELOG.md)
+
+This README and the screenshots describe the current `main` branch. Features under
+**Unreleased** in the changelog are coming in the next release; use a source checkout
+to try them today.
 
 ## Download
 
@@ -41,6 +49,8 @@ xattr -cr "RoomKit UI.app"
 
 ## Features
 
+- **Text and images** — streaming replies, an input that grows to eight lines, image files, camera capture, clipboard paste and drag-and-drop; review attachments before sending
+- **Dictate a message** — speak into the input, edit the transcript, then send when ready
 - **Two conversation modes** — Speech-to-Speech (realtime) or Voice Channel (STT → LLM → TTS)
 - **Realtime providers** — Gemini Live (Gemini 3.8 Live options follow the selected model), OpenAI Realtime, OpenAI GPT-Live (full-duplex), Deepgram Voice Agent, ElevenLabs Conversational AI, xAI Grok
 - **Voice Channel providers** — LLM: Anthropic (Claude Sonnet 5.5 by default), OpenAI, Gemini, local vLLM / Ollama, or llama.cpp; STT: local sherpa-onnx, Deepgram, Gradium, Azure MAI-Transcribe, Meta Muse Voice Transcribe; TTS: Piper, Pocket TTS, Qwen3-TTS, NeuTTS, ElevenLabs, Gradium, Azure MAI-Voice. Model lists come from roomkit's catalogs
@@ -48,7 +58,7 @@ xattr -cr "RoomKit UI.app"
 - **Local TTS** — offline text-to-speech with Piper, Pocket TTS (seven languages, voice clone), Qwen3-TTS (voice clone), and NeuTTS (voice clone)
 - **Who is speaking** — with Meta Muse as the STT, the voices are told apart live, no enrolment: click a speaker in the chat to name them, the assistant names those who introduce themselves, and "Listen only to primary speaker" follows your name. With local STT, enrolled voices are recognised offline
 - **Wake word** — say an enrolled phrase to open a session; detection runs locally and nothing leaves the machine until it fires. Optional hang-up once the conversation goes quiet
-- **Conversation history** — separate threads you can reopen and continue; each keeps its own context and tool results
+- **Conversation history** — separate threads with automatic titles, 30 recent conversations, title search, rename and delete; reopen a thread with its own context, images and saved tool results
 - **Real-time voice** — full-duplex voice conversation with interruption support; in Voice Channel mode, barge-in can be off, on any speech, or on words only (an "ok" or "mm-hmm" lets the assistant go on)
 - **Clean speech** — the Voice Channel voice skips emoji, tool JSON and stage directions
 - **Animated VU meter** — ambient glow visualization for mic and speaker audio levels
@@ -56,8 +66,8 @@ xattr -cr "RoomKit UI.app"
 - **Session usage** — token counts in the session panel, with a cost estimate in Voice Channel mode
 - **System-wide dictation** — global hotkey triggers STT and pastes text into the focused app (macOS, Linux, Windows)
 - **Local STT models** — offline dictation with downloadable sherpa-onnx models (Whisper, Parakeet, Zipformer)
-- **MCP tool support** — connect external tools via Model Context Protocol (stdio, SSE, HTTP) with OAuth2 authentication
-- **MCP Apps** — render HTML UIs served by MCP servers inline in the chat
+- **MCP tool support** — stdio, SSE and streamable HTTP, with Bearer, raw API key, Basic or OAuth 2.0 authentication
+- **MCP Apps** — interactive tool UIs inline in the chat; saved results reopen with the conversation without running tools again
 - **CLI tools** — declare a local command-line binary and the assistant can run it
 - **Echo cancellation** — WebRTC or Speex AEC for hands-free use
 - **Noise suppression** — RNNoise or GTCRN denoiser for noisy environments
@@ -114,6 +124,7 @@ the dialog links to **System Settings → Privacy & Security → Camera**.
 | `dictation` | Global-hotkey dictation (implies `local-voice`) |
 | `wakeword` | Wake word detection (implies `local-voice`; onnxruntime runs the whisper encoder it matches with) |
 | `mcp-apps` | Embedded MCP App web UIs, notification sounds, audio preview |
+| `camera` | Camera capture and review for image attachments |
 | `telemetry` | OpenTelemetry / OTLP trace export |
 | `qwen3-tts`, `neutts` | Voice cloning — see the note below |
 | `pocket-tts` | Kyutai's Pocket TTS: local, CPU-friendly, seven languages, voice cloning from a clip |
@@ -175,12 +186,17 @@ writes, so a CUDA wheel of another version mixes two builds' libraries.
 ## Usage
 
 1. Open **Conversations** with the top-left icon, then click **Settings** at the bottom
-2. Add your API key in **Providers & keys**, then choose your mode and provider in **Conversation**
-3. Close **Settings** — other edits save whenever the dialog closes, Esc included;
-   the light/dark theme applies immediately — then press the **Live waveform icon** at the right of the input to start a
-   voice session
-4. Speak naturally — the AI will respond in real-time
-5. Press the **red hang-up icon** to end the session
+2. Add your provider's API key in **Providers & keys**, or configure a local model.
+   For text and images, select your LLM under **Conversation → Voice Channel → Think · LLM**;
+   for Live, choose **Realtime** or your **Voice Channel** pipeline
+3. Close **Settings** to save, Esc included; the light/dark theme applies immediately
+4. Type a message and press **Enter** or the send arrow. **Shift+Enter** adds a line;
+   the input grows to eight visual lines, then scrolls. Use **+** to choose images or
+   take a photo, paste a copied image, or drop image files into the input. Review up to
+   four attachments and send with or without text. Image understanding needs a model
+   that supports vision
+5. With an empty draft, press the **Live waveform icon** to start talking. The red
+   hang-up icon ends Live while keeping the conversation on screen
 
 The compact home has one input row: **+** for images and camera photos, text, a dictation
 microphone, and the Live icon. Configure a chat model to send text and images. Click the
@@ -204,6 +220,7 @@ The **top-left history icon** opens a sliding panel with **Recent** (the 30 most
 active conversations), search across all conversation titles, and **New conversation**.
 Titles start with your first message, then the configured text model summarizes the
 subject when available. Use **⋯ → Rename** or **F2** to choose your own title.
+**⋯ → Delete…** removes a conversation and its locally saved content after confirmation.
 Hanging up keeps the transcript on screen. Open a saved
 conversation to read it, then press Live to continue that thread; the microphone stays
 off while browsing. End Live before switching conversations. Earlier shared history
@@ -231,6 +248,21 @@ environment variables and other advanced options in a disclosure below the main 
 An MCP server's page also says whether its skills and the instructions it publishes on
 using its tools reach the assistant (both on by default).
 
+For an SSE or streamable HTTP server, select **Authentication** explicitly:
+
+| Method | What to enter |
+| --- | --- |
+| None | No Authorization header |
+| API token (Bearer) | Your token; the Bearer prefix is added automatically |
+| API key (raw Authorization) | The exact value the server expects in Authorization |
+| Username & password (Basic) | Separate username and password fields |
+| OAuth 2.0 | Connect through the browser; optional client details under Advanced options |
+
+Tokens and passwords are masked. Additional headers, such as `X-Workspace`, belong
+under **Advanced options**; every header value uses the existing secret store.
+Older `Authorization` headers are recognized and moved into the matching form fields.
+Choosing None removes manual Authorization; OAuth manages its own authorization.
+
 **Diagnostics** groups **Recorded audio**, **Pipeline capture** and **Telemetry**.
 Filter WAV files by name or source, play them, or open either output folder. Deletion
 asks you to confirm the displayed files; files outside the selection remain untouched.
@@ -242,7 +274,14 @@ installed version, a copy-version-info action and the full MIT license.
 1. Go to **Settings > Models & components > Local models** and download a speech-to-text model
 2. Go to **Settings > Dictation**, enable dictation, choose your shortcut, and set
    **Speech recognition provider** to **Local**, then select your model
-3. Press the global hotkey to record, release to transcribe and paste
+3. Press the global hotkey to record, then press it again to finish and paste
+
+Streaming models, including Kroko, transcribe during recording. The local model loads
+before recording starts and stays warm for the next dictation; batch models transcribe
+after capture stops. The input microphone uses the same settings but inserts the result
+into your draft instead of another app. On macOS, if automatic paste is blocked, the
+transcript remains on the clipboard for manual ⌘V; check Accessibility and Automation
+permissions for the app or terminal that launched it.
 
 ### Wake word
 
@@ -277,10 +316,10 @@ src/roomkit_ui/
 ├── realtime_providers.py       # Realtime provider builders and per-provider audio wiring
 ├── hooks.py, watchdog.py, idle_hangup.py, cleanup.py   # UI events, stall nudge, auto-hangup, loop cleanup
 ├── builtin_tools.py, toolset.py, memory.py             # Built-in tools, tool grouping, conversation memory
-├── mcp_*.py, url_policy.py     # MCP client, OAuth2, MCP Apps bridge and URL policy
+├── mcp_*.py, url_policy.py     # MCP client, HTTP authentication, MCP Apps bridge and URL policy
 ├── cli_*.py, env_config.py     # CLI tools
 ├── skill_*.py, skills_sh_client.py                      # Agent Skills sources and skills.sh
-├── stt_*.py, hotkey.py, paste*.py, tray.py              # System-wide dictation
+├── stt_*.py, dictation_stream.py, hotkey.py, paste*.py, tray.py  # Composer and global dictation
 ├── model_*.py, download_flight.py                       # Local model catalog and downloads
 ├── speaker_manager.py, enrollment.py                    # Speaker profiles for diarization
 ├── speaker_roster.py, speaker_naming.py                 # Voices Meta Muse tells apart, and their names
@@ -293,6 +332,20 @@ src/roomkit_ui/
 ```
 
 Every module is described in the Architecture section of [CLAUDE.md](CLAUDE.md).
+
+### Interface screenshots
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/settings-dark.png">
+  <img src="assets/screenshots/settings-light.png" alt="Conversation settings with Realtime and Voice Channel cards, and the transcription, reasoning and speech pipeline" width="960">
+</picture>
+
+The [screenshot gallery](assets/screenshots/README.md) contains real widgets with demo
+content in both themes. Regenerate it without connecting providers or opening devices:
+
+```bash
+.venv/bin/python scripts/capture_screenshots.py
+```
 
 ## Building
 

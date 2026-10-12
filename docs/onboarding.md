@@ -1,6 +1,6 @@
 # Developer Onboarding
 
-> _Generated: 2026-06-11 — updated 2026-10-12 for roomkit 0.98.0 — re-run /project-review to update_
+> _Generated: 2026-06-11 — updated 2026-10-12 for roomkit 0.99.0 — re-run /project-review to update_
 
 Goal: productive in under 30 minutes. Deeper context:
 [architecture.md](architecture.md) · [technical.md](technical.md) · [features.md](features.md)
@@ -32,7 +32,11 @@ three (they pin conflicting `transformers` versions), e.g.
 
 First run: top-left history icon → **Settings** → **Providers & keys** → paste your API key → **Conversation** →
 pick your mode and provider → close Settings (other edits save on close, Esc included; themes apply immediately) → **Live waveform icon** at the right of the input →
-talk.
+talk. For typed messages, select a conversation LLM under
+**Conversation → Voice Channel → Think · LLM**. With Settings closed, type and send
+with Enter; Shift+Enter adds a line. The **+** adds image files or a camera photo,
+and copied images can be pasted into the input. The small microphone dictates into
+the draft using **Settings → Dictation**, independently of the global paste shortcut.
 
 During Live, use the large microphone button to mute and the red hang-up button
 to finish. The information icon opens the session panel with every active model by role,
@@ -52,6 +56,13 @@ All real configuration (keys, models, devices, hotkeys) lives in the Settings di
 and persists via QSettings. Logs go to `roomkit-ui.log`, rewritten at each launch, in
 `~/.local/share/roomkit-ui/logs/` on Linux (`$XDG_DATA_HOME` if set) and
 `~/Library/Logs/RoomKit UI/` on macOS.
+
+## Interface captures
+
+Run `.venv/bin/python scripts/capture_screenshots.py` to regenerate the real-widget
+[gallery](../assets/screenshots/README.md). The script uses isolated settings and demo
+data, and opens no devices or provider connections. Review both themes before updating
+the README or copying captures to `roomkit-website/roomkit-ui/screenshots/`.
 
 ## Quality checks (run before every PR)
 

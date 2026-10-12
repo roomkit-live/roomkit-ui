@@ -2,11 +2,13 @@
 
 > _Generated: 2026-06-11 — updated 2026-10-12 for roomkit 0.99.0 — re-run /project-review to update_
 
-RoomKit UI is a single-process desktop voice assistant. A PySide6 (Qt 6) GUI and an
+RoomKit UI is a desktop assistant for text, images and Live voice. A PySide6 (Qt 6) GUI and an
 asyncio engine share one thread through [qasync](https://github.com/CabbageDevelopment/qasync),
 which drives the Qt event loop and the asyncio event loop as one. All voice, AI, and
 audio-pipeline work is delegated to the [RoomKit](https://github.com/roomkit-live/roomkit)
 framework; the app's job is wiring RoomKit's async events into Qt signals and back.
+On macOS, camera capture runs in an isolated helper with its own permission declaration;
+MCP stdio servers and local model servers also run as child processes.
 
 See [technical.md](technical.md) for implementation details, [features.md](features.md)
 for user-facing behavior, and [onboarding.md](onboarding.md) to get a dev environment running.
@@ -17,13 +19,13 @@ for user-facing behavior, and [onboarding.md](onboarding.md) to get a dev enviro
 graph TB
     subgraph QtUI["Qt UI — main thread"]
         MW[MainWindow]
-        CB[ConversationComposer + Header<br/>Live / mute / settings]
+        CB[ConversationComposer + Header<br/>Text / images / dictation / Live]
         CV[ChatView + ChatBubble]
         APPW[MCPAppWidget<br/>QWebEngineView]
         VU[VUMeter]
         SI[SessionInfoBar]
         LO[SessionLoading<br/>Conversation slot]
-        SP[SettingsPanel<br/>13 tabs]
+        SP[SettingsPanel<br/>Grouped navigation and search]
         TRAY[Tray icon]
         MW --> CB & CV & VU & SI & LO
         MW -.opens.-> SP
@@ -57,7 +59,7 @@ graph TB
         LLM[Anthropic / OpenAI / Gemini APIs]
         LOC[vLLM / Ollama / llama-server]
         SPEECH[Deepgram / Gradium / ElevenLabs /<br/>Azure MAI speech]
-        MCPS[MCP servers<br/>stdio / SSE / HTTP+OAuth2]
+        MCPS[MCP servers<br/>stdio / SSE / HTTP + authentication]
         HUB[skills.sh catalog]
         EDGE[edge-ai-models + Hugging Face<br/>model downloads]
     end
@@ -99,7 +101,7 @@ graph TB
 | **Wake word** | `wakeword/`, `widgets/wakeword_wizard.py` | Shared microphone lifetime, VAD-gated capture, whisper-encoder embeddings matched by DTW against an enrolled fingerprint |
 | **Dictation** | `stt_engine.py`, `stt_sessions.py`, `dictation_stream.py`, `hotkey.py`, `paste.py`, `paste_windows.py`, `tray.py` | Composer or global hotkey → STT recording (OpenAI/local/Deepgram) → draft insertion or paste into the focused app |
 | **Speakers** | `speaker_manager.py`, `enrollment.py`, `speaker_roster.py`, `speaker_naming.py`, `widgets/voice_name_dialog.py` | Speaker profile persistence (JSON) and embedding extraction for the local diarization; with Meta Muse, the voices it labels, the names put on them (a click in the chat, or the assistant's `name_speaker`), the user's voice for primary-speaker mode, and who is who in each turn's prompt |
-| **MCP** | `mcp_manager.py`, `mcp_config.py`, `mcp_auth.py`, `mcp_app_bridge.py`, `url_policy.py`, `widgets/mcp_app_*.py` | MCP server connections (stdio/SSE/HTTP) on the 2026 protocol when the server offers it, the instructions each server publishes (handed to roomkit's `server_instructions=` with the tools), OAuth2 flow, MCP App hosting (local server, request filter, JSON-RPC bridge) |
+| **MCP** | `mcp_manager.py`, `mcp_config.py`, `mcp_http_auth.py`, `mcp_auth.py`, `mcp_app_bridge.py`, `url_policy.py`, `widgets/mcp_app_*.py` | MCP server connections (stdio/SSE/HTTP) on the 2026 protocol when the server offers it, the instructions each server publishes (handed to roomkit's `server_instructions=` with the tools), explicit HTTP authentication and OAuth2 flow, MCP App hosting (local server, request filter, JSON-RPC bridge) |
 | **Skills** | `skill_manager.py`, `skill_git.py`, `skill_well_known.py`, `skills_sh_client.py` | Skill discovery from git/local sources, skills.sh search and installs, registry building via `roomkit.skills` |
 | **MCP skills** | `mcp_skills.py`, `skill_approval.py`, `widgets/skill_approval_dialog.py` | Skills MCP servers publish (SEP-2640) handed to roomkit's registry beside the user's own; the user's yes before a CLI tool runs while one is active |
 | **Models** | `model_catalog.py`, `model_download.py`, `model_manager.py`, `download_flight.py` | Download/manage local STT/TTS/VAD/speaker/denoiser/turn models (GitHub LFS resolution, one download per model) |
@@ -260,7 +262,7 @@ their ordinary tool row and text result. Private conversations keep the HTML in 
 ## External integrations
 
 - **AI providers**: Gemini Live + Gemini API, OpenAI Realtime, GPT-Live + API, Anthropic API, xAI Grok, Deepgram Voice Agent, ElevenLabs Conversational AI, vLLM/Ollama-compatible local endpoints, llama.cpp (roomkit downloads a pinned `llama-server` build and the GGUF model); ElevenLabs/Gradium/Deepgram/Azure MAI for voice.
-- **MCP servers**: user-configured, three transports (stdio subprocess, SSE, streamable HTTP), OAuth2 with a localhost callback server for HTTP servers.
+- **MCP servers**: user-configured, three transports (stdio subprocess, SSE, streamable HTTP), Bearer, raw API key, Basic or OAuth2 for HTTP servers; OAuth2 uses a localhost callback server.
 - **skills.sh**: public search endpoint used from settings; GitHub-backed results
   install through explicit git sources, while well-known results are downloaded over
   https into local skill folders after index/path validation.
@@ -279,7 +281,7 @@ match the project version (see [technical.md — Testing](technical.md#testing-s
 
 ## Security architecture
 
-- **API keys, OAuth tokens, MCP OAuth client secrets, and secret-looking env values of MCP servers and CLI tools** are stored via `SecretStore` (`settings_secrets.py`): OS keyring first, with a QSettings fallback when no keyring backend is usable or a write was refused. MCP OAuth tokens are bound to the server URL they were issued for and dropped if it changes.
+- **API keys, OAuth tokens, MCP OAuth client secrets, the header values of MCP HTTP servers, and secret-looking env values of MCP servers and CLI tools** are stored via `SecretStore` (`settings_secrets.py`): OS keyring first, with a QSettings fallback when no keyring backend is usable or a write was refused. MCP OAuth tokens are bound to the server URL they were issued for and dropped if it changes.
 - **MCP stdio servers** are launched as subprocesses from user-entered commands (list form, no shell). The SDK inherits only a small default environment; RoomKit UI passes only explicitly configured env values (plus a search `PATH`), with secret-like values removed from plaintext settings.
 - **CLI tools** run a declared binary with arguments the model chooses, with the user's permissions, without asking; the settings page says so. No shell is involved.
 - **Skills are arbitrary code/instructions** loaded from git repos or local folders. skills.sh is used for discovery; GitHub-backed marketplace results become explicit Git sources (git runs bounded in time, without prompts, isolated from any inherited `GIT_DIR`), and well-known marketplace results become local sources fetched over https only, under byte caps. v0.2 `skill-md` well-known artifacts are checked against their SHA-256 digest, but legacy `files[]` well-known sources do not provide signatures — installation is still the trust decision.

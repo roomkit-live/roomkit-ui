@@ -226,7 +226,7 @@ thread's saved version stays intact. (`conversations.py`, `memory.py`,
 
 ### System-wide dictation
 
-Press a global hotkey anywhere in the OS, speak, release — the transcription is pasted
+Press a global hotkey anywhere in the OS, speak, then press again — the transcription is pasted
 into the focused application (macOS, Linux X11/Wayland, Windows). STT can be local
 (sherpa-onnx models), OpenAI, or Deepgram. A tray icon shows recording state; a press
 during a start or a stop is replayed once it settles. A single-modifier hotkey fires only
@@ -289,8 +289,13 @@ makes the assistant answer only utterances attributed to the enrolled primary sp
   runs with the user's permissions and any arguments the assistant chooses, without
   asking — unless a skill an MCP server serves is active (below). (`cli_tools.py`,
   `cli_help.py`)
-- **MCP servers**: stdio / SSE / streamable-HTTP transports, OAuth2 for HTTP servers,
-  configured in Settings → Integrations → MCP servers. An MCP tool named like a built-in or CLI tool, or with a
+- **MCP servers**: stdio / SSE / streamable-HTTP transports, configured in
+  Settings → Integrations → MCP servers. HTTP authentication offers None, Bearer token,
+  raw Authorization API key, Basic username/password or OAuth 2.0. Secret fields are
+  masked; extra headers live under Advanced options and use the same secret store.
+  Older Authorization headers populate the matching method automatically; OAuth owns
+  its Authorization header, and choosing None removes it. Missing credentials are
+  explained before connecting. An MCP tool named like a built-in or CLI tool, or with a
   name providers refuse, is left out and named in the chat. A session speaks the 2026
   protocol when the server offers it, the initialize handshake otherwise. (`mcp_manager.py`)
 - **Skills from MCP servers** (MCP Skills extension, SEP-2640): a server that publishes
@@ -538,25 +543,27 @@ sequenceDiagram
 | Anthropic / OpenAI / Gemini / vLLM / Ollama APIs | outbound | voice-channel LLM turn |
 | llama-server (local) | local HTTP | roomkit downloads the server build and the GGUF model |
 | ElevenLabs / Gradium / Deepgram / Azure MAI / Gemini | outbound | cloud TTS / STT |
-| MCP servers | bidirectional | user-configured, OAuth2 for HTTP |
+| MCP servers | bidirectional | user-configured; Bearer, raw API key, Basic or OAuth2 for HTTP |
 | skills.sh | outbound HTTPS / browser | skill search; GitHub sources install as Git, well-known sources as local folders |
 | edge-ai-models GitHub repo, Hugging Face | outbound | model downloads (LFS; Smart Turn and the wake-word encoder pinned by SHA-256) |
 
 ## Current limitations
 
 - One session at a time.
-- No text input — voice only (paste_text tool exists for the *model* to paste).
+- Text and image messages need a configured conversation LLM; image understanding
+  also needs vision support in the selected model. The composer explains missing setup.
 - Realtime mode requires a cloud provider; no local speech-to-speech.
 - Realtime sessions run without speaker diarization (primary-speaker gating drops the
   audio before the pipeline that would diarize it).
 - The Voice Channel agent's add-ons (speaking decision, thinking, background work) are
   Voice Channel only: a realtime model takes its own turns. A session ended while a
   background task runs cancels it.
-- The pre-built binaries carry Smart Turn but neither Pocket TTS, Qwen3-TTS nor NeuTTS
-  (outside the `all` extra); install from source for those.
+- The pre-built binaries carry neither Smart Turn, Pocket TTS, Qwen3-TTS nor NeuTTS
+  (outside the `all` extra); install their optional components from source.
 - Azure MAI-Transcribe, Meta Muse and Gemini STT are not offered for dictation.
 - MCP Apps require QtWebEngine (the tool's activity and text result remain available without it).
-- Window size fixed; no chat search/export.
+- The main window stays compact; Settings is resizable. History searches conversation
+  titles, not message contents; transcript export is not available yet.
 - French-centric Piper catalog (all three Piper voices are French); Pocket TTS covers six
   more languages.
 

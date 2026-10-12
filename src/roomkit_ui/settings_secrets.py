@@ -1,8 +1,9 @@
 """Where settings secrets live: the OS keyring, never plain QSettings.
 
-API keys (``settings._SECRET_KEYS``), MCP server OAuth client secrets and
-the env values of MCP servers and CLI tools that look like credentials
-(``_is_env_secret``) are stored through ``SecretStore``.  ``hydrate_*`` fills
+API keys (``settings._SECRET_KEYS``), MCP server OAuth client secrets, the
+header values of MCP HTTP servers, and the env values of MCP servers and CLI
+tools that look like credentials (``_is_env_secret``) are stored through
+``SecretStore``.  ``hydrate_*`` fills
 them back into the JSON the settings page edits; ``sanitize_*`` strips them
 out before the JSON reaches QSettings, migrating plaintext left by older
 versions on the way.
@@ -20,6 +21,7 @@ from urllib.parse import urlsplit
 
 from PySide6.QtCore import QSettings
 
+from roomkit_ui.mcp_config import header_line, split_header_line
 from roomkit_ui.secret_store import SecretStore
 
 _MCP_SERVER_SECRET_FIELDS = ("oauth_client_secret",)
@@ -62,6 +64,11 @@ def _mcp_server_env_secret_name(server_id: str, key: str) -> str:
 
 def _mcp_server_env_legacy_names(legacy_ids: list[str], key: str) -> list[str]:
     return [_mcp_server_env_secret_name(old_id, key) for old_id in legacy_ids]
+
+
+def _mcp_server_header_secret_name(server_id: str, name: str) -> str:
+    # Header names are case-insensitive: "authorization" is the same header.
+    return f"mcp_server:{server_id}:header:{name.lower()}"
 
 
 def _cli_tool_env_secret_name(tool_id: str, key: str) -> str:
@@ -197,6 +204,70 @@ def _sanitize_env(
     return "\n".join(out)
 
 
+def _hydrate_headers(
+    raw: Any, store: SecretStore, secret_name: Callable[[str], str]
+) -> tuple[str, bool]:
+    """Fill a headers block's values back in from *store*.
+
+    Every value is a secret: what an MCP server is sent besides its requests
+    is nearly always its credential (``Authorization``, an API key). A value
+    still in plain text is moved to *store*; the returned flag says one was.
+    """
+    if not isinstance(raw, str) or not raw.strip():
+        return "" if raw is None else str(raw or ""), False
+
+    migrated = False
+    out: list[str] = []
+    for line in raw.splitlines():
+        pair = split_header_line(line)
+        if pair is None:
+            out.append(line)
+            continue
+        name, value = pair
+        stored = store.get_secret(secret_name(name), "")
+        if value:
+            if not stored:
+                store.set_secret(secret_name(name), value)
+            migrated = True
+        elif stored:
+            value = stored
+        out.append(header_line(name, value))
+    return "\n".join(out), migrated
+
+
+def _sanitize_headers(
+    raw: Any, store: SecretStore, secret_name: Callable[[str], str], *, persist: bool
+) -> str:
+    """Strip a headers block's values, moving them to *store* if *persist*.
+
+    An emptied value deletes its stored secret, or loading would bring it back.
+    """
+    if persist and not any(
+        pair is not None and pair[0].lower() == "authorization"
+        for pair in (split_header_line(line) for line in str(raw or "").splitlines())
+    ):
+        # Selecting None/OAuth removes the manual credential, including its
+        # stored value, so a subsequently empty header cannot resurrect it.
+        store.delete_secret(secret_name("Authorization"))
+    if not isinstance(raw, str) or not raw.strip():
+        return "" if raw is None else str(raw or "")
+
+    out: list[str] = []
+    for line in raw.splitlines():
+        pair = split_header_line(line)
+        if pair is None:
+            out.append(line)
+            continue
+        name, value = pair
+        if persist:
+            if value:
+                store.set_secret(secret_name(name), value)
+            else:
+                store.delete_secret(secret_name(name))
+        out.append(header_line(name, ""))
+    return "\n".join(out)
+
+
 def load_secret_setting(qs: QSettings, store: SecretStore, key: str) -> str:
     """Load a setting-backed secret and migrate any legacy plaintext value."""
     legacy_key = f"room/{key}"
@@ -278,6 +349,14 @@ def hydrate_mcp_server_secrets(raw: Any, qs: QSettings, store: SecretStore) -> A
         if hydrated_env != server.get("env", ""):
             server["env"] = hydrated_env
         migrated = migrated or env_migrated
+        hydrated_headers, headers_migrated = _hydrate_headers(
+            server.get("headers", ""),
+            store,
+            partial(_mcp_server_header_secret_name, server_id),
+        )
+        if hydrated_headers != server.get("headers", ""):
+            server["headers"] = hydrated_headers
+        migrated = migrated or headers_migrated
 
         for suffix in _MCP_OAUTH_SECRET_SUFFIXES:
             secret_name = _mcp_oauth_secret_name(server_id, suffix)
@@ -307,6 +386,13 @@ def sanitize_mcp_servers(raw: Any, store: SecretStore, *, persist: bool) -> Any:
                 server.get("env", ""),
                 store,
                 partial(_mcp_server_env_secret_name, server_id),
+                persist=persist,
+            )
+        if "headers" in server:
+            server["headers"] = _sanitize_headers(
+                server.get("headers", ""),
+                store,
+                partial(_mcp_server_header_secret_name, server_id),
                 persist=persist,
             )
         for field in _MCP_SERVER_SECRET_FIELDS:

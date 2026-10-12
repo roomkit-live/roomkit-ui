@@ -12,6 +12,16 @@ Each released section is the source for that version's GitHub release notes.
 ## [Unreleased]
 
 ### Added
+- **Explicit authentication for MCP HTTP servers** — choose None, Bearer token,
+  raw Authorization API key, Basic credentials or OAuth 2.0, with masked secret fields.
+  Existing Authorization headers populate the matching fields automatically. Additional
+  headers live under Advanced options (`Name: value` or a pasted JSON line) and reach
+  both SSE and streamable HTTP. Header values use the secret store; malformed lines are
+  counted without logging their contents. None removes manual Authorization, and OAuth
+  supplies its own. The form explains when a plain HTTP connection is unencrypted.
+- **Updated interface documentation** — real application screenshots in both themes,
+  a reproducible capture script using isolated demo data, and refreshed guides for text,
+  images, Live, conversation history, dictation and authentication.
 - **Dictation in the message input** — the small microphone uses Settings → Dictation
   to capture speech, then inserts the transcript at the cursor for review before sending.
   Draft text and images survive cancellation; missing configuration and microphone errors
@@ -94,8 +104,7 @@ Each released section is the source for that version's GitHub release notes.
 - **Compact home and Live conversation redesign** — one input row with an icon to
   start Live, a shared violet background, quieter conversation text, and large mute
   and hang-up controls. Session details open on demand; startup progress stays inside
-  the conversation area. Attachments and message dictation remain reserved for the next
-  phase. The old control bar, loading overlay and redundant activity labels
+  the conversation area. The old control bar, loading overlay and redundant activity labels
   are removed. macOS Dock and bundle icons now share balanced transparent margins.
 - **Tool activity during Live conversations** — compact rows show readable tool names
   and real execution states, with input and results available on click. Interactive

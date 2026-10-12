@@ -317,3 +317,36 @@ def test_emptying_a_secret_env_value_does_not_bring_the_old_one_back(secure_stor
 
     assert json.loads(load_settings()["cli_tools"])[0]["env"] == "UPSTREAM="
     assert secure_store.get_secret("cli_tool:t1:env:UPSTREAM") == ""
+
+
+def test_mcp_header_values_stay_out_of_qsettings_and_come_back(secure_store):
+    """Every header value is a secret: to an MCP server it is nearly always its credential."""
+    servers = [
+        {
+            "name": "home",
+            "transport": "streamable_http",
+            "url": "http://192.168.50.253/mcp",
+            "headers": "Authorization: Bearer s3cret\nX-Client: roomkit",
+        }
+    ]
+
+    save_settings({"mcp_servers": json.dumps(servers)})
+
+    stored = json.loads(QSettings().value("room/mcp_servers"))
+    server_id = stored[0]["id"]
+    assert stored[0]["headers"] == "Authorization:\nX-Client:"
+    secret = secure_store.get_secret(f"mcp_server:{server_id}:header:authorization")
+    assert secret == "Bearer s3cret"
+    hydrated = json.loads(load_settings()["mcp_servers"])
+    assert hydrated[0]["headers"] == "Authorization: Bearer s3cret\nX-Client: roomkit"
+
+
+def test_an_emptied_mcp_header_value_does_not_come_back(secure_store):
+    server = {"name": "home", "transport": "streamable_http", "url": "http://h/mcp"}
+    with_token = {**server, "headers": "Authorization: Bearer s3cret"}
+    save_settings({"mcp_servers": json.dumps([with_token])})
+    [saved] = json.loads(load_settings()["mcp_servers"])
+
+    save_settings({"mcp_servers": json.dumps([{**saved, "headers": "Authorization:"}])})
+
+    assert json.loads(load_settings()["mcp_servers"])[0]["headers"] == "Authorization:"

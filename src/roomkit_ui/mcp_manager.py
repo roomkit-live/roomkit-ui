@@ -23,7 +23,9 @@ from typing import Any
 from roomkit_ui.cli_exec import resolve_command, search_path
 from roomkit_ui.env_config import parse_env_block
 from roomkit_ui.mcp_config import (
+    invalid_header_lines,
     mcp_server_problem,
+    parse_mcp_headers,
     uses_instructions,
     uses_skills,
     validate_mcp_http_url,
@@ -173,6 +175,25 @@ def _parse_stdio_config(cfg: dict[str, Any]) -> tuple[str, list[str], dict[str, 
 
     env = {"PATH": search_path(), **parse_env_block(cfg.get("env", ""))}
     return command, arg_list, env
+
+
+def _request_headers(cfg: dict[str, Any]) -> dict[str, str] | None:
+    """The headers an HTTP server's requests carry (``Authorization``…), None for none.
+
+    A line left out is counted in the log, never shown: it may hold a credential.
+    """
+    raw = cfg.get("headers", "")
+    if ignored := invalid_header_lines(raw):
+        logger.warning(
+            "MCP server %r: %d header line(s) are not 'Name: value' and are not sent",
+            cfg.get("name", ""),
+            ignored,
+        )
+    headers = parse_mcp_headers(raw)
+    if cfg.get("auth") == "oauth2":
+        # Only the OAuth provider supplies Authorization, including on retries.
+        headers = {k: v for k, v in headers.items() if k.lower() != "authorization"}
+    return headers or None
 
 
 class MCPManager:
@@ -400,7 +421,9 @@ class MCPManager:
 
             url = validate_mcp_http_url(cfg.get("url", ""))
             auth = await self._get_auth_provider(cfg, stack)
-            streams = await stack.enter_async_context(sse_client(url, auth=auth))
+            streams = await stack.enter_async_context(
+                sse_client(url, headers=_request_headers(cfg), auth=auth)
+            )
             read_stream, write_stream = streams
 
         elif transport == "streamable_http":
@@ -408,11 +431,12 @@ class MCPManager:
 
             url = validate_mcp_http_url(cfg.get("url", ""))
             auth = await self._get_auth_provider(cfg, stack)
+            headers = _request_headers(cfg)
             http_client = None
-            if auth is not None:
+            if auth is not None or headers:
                 from mcp.shared._httpx_utils import create_mcp_http_client
 
-                http_client = create_mcp_http_client(auth=auth)
+                http_client = create_mcp_http_client(headers=headers, auth=auth)
                 stack.push_async_callback(http_client.aclose)
             streams = await stack.enter_async_context(
                 streamable_http_client(url, http_client=http_client),
