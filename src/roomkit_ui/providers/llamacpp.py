@@ -28,6 +28,9 @@ logger = logging.getLogger(__name__)
 # roomkit's own documented default (LlamaCppConfig, examples/llamacpp_tools.py).
 DEFAULT_MODEL = "unsloth/Qwen3-4B-Instruct-2507-GGUF:Q4_K_M"
 
+# A spoken reply's output cap without reasoning: LlamaCppConfig's default.
+_REPLY_MAX_TOKENS = 1024
+
 _shared: tuple[tuple, _ServerThread] | None = None
 
 
@@ -37,6 +40,7 @@ def create(settings: dict) -> Any:
 
     model = (settings.get("vc_llamacpp_model", "") or "").strip() or DEFAULT_MODEL
     server = _shared_server(model, _context_size(settings))
+    thinking = bool(settings.get("vc_llamacpp_thinking", False))
 
     class _SessionLlamaCpp(LlamaCppAIProvider):
         """Starts the shared server rather than its own; close() leaves it running."""
@@ -53,11 +57,22 @@ def create(settings: dict) -> Any:
             model=model,
             context_size=server.context_size,
             port=server.port,
-            # A spoken reply cannot wait for a reasoning trace (roomkit's
-            # voice_local_pocket_fr example makes the same call).
-            enable_thinking=False,
+            # Off unless asked: a spoken reply then waits on no reasoning
+            # trace (roomkit's voice_local_pocket_fr example makes the same
+            # call).  The chat template reads it on each request, so the
+            # running server serves either.
+            enable_thinking=thinking,
+            max_tokens=_max_tokens(server.context_size, thinking=thinking),
         )
     )
+
+
+def _max_tokens(context_size: int, *, thinking: bool) -> int:
+    """A turn's output cap.  The reasoning counts against it: at roomkit's
+    1024, a model that thinks could spend them all and say nothing.  Thinking,
+    the turn may use what the prompt leaves of the window (llama-server stops
+    there, as it does at the cap)."""
+    return context_size if thinking else _REPLY_MAX_TOKENS
 
 
 def _context_size(settings: dict) -> int | None:

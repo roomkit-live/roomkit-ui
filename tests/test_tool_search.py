@@ -43,6 +43,13 @@ def test_the_mode_forces_it_or_leaves_roomkit_to_decide(mode, forced):
     assert tool_search_options({"tool_search_mode": mode}, realtime=True)["tool_search"] is forced
 
 
+@pytest.mark.parametrize(("mode", "forced"), [("auto", False), ("on", True), ("off", False)])
+def test_automatic_leaves_a_local_model_every_tool(mode, forced):
+    options = tool_search_options({"tool_search_mode": mode}, realtime=False, local_model=True)
+
+    assert options["tool_search"] is forced
+
+
 def test_a_realtime_channel_gets_the_tool_count_only():
     options = tool_search_options({"tool_search_threshold": "12"}, realtime=True)
 
@@ -91,11 +98,12 @@ def test_both_channels_take_their_options():
     )
 
 
-async def _tools_the_model_sees(settings: dict) -> set[str]:
+async def _tools_the_model_sees(settings: dict, *, local_model: bool = False) -> set[str]:
+    options = tool_search_options(settings, realtime=False, local_model=local_model)
     vc = await open_session(
         tts=StreamingInputTTS(),
         reply=["Hi!"],
-        ai_options={"tools": _TOOLS, **tool_search_options(settings, realtime=False)},
+        ai_options={"tools": _TOOLS, **options},
     )
     try:
         await vc.speak()
@@ -118,6 +126,13 @@ async def test_a_small_budget_hides_the_tools_behind_find_tools(qapp):
 
     assert "find_tools" in seen
     assert not seen & {tool.name for tool in _TOOLS}
+
+
+async def test_a_local_model_sees_every_tool_past_the_thresholds(qapp):
+    seen = await _tools_the_model_sees({"tool_search_threshold_tokens": 50}, local_model=True)
+
+    assert {tool.name for tool in _TOOLS} <= seen
+    assert "find_tools" not in seen
 
 
 async def test_below_the_thresholds_the_tools_stay_in_the_prompt(qapp):
@@ -228,3 +243,25 @@ async def test_a_voice_channel_session_runs_the_chosen_thresholds(qapp, monkeypa
     assert channel._tool_search is False
     assert channel._tool_search_threshold_tokens == 3000
     assert channel._tool_search_threshold_pct == 10.0
+
+
+@pytest.mark.parametrize(
+    ("llm", "searches"), [("anthropic", None), ("local", False), ("llamacpp", False)]
+)
+async def test_a_voice_channel_on_a_local_model_does_not_search(qapp, monkeypatch, llm, searches):
+    from roomkit.providers.ai.mock import MockAIProvider
+
+    from roomkit_ui.engine import Engine
+    from roomkit_ui.toolset import ToolSet
+
+    engine = Engine()
+
+    async def no_tools(_settings, _provider):
+        return ToolSet(builtin=[], cli=[], mcp=[]), None
+
+    monkeypatch.setattr(engine, "_load_vc_tools", no_tools)
+    channel, _, _ = await engine._build_vc_ai_channel(
+        dict(_DEFAULTS), MockAIProvider(responses=["ok"]), llm, "Be brief."
+    )
+
+    assert channel._tool_search is searches

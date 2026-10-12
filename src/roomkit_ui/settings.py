@@ -206,6 +206,7 @@ _DEFAULTS = {
     # llama.cpp local LLM (roomkit 0.90+): roomkit downloads llama-server + model
     "vc_llamacpp_model": "",  # "repo:quant" or a .gguf path (empty = Qwen3-4B Q4_K_M)
     "vc_llamacpp_context": "",  # context window in tokens (empty = 8192)
+    "vc_llamacpp_thinking": False,  # off: the reply does not wait on hidden reasoning
     # Pocket TTS (roomkit 0.90+, Kyutai): one language per model, voice by name or clip
     # "" = the STT language's model (English when Pocket has none) | english | french_24l…
     "vc_pocket_language": "",

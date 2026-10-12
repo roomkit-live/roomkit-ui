@@ -60,9 +60,11 @@ kept, never replaced. Agent Skills reach realtime sessions as well as Voice Chan
 - **llama.cpp** — a Hugging Face `repo:quant` or a `.gguf` file; roomkit downloads a
   pinned `llama-server` build (SHA-256 checked) and the model, and the server outlives the
   session (one per model and context size).
-- **Local model thinking** — "Model thinking (slower answers)", off by default, for vLLM
-  and Ollama: a reasoning model otherwise thinks for seconds before a spoken reply. A model
-  that always reasons cannot be switched off; the hint says so.
+- **Local model thinking** — "Model thinking (slower answers)", off by default, for vLLM,
+  Ollama and llama.cpp: a reasoning model otherwise thinks for seconds before a spoken
+  reply. A model that always reasons cannot be switched off; the hint says so. Its
+  reasoning is never spoken. On llama.cpp the setting rides each request (the running
+  server serves both), and a turn that thinks may fill the context window.
 - **Thinking and effort** (Think · LLM, Claude and Gemini) — Claude: Thinking (model
   default / on / off) and Effort (model default, low to max), set apart since effort also
   shapes the answer with thinking off. Gemini: one thinking level, Off included. They
@@ -284,8 +286,9 @@ makes the assistant answer only utterances attributed to the enrolled primary sp
   decides on roomkit's thresholds, each editable: a realtime model searches above 20
   tools and sees at most that many at once; the Voice Channel's model searches once the
   tools' schemas pass 8000 tokens or 10 % of its context window (the tool count when the
-  window is unknown, a local model). Always search and Never force it either way. The
-  built-ins always stay visible. (`toolset.tool_search_options`)
+  window is unknown). A local model (Ollama, vLLM, llama.cpp) gets every tool in its
+  prompt: Automatic never searches for it. Always search and Never force it either way.
+  The built-ins always stay visible. (`toolset.tool_search_options`)
 - **MCP Apps**: tools that declare a `ui://` resource render their HTML UI inline in
   the chat (QWebEngineView + JSON-RPC bridge) and can call tools back through the app;
   they cannot reach local or LAN services. (`mcp_app_bridge.py`, `widgets/mcp_app_widget.py`)

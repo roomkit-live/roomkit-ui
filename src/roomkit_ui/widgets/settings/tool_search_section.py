@@ -49,7 +49,8 @@ class ToolSearchSection(SettingsSection):
         self.mode.setCurrentIndex(max(self.mode.findData(settings.get("tool_search_mode")), 0))
         self.add_row(
             "Search for tools",
-            "Automatic searches once the tools pass the thresholds below.",
+            "Automatic searches once the tools pass the thresholds below, never with a "
+            "local model (Ollama, vLLM, llama.cpp): a small model may not look its tools up.",
             self.mode,
         )
 
@@ -58,7 +59,7 @@ class ToolSearchSection(SettingsSection):
             "Realtime threshold",
             "A realtime model searches above this many tools and sees at most this many "
             "at once. Google recommends 10 to 20 for Gemini Live. A Voice Channel model "
-            "whose context window is unknown (a local one) uses it too.",
+            "whose context window is unknown uses it too.",
             self.threshold,
         )
         self.tokens = _spin(500, 200_000, options["tool_search_threshold_tokens"], " tokens", 500)

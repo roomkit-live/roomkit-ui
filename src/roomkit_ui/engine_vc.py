@@ -31,6 +31,7 @@ from roomkit_ui.engine_audio import (
 )
 from roomkit_ui.engine_state import EngineState
 from roomkit_ui.engine_vc_helpers import (
+    LOCAL_LLMS,
     announce_llm_model,
     build_interruption,
     build_tts_filter,
@@ -307,7 +308,9 @@ class VoiceChannelMixin:
             retry_policy=RetryPolicy(max_retries=2, base_delay_seconds=0.5, max_delay_seconds=4.0),
             **reasoning,
             **toolset.channel_options(),
-            **tool_search_options(settings, realtime=False),
+            **tool_search_options(
+                settings, realtime=False, local_model=llm_provider_name in LOCAL_LLMS
+            ),
             **self._vc_agent.channel_options(),
         )
         return ai_channel, toolset.all, skills_registry

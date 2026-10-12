@@ -23,6 +23,12 @@ _THINKING_HINT = (
     "Thinking-2507) then says its reasoning aloud: turn this on for it."
 )
 
+_LLAMACPP_THINKING_HINT = (
+    "Off, a reasoning model (Qwen3, Qwen3.5) answers at once. On, it thinks before "
+    "each reply, and seconds may pass before a word is spoken. Its thinking is never "
+    "read aloud."
+)
+
 
 class VCLocalFields:
     """Local provider fields added to a parent QFormLayout in phases.
@@ -97,6 +103,15 @@ class VCLocalFields:
         self._vc_llamacpp_note.setWordWrap(True)
         self._vc_llamacpp_note.setObjectName("settingsHint")
         form.addRow("", self._vc_llamacpp_note)
+
+        self.vc_llamacpp_thinking = QCheckBox("Model thinking (slower answers)")
+        self.vc_llamacpp_thinking.setChecked(bool(s.get("vc_llamacpp_thinking", False)))
+        self._vc_llamacpp_thinking_label = QLabel("")
+        form.addRow(self._vc_llamacpp_thinking_label, self.vc_llamacpp_thinking)
+        self._vc_llamacpp_thinking_hint = QLabel(_LLAMACPP_THINKING_HINT)
+        self._vc_llamacpp_thinking_hint.setWordWrap(True)
+        self._vc_llamacpp_thinking_hint.setObjectName("settingsHint")
+        form.addRow("", self._vc_llamacpp_thinking_hint)
 
     def add_stt_fields(self, form: QFormLayout) -> None:
         self.vc_stt_model = QComboBox()
@@ -196,6 +211,9 @@ class VCLocalFields:
             self._vc_llamacpp_context_label,
             self.vc_llamacpp_context,
             self._vc_llamacpp_note,
+            self._vc_llamacpp_thinking_label,
+            self.vc_llamacpp_thinking,
+            self._vc_llamacpp_thinking_hint,
         ):
             widget.setVisible(is_llamacpp)
         self._vc_local_thinking_label.setVisible(is_local)
@@ -317,6 +335,7 @@ class VCLocalFields:
             "vc_local_tools": self.vc_local_tools.isChecked(),
             "vc_llamacpp_model": self.vc_llamacpp_model.text().strip(),
             "vc_llamacpp_context": self.vc_llamacpp_context.text().strip(),
+            "vc_llamacpp_thinking": self.vc_llamacpp_thinking.isChecked(),
             "vc_local_thinking": self.vc_local_thinking.isChecked(),
             "vc_stt_model": self.vc_stt_model.currentData() or "",
             "vc_tts_model": self.vc_tts_model.currentData() or "",

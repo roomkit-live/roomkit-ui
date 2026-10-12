@@ -24,11 +24,12 @@ _SUMMARY_MAX = 200
 _PROVIDER_TOOL_NAME = re.compile(r"[A-Za-z0-9_-]{1,64}")
 
 # Tool Search (Settings → Integrations): "auto" lets roomkit decide from the
-# thresholds, "on" always hides the catalogue behind find_tools, "off" puts
-# every tool in the model's context.  The thresholds are roomkit's defaults
-# (channels/_tool_search_constants.py, private): 20 tools, Google's 10-20 for
-# Gemini Live; 8000 schema tokens, past which hiding the catalogue costs less
-# than re-sending it (RMK-321); 10 % of the model's context window.
+# thresholds (never with a local model), "on" always hides the catalogue
+# behind find_tools, "off" puts every tool in the model's context.  The
+# thresholds are roomkit's defaults (channels/_tool_search_constants.py,
+# private): 20 tools, Google's 10-20 for Gemini Live; 8000 schema tokens, past
+# which hiding the catalogue costs less than re-sending it (RMK-321); 10 % of
+# the model's context window.
 DEFAULT_TOOL_SEARCH_THRESHOLD = 20
 DEFAULT_TOOL_SEARCH_TOKENS = 8000
 DEFAULT_TOOL_SEARCH_WINDOW_PCT = 10
@@ -98,18 +99,21 @@ class ToolSet:
         }
 
 
-def tool_search_options(settings: dict, *, realtime: bool) -> dict[str, Any]:
+def tool_search_options(
+    settings: dict, *, realtime: bool, local_model: bool = False
+) -> dict[str, Any]:
     """A roomkit channel's Tool Search arguments, from Settings → Integrations.
 
     A realtime channel decides on a tool count, which also caps how many
     tools are live at once.  An AIChannel decides on the schemas' tokens and
     its model's context window; the count only applies when that window is
-    unknown (a local model).  A value that is not a positive whole number
-    falls back to roomkit's default.
+    unknown.  Automatic leaves a *local_model* every tool: looking one up
+    first is a step a small model is less likely to take.  A value that is
+    not a positive whole number falls back to roomkit's default.
     """
     mode = settings.get("tool_search_mode", "auto")
     options: dict[str, Any] = {
-        "tool_search": {"on": True, "off": False}.get(mode),
+        "tool_search": {"on": True, "off": False}.get(mode, False if local_model else None),
         "tool_search_threshold": _positive_int(
             settings.get("tool_search_threshold"), DEFAULT_TOOL_SEARCH_THRESHOLD
         ),

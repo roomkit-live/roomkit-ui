@@ -47,7 +47,9 @@ Each released section is the source for that version's GitHub release notes.
   sees its tools in the prompt and when it finds them with `find_tools`. Automatic
   keeps roomkit's thresholds, each editable: the tool count a realtime model searches
   above (20), and the schema-token budget (8000) and context-window share (10 %) past
-  which the Voice Channel's model searches. Always search and Never force it.
+  which the Voice Channel's model searches. Automatic never searches with a local model
+  (Ollama, vLLM, llama.cpp), which may not look its tools up. Always search and Never
+  force it.
 - **Google Gemini STT and TTS in the Voice Channel** (Listen · STT and Speak · TTS), on
   the Gemini key the LLM and Gemini Live already use. The STT is Google's live
   recogniser: words while the user speaks, its own end of turn, an optional vocabulary.
@@ -221,8 +223,10 @@ Each released section is the source for that version's GitHub release notes.
   (on by default; v4, v4 Turbo, v2 and v2.5). v4 and v4 Turbo join the model list, and
   v4 becomes the default model (v3 has no streaming; a saved v3 default moves to v4 and
   the chat says so once).
-- **"Model thinking" for local LLMs** (vLLM / Ollama), off by default, so a reasoning
-  model no longer thinks for seconds before a spoken reply.
+- **"Model thinking" for local LLMs** (vLLM / Ollama, llama.cpp), off by default, so a
+  reasoning model no longer thinks for seconds before a spoken reply. On llama.cpp, a turn
+  that thinks may fill the context window rather than stop at 1024 tokens, which the
+  reasoning could use up before the reply.
 - **`smart-turn` extra** — the Smart Turn detector's dependencies, outside `all` and
   shipped in the pre-built binaries. Without it the setting reads "not installed" and a
   session runs without the detector and says so. The detector stays loaded across sessions; "Unfinished Wait (ms)" sets how long an

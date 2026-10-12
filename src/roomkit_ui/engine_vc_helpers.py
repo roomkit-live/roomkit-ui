@@ -110,6 +110,8 @@ GEMINI_THINKING_LEVELS = ("none", "minimal", "low", "medium", "high")
 # writes 16 384 tokens at least (gpt-4o the fewest); 64k is Anthropic's
 # starting point at xhigh and max.  A cap, not a cost: unused tokens are free.
 _CLOUD_LLMS = ("anthropic", "gemini", "openai")
+# The Voice Channel's LLMs that run on this machine or the user's server.
+LOCAL_LLMS = ("local", "llamacpp")
 _CLOUD_MAX_TOKENS = 16_000
 _CLAUDE_DEEP_MAX_TOKENS = 64_000
 

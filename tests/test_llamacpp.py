@@ -1,9 +1,12 @@
 """llama.cpp: one server per configuration, outliving the sessions that use it."""
 
 import asyncio
+import json
 import threading
 
+import httpx
 import pytest
+from roomkit.providers.ai.base import AIContext, AIMessage
 
 from roomkit_ui.engine_vc_helpers import start_local_llm
 from roomkit_ui.providers import create_ai_provider
@@ -97,6 +100,67 @@ def test_the_context_window_reaches_the_server_and_garbage_falls_back():
     assert _FakeServer.instances[-1].config.context_size == 8192
 
 
+async def _request_body(monkeypatch, **settings) -> dict:
+    """The JSON body a one-line turn sends to llama-server."""
+    from roomkit.providers.openai.ai import OpenAIAIProvider
+
+    sent: list[dict] = []
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        sent.append(json.loads(request.content))
+        return httpx.Response(
+            200,
+            json={
+                "id": "c1",
+                "object": "chat.completion",
+                "created": 0,
+                "model": "qwen3",
+                "choices": [
+                    {
+                        "index": 0,
+                        "message": {"role": "assistant", "content": "Hi!"},
+                        "finish_reason": "stop",
+                    }
+                ],
+            },
+        )
+
+    real = OpenAIAIProvider._sdk_http_client
+    monkeypatch.setattr(
+        OpenAIAIProvider,
+        "_sdk_http_client",
+        staticmethod(lambda module, _transport: real(module, httpx.MockTransport(answer))),
+    )
+    provider = _provider(**settings)
+    try:
+        await provider.generate(AIContext(messages=[AIMessage(role="user", content="Say hi.")]))
+    finally:
+        await provider.close()
+    return sent[0]
+
+
+async def test_a_reasoning_model_answers_at_once_by_default(monkeypatch):
+    body = await _request_body(monkeypatch)
+
+    assert body["chat_template_kwargs"] == {"enable_thinking": False}
+    assert body["max_tokens"] == 1024
+
+
+async def test_thinking_on_asks_for_it_and_leaves_it_the_window(monkeypatch):
+    body = await _request_body(monkeypatch, vc_llamacpp_thinking=True, vc_llamacpp_context="16384")
+
+    assert body["chat_template_kwargs"] == {"enable_thinking": True}
+    # The reasoning counts against the cap: 1024 could all go to it.
+    assert body["max_tokens"] == 16384
+
+
+async def test_switching_thinking_keeps_the_running_server():
+    await _provider().start()
+    await _provider(vc_llamacpp_thinking=True).start()
+
+    assert len(_FakeServer.instances) == 1
+
+
 async def test_a_session_starts_the_server_before_it_opens_the_mic():
     provider = _provider()
     statuses: list[str] = []
@@ -129,16 +193,20 @@ def test_the_settings_page_offers_llamacpp_with_its_fields(qapp):
             "vc_llm_provider": "llamacpp",
             "vc_llamacpp_model": "/models/qwen.gguf",
             "vc_llamacpp_context": "16384",
+            "vc_llamacpp_thinking": True,
         }
     )
     try:
         local = page._local
         assert ("llama.cpp (local GGUF)", "llamacpp") in VC_LLM_PROVIDERS
         assert not local.vc_llamacpp_model.isHidden()
+        assert not local.vc_llamacpp_thinking.isHidden()
         assert local.vc_local_base_url.isHidden()  # the vLLM / Ollama rows
+        assert local.vc_local_thinking.isHidden()
         out = page.get_settings()
         assert out["vc_llm_provider"] == "llamacpp"
         assert out["vc_llamacpp_model"] == "/models/qwen.gguf"
         assert out["vc_llamacpp_context"] == "16384"
+        assert out["vc_llamacpp_thinking"] is True
     finally:
         shiboken6.delete(page)

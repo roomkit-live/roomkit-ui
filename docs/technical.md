@@ -135,7 +135,8 @@ bounds MCP calls at 60 s and each CLI tool at its own timeout) and pins the buil
 against Tool Search. `toolset.tool_search_options(settings, realtime=...)` adds the Tool
 Search mode and thresholds from Settings → Integrations: a realtime channel takes the
 tool count, an AIChannel the schema-token budget and the share of its model's context
-window too (the count only when the window is unknown). A failed call raises `roomkit.ToolFailedError` or `ToolRefusedError`,
+window too (the count only when the window is unknown). Automatic is off for a local
+Voice Channel LLM (`local_model=`, `engine_vc_helpers.LOCAL_LLMS`). A failed call raises `roomkit.ToolFailedError` or `ToolRefusedError`,
 which every provider reads as a failure — Gemini reads any returned body as a success.
 
 The dispatch wrapper emits `ToolCall` / `ToolResult` events through `tool_started` and
