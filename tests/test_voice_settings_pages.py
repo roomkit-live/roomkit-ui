@@ -92,7 +92,7 @@ def test_disabling_or_switching_dictation_keeps_its_choices(world, monkeypatch):
         "stt_model": "whisper-small",
         "stt_translate": True,
         "stt_hotkey": "<ctrl>+<shift>+d",
-        "stt_language": "fr",
+        "dictation_language": "de",
     }
     page = world.open(_DictationPage, settings)
     for index in (0, 1, 2):

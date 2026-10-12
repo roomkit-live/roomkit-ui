@@ -338,6 +338,10 @@ edits when switching tabs. Installed skills can be filtered by name and activati
 removing a skill source keeps its files on disk. OAuth feedback follows its server and
 URL, and downloading or updating a source reports on that source even if another is open.
 
+The spoken language lives in General: every conversation's STT transcribes in it (none
+set: detected, sentence by sentence). Listen · STT links to it. Dictation follows it unless
+its own Dictation language sets another or Auto-detect.
+
 Dictation separates activation and shortcut from transcription choices. Missing backends
 offer installation; unavailable local models retain their saved ID until replaced by the
 user. The translation control appears for local Whisper and keeps its value when hidden.

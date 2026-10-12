@@ -12,6 +12,10 @@ Each released section is the source for that version's GitHub release notes.
 ## [Unreleased]
 
 ### Added
+- **Spoken language in General** — the language you speak is set once, in Settings →
+  General, for every conversation's transcription; Listen · STT links to it. Dictation
+  follows it, or sets its own (another language or Auto-detect). A language chosen before
+  on the Dictation page keeps applying to both.
 - **Tool search settings** (Settings → Integrations → Tool search) — when the assistant
   sees its tools in the prompt and when it finds them with `find_tools`. Automatic
   keeps roomkit's thresholds, each editable: the tool count a realtime model searches

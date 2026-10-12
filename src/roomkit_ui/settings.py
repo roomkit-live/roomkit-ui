@@ -52,7 +52,11 @@ _DEFAULTS = {
     "output_device": None,
     "stt_enabled": True,
     "stt_hotkey": _DEFAULT_HOTKEY,
+    # The language the user speaks (General): every conversation's STT, and
+    # dictation unless it sets its own.  "" = detected.
     "stt_language": "",
+    # Dictation's own: "" = the spoken language above, "auto" = detected
+    "dictation_language": "",
     "stt_provider": "openai",
     "stt_model": "",
     "stt_translate": False,

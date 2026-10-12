@@ -159,7 +159,7 @@ def build_meta_stt(settings: dict, emit_status: Callable[[str], None]) -> Any:
         name = dict((value, label) for label, value in STT_LANGUAGES).get(code, code)
         raise ValueError(
             f"Meta Muse does not transcribe {name}. Pick another language "
-            "(Settings → Dictation) or another STT."
+            "(Settings → General) or another STT."
         )
     keywords = [
         word.strip() for word in str(settings.get("meta_stt_keywords", "") or "").split(",")

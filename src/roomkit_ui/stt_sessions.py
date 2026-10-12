@@ -12,11 +12,21 @@ import asyncio
 import logging
 from typing import Any
 
+from roomkit_ui.constants import DICTATION_DETECTS
 from roomkit_ui.engine_audio import local_audio_backend
 from roomkit_ui.features import unavailable_reason
 from roomkit_ui.model_manager import build_stt_config, is_model_downloaded, is_streaming_model
 
 logger = logging.getLogger(__name__)
+
+
+def dictation_language(settings: dict) -> str:
+    """The language dictation transcribes: its own setting, else the spoken
+    language (Settings → General).  "" means detected."""
+    own = str(settings.get("dictation_language", "") or "")
+    if own == DICTATION_DETECTS:
+        return ""
+    return own or str(settings.get("stt_language", "") or "")
 
 
 class DictationSessionMixin:
@@ -98,7 +108,7 @@ class DictationSessionMixin:
             )
 
             # Set transcription language if configured.
-            stt_language = settings.get("stt_language", "")
+            stt_language = dictation_language(settings)
             if stt_language:
                 await self._provider.send_event(
                     self._session,
@@ -187,7 +197,7 @@ class DictationSessionMixin:
             )
             return None
 
-        language = settings.get("stt_language", "") or "en"
+        language = dictation_language(settings) or "en"
         translate = bool(settings.get("stt_translate", False))
         inference_device = settings.get("inference_device", "cpu")
         config = build_stt_config(
@@ -225,7 +235,7 @@ class DictationSessionMixin:
             self._fail_start(f"Missing dependency for Deepgram STT: {exc}.")
             return None
 
-        language = settings.get("stt_language", "") or "en"
+        language = dictation_language(settings) or "en"
         dg_config = DeepgramConfig(
             api_key=api_key,
             model=settings.get("deepgram_model", "nova-3"),

@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QLabel,
     QLineEdit,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -19,7 +20,7 @@ from roomkit_ui.features import (
     TTS_PROVIDER_FEATURES,
 )
 from roomkit_ui.widgets.settings.choice_cards import ChoiceCards
-from roomkit_ui.widgets.settings.controls import SettingsTabs, label
+from roomkit_ui.widgets.settings.controls import SettingsTabs, label, navigation_link
 from roomkit_ui.widgets.settings.feature_hints import offer_install, populate_provider_combo
 from roomkit_ui.widgets.settings.pipeline_summary import PipelineSummary
 from roomkit_ui.widgets.settings.realtime_section import RealtimeSection
@@ -147,6 +148,11 @@ class VoiceSetup(QWidget):
         )
         self._local.add_stt_fields(stt_form)
         self._cloud.add_stt_fields(stt_form)
+        # The language is the user's, set once for every conversation (General).
+        self.spoken_language_link = navigation_link("Set your spoken language in General →")
+        # A link, not a field: the form must not stretch it across the card.
+        self.spoken_language_link.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
+        stt_form.addRow("Language", self.spoken_language_link)
 
         # Barge-in is decided on the microphone side, and what it can do
         # depends on the STT (Words only needs one that hears words live).

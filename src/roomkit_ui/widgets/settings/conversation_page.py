@@ -33,6 +33,9 @@ class ConversationPage(QWidget):
         links.addWidget(self.models_link, 0, Qt.AlignLeft)
         links.addStretch()
         self.voice = VoiceSetup(settings)
+        self.voice.spoken_language_link.clicked.connect(
+            lambda: self.navigate_requested.emit("general")
+        )
         personality = QWidget()
         personality_layout = QVBoxLayout(personality)
         personality_layout.setContentsMargins(0, 0, 0, 0)

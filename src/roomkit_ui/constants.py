@@ -53,6 +53,15 @@ STT_LANGUAGES = [
     ("Hindi", "hi"),
 ]
 
+# Dictation's own language (dictation_language): "" follows the spoken language
+# (stt_language, Settings → General), DICTATION_DETECTS detects it.
+DICTATION_DETECTS = "auto"
+DICTATION_LANGUAGES = [
+    ("Same as your spoken language", ""),
+    ("Auto-detect", DICTATION_DETECTS),
+    *[(title, code) for title, code in STT_LANGUAGES if code],
+]
+
 
 STT_PROVIDERS = [
     ("OpenAI", "openai"),

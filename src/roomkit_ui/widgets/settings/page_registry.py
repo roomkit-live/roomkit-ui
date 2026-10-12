@@ -55,6 +55,11 @@ PAGE_SPECS = (
             SearchTarget(
                 "Enable assistant shortcut", "hotkey activer raccourci", "assistant_hotkey_enabled"
             ),
+            SearchTarget(
+                "Spoken language",
+                "language transcription speech recognition stt detect",
+                "spoken_language",
+            ),
         ),
     ),
     PageSpec(

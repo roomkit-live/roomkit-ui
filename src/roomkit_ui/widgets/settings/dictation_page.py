@@ -5,7 +5,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QComboBox, QWidget
 
-from roomkit_ui.constants import STT_LANGUAGES, STT_PROVIDERS
+from roomkit_ui.constants import DICTATION_LANGUAGES, STT_PROVIDERS
 from roomkit_ui.widgets.hotkey_button import HotkeyButton
 from roomkit_ui.widgets.install_offer import InstallOffer
 from roomkit_ui.widgets.settings.controls import (
@@ -92,13 +92,17 @@ class _DictationPage(QWidget):
         self.models_link.clicked.connect(lambda: self.navigate_requested.emit("models"))
         form.addRow(self.models_link)
 
+        # The spoken language is General's; dictation may set its own.
         self.language = QComboBox()
-        for title, value in STT_LANGUAGES:
+        for title, value in DICTATION_LANGUAGES:
             self.language.addItem(title, value)
         self.language.setCurrentIndex(
-            max(0, self.language.findData(settings.get("stt_language", "")))
+            max(0, self.language.findData(settings.get("dictation_language", "")))
         )
-        form.addRow("Spoken language", self.language)
+        form.addRow("Dictation language", self.language)
+        self.spoken_language_link = navigation_link("Set your spoken language in General →")
+        self.spoken_language_link.clicked.connect(lambda: self.navigate_requested.emit("general"))
+        form.addRow(self.spoken_language_link)
         transcription.content.addLayout(form)
         self.translate = SettingsToggle(
             "Translate to English", bool(settings.get("stt_translate", False))
@@ -179,6 +183,6 @@ class _DictationPage(QWidget):
             "stt_hotkey": self.hotkey.value(),
             "stt_provider": STT_PROVIDERS[self.stt_provider.currentIndex()][1],
             "stt_model": self.selected_model_id(),
-            "stt_language": self.language.currentData(),
+            "dictation_language": self.language.currentData() or "",
             "stt_translate": self.translate.isChecked(),
         }
