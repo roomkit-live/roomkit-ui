@@ -99,7 +99,7 @@ src/roomkit_ui/
 ├── paste.py             # Clipboard + paste keystroke per platform (paste_into_focused)
 ├── paste_windows.py     # Windows clipboard + Ctrl+V through Win32 SendInput (ctypes)
 ├── tray.py              # System tray icon for dictation
-├── sounds.py            # Notification sounds for session start/stop
+├── sounds.py            # Session start/stop and dictation sounds, through sounddevice (never QSoundEffect)
 ├── speaker_manager.py   # Speaker profile JSON persistence (<data dir>/speakers)
 ├── enrollment.py        # Speaker embedding recording/extraction (sherpa-onnx)
 ├── model_catalog.py     # Downloadable local models + on-disk locations
@@ -260,6 +260,7 @@ Every AI backend lives behind an extra declared in `pyproject.toml` AND mirrored
 - `InterruptionConfig`: pass `InterruptionStrategy.DISABLED` explicitly, not `None`. "Words only" barge-in is SEMANTIC + `PhraseBackchannelDetector`; with a non-streaming (Whisper-type) STT it keeps `cut_without_words` on, or nothing could interrupt
 - A turnless STT (Azure MAI-Transcribe) only finalises when the client commits: without a pipeline VAD no transcript ever comes. `stt_needs_turn_vad` gives it one — the chosen VAD model, else an energy VAD
 - Cached local TTS (`tts._CACHED`): a factory built from more than (provider, model, device) declares `cache_fields(settings)` in its `tts/` module (`tts_cache_fields`; Pocket does), or a changed voice keeps the old instance. Qwen3/NeuTTS add their reference clip in `engine_vc._tts_cache_key`
+- Notification sounds (`sounds.py`) play through sounddevice, never QtMultimedia's `QSoundEffect`: its `play()` holds the GIL down into CoreAudio, which waits for the output device's lock while a session's PortAudio callback holds that lock and waits for the GIL. The session-start sound plays once the session's streams run, and froze the whole app (sounddevice releases the GIL in PortAudio calls). The same goes for any other call into the audio system from the Qt thread
 - Recording sets `storage_encrypted_at_rest=True`: roomkit's only switch for plain WAVs, recorded as a storage choice — not a claim about the disk. The UI says the files are unencrypted
 
 ### Wake word

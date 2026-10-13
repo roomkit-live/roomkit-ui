@@ -372,6 +372,11 @@ Each released section is the source for that version's GitHub release notes.
   roomkit retried the stream. It now says "Speech recognition dropped and is
   reconnecting", and once Meta's voice labels start over, that a click on a voice's name
   names it again.
+- **The app no longer freezes as a Live session opens** — the session-start sound played
+  through QtMultimedia, whose call held Python's lock down into CoreAudio while the
+  session's audio callback held CoreAudio's lock and waited for Python's: the window
+  stopped on "Getting ready" (seen going from a typed conversation to Live). The session
+  and dictation sounds now play through PortAudio, as the session's audio does.
 - **Voice Channel fixes from roomkit 0.100** — the assistant's own voice, heard back while
   the echo canceller is still learning the room at the start of a session, no longer cuts
   its first reply or shows as your words. The sentence said before a tool call is spoken

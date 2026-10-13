@@ -1,204 +1,101 @@
-"""Notification sounds for session start/stop."""
+"""Notification sounds for session start/stop and dictation.
+
+They play through sounddevice (PortAudio), never QtMultimedia's QSoundEffect:
+its play() holds the GIL down into CoreAudio, which waits for the output
+device's lock while a session's PortAudio callback holds that lock and waits
+for the GIL — the session-start sound froze the app as a Live session opened.
+sounddevice calls into PortAudio with the GIL released.
+"""
 
 from __future__ import annotations
 
-import io
 import logging
-import math
-import shutil
-import struct
-import tempfile
-import wave
-from pathlib import Path
-
-from PySide6.QtCore import QUrl
-
-# QtMultimedia lives in PySide6-Addons, which the core install does not pull —
-# see the `mcp-apps` extra.  Notification sounds are a nicety; without the
-# module the app runs silent rather than refusing to start.
-try:
-    from PySide6.QtMultimedia import QSoundEffect
-
-    _HAS_MULTIMEDIA = True
-except ImportError:
-    _HAS_MULTIMEDIA = False
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 _SAMPLE_RATE = 44100
-_cache_dir: Path | None = None
+
+# name → its samples, generated on first use.
+_tones: dict[str, Any] = {}
 
 
-def _ensure_cache_dir() -> Path:
-    global _cache_dir  # noqa: PLW0603
-    if _cache_dir is None:
-        _cache_dir = Path(tempfile.mkdtemp(prefix="roomkit_sounds_"))
-    return _cache_dir
+def _tone(freq: float, duration: float, volume: float, fade_ms: float = 15.0) -> Any:
+    """A sine tone as float32 samples, faded in and out to avoid clicks."""
+    import numpy as np
 
-
-def _generate_tone(
-    freq: float,
-    duration: float,
-    volume: float = 0.3,
-    fade_ms: float = 15.0,
-) -> list[int]:
-    """Generate a sine wave tone as 16-bit PCM samples."""
     n_samples = int(_SAMPLE_RATE * duration)
-    fade_samples = int(_SAMPLE_RATE * fade_ms / 1000.0)
-    samples: list[int] = []
-    for i in range(n_samples):
-        t = i / _SAMPLE_RATE
-        val = math.sin(2.0 * math.pi * freq * t) * volume
-        # Fade in/out to avoid clicks
-        if i < fade_samples:
-            val *= i / fade_samples
-        elif i > n_samples - fade_samples:
-            val *= (n_samples - i) / fade_samples
-        samples.append(int(val * 32767))
+    fade = int(_SAMPLE_RATE * fade_ms / 1000.0)
+    t = np.arange(n_samples, dtype=np.float32) / _SAMPLE_RATE
+    samples = np.sin(2.0 * np.pi * freq * t) * volume
+    ramp = np.linspace(0.0, 1.0, fade, dtype=np.float32)
+    samples[:fade] *= ramp
+    samples[-fade:] *= ramp[::-1]
+    return samples.astype(np.float32)
+
+
+def _silence(duration: float) -> Any:
+    import numpy as np
+
+    return np.zeros(int(_SAMPLE_RATE * duration), dtype=np.float32)
+
+
+def _samples(name: str) -> Any:
+    samples = _tones.get(name)
+    if samples is None:
+        import numpy as np
+
+        if name == "session_start":
+            # Two rising tones — a gentle "ding-ding": C5 then E5.
+            samples = np.concatenate(
+                [_tone(523.25, 0.12, 0.125), _silence(0.03), _tone(659.25, 0.15, 0.125)]
+            )
+        elif name == "session_stop":
+            samples = _tone(440.0, 0.15, 0.08)  # a gentle "dong"
+        elif name == "dictation_start":
+            samples = _tone(783.99, 0.10, 0.075)  # a light "pip"
+        else:
+            samples = _tone(587.33, 0.10, 0.048)  # a softer, lower "pip"
+        _tones[name] = samples
     return samples
 
 
-def _write_wav(samples: list[int], path: Path) -> None:
-    """Write 16-bit mono PCM samples to a WAV file."""
-    buf = io.BytesIO()
-    with wave.open(buf, "wb") as wf:
-        wf.setnchannels(1)
-        wf.setsampwidth(2)
-        wf.setframerate(_SAMPLE_RATE)
-        wf.writeframes(struct.pack(f"<{len(samples)}h", *samples))
-    path.write_bytes(buf.getvalue())
+def _play(name: str) -> None:
+    try:
+        import sounddevice as sd
 
-
-def _generate_start_sound() -> Path:
-    """Two rising tones — a gentle 'ding-ding'."""
-    path = _ensure_cache_dir() / "session_start.wav"
-    if path.exists():
-        return path
-    # C5 (523 Hz) then E5 (659 Hz), each 120ms with a 30ms gap
-    tone1 = _generate_tone(523.25, 0.12, volume=0.25)
-    gap = [0] * int(_SAMPLE_RATE * 0.03)
-    tone2 = _generate_tone(659.25, 0.15, volume=0.25)
-    _write_wav(tone1 + gap + tone2, path)
-    return path
-
-
-def _generate_stop_sound() -> Path:
-    """Single descending tone — a gentle 'dong'."""
-    path = _ensure_cache_dir() / "session_stop.wav"
-    if path.exists():
-        return path
-    tone = _generate_tone(440.0, 0.15, volume=0.20)
-    _write_wav(tone, path)
-    return path
-
-
-# Module-level QSoundEffect instances (lazily created).
-_start_effect: QSoundEffect | None = None
-_stop_effect: QSoundEffect | None = None
-_dictation_start_effect: QSoundEffect | None = None
-_dictation_stop_effect: QSoundEffect | None = None
-
-
-def _generate_dictation_start_sound() -> Path:
-    """Single high tone — a light 'pip' for dictation start."""
-    path = _ensure_cache_dir() / "dictation_start.wav"
-    if path.exists():
-        return path
-    tone = _generate_tone(783.99, 0.10, volume=0.15)
-    _write_wav(tone, path)
-    return path
-
-
-def _generate_dictation_stop_sound() -> Path:
-    """Single lower tone — a soft 'pip' for dictation stop."""
-    path = _ensure_cache_dir() / "dictation_stop.wav"
-    if path.exists():
-        return path
-    tone = _generate_tone(587.33, 0.10, volume=0.12)
-    _write_wav(tone, path)
-    return path
+        sd.play(_samples(name), _SAMPLE_RATE)
+    except Exception:
+        logger.debug("Could not play the %s sound", name, exc_info=True)
 
 
 def play_dictation_start() -> None:
     """Play the dictation-start notification sound."""
-    if not _HAS_MULTIMEDIA:
-        return
-    global _dictation_start_effect  # noqa: PLW0603
-    try:
-        if _dictation_start_effect is None:
-            _dictation_start_effect = QSoundEffect()
-            _dictation_start_effect.setSource(
-                QUrl.fromLocalFile(str(_generate_dictation_start_sound()))
-            )
-            _dictation_start_effect.setVolume(0.5)
-        _dictation_start_effect.play()
-    except Exception:
-        logger.debug("Could not play dictation start sound", exc_info=True)
+    _play("dictation_start")
 
 
 def play_dictation_stop() -> None:
     """Play the dictation-stop notification sound."""
-    if not _HAS_MULTIMEDIA:
-        return
-    global _dictation_stop_effect  # noqa: PLW0603
-    try:
-        if _dictation_stop_effect is None:
-            _dictation_stop_effect = QSoundEffect()
-            _dictation_stop_effect.setSource(
-                QUrl.fromLocalFile(str(_generate_dictation_stop_sound()))
-            )
-            _dictation_stop_effect.setVolume(0.4)
-        _dictation_stop_effect.play()
-    except Exception:
-        logger.debug("Could not play dictation stop sound", exc_info=True)
+    _play("dictation_stop")
 
 
 def play_session_start() -> None:
     """Play the session-start notification sound."""
-    if not _HAS_MULTIMEDIA:
-        return
-    global _start_effect  # noqa: PLW0603
-    try:
-        if _start_effect is None:
-            _start_effect = QSoundEffect()
-            _start_effect.setSource(QUrl.fromLocalFile(str(_generate_start_sound())))
-            _start_effect.setVolume(0.5)
-        _start_effect.play()
-    except Exception:
-        logger.debug("Could not play start sound", exc_info=True)
+    _play("session_start")
 
 
 def play_session_stop() -> None:
     """Play the session-stop notification sound."""
-    if not _HAS_MULTIMEDIA:
-        return
-    global _stop_effect  # noqa: PLW0603
-    try:
-        if _stop_effect is None:
-            _stop_effect = QSoundEffect()
-            _stop_effect.setSource(QUrl.fromLocalFile(str(_generate_stop_sound())))
-            _stop_effect.setVolume(0.4)
-        _stop_effect.play()
-    except Exception:
-        logger.debug("Could not play stop sound", exc_info=True)
+    _play("session_stop")
 
 
 def cleanup() -> None:
-    """Stop and delete all QSoundEffect instances, remove temp cache dir."""
-    global _start_effect, _stop_effect  # noqa: PLW0603
-    global _dictation_start_effect, _dictation_stop_effect  # noqa: PLW0603
-    global _cache_dir  # noqa: PLW0603
-    for effect in (_start_effect, _stop_effect, _dictation_start_effect, _dictation_stop_effect):
-        if effect is not None:
-            try:
-                effect.stop()
-                effect.deleteLater()
-            except Exception:
-                pass
-    _start_effect = None
-    _stop_effect = None
-    _dictation_start_effect = None
-    _dictation_stop_effect = None
-    if _cache_dir is not None:
-        shutil.rmtree(_cache_dir, ignore_errors=True)
-        _cache_dir = None
+    """Stop a sound still playing as the app quits."""
+    if not _tones:
+        return  # none ever played: nothing to stop, and no PortAudio to load
+    try:
+        import sounddevice as sd
+
+        sd.stop()
+    except Exception:
+        pass
