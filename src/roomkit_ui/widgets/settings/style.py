@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import QSettings
 
-from roomkit_ui.theme import get_colors
+from roomkit_ui.theme import get_colors, spin_buttons_qss, switch_indicator_qss
 
 
 def settings_colors(theme: str | None = None) -> dict[str, str]:
@@ -315,4 +315,13 @@ def settings_stylesheet(theme: str) -> str:
         QDialog#settingsPanel QWidget#settingsLibraryItem[settingsSearchHit="true"] {{
             border: 2px solid {c["accent"]}; border-radius: 7px;
         }}
-    """
+    """ + _controls_qss(c)
+
+
+def _controls_qss(c: dict[str, str]) -> str:
+    """Every plain checkbox drawn as SettingsToggle's switch, and number
+    fields with steppers of their own inside the frame."""
+    scope = "QDialog#settingsPanel"
+    return switch_indicator_qss(
+        scope, on=c["accent"], off=c["outline"], knob_on=c["surface"], knob_off="#FFFFFF"
+    ) + spin_buttons_qss(scope, arrow=c["muted"], hover=c["selected"])

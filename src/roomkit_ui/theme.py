@@ -107,22 +107,111 @@ _CHEVRON_SVG = (
 )
 
 
-def _chevron_url(color: str) -> str:
-    """Path (as_posix, for QSS ``url()``) of a chevron-down SVG in *color*.
-
-    Written on demand, keyed by color so each theme keeps its own file.  An
-    unwritable data dir degrades to ``""`` — the caller then keeps the arrow
-    hidden rather than shipping a broken ``url()``.
+def _cached_svg(name: str, svg: str) -> str:
+    """Path (as_posix, for QSS ``url()``) of *svg*, written once as
+    ``cache/<name>.svg``.  An unwritable data dir degrades to ``""``: the
+    caller then keeps its native glyph rather than shipping a broken ``url()``.
     """
-    safe = color.lstrip("#").lower()
-    path = data_dir() / "cache" / f"chevron-{safe}.svg"
+    path = data_dir() / "cache" / f"{name}.svg"
     try:
         if not path.exists():
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(_CHEVRON_SVG.format(color=color), encoding="utf-8")
+            path.write_text(svg, encoding="utf-8")
     except OSError:
         return ""
     return path.as_posix()
+
+
+def _chevron_url(color: str, *, up: bool = False) -> str:
+    """A chevron-down (or up) SVG in *color*, keyed by color so each theme
+    keeps its own file."""
+    svg = _CHEVRON_SVG.format(color=color)
+    if up:
+        svg = svg.replace("m19.5 8.25-7.5 7.5-7.5-7.5", "m4.5 15.75 7.5-7.5 7.5 7.5")
+    direction = "up" if up else "chevron"
+    return _cached_svg(f"{direction}-{color.lstrip('#').lower()}", svg)
+
+
+# SettingsToggle's switch as an image, so every checkbox draws it: a 38x20
+# track, a 14 px knob, on a 44x26 canvas that leaves room for the focus ring.
+_SWITCH_SVG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" width="44" height="26" viewBox="0 0 44 26">'
+    "{ring}"
+    '<g opacity="{opacity}">'
+    '<rect x="3" y="3" width="38" height="20" rx="10" fill="{track}"/>'
+    '<circle cx="{knob_x}" cy="13" r="7" fill="{knob}"/></g></svg>'
+)
+_SWITCH_RING = (
+    '<rect x="0.75" y="0.75" width="42.5" height="24.5" rx="12.25" fill="none" '
+    'stroke="{color}" stroke-width="1.5"/>'
+)
+
+
+def switch_indicator_qss(scope: str, *, on: str, off: str, knob_on: str, knob_off: str) -> str:
+    """QSS drawing every QCheckBox under *scope* as the settings' switch:
+    on, off, disabled, and with the keyboard focus ring.  Empty when the
+    images cannot be written (the checkboxes keep their own look)."""
+    urls: dict[str, str] = {}
+    for state, checked, disabled, focus in (
+        ("off", False, False, False),
+        ("on", True, False, False),
+        ("off-disabled", False, True, False),
+        ("on-disabled", True, True, False),
+        ("off-focus", False, False, True),
+        ("on-focus", True, False, True),
+    ):
+        svg = _SWITCH_SVG.format(
+            ring=_SWITCH_RING.format(color=on) if focus else "",
+            opacity="0.45" if disabled else "1",
+            track=on if checked else off,
+            knob=knob_on if checked else knob_off,
+            knob_x=31 if checked else 13,
+        )
+        key = "-".join(color.lstrip("#").lower() for color in (on, off, knob_on, knob_off))
+        urls[state] = _cached_svg(f"switch-{state}-{key}", svg)
+        if not urls[state]:
+            return ""
+    box = f"{scope} QCheckBox"
+    return f"""
+{box} {{ spacing: 10px; }}
+{box}::indicator {{
+    width: 44px; height: 26px; border: none; background: transparent;
+    image: url("{urls["off"]}");
+}}
+{box}::indicator:checked {{ image: url("{urls["on"]}"); }}
+{box}::indicator:disabled {{ image: url("{urls["off-disabled"]}"); }}
+{box}::indicator:checked:disabled {{ image: url("{urls["on-disabled"]}"); }}
+{box}::indicator:focus {{ image: url("{urls["off-focus"]}"); }}
+{box}::indicator:checked:focus {{ image: url("{urls["on-focus"]}"); }}
+"""
+
+
+def spin_buttons_qss(scope: str, *, arrow: str, hover: str) -> str:
+    """QSS giving every number field under *scope* its own up/down buttons,
+    clear of its text and border, with chevrons in *arrow*."""
+    up, down = _chevron_url(arrow, up=True), _chevron_url(arrow)
+    spin = f"{scope} QAbstractSpinBox"
+    arrows = (
+        f"""
+{spin}::up-arrow {{ image: url("{up}"); width: 10px; height: 10px; }}
+{spin}::down-arrow {{ image: url("{down}"); width: 10px; height: 10px; }}
+"""
+        if up and down
+        else ""
+    )
+    return (
+        f"""
+{spin} {{ padding-right: 30px; }}
+{spin}::up-button, {spin}::down-button {{
+    subcontrol-origin: border; width: 22px; border: none; border-radius: 4px;
+    background: transparent;
+}}
+{spin}::up-button {{ subcontrol-position: top right; margin: 4px 4px 0 0; }}
+{spin}::down-button {{ subcontrol-position: bottom right; margin: 0 4px 4px 0; }}
+{spin}::up-button:hover, {spin}::down-button:hover {{ background: {hover}; }}
+"""
+        + arrows
+    )
 
 
 def get_stylesheet(theme: str = "dark") -> str:
@@ -231,25 +320,16 @@ QCheckBox {{
     color: {c["TEXT_PRIMARY"]};
     spacing: 8px;
 }}
-QCheckBox::indicator {{
-    width: 18px;
-    height: 18px;
-    border-radius: 4px;
-    border: 2px solid {c["BG_TERTIARY"]};
-    background: {c["BG_SECONDARY"]};
-}}
-QCheckBox::indicator:checked {{
-    background: {c["ACCENT_BLUE"]};
-    border-color: {c["ACCENT_BLUE"]};
-}}
 QCheckBox:disabled {{
     color: {c["TEXT_SECONDARY"]};
 }}
-QCheckBox::indicator:checked:disabled {{
-    background: {c["TEXT_SECONDARY"]};
-    border-color: {c["TEXT_SECONDARY"]};
-}}
-"""
+""" + switch_indicator_qss(
+        "",
+        on=c["ACCENT_BRAND"],
+        off=c["TEXT_SECONDARY"],
+        knob_on=c["BG_PRIMARY"],
+        knob_off="#FFFFFF",
+    )
 
 
 # ---------------------------------------------------------------------------

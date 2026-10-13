@@ -399,6 +399,12 @@ Each released section is the source for that version's GitHub release notes.
   without it and says so; Voice Channel mode is unchanged.
 
 ### Fixed
+- **Checkboxes and number fields in Settings** — every plain checkbox (audio capture
+  stages, barge-in, tool use, ElevenLabs streaming, the Agent tab, CLI tools) is now the
+  same switch as the rest of Settings, dimmed when unavailable and ringed with the
+  keyboard focus, instead of a bare square. Number fields (the idle hang-up delay,
+  Tool search, CLI help depth and timeout) get their own up/down steppers inside the
+  frame, no longer cut off on the right.
 - **macOS dictation paste feedback** — a System Events timeout now explains that the
   transcript was copied and can be pasted manually, with the Accessibility and
   Automation settings to check. No automatic retry risks inserting it twice; an
