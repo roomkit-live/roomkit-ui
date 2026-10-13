@@ -8,7 +8,7 @@ from PySide6.QtWidgets import QComboBox, QFormLayout, QFrame, QLabel, QWidget
 from roomkit_ui.features import IMAGE_PROVIDER_FEATURES
 from roomkit_ui.image_generation import IMAGE_PROVIDERS, default_image_model, image_models
 from roomkit_ui.widgets.settings.feature_hints import offer_install, populate_provider_combo
-from roomkit_ui.widgets.settings.vc_cloud_fields import _select_model
+from roomkit_ui.widgets.settings.model_combos import select_model
 
 _IMAGES_HINT = (
     "Asked for a picture, the assistant draws it and shows it in the chat, by voice "
@@ -49,7 +49,7 @@ class ImagesSetup(QFrame):
             for name, model_id in image_models(provider):
                 combo.addItem(name, model_id)
             combo.setCurrentIndex(max(combo.findData(default_image_model(provider)), 0))
-            _select_model(combo, str(settings.get(f"image_{provider}_model") or ""))
+            select_model(combo, str(settings.get(f"image_{provider}_model") or ""))
             combo.setProperty("settingsFormField", True)
             label = QLabel("Model")
             form.addRow(label, combo)

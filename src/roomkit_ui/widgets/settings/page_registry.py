@@ -118,7 +118,7 @@ PAGE_SPECS = (
             SearchTarget(
                 "Think · LLM",
                 "language model intelligence modèle langage",
-                "voice.vc_provider",
+                "voice.llm.provider",
                 (("tabs", 0), ("voice.pipeline_tabs", 1)),
                 fallback="voice.mode_picker",
                 unavailable="Select Voice Channel mode to configure reasoning.",
@@ -126,7 +126,7 @@ PAGE_SPECS = (
             SearchTarget(
                 "Thinking & effort",
                 "reasoning effort thinking réflexion raisonnement claude gemini",
-                "voice._cloud.vc_reasoning",
+                "voice.llm.reasoning",
                 (("tabs", 0), ("voice.pipeline_tabs", 1)),
                 fallback="voice.mode_picker",
                 unavailable="Select Voice Channel mode with Claude or Gemini to set "

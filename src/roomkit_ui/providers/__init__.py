@@ -24,19 +24,19 @@ LLM_PROVIDERS: list[tuple[str, str]] = [
     ("llama.cpp (local GGUF)", "llamacpp"),
 ]
 
-# What a provider's factory reads beside its API key, named without the
-# "vc_" of Think · LLM's keys: a role prefixes them with its own.
+# What a provider's factory and its reasoning read beside its API key, named
+# without the "vc_" of Think · LLM's keys: a role prefixes them with its own.
 MODEL_FIELDS: dict[str, tuple[str, ...]] = {
-    "anthropic": ("anthropic_model",),
+    "anthropic": ("anthropic_model", "anthropic_thinking", "anthropic_effort"),
     "openai": ("openai_model",),
-    "gemini": ("gemini_model",),
+    "gemini": ("gemini_model", "gemini_thinking"),
     "local": ("local_base_url", "local_model", "local_tools", "local_thinking"),
     "llamacpp": ("llamacpp_model", "llamacpp_context", "llamacpp_thinking"),
 }
 
 # Think · LLM's reasoning (engine_vc_helpers.reasoning_options), set for a
 # spoken reply someone waits on: a role on a model of its own reasons as its
-# model does by default.
+# own fields say, its model's default where they are empty.
 _REPLY_REASONING = ("vc_anthropic_thinking", "vc_anthropic_effort", "vc_gemini_thinking")
 
 # role → (the settings key naming its provider, the prefix of its model
@@ -76,9 +76,9 @@ def has_own_llm(settings: dict, role: str) -> bool:
 
 def llm_settings(settings: dict, role: str) -> dict:
     """*settings* as *role*'s model reads them: ``vc_llm_provider`` names its
-    provider, Think · LLM's model fields hold its own and its reasoning is its
-    model's default.  A field left empty takes Think · LLM's; a role on
-    Think · LLM's model gets *settings* as is."""
+    provider and Think · LLM's model fields hold its own.  A field left empty
+    takes Think · LLM's, save its reasoning: empty, the model's default.  A
+    role on Think · LLM's model gets *settings* as is."""
     if not has_own_llm(settings, role):
         return settings
     provider_key, prefix = LLM_ROLES[role]

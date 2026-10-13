@@ -245,7 +245,7 @@ def test_search_lands_on_claude_thinking_in_the_llm_tab(open_panel, qapp):
     qapp.processEvents()
     voice = panel._conversation.voice
     assert voice.pipeline_tabs.bar.currentIndex() == 1
-    assert voice._cloud.vc_anthropic_thinking.hasFocus()
+    assert voice.llm.fields["anthropic_thinking"].hasFocus()
     assert panel._search_notice.text() == "Found: Thinking & effort"
 
 
@@ -848,7 +848,7 @@ def test_pipeline_summary_follows_all_three_provider_choices(panel):
     voice = panel._conversation.voice
     assert [item.text() for item in voice.pipeline.providers] == ["Local", "Anthropic", "Piper"]
     voice.vc_stt_provider.setCurrentIndex(2)
-    voice.vc_provider.setCurrentIndex(4)
+    voice.llm.provider.setCurrentIndex(4)
     voice.vc_tts_provider.setCurrentIndex(4)
     assert [item.text() for item in voice.pipeline.providers] == [
         "Deepgram",
@@ -863,9 +863,9 @@ def test_mode_navigation_and_live_theme_preserve_pending_conversation_edits(pane
     panel.show()
     panel._sidebar.select_page("conversation")
     voice = panel._conversation.voice
-    voice._cloud.vc_openai_model.setCurrentText("custom-model")
+    voice.llm.fields["openai_model"].setCurrentText("custom-model")
     voice._realtime.openai_voice.setCurrentIndex(1)
-    voice.vc_provider.setCurrentIndex(1)
+    voice.llm.provider.setCurrentIndex(1)
     voice.mode_picker.options["voice_channel"].click()
     before = voice.get_settings()
     for theme in ("light", "dark"):

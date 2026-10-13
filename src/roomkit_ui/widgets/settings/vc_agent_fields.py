@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
 from roomkit_ui.features import SPEAK_POLICY_FEATURES
 from roomkit_ui.vc_agent import DEFAULT_AGENT_NAME, SPEAK_POLICIES
 from roomkit_ui.widgets.settings.feature_hints import offer_install, populate_provider_combo
-from roomkit_ui.widgets.settings.llm_role_fields import RoleLLMFields
+from roomkit_ui.widgets.settings.llm_fields import LLMFields
 
 _SPEAKING_HINT = (
     "Always answer replies to every turn. Deciding, the assistant stays quiet while "
@@ -37,8 +37,9 @@ _BACKGROUND_HINT = (
     "The assistant can hand a long request (a search, a report, several tool calls) "
     "to a task that runs while you keep talking, then tells you the result. The task "
     "has the same tools. On a model of its own it runs beside the conversation model: "
-    "a stronger one for the work, or llama.cpp on this computer. On a cloud model it "
-    "reasons as that model does by default. The session stays open until the task ends."
+    "a stronger one for the work, or llama.cpp on this computer, with the same fields "
+    "as Think · LLM: its reasoning left at Model default, it reasons as that model "
+    "does. The session stays open until the task ends."
 )
 
 _TASK_THINKING_HINT = (
@@ -93,14 +94,15 @@ class VCAgentPage(QFrame):
         self.background.setChecked(bool(settings.get("vc_background", False)))
         form.addRow("", self.background)
 
-        self.tasks_llm = RoleLLMFields(
+        # The same rows as Think · LLM's and the Text chat tab's model.
+        self.tasks_llm = LLMFields(
             settings,
             "background",
+            parent=self,
             same_label="The conversation model",
             thinking=True,
-            thinking_hint=_TASK_THINKING_HINT,
+            thinking_hints=dict.fromkeys(("local", "llamacpp"), _TASK_THINKING_HINT),
             tool_use=False,
-            parent=self,
         )
         self.tasks_llm.add_rows(form, "Tasks run on")
         form.addRow("", _hint(_BACKGROUND_HINT))

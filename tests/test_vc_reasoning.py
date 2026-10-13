@@ -13,8 +13,8 @@ from roomkit_ui.engine_vc_helpers import (
     reasoning_options,
 )
 from roomkit_ui.settings import _DEFAULTS
-from roomkit_ui.widgets.settings import vc_cloud_fields
-from roomkit_ui.widgets.settings.vc_cloud_fields import (
+from roomkit_ui.widgets.settings import llm_fields
+from roomkit_ui.widgets.settings.llm_fields import (
     CLAUDE_EFFORT_OPTIONS,
     CLAUDE_THINKING_OPTIONS,
     GEMINI_THINKING_OPTIONS,
@@ -136,7 +136,7 @@ def page_over(qapp):
 
 
 def _select_llm(page: VoiceSetup, provider: str) -> None:
-    page.vc_provider.setCurrentIndex([v for _l, v in VC_LLM_PROVIDERS].index(provider))
+    page.llm.provider.setCurrentIndex([v for _l, v in VC_LLM_PROVIDERS].index(provider))
 
 
 def test_the_saved_choices_come_back(page_over):
@@ -153,55 +153,55 @@ def test_the_saved_choices_come_back(page_over):
 
 def test_the_block_shows_the_chosen_providers_rows_only(page_over):
     page = page_over(conversation_mode="voice_channel", vc_llm_provider="anthropic")
-    cloud = page._cloud
+    llm = page.llm
 
-    assert not cloud.vc_reasoning.isHidden()
-    assert not cloud.vc_anthropic_effort.isHidden()
-    assert cloud.vc_gemini_thinking.isHidden()
+    assert not llm.reasoning.isHidden()
+    assert not llm.fields["anthropic_effort"].isHidden()
+    assert llm.fields["gemini_thinking"].isHidden()
 
     _select_llm(page, "gemini")
-    assert not cloud.vc_gemini_thinking.isHidden()
-    assert cloud.vc_anthropic_thinking.isHidden()
+    assert not llm.fields["gemini_thinking"].isHidden()
+    assert llm.fields["anthropic_thinking"].isHidden()
 
     for provider in ("openai", "local", "llamacpp"):
         _select_llm(page, provider)
-        assert cloud.vc_reasoning.isHidden(), provider
+        assert llm.reasoning.isHidden(), provider
 
 
 def test_a_claude_model_without_effort_keeps_the_pick_disabled(page_over, monkeypatch):
     def tags(_catalog, model_id):
         return {"effort_refused"} if model_id == "claude-haiku-4-5-20251001" else set()
 
-    monkeypatch.setattr(vc_cloud_fields, "_catalog_tags", tags)
+    monkeypatch.setattr(llm_fields, "_catalog_tags", tags)
     page = page_over(vc_llm_provider="anthropic", vc_anthropic_effort="high")
-    cloud = page._cloud
-    assert cloud.vc_anthropic_effort.isEnabled()
+    llm = page.llm
+    assert llm.fields["anthropic_effort"].isEnabled()
 
-    cloud.vc_anthropic_model.setCurrentIndex(
-        cloud.vc_anthropic_model.findData("claude-haiku-4-5-20251001")
+    llm.fields["anthropic_model"].setCurrentIndex(
+        llm.fields["anthropic_model"].findData("claude-haiku-4-5-20251001")
     )
 
-    assert not cloud.vc_anthropic_effort.isEnabled()
-    assert "takes no effort" in cloud._vc_reasoning_note.text()
+    assert not llm.fields["anthropic_effort"].isEnabled()
+    assert "takes no effort" in llm._reasoning_note.text()
     assert page.get_settings()["vc_anthropic_effort"] == "high"
 
 
 def test_a_claude_model_that_always_thinks_says_what_off_does(page_over, monkeypatch):
-    monkeypatch.setattr(vc_cloud_fields, "_catalog_tags", lambda *_: {"reasoning_floor_low"})
+    monkeypatch.setattr(llm_fields, "_catalog_tags", lambda *_: {"reasoning_floor_low"})
 
     page = page_over(vc_llm_provider="anthropic")
 
-    assert "Off runs it at low effort" in page._cloud._vc_reasoning_note.text()
+    assert "Off runs it at low effort" in page.llm._reasoning_note.text()
 
 
 def test_the_gemini_note_follows_the_typed_model(page_over):
     page = page_over(vc_llm_provider="gemini", vc_gemini_model="gemini-3.8-flash")
-    cloud = page._cloud
+    llm = page.llm
 
-    cloud.vc_gemini_model.setCurrentText("gemini-3.1-pro-preview")
+    llm.fields["gemini_model"].setCurrentText("gemini-3.1-pro-preview")
 
-    assert cloud._vc_reasoning_note.text() == gemini_reasoning_note("gemini-3.1-pro-preview")
-    assert "always thinks" in cloud._vc_reasoning_note.text()
+    assert llm._reasoning_note.text() == gemini_reasoning_note("gemini-3.1-pro-preview")
+    assert "always thinks" in llm._reasoning_note.text()
 
 
 @pytest.mark.parametrize(
@@ -217,7 +217,7 @@ def test_gemini_caveats_come_from_roomkits_catalog(model_id, caveat):
     note = gemini_reasoning_note(model_id)
 
     if caveat is None:
-        assert note == vc_cloud_fields._GEMINI_REASONING_HINT
+        assert note == llm_fields._GEMINI_REASONING_HINT
     else:
         assert caveat in note
 
@@ -225,9 +225,9 @@ def test_gemini_caveats_come_from_roomkits_catalog(model_id, caveat):
 def test_every_caveat_of_a_claude_model_is_said(page_over, monkeypatch):
     # Sonnet 5.5 in roomkit 0.98's catalog.
     tags = {"thinking_off_between_tools", "thinking_off_effort_high"}
-    monkeypatch.setattr(vc_cloud_fields, "_catalog_tags", lambda *_: tags)
+    monkeypatch.setattr(llm_fields, "_catalog_tags", lambda *_: tags)
 
-    note = page_over(vc_llm_provider="anthropic")._cloud._vc_reasoning_note.text()
+    note = page_over(vc_llm_provider="anthropic").llm._reasoning_note.text()
 
     assert "between tool calls" in note
     assert "Extra high and Max run as High" in note
@@ -246,3 +246,52 @@ async def test_the_model_is_asked_with_room_for_its_turn(qapp):
         assert vc.ai.contexts[0].max_tokens == 16_000
     finally:
         await vc.kit.close()
+
+
+# -- the same fields in every place a model is chosen ----------------------------------
+
+
+@pytest.mark.parametrize("place", ["tasks", "text"])
+def test_every_place_a_model_is_chosen_offers_its_reasoning(qapp, place):
+    """The Agent tab's tasks and the Text chat tab have Think · LLM's rows,
+    their reasoning saved under their own keys."""
+    from roomkit_ui.widgets.settings.text_chat_setup import TextChatSetup
+    from roomkit_ui.widgets.settings.vc_agent_fields import VCAgentPage
+
+    if place == "tasks":
+        page = VCAgentPage({"vc_background": True, "vc_background_model": "anthropic"})
+        llm, prefix = page.tasks_llm, "vc_background_"
+    else:
+        page = TextChatSetup({"text_llm_provider": "gemini"})
+        llm, prefix = page.llm, "text_"
+    try:
+        assert {"anthropic_thinking", "anthropic_effort", "gemini_thinking"} <= set(llm.fields)
+        provider = llm.current()
+        if provider == "anthropic":
+            effort = llm.fields["anthropic_effort"]
+            effort.setCurrentIndex(effort.findData("max"))
+            assert page.get_settings()[f"{prefix}anthropic_effort"] == "max"
+        else:
+            level = llm.fields["gemini_thinking"]
+            level.setCurrentIndex(level.findData("none"))
+            assert page.get_settings()[f"{prefix}gemini_thinking"] == "none"
+        assert not llm.reasoning.isHidden()
+    finally:
+        shiboken6.delete(page)
+
+
+def test_a_role_reasons_as_its_own_fields_say():
+    from roomkit_ui.providers import llm_settings
+
+    settings = {
+        **_DEFAULTS,
+        "vc_anthropic_thinking": "off",  # Think · LLM's, set for spoken replies
+        "vc_anthropic_effort": "low",
+        "text_llm_provider": "anthropic",
+        "text_anthropic_effort": "high",
+    }
+
+    options = reasoning_options(llm_settings(settings, "text"), "anthropic")
+
+    # Its own effort; its thinking left at Model default, not Think · LLM's off.
+    assert options == {"max_tokens": 16_000, "reasoning_effort": "high"}

@@ -152,9 +152,10 @@ and logs; the other add-ons report their absence in the chat.
   the conversation's (the default), or any LLM Think · LLM offers — Anthropic, OpenAI,
   Gemini, a local vLLM/Ollama server or llama.cpp — with its fields below it. A cloud
   model starts on Think · LLM's and uses that provider's key; a local field left empty
-  takes Think · LLM's value. On a cloud model of its own a task reasons as that model
-  does by default (Think · LLM's thinking and effort are set for spoken replies), and a
-  local model's Model thinking is on by default since nobody waits on a task's first word.
+  takes Think · LLM's value. The rows are Think · LLM's, reasoning included (Claude's
+  thinking and effort, Gemini's thinking level): left at Model default, a task reasons as
+  its model does, never as Think · LLM's spoken replies are set, and a local model's Model
+  thinking is on by default since nobody waits on a task's first word.
   A llama.cpp server starts while the session opens, without holding it up (the chat
   says if it cannot); the same GGUF and context as Think · LLM share one server, a
   different one runs beside it. The session details list the model as "Background
@@ -427,8 +428,8 @@ Enter or the arrow sends; Shift+Enter adds a line, and pasted text keeps its lin
 It uses the LLM chosen in
 **Settings → Conversation → Text chat**: by default the Voice Channel's (Think · LLM),
 including when Live is set to Realtime, or a model of its own from the same providers,
-with the same instructions, tools and memory. A cloud model of its own reasons as it
-does by default; a local one has its own tool-use and thinking switches, and llama.cpp
+with the same instructions, tools and memory, and the same rows as Think · LLM (its
+reasoning left at Model default, it reasons as its model does); a local one has its own tool-use and thinking switches, and llama.cpp
 keeps a server for typed messages beside the voice's when their GGUF or context differ.
 Until that provider has its required key/model and installed backend, the input stays
 grey with **Configure chat in Settings…**; its tooltip identifies what is missing. Closing Settings refreshes it immediately. This local check does not test

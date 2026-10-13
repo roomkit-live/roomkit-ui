@@ -263,12 +263,12 @@ def test_the_settings_page_offers_llamacpp_with_its_fields(qapp):
         }
     )
     try:
-        local = page._local
+        fields = page.llm.fields
         assert ("llama.cpp (local GGUF)", "llamacpp") in VC_LLM_PROVIDERS
-        assert not local.vc_llamacpp_model.isHidden()
-        assert not local.vc_llamacpp_thinking.isHidden()
-        assert local.vc_local_base_url.isHidden()  # the vLLM / Ollama rows
-        assert local.vc_local_thinking.isHidden()
+        assert not fields["llamacpp_model"].isHidden()
+        assert not fields["llamacpp_thinking"].isHidden()
+        assert fields["local_base_url"].isHidden()  # the vLLM / Ollama rows
+        assert fields["local_thinking"].isHidden()
         out = page.get_settings()
         assert out["vc_llm_provider"] == "llamacpp"
         assert out["vc_llamacpp_model"] == "/models/qwen.gguf"

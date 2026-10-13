@@ -1,10 +1,12 @@
-"""Voice Channel local provider fields: local LLM, local STT, Piper TTS, voice clone."""
+"""Voice Channel local provider fields: local STT, Piper TTS, voice clone.
+
+A local LLM's fields are ``llm_fields.LLMFields``, as in every place a model is
+chosen."""
 
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QCheckBox,
     QComboBox,
     QFileDialog,
     QFormLayout,
@@ -17,23 +19,11 @@ from PySide6.QtWidgets import (
 
 _MODEL_MISSING_ROLE = Qt.UserRole + 1
 
-_THINKING_HINT = (
-    "Off, a reasoning model (Qwen3, DeepSeek-R1) answers at once instead of thinking "
-    "for seconds before a word is spoken. A model that always reasons (Qwen3 "
-    "Thinking-2507) then says its reasoning aloud: turn this on for it."
-)
-
-_LLAMACPP_THINKING_HINT = (
-    "Off, a reasoning model (Qwen3, Qwen3.5) answers at once. On, it thinks before "
-    "each reply, and seconds may pass before a word is spoken. Its thinking is never "
-    "read aloud."
-)
-
 
 class VCLocalFields:
     """Local provider fields added to a parent QFormLayout in phases.
 
-    Call ``add_llm_fields``, ``add_stt_fields``, ``add_tts_fields`` at the
+    Call ``add_stt_fields``, ``add_tts_fields`` at the
     correct insertion points in the form so rows interleave properly with
     the provider selectors owned by the orchestrator.
     """
@@ -41,77 +31,6 @@ class VCLocalFields:
     def __init__(self, parent_widget: QWidget, settings: dict) -> None:
         self._parent = parent_widget
         self._settings = settings
-
-    def add_llm_fields(self, form: QFormLayout) -> None:
-        s = self._settings
-        self.vc_local_base_url = QLineEdit(s.get("vc_local_base_url", ""))
-        self.vc_local_base_url.setPlaceholderText("http://localhost:11434/v1")
-        self._vc_local_base_url_label = QLabel("Base URL")
-        form.addRow(self._vc_local_base_url_label, self.vc_local_base_url)
-
-        self.vc_local_model = QLineEdit(s.get("vc_local_model", ""))
-        self.vc_local_model.setPlaceholderText("e.g. qwen2.5:7b")
-        self._vc_local_model_label = QLabel("Model")
-        form.addRow(self._vc_local_model_label, self.vc_local_model)
-
-        self.vc_local_tools = QCheckBox("Model supports tool use (function calling)")
-        self.vc_local_tools.setChecked(bool(s.get("vc_local_tools", True)))
-        self._vc_local_tools_label = QLabel("")
-        form.addRow(self._vc_local_tools_label, self.vc_local_tools)
-
-        self.vc_local_thinking = QCheckBox("Model thinking (slower answers)")
-        self.vc_local_thinking.setChecked(bool(s.get("vc_local_thinking", False)))
-        self._vc_local_thinking_label = QLabel("")
-        form.addRow(self._vc_local_thinking_label, self.vc_local_thinking)
-        self._vc_local_thinking_hint = QLabel(_THINKING_HINT)
-        self._vc_local_thinking_hint.setWordWrap(True)
-        self._vc_local_thinking_hint.setObjectName("settingsHint")
-        form.addRow("", self._vc_local_thinking_hint)
-
-        self._add_llamacpp_fields(form)
-
-    def _add_llamacpp_fields(self, form: QFormLayout) -> None:
-        """llama.cpp: a GGUF model roomkit downloads, starts and keeps running."""
-        from roomkit_ui.providers.llamacpp import DEFAULT_MODEL
-
-        s = self._settings
-        self.vc_llamacpp_model = QLineEdit(s.get("vc_llamacpp_model", ""))
-        self.vc_llamacpp_model.setPlaceholderText(DEFAULT_MODEL)
-        self.vc_llamacpp_model.setToolTip(
-            "A Hugging Face GGUF as repo:quant, or the path of a local .gguf file."
-        )
-        self._vc_llamacpp_browse = QPushButton("Browse…")
-        self._vc_llamacpp_browse.setCursor(Qt.PointingHandCursor)
-        self._vc_llamacpp_browse.setAutoDefault(False)
-        self._vc_llamacpp_browse.clicked.connect(self._browse_gguf)
-        model_row = QHBoxLayout()
-        model_row.setSpacing(6)
-        model_row.addWidget(self.vc_llamacpp_model, 1)
-        model_row.addWidget(self._vc_llamacpp_browse)
-        self._vc_llamacpp_model_label = QLabel("GGUF Model")
-        form.addRow(self._vc_llamacpp_model_label, model_row)
-
-        self.vc_llamacpp_context = QLineEdit(str(s.get("vc_llamacpp_context", "") or ""))
-        self.vc_llamacpp_context.setPlaceholderText("8192 (tokens; tools count against it)")
-        self._vc_llamacpp_context_label = QLabel("Context")
-        form.addRow(self._vc_llamacpp_context_label, self.vc_llamacpp_context)
-
-        self._vc_llamacpp_note = QLabel(
-            "Nothing to install: the first session downloads llama.cpp and the model "
-            "(several GB), then the server stays up between sessions."
-        )
-        self._vc_llamacpp_note.setWordWrap(True)
-        self._vc_llamacpp_note.setObjectName("settingsHint")
-        form.addRow("", self._vc_llamacpp_note)
-
-        self.vc_llamacpp_thinking = QCheckBox("Model thinking (slower answers)")
-        self.vc_llamacpp_thinking.setChecked(bool(s.get("vc_llamacpp_thinking", False)))
-        self._vc_llamacpp_thinking_label = QLabel("")
-        form.addRow(self._vc_llamacpp_thinking_label, self.vc_llamacpp_thinking)
-        self._vc_llamacpp_thinking_hint = QLabel(_LLAMACPP_THINKING_HINT)
-        self._vc_llamacpp_thinking_hint.setWordWrap(True)
-        self._vc_llamacpp_thinking_hint.setObjectName("settingsHint")
-        form.addRow("", self._vc_llamacpp_thinking_hint)
 
     def add_stt_fields(self, form: QFormLayout) -> None:
         self.vc_stt_model = QComboBox()
@@ -194,31 +113,6 @@ class VCLocalFields:
         form.addRow(self._vc_pocket_voice_label, voice_row)
 
     # -- Visibility --
-
-    def update_llm_visibility(self, provider: str) -> None:
-        is_local = provider == "local"
-        self._vc_local_base_url_label.setVisible(is_local)
-        self.vc_local_base_url.setVisible(is_local)
-        self._vc_local_model_label.setVisible(is_local)
-        self.vc_local_model.setVisible(is_local)
-        self._vc_local_tools_label.setVisible(is_local)
-        self.vc_local_tools.setVisible(is_local)
-        is_llamacpp = provider == "llamacpp"
-        for widget in (
-            self._vc_llamacpp_model_label,
-            self.vc_llamacpp_model,
-            self._vc_llamacpp_browse,
-            self._vc_llamacpp_context_label,
-            self.vc_llamacpp_context,
-            self._vc_llamacpp_note,
-            self._vc_llamacpp_thinking_label,
-            self.vc_llamacpp_thinking,
-            self._vc_llamacpp_thinking_hint,
-        ):
-            widget.setVisible(is_llamacpp)
-        self._vc_local_thinking_label.setVisible(is_local)
-        self.vc_local_thinking.setVisible(is_local)
-        self._vc_local_thinking_hint.setVisible(is_local)
 
     def update_stt_visibility(self, provider: str) -> None:
         is_local = provider == "local"
@@ -319,24 +213,10 @@ class VCLocalFields:
         if path:
             self.vc_pocket_voice.setText(path)
 
-    def _browse_gguf(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(
-            self._parent, "Select a GGUF Model", "", "GGUF models (*.gguf)"
-        )
-        if path:
-            self.vc_llamacpp_model.setText(path)
-
     # -- Settings --
 
     def get_settings(self) -> dict:
         return {
-            "vc_local_base_url": self.vc_local_base_url.text().strip(),
-            "vc_local_model": self.vc_local_model.text().strip(),
-            "vc_local_tools": self.vc_local_tools.isChecked(),
-            "vc_llamacpp_model": self.vc_llamacpp_model.text().strip(),
-            "vc_llamacpp_context": self.vc_llamacpp_context.text().strip(),
-            "vc_llamacpp_thinking": self.vc_llamacpp_thinking.isChecked(),
-            "vc_local_thinking": self.vc_local_thinking.isChecked(),
             "vc_stt_model": self.vc_stt_model.currentData() or "",
             "vc_tts_model": self.vc_tts_model.currentData() or "",
             "vc_tts_ref_audio": self.vc_tts_ref_audio.text().strip(),

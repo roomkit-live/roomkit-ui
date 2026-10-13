@@ -12,6 +12,12 @@ Each released section is the source for that version's GitHub release notes.
 ## [Unreleased]
 
 ### Added
+- **The same LLM rows in every place a model is chosen** — Think · LLM, the Agent tab's
+  background tasks and the Text chat tab now build one component: the provider, its model,
+  its reasoning (Claude's thinking and effort, Gemini's thinking level, with what the model
+  does differently) and a local server's or a GGUF's fields. The tasks and typed messages
+  gain the reasoning settings only Think · LLM had, each saved under its own keys; left at
+  Model default, they reason as their model does, never as Think · LLM's spoken replies.
 - **The assistant draws images** (Settings → Conversation → Images) — pick OpenAI, Google
   Gemini, xAI Grok or Meta Muse and a model from roomkit's catalog, and the assistant
   gets a `generate_image` tool, by voice or in writing. The image shows in the chat as

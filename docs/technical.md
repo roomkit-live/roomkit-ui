@@ -219,8 +219,9 @@ session's prompt, tools and skills, that model's reasoning and Tool Search), reg
 on the kit but never attached to the session room, where it would answer every turn;
 the kit closes it. Its model comes from `providers.llm_settings(settings, "background")`:
 `vc_llm_provider` becomes the tasks' provider, the Agent tab's fields
-(`vc_background_<field>`) replace Think · LLM's where set, and Think · LLM's reply
-reasoning is cleared, so the model reasons as it does by default. `providers/llamacpp.py`
+(`vc_background_<field>`) replace Think · LLM's where set, and its reasoning is its own
+(`vc_background_anthropic_effort` …), the model's default where empty, never Think ·
+LLM's, set for spoken replies. `providers/llamacpp.py`
 keeps a server per role (conversation, background, text), one when two run the same
 configuration; an owned task starts it while the session opens
 (`vc_agent.warm_up_worker`). A task's room, marked by roomkit with `task_id`, gets no
@@ -232,8 +233,10 @@ thinker: `Engine._close_vc_agent()` does, after the kit.
 Typed turns read their model the same way, `llm_settings(settings, "text")` from the
 Text chat tab (`text_llm_provider`, `text_<field>`), in `text_chat_unavailable()` and
 `Engine._start_text`; left on Think · LLM's model, they get the settings as they are.
-The Agent tab and the Text chat tab share one widget for a role's model,
-`widgets/settings/llm_role_fields.RoleLLMFields`.
+Think · LLM, the Agent tab and the Text chat tab build one widget for a model,
+`widgets/settings/llm_fields.LLMFields`: the provider, its model, its reasoning (Claude's
+thinking and effort, Gemini's thinking level, with the model's catalog caveats) and a
+local server's or a GGUF's fields, the same everywhere.
 `agent_hooks.py` logs `ON_SPEAK_DECISION` and `ON_THOUGHT`; those diagnostics stay out
 of the transcript. `ON_TASK_DELEGATED` and `ON_TASK_COMPLETED` produce chat notices
 and update `Engine._background_tasks`, which the idle hang-up waits on.

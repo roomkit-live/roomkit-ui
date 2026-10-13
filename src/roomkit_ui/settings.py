@@ -261,6 +261,9 @@ _DEFAULTS = {
     # providers.llm_settings) and a local model's thinking (on: nobody waits on a task)
     "vc_background_model": "",
     "vc_background_anthropic_model": "",
+    "vc_background_anthropic_thinking": "",  # "" = the model's default, as below
+    "vc_background_anthropic_effort": "",
+    "vc_background_gemini_thinking": "",
     "vc_background_openai_model": "",
     "vc_background_gemini_model": "",
     "vc_background_local_base_url": "",
@@ -273,6 +276,9 @@ _DEFAULTS = {
     # fields as the tasks' above; a local model's tool use and thinking its own
     "text_llm_provider": "",
     "text_anthropic_model": "",
+    "text_anthropic_thinking": "",  # "" = the model's default
+    "text_anthropic_effort": "",
+    "text_gemini_thinking": "",
     "text_openai_model": "",
     "text_gemini_model": "",
     "text_local_base_url": "",

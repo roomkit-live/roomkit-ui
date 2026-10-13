@@ -4,7 +4,8 @@ import pytest
 import shiboken6
 
 from roomkit_ui.settings import _DEFAULTS
-from roomkit_ui.widgets.settings.vc_cloud_fields import ELEVENLABS_MODELS, VC_ANTHROPIC_MODELS
+from roomkit_ui.widgets.settings.llm_fields import VC_ANTHROPIC_MODELS
+from roomkit_ui.widgets.settings.vc_cloud_fields import ELEVENLABS_MODELS
 from roomkit_ui.widgets.settings.voice_setup import VoiceSetup
 
 
@@ -38,7 +39,7 @@ def test_a_saved_model_outside_the_lineup_is_kept(page_over, key, model_id):
 
 def test_a_saved_model_in_the_lineup_is_selected_not_duplicated(page_over):
     page = page_over(vc_anthropic_model="claude-haiku-4-5-20251001")
-    combo = page._cloud.vc_anthropic_model
+    combo = page.llm.fields["anthropic_model"]
 
     assert combo.currentData() == "claude-haiku-4-5-20251001"
     assert combo.findData("claude-haiku-4-5-20251001") == combo.currentIndex()
@@ -68,7 +69,7 @@ def test_the_claude_lineup_is_the_catalogs_current_models():
 
 
 def test_the_openai_lineup_leaves_out_models_that_refuse_a_voice_turn():
-    from roomkit_ui.widgets.settings.vc_cloud_fields import VC_OPENAI_MODELS
+    from roomkit_ui.widgets.settings.llm_fields import VC_OPENAI_MODELS
 
     ids = [model_id for _label, model_id in VC_OPENAI_MODELS]
     assert "gpt-4o" in ids
@@ -79,7 +80,7 @@ def test_the_openai_lineup_leaves_out_models_that_refuse_a_voice_turn():
 
 
 def test_the_gemini_lineup_leaves_out_deprecated_models():
-    from roomkit_ui.widgets.settings.vc_cloud_fields import VC_GEMINI_MODELS
+    from roomkit_ui.widgets.settings.llm_fields import VC_GEMINI_MODELS
 
     ids = [model_id for _label, model_id in VC_GEMINI_MODELS]
     assert "gemini-3.8-flash" in ids
@@ -88,7 +89,7 @@ def test_the_gemini_lineup_leaves_out_deprecated_models():
 
 def test_a_saved_deprecated_claude_model_is_kept_and_named_deprecated(page_over):
     page = page_over(vc_anthropic_model="claude-sonnet-4-20250514")
-    combo = page._cloud.vc_anthropic_model
+    combo = page.llm.fields["anthropic_model"]
 
     assert combo.currentText() == "Claude Sonnet 4 (deprecated)"
     assert page.get_settings()["vc_anthropic_model"] == "claude-sonnet-4-20250514"
@@ -96,10 +97,10 @@ def test_a_saved_deprecated_claude_model_is_kept_and_named_deprecated(page_over)
 
 def test_editable_lineups_show_ids_and_keep_a_typed_one(page_over):
     page = page_over(vc_openai_model="ft:gpt-4o:acme", vc_gemini_model="gemini-3.8-flash")
-    cloud = page._cloud
+    llm = page.llm
 
-    assert cloud.vc_openai_model.currentText() == "ft:gpt-4o:acme"
-    assert cloud.vc_gemini_model.currentText() == "gemini-3.8-flash"
+    assert llm.fields["openai_model"].currentText() == "ft:gpt-4o:acme"
+    assert llm.fields["gemini_model"].currentText() == "gemini-3.8-flash"
     settings = page.get_settings()
     assert settings["vc_openai_model"] == "ft:gpt-4o:acme"
     assert settings["vc_gemini_model"] == "gemini-3.8-flash"

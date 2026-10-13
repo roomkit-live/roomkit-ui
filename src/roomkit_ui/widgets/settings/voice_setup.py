@@ -15,7 +15,6 @@ from PySide6.QtWidgets import (
 )
 
 from roomkit_ui.features import (
-    AI_PROVIDER_FEATURES,
     STT_PROVIDER_FEATURES,
     TTS_PROVIDER_FEATURES,
 )
@@ -23,6 +22,7 @@ from roomkit_ui.providers import LLM_PROVIDERS as VC_LLM_PROVIDERS
 from roomkit_ui.widgets.settings.choice_cards import ChoiceCards
 from roomkit_ui.widgets.settings.controls import SettingsTabs, label, navigation_link
 from roomkit_ui.widgets.settings.feature_hints import offer_install, populate_provider_combo
+from roomkit_ui.widgets.settings.llm_fields import CONVERSATION_THINKING_HINTS, LLMFields
 from roomkit_ui.widgets.settings.pipeline_summary import PipelineSummary
 from roomkit_ui.widgets.settings.realtime_section import RealtimeSection
 from roomkit_ui.widgets.settings.vc_agent_fields import VCAgentPage
@@ -161,19 +161,14 @@ class VoiceSetup(QWidget):
         llm_form.setRowWrapPolicy(QFormLayout.WrapAllRows)
         llm_form.setContentsMargins(20, 20, 20, 20)
 
-        self.vc_provider = QComboBox()
-        populate_provider_combo(self.vc_provider, VC_LLM_PROVIDERS, AI_PROVIDER_FEATURES)
-        current_vc_provider = settings.get("vc_llm_provider", "anthropic")
-        for i, (_, val) in enumerate(VC_LLM_PROVIDERS):
-            if val == current_vc_provider:
-                self.vc_provider.setCurrentIndex(i)
-                break
-        llm_form.addRow("Provider", self.vc_provider)
-        llm_form.addRow(
-            "", offer_install(self.vc_provider, VC_LLM_PROVIDERS, AI_PROVIDER_FEATURES)
+        # The same rows as the Agent tab's tasks and the Text chat tab's model.
+        self.llm = LLMFields(
+            settings,
+            "conversation",
+            parent=self,
+            thinking_hints=CONVERSATION_THINKING_HINTS,
         )
-        self._cloud.add_llm_fields(llm_form)
-        self._local.add_llm_fields(llm_form)
+        self.llm.add_rows(llm_form, "Provider")
 
         # -- Page 2: TTS --
         tts_page = QFrame()
@@ -219,7 +214,7 @@ class VoiceSetup(QWidget):
 
         # Wire signals
         self.mode_picker.value_changed.connect(self._on_mode_changed)
-        self.vc_provider.currentIndexChanged.connect(self._on_vc_provider_changed)
+        self.llm.provider.currentIndexChanged.connect(lambda _i: self._update_pipeline_summary())
         self.vc_stt_provider.currentIndexChanged.connect(self._on_vc_stt_provider_changed)
         self.vc_tts_provider.currentIndexChanged.connect(self._on_vc_tts_provider_changed)
 
@@ -232,7 +227,8 @@ class VoiceSetup(QWidget):
 
         # Initial state
         self._on_mode_changed(self.mode_picker.value())
-        self._on_vc_provider_changed(self.vc_provider.currentIndex())
+        self.llm.update_visibility()
+        self._update_pipeline_summary()
         self._on_vc_stt_provider_changed(self.vc_stt_provider.currentIndex())
         self._on_vc_tts_provider_changed(self.vc_tts_provider.currentIndex())
 
@@ -262,12 +258,6 @@ class VoiceSetup(QWidget):
         # empty they saved the voice-channel model choice as "".
         self.refresh_vc_model_combos()
 
-    def _on_vc_provider_changed(self, index: int) -> None:
-        prov = VC_LLM_PROVIDERS[index][1]
-        self._local.update_llm_visibility(prov)
-        self._cloud.update_llm_visibility(prov)
-        self._update_pipeline_summary()
-
     def _on_vc_stt_provider_changed(self, index: int) -> None:
         prov = VC_STT_PROVIDERS[index][1]
         self._local.update_stt_visibility(prov)
@@ -295,7 +285,7 @@ class VoiceSetup(QWidget):
         }
         providers = (
             (self.vc_stt_provider, VC_STT_PROVIDERS, stt),
-            (self.vc_provider, VC_LLM_PROVIDERS, llm),
+            (self.llm.provider, VC_LLM_PROVIDERS, llm),
             (self.vc_tts_provider, VC_TTS_PROVIDERS, tts),
         )
         names = []
@@ -330,11 +320,11 @@ class VoiceSetup(QWidget):
         return {
             "conversation_mode": self.mode_picker.value(),
             **self._realtime.get_settings(),
-            "vc_llm_provider": VC_LLM_PROVIDERS[self.vc_provider.currentIndex()][1],
             "vc_stt_provider": VC_STT_PROVIDERS[self.vc_stt_provider.currentIndex()][1],
             "vc_interruption_mode": self.vc_interruption_mode.currentData() or "off",
             "vc_tts_provider": VC_TTS_PROVIDERS[self.vc_tts_provider.currentIndex()][1],
             **self._local.get_settings(),
             **self._cloud.get_settings(),
             **self._agent.get_settings(),
+            **self.llm.get_settings(),
         }
