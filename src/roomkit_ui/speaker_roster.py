@@ -167,6 +167,8 @@ class SpeakerRoster:
             "Several people speak in this conversation; each of their turns opens "
             "with who said it.",
             *(f"- {self._who(key)}" for key in self._seen),
+            # The model said "Speaker B vient de dire…" to the person.
+            'A label such as "Speaker B" is no name: never say one aloud.',
         ]
         if self.assistant_names:
             lines.append(

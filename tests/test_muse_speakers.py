@@ -279,7 +279,8 @@ def test_the_note_says_who_is_who_once_two_voices_spoke():
     roster.name("Speaker A", "Sylvain")
     assert roster.prompt_note() == (
         "Several people speak in this conversation; each of their turns opens with "
-        'who said it.\n- Speaker A is "Sylvain".\n- Speaker B has not been named yet.'
+        'who said it.\n- Speaker A is "Sylvain".\n- Speaker B has not been named yet.\n'
+        'A label such as "Speaker B" is no name: never say one aloud.'
     )
 
 
