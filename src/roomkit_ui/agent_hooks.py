@@ -17,12 +17,17 @@ logger = logging.getLogger(__name__)
 _TASK_LABEL_MAX = 120
 
 
-def task_started_notice(event: Any) -> str:
-    """The chat line for a task the agent started: what it was asked."""
-    meta = getattr(event, "metadata", None) or {}
+def _task_label(meta: dict) -> str:
+    """What a task was asked, on one line and shortened."""
     task = " ".join(str(meta.get("task_input") or "").split())
     if len(task) > _TASK_LABEL_MAX:
         task = task[: _TASK_LABEL_MAX - 1] + "…"
+    return task
+
+
+def task_started_notice(event: Any) -> str:
+    """The chat line for a task the agent started: what it was asked."""
+    task = _task_label(getattr(event, "metadata", None) or {})
     return f"Working in the background: {task}" if task else "Working in the background."
 
 
@@ -77,6 +82,14 @@ def _register_task_hooks(kit: Any, engine: Any) -> None:
     @kit.hook(HookTrigger.ON_TASK_DELEGATED, HookExecution.ASYNC)
     async def _on_task_started(event, context):
         engine._background_tasks += 1
+        meta = event.metadata or {}
+        # agent_id: the channel doing it, "background" on a model of its own.
+        logger.info(
+            "Background task %s started on %s: %s",
+            meta.get("task_id"),
+            meta.get("agent_id"),
+            _task_label(meta),
+        )
         _notify(engine, task_started_notice(event))
 
     @kit.hook(HookTrigger.ON_TASK_COMPLETED, HookExecution.ASYNC)
@@ -85,6 +98,13 @@ def _register_task_hooks(kit: Any, engine: Any) -> None:
         meta = event.metadata or {}
         if meta.get("error"):
             logger.warning("Background task %s failed: %s", meta.get("task_id"), meta["error"])
+        else:
+            logger.info(
+                "Background task %s %s in %.1f s",
+                meta.get("task_id"),
+                meta.get("task_status"),
+                (meta.get("duration_ms") or 0) / 1000,
+            )
         _notify(engine, task_ended_notice(event))
 
 

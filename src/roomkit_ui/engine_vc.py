@@ -52,7 +52,7 @@ from roomkit_ui.features import (
 )
 from roomkit_ui.hooks import register_vc_hooks
 from roomkit_ui.memory import session_window
-from roomkit_ui.providers import create_ai_provider
+from roomkit_ui.providers import create_ai_provider, llm_settings
 from roomkit_ui.session_models import voice_channel_models
 from roomkit_ui.speaker_naming import (
     NAME_SPEAKER_TOOL,
@@ -96,6 +96,7 @@ class VoiceChannelMixin:
     _primary_speaker_mode: bool
     _primary_speaker_name: str
     _ai_pricing: Any
+    _task_pricing: Any
     _usage_cost: float
     _usage_in: int
     _usage_out: int
@@ -105,26 +106,29 @@ class VoiceChannelMixin:
     _vc_agent: Any
     _speakers: Any
 
-    def _accumulate_usage(self, usage: dict) -> None:
+    def _accumulate_usage(self, usage: dict, *, task: bool = False) -> None:
         """Add one AI response's token usage to the session totals and emit.
 
-        Called from the ON_AI_RESPONSE hook.  Cost is priced with the active
-        model's catalog ``ModelPricing`` when roomkit carries one; without it
-        (local models, unknown ids) only token counts are reported.
+        Called from the ON_AI_RESPONSE hook.  Cost is priced with the model
+        that answered's catalog ``ModelPricing`` when roomkit carries one: the
+        session LLM's, or with *task* the background tasks' model of its own.
+        Without one (local models, unknown ids) only token counts are reported.
         """
+        pricing = self._task_pricing if task else self._ai_pricing
         self._usage_in += (
             _usage_int(usage, "input_tokens")
             + _usage_int(usage, "cache_read_input_tokens")
             + _usage_int(usage, "cache_creation_input_tokens")
         )
         self._usage_out += _usage_int(usage, "output_tokens")
-        if self._ai_pricing is not None:
+        if pricing is not None:
             try:
-                self._usage_cost += self._ai_pricing.cost_for(usage)
+                self._usage_cost += pricing.cost_for(usage)
             except Exception:
                 logger.debug("cost_for() failed for usage=%s", usage, exc_info=True)
+        priced = self._ai_pricing is not None or self._task_pricing is not None
         payload = {
-            "cost_usd": self._usage_cost if self._ai_pricing is not None else None,
+            "cost_usd": self._usage_cost if priced else None,
             "input_tokens": self._usage_in,
             "output_tokens": self._usage_out,
         }
@@ -310,6 +314,7 @@ class VoiceChannelMixin:
             **self._vc_agent.channel_options(),
         )
         if self._vc_agent.worker is not None:
+            self._task_pricing = _model_pricing(self._vc_agent.worker)
             self._vc_agent.worker_channel = _background_worker_channel(
                 settings, self._vc_agent, system_prompt, toolset, skills_registry, self
             )
@@ -705,8 +710,8 @@ def _background_worker_channel(
     engine: Any,
 ) -> Any:
     """The AIChannel background tasks run on when they have a model of their
-    own: the session's prompt, tools and skills, that model's reasoning and
-    Tool Search.  No speak policy: it talks to nobody."""
+    own: the session's prompt, tools and skills, that model's reasoning
+    (``llm_settings``) and Tool Search.  No speak policy: it talks to nobody."""
     from roomkit.channels.ai import AIChannel
 
     name = agent.worker_provider
@@ -718,7 +723,7 @@ def _background_worker_channel(
         config_provider=toolset.turn_config(),
         skills=skills_registry,
         retry_policy=_turn_retry_policy(),
-        **reasoning_options(settings, name),
+        **reasoning_options(llm_settings(settings, "background"), name),
         **toolset.channel_options(),
         **tool_search_options(settings, realtime=False, local_model=name in LOCAL_LLMS),
     )

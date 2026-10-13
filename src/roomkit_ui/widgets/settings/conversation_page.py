@@ -1,4 +1,5 @@
-"""Conversation setup and personality, with one owner for every setting."""
+"""Conversation setup (voice, text chat) and personality, with one owner for
+every setting."""
 
 from __future__ import annotations
 
@@ -13,6 +14,7 @@ from roomkit_ui.widgets.settings.controls import (
     navigation_link,
     page_layout,
 )
+from roomkit_ui.widgets.settings.text_chat_setup import TextChatSetup
 from roomkit_ui.widgets.settings.voice_setup import VoiceSetup
 
 
@@ -36,6 +38,7 @@ class ConversationPage(QWidget):
         self.voice.spoken_language_link.clicked.connect(
             lambda: self.navigate_requested.emit("general")
         )
+        self.text_chat = TextChatSetup(settings)
         personality = QWidget()
         personality_layout = QVBoxLayout(personality)
         personality_layout.setContentsMargins(0, 0, 0, 0)
@@ -76,7 +79,11 @@ class ConversationPage(QWidget):
         self.attitudes = _AttitudesPage(settings)
         personality_layout.addWidget(self.attitudes)
         self.tabs = SettingsTabs(
-            [("Voice setup", self.voice), ("Personality & instructions", personality)]
+            [
+                ("Voice setup", self.voice),
+                ("Text chat", self.text_chat),
+                ("Personality & instructions", personality),
+            ]
         )
         self.tabs.current_changed.connect(self._on_tab_changed)
         self.attitudes.changed.connect(self._refresh_attitudes)
@@ -115,6 +122,7 @@ class ConversationPage(QWidget):
     def get_settings(self) -> dict:
         return {
             **self.voice.get_settings(),
+            **self.text_chat.get_settings(),
             **self.attitudes.get_settings(),
             "system_prompt": self.prompt.toPlainText().strip(),
             "selected_attitude": self.attitude_combo.currentData() or "",

@@ -106,15 +106,16 @@ graph TB
 | **MCP skills** | `mcp_skills.py`, `skill_approval.py`, `widgets/skill_approval_dialog.py` | Skills MCP servers publish (SEP-2640) handed to roomkit's registry beside the user's own; the user's yes before a CLI tool runs while one is active |
 | **Models** | `model_catalog.py`, `model_download.py`, `model_manager.py`, `download_flight.py` | Download/manage local STT/TTS/VAD/speaker/denoiser/turn models (GitHub LFS resolution, one download per model) |
 | **Settings & secrets** | `settings.py`, `settings_secrets.py`, `secret_store.py` | QSettings persistence; API keys and secret env values in the OS keyring |
-| **Providers** | `providers/`, `tts/` | Lazy factory registries for LLM providers and TTS backends |
+| **Providers** | `providers/`, `tts/` | Lazy factory registries for LLM providers and TTS backends; each LLM role's settings (conversation, background tasks, text chat) |
 | **Widgets** | `widgets/` | Main window, chat, VU meter, compact welcome and composer, loading overlay, grouped settings workspace |
 
 ## Data flow
 
 ### Typed conversation
 
-`text_chat.py` checks the selected `vc_llm_provider` locally for its required settings
-and installed feature. The composer refreshes this gate when Settings closes. A send
+`text_chat.py` checks the text chat's model locally for its required settings and
+installed feature: the Text chat tab's (`text_llm_provider`), or Think · LLM's
+(`vc_llm_provider`) while that is left empty, both read through `providers.llm_settings`. The composer refreshes this gate when Settings closes. A send
 prepares the selected conversation and snapshots earlier context before appending the
 new user message. `Engine.start(..., text=...)` dispatches to `engine_text.py`:
 `AIChannel` plus a `WebSocketChannel` whose delivery callbacks run in-process (no server

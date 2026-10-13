@@ -64,3 +64,41 @@ def test_missing_backend_does_not_claim_to_be_ready(monkeypatch):
     monkeypatch.setattr("roomkit_ui.text_chat.is_available", lambda _feature: False)
     assert "Install" in text_chat_unavailable({"anthropic_api_key": "test-only"})
     assert text_chat_unavailable({"vc_llm_provider": "unknown"})
+
+
+def test_typed_messages_on_a_model_of_their_own_need_its_key():
+    settings = {
+        "vc_llm_provider": "anthropic",
+        "anthropic_api_key": "test-only",
+        "text_llm_provider": "openai",
+        "text_openai_model": "gpt-5.5",
+    }
+
+    assert text_chat_unavailable(settings) == "Add your OpenAI key in Settings…"
+    settings["openai_api_key"] = "test-only"
+    assert text_chat_unavailable(settings) == ""
+
+
+def test_the_text_chat_tab_sets_the_model_of_typed_messages(qapp):
+    from roomkit_ui.widgets.settings.text_chat_setup import TextChatSetup
+
+    page = TextChatSetup({"vc_local_model": "qwen3:8b", "text_anthropic_model": "x"})
+    llm = page.llm
+
+    assert llm.current() == ""  # Think · LLM's until another is chosen
+    assert page.get_settings() == {"text_llm_provider": "", "text_anthropic_model": "x"}
+    llm.provider.setCurrentIndex([value for _, value in llm.entries].index("local"))
+    model, tools = llm.fields["local_model"], llm.fields["local_tools"]
+    assert not model.isHidden() and not tools.isHidden()
+    assert "qwen3:8b" in model.placeholderText()
+    model.setText(" gemma4:12b ")
+    tools.setChecked(False)
+
+    assert page.get_settings() == {
+        "text_llm_provider": "local",
+        "text_anthropic_model": "x",
+        "text_local_base_url": "",
+        "text_local_model": "gemma4:12b",
+        "text_local_tools": False,
+        "text_local_thinking": False,
+    }

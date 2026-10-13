@@ -310,7 +310,7 @@ async def test_a_typed_turn_carries_them_once(qapp, monkeypatch):
     monkeypatch.setattr(Engine, "_finalize_event_loop", AsyncMock())
     monkeypatch.setattr(Engine, "_load_vc_tools", AsyncMock(return_value=(_toolset(), None)))
     provider = MockAIProvider(responses=["The goblin falls."])
-    monkeypatch.setattr("roomkit_ui.engine_text.create_ai_provider", lambda *_: provider)
+    monkeypatch.setattr("roomkit_ui.engine_text.create_ai_provider", lambda *_, **__: provider)
     engine = Engine()
     settings = {
         **_DEFAULTS,

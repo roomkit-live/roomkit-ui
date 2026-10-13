@@ -195,14 +195,12 @@ def _register_vc_assistant_hooks(kit: Any, engine: Any, tts_filter: Any) -> None
     async def _on_ai_usage(event, context):
         # AIResponseEvent.usage carries the provider's token counters
         # (input/output + cache counters since roomkit 0.42).  A background
-        # worker's model is another one: priced as the conversation's, its
-        # tokens would be wrong.
-        if getattr(event, "channel_id", "") == BACKGROUND_WORKER:
-            return
+        # worker's model is another one, priced as itself.
+        task = getattr(event, "channel_id", "") == BACKGROUND_WORKER
         try:
             usage = dict(getattr(event, "usage", {}) or {})
             if usage:
-                engine._accumulate_usage(usage)
+                engine._accumulate_usage(usage, task=task)
         except Exception:
             pass
 

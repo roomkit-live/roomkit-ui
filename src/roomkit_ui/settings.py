@@ -256,12 +256,32 @@ _DEFAULTS = {
     "vc_agent_name": "",  # what people call the assistant (empty = "Assistant")
     "vc_thinker": False,  # think while listening (needs a speak policy)
     "vc_background": False,  # long requests run as background tasks (roomkit 0.97)
-    # The LLM those tasks run on: "" (the conversation model) | "llamacpp", with its
-    # GGUF and context ("" = Think · LLM's) and its thinking (on: nobody waits on a task)
+    # The LLM those tasks run on: "" (the conversation model) or a provider of
+    # providers.LLM_PROVIDERS, with its model fields ("" = Think · LLM's,
+    # providers.llm_settings) and a local model's thinking (on: nobody waits on a task)
     "vc_background_model": "",
+    "vc_background_anthropic_model": "",
+    "vc_background_openai_model": "",
+    "vc_background_gemini_model": "",
+    "vc_background_local_base_url": "",
+    "vc_background_local_model": "",
+    "vc_background_local_thinking": True,
     "vc_background_llamacpp_model": "",
     "vc_background_llamacpp_context": "",
     "vc_background_llamacpp_thinking": True,
+    # The LLM typed messages run on: "" (Think · LLM's) or a provider, with its
+    # fields as the tasks' above; a local model's tool use and thinking its own
+    "text_llm_provider": "",
+    "text_anthropic_model": "",
+    "text_openai_model": "",
+    "text_gemini_model": "",
+    "text_local_base_url": "",
+    "text_local_model": "",
+    "text_local_tools": True,
+    "text_local_thinking": False,
+    "text_llamacpp_model": "",
+    "text_llamacpp_context": "",
+    "text_llamacpp_thinking": False,
     "typesafe_api_key": "",  # secret — keyring, never QSettings
 }
 

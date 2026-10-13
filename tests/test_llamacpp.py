@@ -9,8 +9,9 @@ import pytest
 from roomkit.providers.ai.base import AIContext, AIMessage
 
 from roomkit_ui.engine_vc_helpers import start_local_llm
-from roomkit_ui.providers import create_ai_provider
+from roomkit_ui.providers import create_ai_provider, llm_settings
 from roomkit_ui.providers import llamacpp as factory
+from roomkit_ui.settings import _DEFAULTS
 
 
 class _FakeServer:
@@ -165,7 +166,8 @@ async def test_switching_thinking_keeps_the_running_server():
 
 
 def _tasks_provider(**settings):
-    return factory.create(factory.background_settings(settings), role="background")
+    own = llm_settings({**settings, "vc_background_model": "llamacpp"}, "background")
+    return factory.create(own, role="background")
 
 
 async def test_the_tasks_share_the_conversations_server_when_they_run_the_same():
@@ -200,17 +202,21 @@ async def test_a_server_another_role_still_uses_is_not_stopped():
 
 
 def test_the_tasks_take_think_llms_gguf_and_context_unless_set_and_think():
-    inherited = factory.background_settings(
-        {"vc_llamacpp_model": "/m/a.gguf", "vc_llamacpp_context": "16384"}
+    tasks = {**_DEFAULTS, "vc_background_model": "llamacpp"}
+    inherited = llm_settings(
+        {**tasks, "vc_llamacpp_model": "/m/a.gguf", "vc_llamacpp_context": "16384"},
+        "background",
     )
-    own = factory.background_settings(
+    own = llm_settings(
         {
+            **tasks,
             "vc_llamacpp_model": "/m/a.gguf",
             "vc_background_llamacpp_model": "/m/b.gguf",
             "vc_background_llamacpp_context": "32768",
             "vc_background_llamacpp_thinking": False,
             "vc_llamacpp_thinking": True,
-        }
+        },
+        "background",
     )
 
     assert inherited["vc_llamacpp_model"] == "/m/a.gguf"

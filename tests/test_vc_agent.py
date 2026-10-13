@@ -173,9 +173,6 @@ def test_the_agent_tab_saves_its_choices(qapp):
         "vc_thinker": False,
         "vc_background": False,
         "vc_background_model": "",
-        "vc_background_llamacpp_model": "",
-        "vc_background_llamacpp_context": "",
-        "vc_background_llamacpp_thinking": True,
     }
     assert not page.agent_name.isHidden()
 
@@ -397,8 +394,11 @@ def made(monkeypatch):
 
 
 def test_tasks_run_on_the_llamacpp_model_set_for_them(made):
+    from roomkit_ui.settings import _DEFAULTS
+
     agent, notices = _build(
         {
+            **_DEFAULTS,
             "vc_background": True,
             "vc_background_model": "llamacpp",
             "vc_background_llamacpp_model": "/models/b.gguf",
@@ -412,20 +412,58 @@ def test_tasks_run_on_the_llamacpp_model_set_for_them(made):
     assert agent.worker_provider == "llamacpp"
     assert role == "background"
     assert settings["vc_llamacpp_model"] == "/models/b.gguf"
-    assert settings["vc_llamacpp_thinking"] is True
+    assert settings["vc_llamacpp_thinking"] is True  # nobody waits on a task
     assert agent.summary == [
         {"name": "Works in the background", "description": "long requests run as tasks, on mock"}
     ]
     assert notices == []
 
 
-@pytest.mark.parametrize("picked", ["", "anthropic"])
-def test_otherwise_the_conversation_model_is_its_own_worker(made, picked):
-    agent, _ = _build({"vc_background": True, "vc_background_model": picked})
+def test_otherwise_the_conversation_model_is_its_own_worker(made):
+    agent, _ = _build({"vc_background": True, "vc_background_model": ""})
 
     assert agent.background
     assert agent.worker is None
     assert made == []
+
+
+def test_tasks_run_on_a_cloud_model_at_its_own_reasoning():
+    from roomkit_ui.engine_vc_helpers import reasoning_options
+    from roomkit_ui.providers import llm_settings
+
+    settings = {
+        "vc_background": True,
+        "vc_background_model": "anthropic",
+        "vc_background_anthropic_model": "claude-opus-5-5",
+        "anthropic_api_key": "k",
+        "vc_llm_provider": "local",
+        # Set for spoken replies: quick, no thinking.
+        "vc_anthropic_thinking": "off",
+        "vc_anthropic_effort": "low",
+    }
+    agent, notices = _build(settings)
+
+    assert agent.worker_provider == "anthropic"
+    assert agent.worker.model_name == "claude-opus-5-5"
+    assert agent.worker_note == (
+        "Runs the background tasks, reasoning as its model does by default."
+    )
+    assert reasoning_options(llm_settings(settings, "background"), "anthropic") == {
+        "max_tokens": 16_000
+    }
+    assert notices == []
+
+
+def test_a_cloud_model_without_its_key_leaves_the_tasks_on_the_conversation_model():
+    agent, notices = _build(
+        {"vc_background": True, "vc_background_model": "openai", "openai_api_key": ""}
+    )
+
+    assert agent.background and agent.worker is None
+    assert notices == [
+        "Background tasks run on the conversation model: "
+        "OpenAI API key is required. Open Settings to enter it."
+    ]
 
 
 def test_a_model_that_cannot_run_leaves_the_tasks_on_the_conversation_model(monkeypatch):
@@ -461,24 +499,54 @@ def test_the_agent_tab_sets_the_tasks_model(qapp):
         }
     )
 
-    assert page.background_model.currentText() == "llama.cpp (local GGUF)"
-    assert not page.background_model.isEnabled()  # waits for background work
-    assert not page.task_gguf.isHidden()
-    assert "a.gguf" in page.task_gguf.placeholderText()  # Think · LLM's, until set
+    tasks = page.tasks_llm
+    gguf = tasks.fields["llamacpp_model"]
+    assert tasks.provider.currentText() == "llama.cpp (local GGUF)"
+    assert not tasks.provider.isEnabled()  # waits for background work
+    assert not gguf.isHidden()
+    assert "a.gguf" in gguf.placeholderText()  # Think · LLM's, until set
     page.background.setChecked(True)
-    assert page.background_model.isEnabled() and page.task_gguf.isEnabled()
-    page.task_gguf.setText(" /models/b.gguf ")
-    page.task_context.setText("32768")
-    page.task_thinking.setChecked(False)
+    assert tasks.provider.isEnabled() and gguf.isEnabled()
+    gguf.setText(" /models/b.gguf ")
+    tasks.fields["llamacpp_context"].setText("32768")
+    tasks.fields["llamacpp_thinking"].setChecked(False)
     out = page.get_settings()
     assert out["vc_background_model"] == "llamacpp"
     assert out["vc_background_llamacpp_model"] == "/models/b.gguf"
     assert out["vc_background_llamacpp_context"] == "32768"
     assert out["vc_background_llamacpp_thinking"] is False
 
-    page.background_model.setCurrentIndex(0)  # the conversation model
-    assert page.task_gguf.isHidden()
+    tasks.provider.setCurrentIndex(0)  # the conversation model
+    assert gguf.isHidden()
     assert page.get_settings()["vc_background_model"] == ""
+
+
+def test_the_agent_tab_offers_every_llm_for_the_tasks(qapp):
+    from roomkit_ui.providers import LLM_PROVIDERS
+    from roomkit_ui.widgets.settings.vc_agent_fields import VCAgentPage
+
+    page = VCAgentPage(
+        {
+            "vc_background": True,
+            "vc_background_openai_model": "gpt-5.5",
+            "vc_gemini_model": "gemini-3.8-pro",
+        }
+    )
+    tasks = page.tasks_llm
+    choices = [tasks.provider.itemText(i) for i in range(tasks.provider.count())]
+
+    assert choices == ["The conversation model", *(label for label, _ in LLM_PROVIDERS)]
+    tasks.provider.setCurrentIndex(choices.index("Google Gemini"))
+    gemini = tasks.fields["gemini_model"]
+    assert not gemini.isHidden() and tasks.fields["openai_model"].isHidden()
+    assert gemini.currentText() == "gemini-3.8-pro"  # starts on Think · LLM's
+
+    out = page.get_settings()
+    assert out["vc_background_model"] == "gemini"
+    assert out["vc_background_gemini_model"] == "gemini-3.8-pro"
+    # Another provider's model is kept, not overwritten by what its field shows.
+    assert out["vc_background_openai_model"] == "gpt-5.5"
+    assert "vc_background_anthropic_model" not in out
 
 
 async def test_a_task_runs_on_its_own_model_with_the_session_tools(qapp, monkeypatch):
@@ -544,14 +612,14 @@ async def test_a_task_runs_on_its_own_model_with_the_session_tools(qapp, monkeyp
             super().__init__()
             self.usage: list[dict] = []
 
-        def _accumulate_usage(self, usage):
-            self.usage.append(usage)
+        def _accumulate_usage(self, usage, *, task=False):
+            self.usage.append((usage["input_tokens"], task))
 
     hooks = Usage()
     register_vc_hooks(kit, hooks)
 
     await kit.start_task("main", "ai", "Summarize this week's mails")
-    await until(lambda: len(worker.calls) == 2 and conversation.calls and hooks.usage)
+    await until(lambda: len(worker.calls) == 2 and conversation.calls and len(hooks.usage) == 2)
     await kit.close()
 
     assert "get_current_time" in {t.name for t in worker.calls[0].tools}
@@ -563,8 +631,60 @@ async def test_a_task_runs_on_its_own_model_with_the_session_tools(qapp, monkeyp
     assert "Three mails." in relay
     # Never attached to the session room, where it would answer every turn.
     assert await kit.store.get_binding("main", "background") is None
-    # Its tokens are another model's: not priced as the conversation's.
-    assert [usage["input_tokens"] for usage in hooks.usage] == [7]
+    # Its tokens (both its calls) are another model's: priced as that model's.
+    assert sorted(hooks.usage) == [(7, False), (1700, True)]
+
+
+async def test_a_spoken_turn_is_offered_background_work_beside_tool_search(
+    qapp, monkeypatch, caplog
+):
+    # Tool Search hides the MCP tools behind find_tools: the agent must still
+    # see work_in_background to start a task.
+    from roomkit import ChannelCategory, RoomKit, SMSChannel, TextContent
+    from roomkit.models.delivery import InboundMessage
+    from roomkit.providers.sms.mock import MockSMSProvider
+
+    from roomkit_ui.engine import Engine
+    from roomkit_ui.settings import _DEFAULTS
+    from roomkit_ui.toolset import ToolSet
+
+    many = [
+        {"name": f"tool_{i}", "description": "Does one thing. " * 30, "parameters": {}}
+        for i in range(150)
+    ]
+
+    async def tools(_settings, _provider):
+        builtin = [{"name": "get_current_time", "description": "Time.", "parameters": {}}]
+        return ToolSet(builtin=builtin, cli=[], mcp=many), None
+
+    engine = Engine()
+    monkeypatch.setattr(engine, "_load_vc_tools", tools)
+    conversation = MockAIProvider(responses=["On it."])
+    settings = {
+        **_DEFAULTS,
+        "vc_llm_provider": "anthropic",
+        "vc_background": True,
+        "tool_search_mode": "on",
+    }
+    ai, _, _ = await engine._build_vc_ai_channel(settings, conversation, "anthropic", "Be brief.")
+    kit = RoomKit()
+    kit.register_channel(SMSChannel("sms", provider=MockSMSProvider()))
+    kit.register_channel(ai)
+    with caplog.at_level(logging.INFO, logger="roomkit_ui.vc_agent"):
+        engine._vc_agent.setup_background(kit, ai)
+    await kit.create_room(room_id="main")
+    await kit.attach_channel("main", "sms")
+    await kit.attach_channel("main", "ai", category=ChannelCategory.INTELLIGENCE)
+
+    await kit.process_inbound(
+        InboundMessage(channel_id="sms", sender_id="u", content=TextContent(body="Go on"))
+    )
+    await kit.close()
+
+    declared = {t.name for t in conversation.calls[0].tools}
+    assert "tool_7" not in declared  # behind find_tools
+    assert "work_in_background" in declared
+    assert "Background work: tasks run on the conversation model" in caplog.text
 
 
 async def test_the_tasks_model_loads_while_the_session_opens_and_says_if_it_cannot():

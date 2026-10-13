@@ -70,7 +70,7 @@ async def setup_text(qapp, monkeypatch):
     engines = []
 
     def install(provider, engine=None):
-        monkeypatch.setattr("roomkit_ui.engine_text.create_ai_provider", lambda *_: provider)
+        monkeypatch.setattr("roomkit_ui.engine_text.create_ai_provider", lambda *_, **__: provider)
         eng = engine or Engine()
         if eng not in engines:
             engines.append(eng)
@@ -112,6 +112,30 @@ async def test_real_channel_streams_before_completion_and_closes_provider(setup_
     assert [m.content for m in provider.contexts[0].messages] == ["Salut"]
     await engine.stop()
     assert provider.closed and engine._kit is None
+
+
+async def test_typed_turns_run_on_the_text_chats_own_model(setup_text, monkeypatch):
+    provider = TestProvider()
+    engine = setup_text(provider)
+    made = []
+
+    def create(name, settings, **options):
+        made.append((name, settings, options))
+        return provider
+
+    monkeypatch.setattr("roomkit_ui.engine_text.create_ai_provider", create)
+    settings = {
+        **SETTINGS,
+        "text_llm_provider": "openai",
+        "text_openai_model": "gpt-5.5",
+        "openai_api_key": "test-only",
+    }
+
+    await asyncio.wait_for(engine.start(settings, text="Salut", conversation_id="thread"), 3)
+
+    ((name, used, options),) = made
+    assert (name, used["vc_openai_model"], options) == ("openai", "gpt-5.5", {"role": "text"})
+    await engine.stop()
 
 
 async def test_cancel_retains_partial_and_never_emits_late_text(setup_text):

@@ -12,6 +12,15 @@ Each released section is the source for that version's GitHub release notes.
 ## [Unreleased]
 
 ### Added
+- **A model of its own for typed messages** (Settings → Conversation → Text chat) — typed
+  messages run on the Voice Channel's model (Think · LLM) as before, or on any other LLM
+  the app offers: Anthropic, OpenAI, Gemini, a local vLLM/Ollama server or llama.cpp, with
+  the same instructions, tools and memory. A local model has its own tool-use and
+  thinking switches; empty fields take Think · LLM's values.
+- **Background tasks on any LLM** (Voice Channel → Agent → Tasks run on) — not only the
+  conversation model or llama.cpp: a stronger cloud model can do the work while a quick
+  one talks. A task on a cloud model of its own reasons as that model does by default,
+  and its tokens are priced as that model in the session's cost (they were left out).
 - **Explicit authentication for MCP HTTP servers** — choose None, Bearer token,
   raw Authorization API key, Basic credentials or OAuth 2.0, with masked secret fields.
   Existing Authorization headers populate the matching fields automatically. Additional
@@ -382,6 +391,8 @@ Each released section is the source for that version's GitHub release notes.
   at the head of the words after the call, and once more in the reply's final, opened
   below a background-task notice. A tool row or a notice inside a reply now closes its
   entry, and the next one shows only the words that follow.
+- **Background work is in the logs** — the session log says where the tasks run, and when
+  each starts (on which channel, what it was asked) and how it ended.
 - **Voice Channel fixes from roomkit 0.100** — the assistant's own voice, heard back while
   the echo canceller is still learning the room at the start of a session, no longer cuts
   its first reply or shows as your words. The sentence said before a tool call is spoken

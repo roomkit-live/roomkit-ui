@@ -222,6 +222,8 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, TextMix
         # active LLM's ModelPricing, or None where the offline catalog has no
         # price — every realtime model, whose sessions show tokens only.
         self._ai_pricing: Any = None
+        # The background tasks' model's, when they run on one of their own.
+        self._task_pricing: Any = None
         # The Voice Channel agent's parts (speak policy …) and the clients
         # they opened, closed after the kit (vc_agent.VCAgent).
         self._vc_agent: Any = None
@@ -424,6 +426,7 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, TextMix
 
         if not reuse:
             self._ai_pricing = None
+            self._task_pricing = None
             self._usage_cost = 0.0
             self._usage_in = 0
             self._usage_out = 0

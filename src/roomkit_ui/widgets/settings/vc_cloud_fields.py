@@ -229,6 +229,34 @@ def _populate_editable_models(
         combo.setCurrentText(current)
 
 
+# A cloud provider's model before the user picks one: its factory's default
+# (Claude's is the catalog's first).
+_DEFAULT_MODELS = {"openai": "gpt-4o", "gemini": "gemini-3.8-flash"}
+
+
+def cloud_model_combo(provider: str, model_id: str) -> QComboBox:
+    """Think · LLM's model dropdown for a cloud *provider*, on *model_id*:
+    Claude's lineup from its catalog; OpenAI's and Gemini's editable, any id
+    their API takes."""
+    combo = QComboBox()
+    if provider == "anthropic":
+        for label, catalog_id in VC_ANTHROPIC_MODELS:
+            combo.addItem(label, catalog_id)
+        _select_model(combo, model_id, _deprecated_label(_ANTHROPIC_CATALOG, model_id))
+        return combo
+    combo.setEditable(True)
+    lineup = VC_OPENAI_MODELS if provider == "openai" else VC_GEMINI_MODELS
+    _populate_editable_models(combo, lineup, model_id or _DEFAULT_MODELS[provider])
+    return combo
+
+
+def cloud_model(combo: QComboBox) -> str:
+    """The model id a ``cloud_model_combo`` is on."""
+    if combo.isEditable():
+        return combo.currentText().strip()
+    return combo.currentData() or VC_ANTHROPIC_MODELS[0][1]
+
+
 class VCCloudFields:
     """Cloud provider fields added to a parent QFormLayout in phases.
 
@@ -249,34 +277,15 @@ class VCCloudFields:
     def add_llm_fields(self, form: QFormLayout) -> None:
         s = self._settings
 
-        # Anthropic
-        self.vc_anthropic_model = QComboBox()
-        for label, model_id in VC_ANTHROPIC_MODELS:
-            self.vc_anthropic_model.addItem(label, model_id)
-        saved_anthropic = s.get("vc_anthropic_model", "")
-        _select_model(
-            self.vc_anthropic_model,
-            saved_anthropic,
-            _deprecated_label(_ANTHROPIC_CATALOG, saved_anthropic),
-        )
+        self.vc_anthropic_model = cloud_model_combo("anthropic", s.get("vc_anthropic_model", ""))
         self._vc_anthropic_model_label = QLabel("Model")
         form.addRow(self._vc_anthropic_model_label, self.vc_anthropic_model)
 
-        # OpenAI
-        self.vc_openai_model = QComboBox()
-        self.vc_openai_model.setEditable(True)
-        _populate_editable_models(
-            self.vc_openai_model, VC_OPENAI_MODELS, s.get("vc_openai_model", "gpt-4o")
-        )
+        self.vc_openai_model = cloud_model_combo("openai", s.get("vc_openai_model", ""))
         self._vc_openai_model_label = QLabel("Model")
         form.addRow(self._vc_openai_model_label, self.vc_openai_model)
 
-        # Gemini
-        self.vc_gemini_model = QComboBox()
-        self.vc_gemini_model.setEditable(True)
-        _populate_editable_models(
-            self.vc_gemini_model, VC_GEMINI_MODELS, s.get("vc_gemini_model", "gemini-3.8-flash")
-        )
+        self.vc_gemini_model = cloud_model_combo("gemini", s.get("vc_gemini_model", ""))
         self._vc_gemini_model_label = QLabel("Model")
         form.addRow(self._vc_gemini_model_label, self.vc_gemini_model)
 
@@ -581,11 +590,9 @@ class VCCloudFields:
 
     def get_settings(self) -> dict:
         return {
-            "vc_anthropic_model": (
-                self.vc_anthropic_model.currentData() or VC_ANTHROPIC_MODELS[0][1]
-            ),
-            "vc_openai_model": self.vc_openai_model.currentText().strip(),
-            "vc_gemini_model": self.vc_gemini_model.currentText().strip(),
+            "vc_anthropic_model": cloud_model(self.vc_anthropic_model),
+            "vc_openai_model": cloud_model(self.vc_openai_model),
+            "vc_gemini_model": cloud_model(self.vc_gemini_model),
             "vc_anthropic_thinking": self.vc_anthropic_thinking.currentData() or "",
             "vc_anthropic_effort": self.vc_anthropic_effort.currentData() or "",
             "vc_gemini_thinking": self.vc_gemini_thinking.currentData() or "",

@@ -1,4 +1,4 @@
-"""Local readiness check for the conversation LLM; no API call or model load."""
+"""Local readiness check for the text chat's LLM; no API call or model load."""
 
 from __future__ import annotations
 
@@ -7,17 +7,19 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from roomkit_ui.features import AI_PROVIDER_FEATURES, is_available
+from roomkit_ui.providers import llm_settings
 
 _CLOUD = {
     "anthropic": ("Anthropic", "anthropic_api_key", "vc_anthropic_model"),
     "openai": ("OpenAI", "openai_api_key", "vc_openai_model"),
     "gemini": ("Gemini", "api_key", "vc_gemini_model"),
 }
-CONFIGURATION_HINT = "Settings → Conversation → Voice Channel → Reason · LLM"
+CONFIGURATION_HINT = "Settings → Conversation → Text chat"
 
 
 def text_chat_unavailable(settings: dict) -> str:
     """A reason for the disabled input, or empty when its AI channel is configured."""
+    settings = llm_settings(settings, "text")
     provider = settings.get("vc_llm_provider", "anthropic")
     if provider in _CLOUD:
         name, key, model_key = _CLOUD[provider]
@@ -53,6 +55,7 @@ def image_chat_unavailable(settings: dict) -> str:
     """Use RoomKit's model metadata without opening a provider or making a request."""
     if reason := text_chat_unavailable(settings):
         return reason
+    settings = llm_settings(settings, "text")
     name = settings.get("vc_llm_provider", "anthropic")
     classes = {
         "anthropic": "AnthropicAIProvider",

@@ -18,7 +18,7 @@ from roomkit_ui.engine_vc_helpers import reasoning_options, start_local_llm
 from roomkit_ui.features import FeatureUnavailableError
 from roomkit_ui.image_messages import ImageSessionWindow, message_content
 from roomkit_ui.images import ImageAttachment
-from roomkit_ui.providers import create_ai_provider
+from roomkit_ui.providers import create_ai_provider, has_own_llm, llm_settings
 from roomkit_ui.text_chat import text_chat_unavailable
 from roomkit_ui.toolset import tool_search_options
 
@@ -49,6 +49,9 @@ class TextMixin:
         try:
             if reason := text_chat_unavailable(settings):
                 raise ValueError(reason)
+            # Typed turns read their own model's settings (Text chat tab).
+            own_model = has_own_llm(settings, "text")
+            settings = llm_settings(settings, "text")
             provider_name = settings.get("vc_llm_provider", "anthropic")
             prompt = self._compose_session_prompt(settings)  # type: ignore[attr-defined]
             kit, _store = self._build_kit(RoomKit, settings)  # type: ignore[attr-defined]
@@ -59,7 +62,9 @@ class TextMixin:
                 toolset,
                 builtin=[t for t in toolset.builtin if t["name"] != "end_conversation"],
             )
-            provider = create_ai_provider(provider_name, settings)
+            provider = create_ai_provider(
+                provider_name, settings, role="text" if own_model else "conversation"
+            )
             try:
                 self._text_vision = provider.supports_vision
                 if self._text_images and not self._text_vision:

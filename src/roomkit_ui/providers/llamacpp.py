@@ -4,9 +4,10 @@ roomkit's ``LlamaCppAIProvider`` downloads a pinned ``llama-server`` build
 and the model, starts the server on first use and stops it on ``close()``.
 A session closes its AI provider when it ends, so used as is, every session
 would pay the model load again.  Here the server outlives the session: one
-per role (the conversation, the background tasks), one server when both run
-the same configuration, kept until its role's configuration changes or the
-app quits (roomkit kills a server still running at interpreter exit).
+per role (the conversation, the background tasks, typed messages), one server
+when two run the same configuration, kept until its role's configuration
+changes or the app quits (roomkit kills a server still running at interpreter
+exit).
 
 The server runs on a thread and event loop of its own.  When a session ends
 the engine strips the app's loop of every file descriptor the session
@@ -32,8 +33,9 @@ DEFAULT_MODEL = "unsloth/Qwen3-4B-Instruct-2507-GGUF:Q4_K_M"
 # A spoken reply's output cap without reasoning: LlamaCppConfig's default.
 _REPLY_MAX_TOKENS = 1024
 
-# role → (configuration, its server): "conversation" (Think · LLM) and
-# "background" (Agent tab → Tasks run on).
+# role → (configuration, its server): "conversation" (Think · LLM),
+# "background" (Agent tab → Tasks run on) and "text" (Text chat), each
+# configured as ``providers.llm_settings`` reads it.
 _servers: dict[str, tuple[tuple, _ServerThread]] = {}
 
 
@@ -70,21 +72,6 @@ def create(settings: dict, *, role: str = "conversation") -> Any:
     )
 
 
-def background_settings(settings: dict) -> dict:
-    """*settings* as the background tasks' model reads them: the Agent tab's
-    GGUF and context, each left empty taking Think · LLM's (one server then
-    serves both), and its own thinking, on unless turned off: a task waits on
-    nobody's first word."""
-    return {
-        **settings,
-        "vc_llamacpp_model": settings.get("vc_background_llamacpp_model")
-        or settings.get("vc_llamacpp_model", ""),
-        "vc_llamacpp_context": settings.get("vc_background_llamacpp_context")
-        or settings.get("vc_llamacpp_context", ""),
-        "vc_llamacpp_thinking": bool(settings.get("vc_background_llamacpp_thinking", True)),
-    }
-
-
 def _max_tokens(context_size: int, *, thinking: bool) -> int:
     """A turn's output cap.  The reasoning counts against it: at roomkit's
     1024, a model that thinks could spend them all and say nothing.  Thinking,
@@ -104,7 +91,7 @@ def _context_size(settings: dict) -> int | None:
 
 
 def _shared_server(model: str, context_size: int | None, role: str) -> _ServerThread:
-    """*role*'s server for this configuration, the other role's when it runs
+    """*role*'s server for this configuration, another role's when it runs
     the same; the one the role had before is stopped once no role uses it."""
     key = (model, context_size)
     held = _servers.get(role)

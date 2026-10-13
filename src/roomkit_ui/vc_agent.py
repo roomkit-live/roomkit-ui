@@ -11,8 +11,8 @@ decides again and the agent may offer.  A thinker needs a speak policy.
 roomkit 0.97's ``setup_background`` gives the agent ``work_in_background``:
 long work runs as a task, in a room of its own, while the conversation goes
 on, and its result comes back as a turn the agent speaks.  The task runs on
-the agent itself, or on a worker channel with a llama.cpp model of its own,
-on this computer.
+the agent itself, or on a worker channel with a model of its own: any LLM
+Think · LLM offers, llama.cpp on this computer included.
 
 Both are add-ons: one that cannot run is left out of the session. Speaking
 policy problems go to session details and logs; other add-ons explain their
@@ -54,6 +54,9 @@ DEFAULT_AGENT_NAME = "Assistant"
 # answer every turn.
 BACKGROUND_WORKER = "background"
 
+# A local model's thinking switch: the Agent tab sets it for the tasks.
+_THINKING_FIELDS = {"llamacpp": "vc_llamacpp_thinking", "local": "vc_local_thinking"}
+
 # The settings key holding each classifier's API key.
 _CLASSIFIER_KEYS = {"openai": "openai_api_key", "jev": "typesafe_api_key"}
 
@@ -91,6 +94,12 @@ class VCAgent:
         if worker is not None:
             kit.register_channel(worker)
         kit.setup_background(ai_channel, worker=None if worker is None else worker.channel_id)
+        logger.info(
+            "Background work: tasks run on %s",
+            "the conversation model"
+            if worker is None
+            else f"{self.worker_provider} ({self.worker_model})",
+        )
 
     async def close(self) -> None:
         """Close the clients this agent opened (roomkit closes none of them)."""
@@ -195,25 +204,27 @@ def _add_background(
 
 def _add_worker(agent: VCAgent, settings: dict, notice: Callable[[str], None]) -> None:
     """The model the tasks run on when it is not the conversation's (Agent
-    tab → Tasks run on): llama.cpp, set there.  One that cannot run leaves
-    them on the conversation model, and the chat says why."""
-    if settings.get("vc_background_model") != "llamacpp":
-        return
-    from roomkit_ui.features import AI_PROVIDER_FEATURES, require
-    from roomkit_ui.providers import llamacpp
+    tab → Tasks run on).  One that cannot run leaves them on the conversation
+    model, and the chat says why."""
+    from roomkit_ui.providers import create_ai_provider, has_own_llm, llm_settings
 
-    task_settings = llamacpp.background_settings(settings)
+    if not has_own_llm(settings, "background"):
+        return
+    own = llm_settings(settings, "background")
+    name = own["vc_llm_provider"]
     try:
-        require(AI_PROVIDER_FEATURES["llamacpp"])
-        agent.worker = llamacpp.create(task_settings, role="background")
-    except Exception as exc:  # not installed, a bad setting: said in the chat
+        agent.worker = create_ai_provider(name, own, role="background")
+    except Exception as exc:  # not installed, no key, a bad setting: said in the chat
         logger.warning("Background model unavailable: %s", exc)
         notice(f"Background tasks run on the conversation model: {exc}")
         return
-    agent.worker_provider = "llamacpp"
+    agent.worker_provider = name
     agent.worker_model = _model_label(agent.worker)
-    thinking = "on" if task_settings["vc_llamacpp_thinking"] else "off"
-    agent.worker_note = f"Runs the background tasks. Thinking {thinking}."
+    if name in _THINKING_FIELDS:
+        thinking = "on" if own.get(_THINKING_FIELDS[name]) else "off"
+        agent.worker_note = f"Runs the background tasks. Thinking {thinking}."
+    else:
+        agent.worker_note = "Runs the background tasks, reasoning as its model does by default."
 
 
 async def warm_up_worker(worker: Any, notice: Callable[[str], None]) -> None:

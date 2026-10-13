@@ -77,22 +77,28 @@ PAGE_SPECS = (
                 (("tabs", 0),),
             ),
             SearchTarget(
+                "Text chat model",
+                "typed messages text chat written discussion texte écrit llm model modèle",
+                "text_chat.llm.provider",
+                (("tabs", 1),),
+            ),
+            SearchTarget(
                 "System instructions",
                 "system prompt instructions système",
                 "prompt",
-                (("tabs", 1),),
+                (("tabs", 2),),
             ),
             SearchTarget(
                 "Default personality",
                 "attitudes persona personnalité ton",
                 "attitude_combo",
-                (("tabs", 1),),
+                (("tabs", 2),),
             ),
             SearchTarget(
                 "Personality presets",
                 "attitudes custom personnalités",
                 "attitudes",
-                (("tabs", 1),),
+                (("tabs", 2),),
             ),
             SearchTarget(
                 "Listen · STT",
@@ -137,11 +143,19 @@ PAGE_SPECS = (
             ),
             SearchTarget(
                 "Agent behavior",
-                "turn taking jev thinker background tasks worker llama.cpp speaking decision",
+                "turn taking jev thinker speaking decision",
                 "voice._agent.speak_policy",
                 (("tabs", 0), ("voice.pipeline_tabs", 3)),
                 fallback="voice.mode_picker",
                 unavailable="Select Voice Channel mode to configure agent behavior.",
+            ),
+            SearchTarget(
+                "Background tasks model",
+                "work in the background tasks worker llm model tâches de fond",
+                "voice._agent.tasks_llm.provider",
+                (("tabs", 0), ("voice.pipeline_tabs", 3)),
+                fallback="voice.mode_picker",
+                unavailable="Select Voice Channel mode to configure background tasks.",
             ),
             SearchTarget(
                 "Barge-in",

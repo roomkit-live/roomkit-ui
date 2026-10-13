@@ -61,7 +61,7 @@ class FakeEngine(QObject):
         self.emit_threads.add(threading.get_ident())
         self.chat.append((text, role, final, speaker))
 
-    def _accumulate_usage(self, usage: dict) -> None:
+    def _accumulate_usage(self, usage: dict, *, task: bool = False) -> None:
         pass
 
     def finals(self, role: str) -> list[tuple[str, str]]:

@@ -212,18 +212,27 @@ prompt. The no-MCP realtime retry (`ToolSet.without_mcp`) sheds them with the to
 `speak_policy` (`ClassifierSpeakPolicy` on `OpenAIClassifier`, `JevClassifier` or
 `LLMClassifier`) and `thinker` (`LLMThinker` on the conversation model), and a `background`
 flag `VCAgent.setup_background` turns into `kit.setup_background(ai_channel, worker=...)`.
-With llama.cpp picked for the tasks (`vc_background_model`), the engine builds a
-second AIChannel, `background` (the session's prompt, tools and skills, that model's
-reasoning and Tool Search), registered on the kit but never attached to the session
-room, where it would answer every turn; the kit closes it. Its model comes from
-`llamacpp.background_settings()` (the Agent tab's GGUF and context, Think · LLM's when
-empty, its own thinking), and `providers/llamacpp.py` keeps a server per role
-(conversation, background), one when both run the same configuration; an owned task
-starts it while the session opens (`vc_agent.warm_up_worker`). A task's room, marked by
-roomkit with `task_id`, gets no `toolset.SESSION_TOOLS` from `ToolSet.turn_config()`,
-and roomkit refuses a tool its turn did not declare. Its usage is left out of the
-session cost, which prices the conversation model. roomkit closes neither the
-classifier nor the thinker: `Engine._close_vc_agent()` does, after the kit.
+With a model of their own picked for the tasks (`vc_background_model`: any provider of
+`providers.LLM_PROVIDERS`), the engine builds a second AIChannel, `background` (the
+session's prompt, tools and skills, that model's reasoning and Tool Search), registered
+on the kit but never attached to the session room, where it would answer every turn;
+the kit closes it. Its model comes from `providers.llm_settings(settings, "background")`:
+`vc_llm_provider` becomes the tasks' provider, the Agent tab's fields
+(`vc_background_<field>`) replace Think · LLM's where set, and Think · LLM's reply
+reasoning is cleared, so the model reasons as it does by default. `providers/llamacpp.py`
+keeps a server per role (conversation, background, text), one when two run the same
+configuration; an owned task starts it while the session opens
+(`vc_agent.warm_up_worker`). A task's room, marked by roomkit with `task_id`, gets no
+`toolset.SESSION_TOOLS` from `ToolSet.turn_config()`, and roomkit refuses a tool its turn
+did not declare. Its usage is priced as its own model (`Engine._task_pricing`), the
+conversation's as the conversation model. roomkit closes neither the classifier nor the
+thinker: `Engine._close_vc_agent()` does, after the kit.
+
+Typed turns read their model the same way, `llm_settings(settings, "text")` from the
+Text chat tab (`text_llm_provider`, `text_<field>`), in `text_chat_unavailable()` and
+`Engine._start_text`; left on Think · LLM's model, they get the settings as they are.
+The Agent tab and the Text chat tab share one widget for a role's model,
+`widgets/settings/llm_role_fields.RoleLLMFields`.
 `agent_hooks.py` logs `ON_SPEAK_DECISION` and `ON_THOUGHT`; those diagnostics stay out
 of the transcript. `ON_TASK_DELEGATED` and `ON_TASK_COMPLETED` produce chat notices
 and update `Engine._background_tasks`, which the idle hang-up waits on.

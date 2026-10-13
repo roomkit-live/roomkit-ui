@@ -19,6 +19,7 @@ from roomkit_ui.features import (
     STT_PROVIDER_FEATURES,
     TTS_PROVIDER_FEATURES,
 )
+from roomkit_ui.providers import LLM_PROVIDERS as VC_LLM_PROVIDERS
 from roomkit_ui.widgets.settings.choice_cards import ChoiceCards
 from roomkit_ui.widgets.settings.controls import SettingsTabs, label, navigation_link
 from roomkit_ui.widgets.settings.feature_hints import offer_install, populate_provider_combo
@@ -27,14 +28,6 @@ from roomkit_ui.widgets.settings.realtime_section import RealtimeSection
 from roomkit_ui.widgets.settings.vc_agent_fields import VCAgentPage
 from roomkit_ui.widgets.settings.vc_cloud_fields import VCCloudFields
 from roomkit_ui.widgets.settings.vc_local_fields import VCLocalFields
-
-VC_LLM_PROVIDERS = [
-    ("Anthropic", "anthropic"),
-    ("OpenAI", "openai"),
-    ("Google Gemini", "gemini"),
-    ("Local (vLLM / Ollama)", "local"),
-    ("llama.cpp (local GGUF)", "llamacpp"),
-]
 
 VC_STT_PROVIDERS: list[tuple[str, str]] = [
     ("Local (sherpa-onnx)", "local"),

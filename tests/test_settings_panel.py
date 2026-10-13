@@ -206,7 +206,7 @@ def test_search_opens_personality_and_focuses_instructions(panel, qapp):
     QTest.keyClick(panel._search_results.list, Qt.Key_Return)
     qapp.processEvents()
     assert panel._stack.currentWidget() is panel._scrolls["conversation"]
-    assert panel._conversation.tabs.bar.currentIndex() == 1
+    assert panel._conversation.tabs.bar.currentIndex() == 2
     assert panel._conversation.prompt.hasFocus()
     assert panel._conversation.prompt.property("settingsSearchHit") is True
 
@@ -481,7 +481,7 @@ def test_context_links_open_personality_and_telemetry_tabs_without_saving(panel,
     monkeypatch.setattr(panel_mod, "save_settings", saves.append)
     panel._general.personality_link.click()
     assert panel._current_page_key == "conversation"
-    assert panel._conversation.tabs.bar.currentIndex() == 1
+    assert panel._conversation.tabs.bar.currentIndex() == 2
     panel._privacy.telemetry_link.click()
     assert panel._current_page_key == "diagnostics"
     assert panel._diagnostics.tabs.bar.currentIndex() == 2

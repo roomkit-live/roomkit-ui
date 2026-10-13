@@ -149,18 +149,22 @@ and logs; the other add-ons report their absence in the chat.
   conversation goes on; the result comes back as a turn it speaks. The chat shows when a
   task starts and how it ended, and the idle hang-up waits for running tasks. Needs a model
   given tools (not a local model set without tool use). "Tasks run on" picks the model:
-  the conversation's (the default), or a llama.cpp model set below it — a GGUF and a
-  context (empty: Think · LLM's, and one server serves both), and Model thinking, on by
-  default since nobody waits on a task's first word. Its server starts while the
-  session opens, without holding it up (the chat says if it cannot), and a different
-  GGUF or context runs a second server beside the conversation's; the session details
-  list it as "Background tasks · LLM". Not installed, the tasks stay on the
-  conversation model, and the chat says why. Whatever the model, a task is not given
+  the conversation's (the default), or any LLM Think · LLM offers — Anthropic, OpenAI,
+  Gemini, a local vLLM/Ollama server or llama.cpp — with its fields below it. A cloud
+  model starts on Think · LLM's and uses that provider's key; a local field left empty
+  takes Think · LLM's value. On a cloud model of its own a task reasons as that model
+  does by default (Think · LLM's thinking and effort are set for spoken replies), and a
+  local model's Model thinking is on by default since nobody waits on a task's first word.
+  A llama.cpp server starts while the session opens, without holding it up (the chat
+  says if it cannot); the same GGUF and context as Think · LLM share one server, a
+  different one runs beside it. The session details list the model as "Background
+  tasks · LLM". Not installed or without its key, the tasks stay on the conversation
+  model, and the chat says why. Whatever the model, a task is not given
   the tools that act on the live conversation or the desktop (`toolset.SESSION_TOOLS`:
   hang up, attitudes, voices' names, paste); roomkit refuses one called anyway.
 
-The session's cost counts the background task's turns when they run on the conversation
-model (they are AI responses), never another model's, the classifier's or the thinker's.
+The session's cost counts the background tasks' turns, priced as the model they run on,
+but never the classifier's or the thinker's.
 
 ### Wake word
 
@@ -403,10 +407,13 @@ their defaults; searching tools hides the overview until the search is cleared.
 The composer starts on one line, grows to eight visual lines, then scrolls vertically.
 Enter or the arrow sends; Shift+Enter adds a line, and pasted text keeps its line breaks.
 It uses the LLM chosen in
-**Settings → Conversation → Voice Channel → Reason · LLM**, including when Live is set
-to Realtime. Until that provider has its required key/model and installed backend, the
-input stays grey with **Configure chat in Settings…**; its tooltip identifies what is
-missing. Closing Settings refreshes it immediately. This local check does not test
+**Settings → Conversation → Text chat**: by default the Voice Channel's (Think · LLM),
+including when Live is set to Realtime, or a model of its own from the same providers,
+with the same instructions, tools and memory. A cloud model of its own reasons as it
+does by default; a local one has its own tool-use and thinking switches, and llama.cpp
+keeps a server for typed messages beside the voice's when their GGUF or context differ.
+Until that provider has its required key/model and installed backend, the input stays
+grey with **Configure chat in Settings…**; its tooltip identifies what is missing. Closing Settings refreshes it immediately. This local check does not test
 credentials or contact a server. An empty draft keeps the Live button; while a written
 response streams, the button stops generation and retains all received text. A following
 draft can be prepared during generation. Text uses the selected thread's context, tools,

@@ -72,8 +72,9 @@ class _FakeEngine:
 
     _accumulate_usage = VoiceChannelMixin._accumulate_usage
 
-    def __init__(self, pricing):
+    def __init__(self, pricing, task_pricing=None):
         self._ai_pricing = pricing
+        self._task_pricing = task_pricing
         self._usage_cost = 0.0
         self._usage_in = 0
         self._usage_out = 0
@@ -104,6 +105,17 @@ def test_accumulate_usage_without_pricing_reports_tokens_only():
     payload = engine.session_cost.payloads[-1]
     assert payload["cost_usd"] is None
     assert payload["input_tokens"] == 10
+
+
+def test_a_task_on_a_model_of_its_own_is_priced_as_that_model():
+    # A local conversation model, background tasks on a priced cloud model.
+    engine = _FakeEngine(None, task_pricing=PRICING)
+    engine._accumulate_usage({"input_tokens": 10, "output_tokens": 5})
+    engine._accumulate_usage({"input_tokens": 1000, "output_tokens": 2000}, task=True)
+
+    payload = engine.session_cost.payloads[-1]
+    assert abs(payload["cost_usd"] - (1000 * 3.0 + 2000 * 15.0) / 1_000_000) < 1e-9
+    assert (payload["input_tokens"], payload["output_tokens"]) == (1010, 2005)
 
 
 # -- _usage_summary -----------------------------------------------------------
