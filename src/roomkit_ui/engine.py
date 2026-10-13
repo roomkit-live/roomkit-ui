@@ -233,6 +233,9 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, TextMix
         # and whether an image's cost was priced into the session's.
         self._images: Any = None
         self._images_priced = False
+        # Why the live session cannot take an image the user shares, "" when
+        # it can: its model sees (Voice Channel), its voice injects (realtime).
+        self._live_images_reason = ""
         self._usage_cost: float = 0.0
         self._usage_in: int = 0
         self._usage_out: int = 0
@@ -326,6 +329,53 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, TextMix
     @property
     def is_text(self) -> bool:
         return self._text_request is not None
+
+    @property
+    def live_images_unavailable(self) -> str:
+        """Why images cannot be shared in the live session, "" when they can."""
+        return self._live_images_reason
+
+    def share_images(self, images: tuple[ImageAttachment, ...]) -> None:
+        """Images the user shares while Live: a turn of theirs, answered aloud."""
+        self._create_owned_task(self._share_images(images), name="share_images")
+
+    async def _share_images(self, images: tuple[ImageAttachment, ...]) -> None:
+        """Into the realtime provider's session, or into the Voice Channel's
+        room as the user's message, which the conversation model sees."""
+        channel, session = self._channel, self._session
+        if not images or channel is None or session is None or self._kit is None:
+            return
+        if self._images is not None:
+            self._images.last = images[-1]  # what "change it" edits next
+        try:
+            inject = getattr(channel, "inject_image", None)
+            if inject is not None:  # a realtime voice
+                for index, image in enumerate(images):
+                    # One answer, once the last image is in.
+                    await inject(
+                        session,
+                        image.bytes(),
+                        image.mime_type,
+                        silent=index < len(images) - 1,
+                    )
+                return
+            from roomkit.models.delivery import InboundMessage
+
+            from roomkit_ui.image_messages import message_content
+
+            await self._kit.process_inbound(
+                InboundMessage(
+                    channel_id="voice",
+                    sender_id="local-user",
+                    content=message_content("", images),
+                ),
+                room_id=self._room_id,
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning("Sharing images failed: %s", exc)
+            self.session_notice.emit(f"The image could not be shared: {exc}")
 
     @property
     def text_session_open(self) -> bool:
@@ -811,6 +861,7 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, TextMix
         the user explicitly ends the session.
         """
         self._channel = None
+        self._live_images_reason = ""
         self._text_ready = False
         self._text_images = ()
         self._resume_image_entries = []

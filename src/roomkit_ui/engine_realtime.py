@@ -365,6 +365,9 @@ class RealtimeMixin:
                 skills=skills,
                 **(tool_options or {}),
             )
+            self._live_images_reason = (  # type: ignore[attr-defined]
+                "" if _injects_images(provider) else "This voice cannot see images."
+            )
             self._kit.register_channel(self._channel)  # type: ignore[attr-defined]
             await self._kit.attach_channel(self._room_id, "voice")  # type: ignore[attr-defined]
             metadata: dict[str, Any] = {}
@@ -493,3 +496,13 @@ def _build_realtime_pipeline(
             inbound_dsp_threads=DSP_THREADS,
         )
     return None
+
+
+def _injects_images(provider: Any) -> bool:
+    """Whether a realtime provider takes an image into its session: roomkit's
+    ``inject_image`` refuses one unless the provider overrides it (Gemini Live,
+    OpenAI Realtime)."""
+    from roomkit.voice.realtime.provider import RealtimeVoiceProvider
+
+    injects = getattr(type(provider), "inject_image", None)
+    return injects is not None and injects is not RealtimeVoiceProvider.inject_image

@@ -185,6 +185,11 @@ class VoiceChannelMixin:
             self.loading_status.emit("Connecting to LLM…")  # type: ignore[attr-defined]
             llm_provider_name = settings.get("vc_llm_provider", "anthropic")
             ai_provider = create_ai_provider(llm_provider_name, settings)
+            self._live_images_reason = (  # type: ignore[attr-defined]
+                ""
+                if getattr(ai_provider, "supports_vision", False)
+                else "The conversation model does not see images (Think · LLM)."
+            )
             model = ai_provider.model_name
             self._ai_pricing = _model_pricing(ai_provider)  # type: ignore[attr-defined]
             announce_llm_model(ai_provider, self.session_notice.emit)  # type: ignore[attr-defined]

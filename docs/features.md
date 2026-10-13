@@ -443,7 +443,11 @@ The camera opens only on request, offers **Retake** and **Use photo**, and stops
 capture or cancellation. Missing camera support offers the `camera` component; access
 denied and missing devices have explicit feedback. PDFs remain unavailable.
 Known text-only models show a setup hint; local endpoints decide
-whether their loaded model accepts images.
+whether their loaded model accepts images. While Live, an image button
+beside the mic shares one the same way (file or camera): it shows in the chat as the
+user's, and the assistant answers aloud. On the Voice Channel it is the user's turn,
+read by a Think · LLM model that sees; on a realtime voice it goes into the session
+(Gemini Live, OpenAI Realtime). Otherwise the button is greyed, with the reason.
 
 The small microphone dictates into the draft using **Settings → Dictation** (OpenAI,
 Deepgram or a downloaded local model), its language and the selected input device.

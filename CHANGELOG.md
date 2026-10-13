@@ -19,6 +19,12 @@ Each released section is the source for that version's GitHub release notes.
   one you shared or one it drew. A provider not installed or without its key leaves the
   tool out, and the chat says why. A paid generation is never retried; an image billed
   before a failure is still shown. The session's cost counts images roomkit can price.
+- **Share an image during a live conversation** — while Live, an image button beside the
+  mic adds one from a file or the camera, as in a typed conversation. It shows in the
+  chat as yours and the assistant answers aloud: on the Voice Channel it is your turn in
+  the conversation, which a model that sees reads; on a realtime voice it goes into the
+  session (Gemini Live, OpenAI Realtime). A model or voice that cannot see images keeps
+  the button greyed, with the reason.
 - **The assistant sees what it drew** — `generate_image` gives the conversation model the
   image's id, size and dominant colours (so "set my lights to its colours" needs no
   guess), and a copy at most 768 px long to look at; roomkit keeps the latest two in view

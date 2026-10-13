@@ -102,6 +102,7 @@ class MainWindow(QMainWindow):
         # ── Signals ──
         self._controls.start_requested.connect(self._on_start)
         self._controls.send_requested.connect(self._on_send)
+        self._controls.images_shared.connect(self._on_images_shared)
         self._controls.stop_requested.connect(self._on_stop)
         self._controls.mute_toggled.connect(self._engine.set_mic_muted)
         self._controls.mute_toggled.connect(self._vu.set_muted)
@@ -279,6 +280,15 @@ class MainWindow(QMainWindow):
         self._history.drawer.set_busy(True)
         self._chat.set_text_pending(True)
 
+    def _on_images_shared(self, images: tuple) -> None:
+        """Images shared while Live: the user's entry in the chat, and a turn
+        of theirs in the session, answered aloud."""
+        if self._engine.state != EngineState.ACTIVE or self._engine.is_text:
+            return
+        self._chat.add_image_message("", images)
+        self._history.changed()
+        self._engine.share_images(images)
+
     def _start_finished(self, task: asyncio.Future) -> None:
         self._request_task = None
         self._start_pending = False
@@ -356,6 +366,7 @@ class MainWindow(QMainWindow):
             self._conversation_stack.setCurrentWidget(self._chat)
             self._info_bar.show()
             if not text_mode:
+                self._controls.set_live_image_availability(self._engine.live_images_unavailable)
                 self._vu.show()
                 self._vu.start()
                 self._idle_hangup.start()

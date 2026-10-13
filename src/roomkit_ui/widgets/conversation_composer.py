@@ -34,6 +34,7 @@ class ConversationComposer(QWidget):
     dictation_requested = Signal()
     dictation_cancelled = Signal()
     draft_cleared = Signal()
+    images_shared = Signal(object)  # tuple[ImageAttachment, ...] shared while Live
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -44,6 +45,7 @@ class ConversationComposer(QWidget):
         self._expanded = False
         self._voice_controls = False
         self._images_unavailable = ""
+        self._live_images_unavailable = ""
         self._dictation_unavailable = "Configure speech recognition in Settings → Dictation."
         self._dictation_state = DictationState.IDLE
         self._external_dictation = False
@@ -112,7 +114,7 @@ class ConversationComposer(QWidget):
         self._live_button.clicked.connect(self._on_action)
         inner.addWidget(self._live_button, 0, Qt.AlignBottom)
         inner.addStretch(0)
-        self._attachments.changed.connect(self._refresh)
+        self._attachments.changed.connect(self._on_attachments_changed)
         bind_theme(self, self._refresh)
 
     @staticmethod
@@ -134,6 +136,21 @@ class ConversationComposer(QWidget):
     @property
     def images(self) -> tuple[ImageAttachment, ...]:
         return self._attachments.images
+
+    def set_live_image_availability(self, reason: str) -> None:
+        """Why the live session cannot take a shared image, "" when it can."""
+        self._live_images_unavailable = reason
+        self._refresh()
+
+    def _on_attachments_changed(self) -> None:
+        # While Live an image is not a draft: it goes to the session at once.
+        live = not self._text_mode and self._state == EngineState.ACTIVE
+        if live and self._attachments.images:
+            images = self._attachments.images
+            self._attachments.clear()  # emits changed again, with nothing to share
+            self.images_shared.emit(images)
+            return
+        self._refresh()
 
     def set_image_availability(self, reason: str) -> None:
         self._images_unavailable = reason
@@ -350,20 +367,45 @@ class ConversationComposer(QWidget):
         self._input.setToolTip(hint)
         self._surface.setToolTip(hint if self._unavailable else "")
         self._input.setAccessibleDescription(hint)
-        self._attachment_button.setVisible(not busy)
+        # While Live, the + shares an image with the session, beside the mic.
+        self._attachment_button.setVisible(not busy or live)
         image_reason = self._unavailable or self._images_unavailable
-        self._attachments.set_availability(
-            "End the live conversation to add images." if busy else image_reason
-        )
+        if live:
+            image_reason = self._live_images_unavailable
+        elif busy:
+            image_reason = "Wait for the live conversation to start."
+        self._attachments.set_availability(image_reason)
+        notice = bool(self._attachments._notice.text())
         self._attachments.setVisible(
-            not busy and (bool(self.images) or bool(self._attachments._notice.text()))
+            (not busy and (bool(self.images) or notice)) or (live and notice)
         )
-        self._attachment_button.setEnabled(not busy and not image_reason)
-        self._attachment_button.setToolTip(image_reason or "Add images from a file or camera")
-        if self.images and self._images_unavailable:
+        self._attachment_button.setEnabled(not image_reason)
+        action = "Share an image" if live else "Add images"
+        self._attachment_button.setAccessibleName(action)
+        self._attachment_button.setToolTip(image_reason or f"{action} from a file or camera")
+        if self.images and self._images_unavailable and not busy:
             self._attachments.notice(self._images_unavailable)
         self._dictation_button.setVisible(not busy)
-        self._attachment_button.setIcon(svg_icon("plus", c["TEXT_SECONDARY"], 20))
+        if live:
+            self._attachment_button.setFixedSize(56, 56)
+            self._attachment_button.setIconSize(QSize(24, 24))
+            self._attachment_button.setIcon(svg_icon("photo", c["TEXT_PRIMARY"], 24))
+            self._attachment_button.setStyleSheet(
+                f"QPushButton {{ background: {c['BG_SECONDARY']};"
+                f" border: 1px solid {c['BG_TERTIARY']};"
+                " border-radius: 28px; padding: 0; }"
+                f"QPushButton:hover {{ background: {c['BG_TERTIARY']}; }}"
+                f"QPushButton:disabled {{ background: {c['BG_SECONDARY']}; }}"
+                'QPushButton[keyboardFocus="true"] {'
+                f" border-color: {c['ACCENT_BRAND']}; }}"
+            )
+        else:
+            self._attachment_button.setFixedSize(36, 44)
+            self._attachment_button.setIconSize(QSize(20, 20))
+            self._attachment_button.setIcon(svg_icon("plus", c["TEXT_SECONDARY"], 20))
+            self._attachment_button.setStyleSheet(
+                "QPushButton { background: transparent; border: none; padding: 0; }"
+            )
         self._refresh_dictation(c, busy or text_busy or not ready)
         self._mute_button.setVisible(live)
         self._mute_button.setEnabled(live)
