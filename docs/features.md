@@ -353,7 +353,11 @@ it drew) or a drawing by its id. It uses the provider's key from Providers & key
 not installed or without its key leaves the tool out, and the chat says why. Each
 image is billed by the provider and one that fails is never drawn again on its own
 (roomkit's rule); an image billed before a failure is still shown. The session's cost
-counts an image when roomkit's catalog prices the model (OpenAI, Gemini). Any image in
+counts an image when roomkit's catalog prices the model (OpenAI, Gemini). Under the
+model, the tab offers the settings that model takes, from roomkit's catalog: GPT Image's
+size and quality, Nano Banana's shape, resolution and thinking, Grok Imagine's resolution
+(and quality on Imagine 2.0), Muse's size and thinking. Each starts at Model default; a
+size the assistant names wins over the size, shape and resolution. Any image in
 the chat, drawn or shared, opens larger on a click, with a Save… button; a right-click
 offers Save image…. The file is the image as the chat keeps it (PNG or JPEG).
 

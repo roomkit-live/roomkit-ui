@@ -107,6 +107,118 @@ GENERATE_IMAGE_TOOL: dict = {
 }
 
 
+# The settings a model's drawings take, by field (image_<provider>_<field>).
+IMAGE_CONTROL_FIELDS = ("size", "aspect_ratio", "resolution", "quality", "thinking")
+
+# Sizes offered for a model that takes any size (gpt-image-2, Muse), the ones
+# its catalog's rules accept: a square, landscape and portrait, then larger.
+_FLEXIBLE_SIZES = (
+    "1024x1024",
+    "1536x1024",
+    "1024x1536",
+    "2048x2048",
+    "2048x1152",
+    "1152x2048",
+    "3840x2160",
+    "2160x3840",
+)
+_SHAPES = {1: "square", 2: "landscape", 0: "portrait"}
+_LEVELS = {"xhigh": "Extra high", "1k": "1K", "2k": "2K"}
+# xAI's catalog declares no controls: its config's, as roomkit documents them.
+_XAI_RESOLUTIONS = ("1k", "2k")
+_XAI_QUALITIES = ("low", "medium")
+_XAI_QUALITY_MODEL = "grok-imagine-image-2.0"
+
+
+@dataclass(frozen=True)
+class ImageControl:
+    """One setting a model's drawings take, as its catalog declares it.
+
+    *field* names it in the settings; *option* is the ``ImageOptions`` field
+    it sets, *config* the provider config's (xAI), and neither for the size,
+    the default of the call's own ``size``. *choices* are ``(label, value)``,
+    the model's default ("") first.
+    """
+
+    field: str
+    label: str
+    choices: tuple[tuple[str, str], ...]
+    option: str = ""
+    config: str = ""
+
+
+def image_controls(provider: str, model_id: str) -> list[ImageControl]:
+    """The settings *model_id* takes, from roomkit's offline catalog: none
+    for a model it does not know."""
+    vendor = _VENDORS.get(provider)
+    if vendor is None:
+        return []
+    if provider == "xai":
+        xai = [
+            ImageControl(
+                "resolution", "Resolution", _labelled(_XAI_RESOLUTIONS), config="resolution"
+            )
+        ]
+        if model_id == _XAI_QUALITY_MODEL:
+            xai.append(
+                ImageControl("quality", "Quality", _labelled(_XAI_QUALITIES), config="quality")
+            )
+        return xai
+    try:
+        from roomkit.providers.image.options import image_model_entry
+
+        models = importlib.import_module(vendor.catalog).MODELS
+        caps = getattr(image_model_entry(models, model_id), "image", None)
+    except Exception:
+        return []
+    if caps is None:
+        return []
+    controls: list[ImageControl] = []
+    sizes = [s for s in caps.sizes if s != "auto"]
+    if caps.flexible_size:
+        sizes += [s for s in _FLEXIBLE_SIZES if s not in sizes and _fits(caps, s)]
+    if sizes:
+        choices = (("Model default", ""), *((_size_label(s), s) for s in sizes))
+        controls.append(ImageControl("size", "Size", choices))
+    if caps.aspect_ratios:
+        controls.append(
+            ImageControl("aspect_ratio", "Shape", _labelled(caps.aspect_ratios), "aspect_ratio")
+        )
+    if caps.image_sizes:
+        controls.append(
+            ImageControl("resolution", "Resolution", _labelled(caps.image_sizes), "image_size")
+        )
+    qualities = [q for q in caps.qualities if q != "auto"]
+    if qualities:
+        controls.append(ImageControl("quality", "Quality", _labelled(qualities), "quality"))
+    if caps.thinking_levels:
+        controls.append(
+            ImageControl("thinking", "Thinking", _labelled(caps.thinking_levels), "thinking_level")
+        )
+    return controls
+
+
+def _labelled(values: Any) -> tuple[tuple[str, str], ...]:
+    return (
+        ("Model default", ""),
+        *((_LEVELS.get(v, v[:1].upper() + v[1:]), v) for v in values),
+    )
+
+
+def _fits(caps: Any, size: str) -> bool:
+    try:
+        caps.validate_size(size)
+    except ValueError:
+        return False
+    return True
+
+
+def _size_label(size: str) -> str:
+    width, height = (int(edge) for edge in size.split("x"))
+    shape = _SHAPES[(width > height) * 2 or int(width == height)]
+    return f"{width}×{height} ({shape})"
+
+
 def image_models(provider: str) -> list[tuple[str, str]]:
     """``(display name, model id)`` of *provider*'s current image models, from
     roomkit's offline catalog; empty when it cannot be read."""
@@ -147,11 +259,25 @@ def create_image_studio(settings: dict) -> ImageStudio:
     key = str(settings.get(vendor.key) or "").strip()
     if not key:
         raise ValueError(f"{vendor.label} has no API key (Settings → Providers & keys).")
-    images = _build_provider(provider, key, image_model(settings, provider))
-    return ImageStudio(images, provider)
+    model = image_model(settings, provider)
+    # The Images tab's settings this model takes; one it does not, ignored.
+    chosen: dict[str, str] = {}
+    config: dict[str, str] = {}
+    options: dict[str, str] = {}
+    for control in image_controls(provider, model):
+        value = str(settings.get(f"image_{provider}_{control.field}") or "")
+        if value not in {v for _label, v in control.choices[1:]}:
+            continue
+        chosen[control.field] = value
+        if control.config:
+            config[control.config] = value
+        elif control.option:
+            options[control.option] = value
+    images = _build_provider(provider, key, model, config)
+    return ImageStudio(images, provider, size=chosen.get("size", ""), options=options)
 
 
-def _build_provider(provider: str, api_key: str, model: str) -> Any:
+def _build_provider(provider: str, api_key: str, model: str, config: dict[str, str]) -> Any:
     from pydantic import SecretStr
 
     key = SecretStr(api_key)
@@ -169,7 +295,9 @@ def _build_provider(provider: str, api_key: str, model: str) -> Any:
         from roomkit.providers.xai.config import XAIImageConfig
         from roomkit.providers.xai.image import XAIImageProvider
 
-        return XAIImageProvider(XAIImageConfig(api_key=key, model=model))
+        return XAIImageProvider(
+            XAIImageConfig.model_validate({"api_key": key, "model": model, **config})
+        )
     from roomkit.providers.meta.config import MetaImageConfig
     from roomkit.providers.meta.image import MetaImageProvider
 
@@ -201,9 +329,20 @@ class ImageStudio:
     """The session's image provider, and the images an edit can change: the
     last one drawn or shared, or a drawing named by its id."""
 
-    def __init__(self, provider: Any, provider_name: str) -> None:
+    def __init__(
+        self,
+        provider: Any,
+        provider_name: str,
+        *,
+        size: str = "",
+        options: dict[str, str] | None = None,
+    ) -> None:
         self.provider = provider
         self.provider_name = provider_name
+        # The Images tab's defaults: the size a call names none takes, and
+        # the options (quality, shape, resolution, thinking) every call does.
+        self.size = size
+        self.options = dict(options or {})
         self.last: ImageAttachment | None = None
         self._drawn: dict[str, ImageAttachment] = {}
         self._count = 0
@@ -254,9 +393,7 @@ class ImageStudio:
                 raise ToolRefusedError(f"{self.model} cannot change an image: draw a new one.")
             references = [_image_part(source)]
         try:
-            results = await self.provider.generate(
-                prompt, size=(size or "").strip() or None, reference_images=references
-            )
+            results = await self._generate(prompt, (size or "").strip(), references)
         except ImageGenerationError as exc:
             # Never retried: any image it delivered was billed, so it is shown.
             if not exc.results:
@@ -276,6 +413,27 @@ class ImageStudio:
         self.last = images[-1]
         first = results[0]
         return Drawing(images, ids, first.revised_prompt, dict(first.usage or {}))
+
+    async def _generate(self, prompt: str, size: str, references: Any) -> Any:
+        """One call, with the Images tab's defaults: a size the assistant
+        names wins over the default size, the shape and the resolution."""
+        options = dict(self.options)
+        if size:
+            options.pop("aspect_ratio", None)
+            options.pop("image_size", None)
+        size = size or self.size
+        if not options:
+            return await self.provider.generate(
+                prompt, size=size or None, reference_images=references
+            )
+        from roomkit import ImageOptions
+
+        return await self.provider.generate_with_options(
+            prompt,
+            size=size or None,
+            reference_images=references,
+            options=ImageOptions.model_validate(options),
+        )
 
     def _keep(self, image: ImageAttachment) -> str:
         self._count += 1

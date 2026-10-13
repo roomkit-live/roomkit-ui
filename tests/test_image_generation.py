@@ -280,7 +280,74 @@ def test_the_images_tab_saves_the_provider_and_its_model(qapp):
         "image_provider": "gemini",
         "image_gemini_model": "gemini-3-pro-image",
         "image_xai_model": "grok-imagine-image",
+        **{f"image_gemini_{field}": "" for field in image_generation.IMAGE_CONTROL_FIELDS},
     }
+
+
+def test_the_tab_offers_what_the_chosen_model_takes(qapp):
+    from roomkit_ui.widgets.settings.images_setup import ImagesSetup
+
+    page = ImagesSetup({"image_provider": "gemini", "image_gemini_resolution": "2K"})
+    # Nano Banana 2.1: a shape, a resolution and a thinking level; no quality.
+    assert set(page.controls) == {"aspect_ratio", "resolution", "thinking"}
+    assert page.controls["resolution"].currentData() == "2K"
+    shape = page.controls["aspect_ratio"]
+    shape.setCurrentIndex(shape.findData("16:9"))
+
+    _label, model = page.models["gemini"]
+    model.setCurrentIndex(model.findData("gemini-3-pro-image"))  # takes no thinking
+    assert set(page.controls) == {"aspect_ratio", "resolution"}
+    assert page.controls["aspect_ratio"].currentData() == "16:9"  # kept across the change
+
+    out = page.get_settings()
+    assert (out["image_gemini_aspect_ratio"], out["image_gemini_resolution"]) == ("16:9", "2K")
+    assert out["image_gemini_thinking"] == ""
+
+    page.provider.setCurrentIndex([value for _l, value in IMAGE_PROVIDERS].index("openai"))
+    assert set(page.controls) == {"size", "quality"}  # GPT Image 2
+
+
+def test_each_model_takes_what_its_catalog_declares():
+    controls = {
+        control.field: [value for _label, value in control.choices]
+        for control in image_generation.image_controls("openai", "gpt-image-1.5")
+    }
+    assert controls == {
+        "size": ["", "1024x1024", "1536x1024", "1024x1536"],
+        "quality": ["", "low", "medium", "high"],
+    }
+    flexible = image_generation.image_controls("openai", "gpt-image-2")
+    assert "3840x2160" in [value for _label, value in flexible[0].choices]
+    xai = image_generation.image_controls("xai", "grok-imagine-image")
+    assert [control.field for control in xai] == ["resolution"]  # no quality on this one
+    assert image_generation.image_controls("openai", "an-unknown-model") == []
+
+
+async def test_the_tabs_settings_reach_every_drawing(qapp, monkeypatch):
+    monkeypatch.setattr(image_generation, "require", lambda _feature: None)
+    settings = {
+        "image_provider": "gemini",
+        "api_key": "test-only",
+        "image_gemini_aspect_ratio": "16:9",
+        "image_gemini_resolution": "2K",
+        "image_gemini_quality": "high",  # Gemini takes none: ignored
+    }
+    built = create_image_studio(settings)
+    assert built.options == {"aspect_ratio": "16:9", "image_size": "2K"}
+
+    calls: list[tuple] = []
+
+    async def generate_with_options(prompt, *, size=None, options=None, **_call):
+        # Gemini's generate() comes here too, with no options.
+        shape = (options.aspect_ratio, options.image_size) if options else (None, None)
+        calls.append((size, *shape))
+        return await MockImageProvider().generate(prompt)
+
+    monkeypatch.setattr(built.provider, "generate_with_options", generate_with_options)
+    await built.draw("A fox")
+    await built.draw("A fox", size="1024x1536")  # the assistant's size wins
+
+    assert calls == [(None, "16:9", "2K"), ("1024x1536", None, None)]
 
 
 async def test_a_drawing_has_its_entry_in_the_chat_and_history(qapp, studio):

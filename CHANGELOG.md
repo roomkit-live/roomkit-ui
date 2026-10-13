@@ -35,6 +35,12 @@ Each released section is the source for that version's GitHub release notes.
   image's id, size and dominant colours (so "set my lights to its colours" needs no
   guess), and a copy at most 768 px long to look at; roomkit keeps the latest two in view
   on the next turns. `edit` can name the drawing it changes by its id.
+- **Image model settings** (Settings → Conversation → Images) — under the model, the
+  settings that model takes, as roomkit's catalog declares them: the size and quality of
+  GPT Image, the shape, resolution and thinking of Gemini's Nano Banana, Grok Imagine's
+  resolution and quality, Muse's size and thinking. Each starts at Model default; a size
+  the assistant asks for wins over the size, shape and resolution, and a setting the
+  model does not take is never sent.
 - **Save an image from the chat** — the enlarged view has a Save… button, and a right-click
   on any image in the chat offers Save image…. The file is the image as the chat keeps
   it, PNG or JPEG, never encoded again.

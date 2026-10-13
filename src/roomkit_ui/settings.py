@@ -296,6 +296,13 @@ _DEFAULTS = {
     "image_gemini_model": "",
     "image_xai_model": "",
     "image_meta_model": "",
+    # Each provider's image settings (image_generation.image_controls): its
+    # default size, shape, resolution, quality and thinking ("" = the model's)
+    **{
+        f"image_{provider}_{field}": ""
+        for provider in ("openai", "gemini", "xai", "meta")
+        for field in ("size", "aspect_ratio", "resolution", "quality", "thinking")
+    },
 }
 
 # Keys renamed since a release shipped: new key → (old key, old value → new value).
