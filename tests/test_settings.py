@@ -105,6 +105,14 @@ def test_api_key_is_saved_outside_plain_qsettings(secure_store):
     assert load_settings()["openai_api_key"] == "sk-test"
 
 
+def test_the_hugging_face_token_is_kept_as_a_secret(secure_store):
+    save_settings({"huggingface_token": "hf_test"})
+
+    assert QSettings().value("room/huggingface_token", None) is None
+    assert secure_store.get_secret("settings:huggingface_token") == "hf_test"
+    assert load_settings()["huggingface_token"] == "hf_test"
+
+
 def test_api_key_legacy_plaintext_is_migrated(secure_store):
     qs = QSettings()
     qs.setValue("room/openai_api_key", "legacy-secret")

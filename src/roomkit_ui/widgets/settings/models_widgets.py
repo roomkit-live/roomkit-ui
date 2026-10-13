@@ -11,7 +11,13 @@ from roomkit_ui.widgets.settings.model_library import LibraryModel
 
 
 class _ModelRow(QWidget):
-    def __init__(self, model: LibraryModel, *, allow_delete: bool = True) -> None:
+    def __init__(
+        self,
+        model: LibraryModel,
+        *,
+        allow_delete: bool = True,
+        badge: tuple[str, str] | None = None,
+    ) -> None:
         super().__init__()
         self.setObjectName("settingsLibraryItem")
         self.setAttribute(Qt.WA_StyledBackground, True)
@@ -30,10 +36,23 @@ class _ModelRow(QWidget):
         layout.addLayout(heading)
         layout.addWidget(label(model.detail, "settingsHint"))
         actions = QHBoxLayout()
-        actions.addWidget(label(model.size, "settingsHint"), 1)
+        actions.addWidget(label(model.size, "settingsHint"))
+        # A second, lasting fact beside the size (whether it fits this computer).
+        self.badge = StatusBadge()
+        self.badge.setVisible(badge is not None)
+        if badge is not None:
+            self.badge.set_status(*badge)
+        actions.addWidget(self.badge)
+        actions.addStretch(1)
         self.action_btn = QPushButton("Download")
+        self.cancel_btn = QPushButton("Cancel")
+        self.cancel_btn.hide()
         self.delete_btn = QPushButton("Delete files")
-        for button, verb in ((self.action_btn, "Download"), (self.delete_btn, "Delete")):
+        for button, verb in (
+            (self.action_btn, "Download"),
+            (self.cancel_btn, "Cancel the download of"),
+            (self.delete_btn, "Delete"),
+        ):
             button.setAutoDefault(False)
             button.setCursor(Qt.PointingHandCursor)
             button.setAccessibleName(f"{verb} {model.name}")
@@ -56,6 +75,7 @@ class _ModelRow(QWidget):
         active = self.phase in {"resolving", "downloading"}
         self.action_btn.setVisible(self.phase in {"available", "error"})
         self.action_btn.setText("Retry download" if self.phase == "error" else "Download")
+        self.cancel_btn.setVisible(active and self.model.cancellable)
         self.delete_btn.setVisible(self._allow_delete and self.phase == "downloaded")
         self.progress_bar.setVisible(active)
         self.progress_bar.setRange(0, 0 if self.phase == "resolving" else 100)

@@ -18,7 +18,11 @@ from roomkit_ui.widgets.settings.integrations_page import IntegrationsPage
 from roomkit_ui.widgets.settings.library_page import LibraryPage
 from roomkit_ui.widgets.settings.model_library import model_groups
 from roomkit_ui.widgets.settings.privacy_page import PrivacyPage
-from roomkit_ui.widgets.settings.providers_page import PROVIDERS, ProvidersPage
+from roomkit_ui.widgets.settings.providers_page import (
+    PROVIDERS,
+    ProvidersPage,
+    credential_name,
+)
 from roomkit_ui.widgets.settings.search import SearchTarget
 from roomkit_ui.widgets.settings.wakeword_page import _WakeWordPage
 
@@ -341,8 +345,8 @@ PAGE_SPECS = (
         "refresh",
         search=tuple(
             SearchTarget(
-                f"{name} API key",
-                f"{uses} clé clef credentials secret fournisseur",
+                f"{name} {credential_name(key)}",
+                f"{uses} clé clef jeton token credentials secret fournisseur",
                 f"fields.{key}",
             )
             for key, name, uses in PROVIDERS
@@ -363,10 +367,17 @@ PAGE_SPECS = (
                 (("tabs", 0),),
             ),
             SearchTarget(
+                "Local LLMs (llama.cpp)",
+                "GGUF Hugging Face llama.cpp LLM modèles locaux télécharger recommended "
+                "recommandés search recherche quantization quant RAM mémoire memory",
+                "llms.search",
+                (("tabs", 1),),
+            ),
+            SearchTarget(
                 "Install components",
                 "backends extras installer composants dependencies dépendances",
                 "components.search",
-                (("tabs", 1),),
+                (("tabs", 2),),
             ),
             *(
                 SearchTarget(
@@ -383,7 +394,7 @@ PAGE_SPECS = (
                     f"{component.title} component",
                     f"install backend extra composant {component.description}",
                     f"components.rows.{component.extra}",
-                    (("tabs", 1),),
+                    (("tabs", 2),),
                 )
                 for component in components()
             ),

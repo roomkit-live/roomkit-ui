@@ -57,9 +57,15 @@ kept, never replaced. Agent Skills reach realtime sessions as well as Voice Chan
   Claude Sonnet 5.5 and Gemini to Gemini 3.8 Flash; a stored retired default moves to the
   new one once, and the chat says so. A deprecated model the user picked is kept, with a
   notice at each session.
-- **llama.cpp** — a Hugging Face `repo:quant` or a `.gguf` file; roomkit downloads a
-  pinned `llama-server` build (SHA-256 checked) and the model, and the server outlives the
-  session (one per model and context size).
+- **llama.cpp** — a model downloaded in Models & components → LLMs (the GGUF field lists
+  them), a Hugging Face `repo:quant` or a `.gguf` file; roomkit downloads a pinned
+  `llama-server` build (SHA-256 checked), and the server outlives the session (one per
+  model and context size). The context is 32,768 tokens unless set: the tools are in
+  every prompt (Tool search stays off for a local model), and a prompt longer than the
+  context says so in the chat with what to change. A downloaded `repo:quant` starts from
+  its file, offline
+  included; one not downloaded is fetched by llama-server at the first session. Under
+  the field, whether the model is here and fits this computer (a warning, never a block).
 - **Local model thinking** — "Model thinking (slower answers)", off by default, for vLLM,
   Ollama and llama.cpp: a reasoning model otherwise thinks for seconds before a spoken
   reply. A model that always reasons cannot be switched off; the hint says so. Its
@@ -390,6 +396,22 @@ provider or model. Links from Conversation, Dictation, Audio & voice and Wake Wo
 while keeping pending edits. Global search can reveal an individual model or component.
 (`model_catalog.py`, `model_download.py`, `model_library.py`, `model_jobs.py`, `models_page.py`)
 
+The LLMs tab downloads GGUF models for llama.cpp from Hugging Face (`gguf_models.py`,
+`llm_library_page.py`): seven recommended models checked for conversation and tool calls
+(Liquid AI LFM2.5 1.2B to Qwen3 30B-A3B), a search of the models llama.cpp runs (most
+downloaded first, by default no larger than this computer runs, through the API's
+`apps=llama.cpp` and `num_parameters` filters; a result shows its parameters, downloads,
+whether its chat template takes tools and whether it is gated, then its sizes on demand),
+and every GGUF model already in the cache. Each size carries a badge — Runs well here,
+Tight on memory, Too big for this computer — estimated from its file, the KV cache of the
+configured context and a margin, against the memory a model may take (the GPU's share of
+unified memory on Apple silicon, three quarters of the RAM elsewhere). It warns; the
+download stays possible. Downloads land in the Hugging Face cache llama-server reads
+(`~/.cache/huggingface/hub`, or `HF_HUB_CACHE`/`HF_HOME`), each part held to its size and
+SHA-256, resumable after a cancel or a cut; they continue when Settings closes. An access
+token (Providers & keys → Hugging Face, optional) serves gated models; only downloads use
+it, never llama-server.
+
 The Components tab lists the dependencies separately, with name and installation filters.
 It preserves automatic installation, command copying in a source checkout, bundled-build
 restrictions, conflict confirmation and cancellation. Installation output is expandable;
@@ -575,7 +597,8 @@ sequenceDiagram
 |---|---|---|
 | Gemini Live / OpenAI Realtime / GPT-Live / Deepgram Agent / ElevenLabs / Grok | bidirectional WS | speech-to-speech |
 | Anthropic / OpenAI / Gemini / vLLM / Ollama APIs | outbound | voice-channel LLM turn |
-| llama-server (local) | local HTTP | roomkit downloads the server build and the GGUF model |
+| llama-server (local) | local HTTP | roomkit downloads the server build; the app or llama-server the GGUF model |
+| Hugging Face API | outbound HTTPS | GGUF search, repository files and downloads (optional access token) |
 | ElevenLabs / Gradium / Deepgram / Azure MAI / Gemini | outbound | cloud TTS / STT |
 | MCP servers | bidirectional | user-configured; Bearer, raw API key, Basic or OAuth2 for HTTP |
 | skills.sh | outbound HTTPS / browser | skill search; GitHub sources install as Git, well-known sources as local folders |

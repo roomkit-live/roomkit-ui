@@ -187,6 +187,25 @@ async def test_a_failed_turn_says_why_in_the_chat():
     assert notices == ["The assistant could not answer: anthropic: 401 invalid x-api-key"]
 
 
+async def test_a_prompt_too_long_for_llama_cpp_says_what_to_raise():
+    engine, kit = _setup()
+    notices = []
+    engine.session_notice.connect(notices.append)
+    error = (
+        "llamacpp (400): Error code: 400 - {'error': {'code': 400, 'message': 'request "
+        "(23074 tokens) exceeds the available context size (16128 tokens), try increasing "
+        "it', 'type': 'exceed_context_size_error'}}"
+    )
+
+    await _hook(kit, "on_error")(SimpleNamespace(metadata={"error": error}), None)
+
+    assert notices[0].startswith(
+        "This conversation needs 23,074 tokens, more than the 16,128 the local model's "
+        "context holds. Raise its Context"
+    )
+    assert "Tool search" in notices[0]
+
+
 async def test_a_local_tool_refusal_is_left_to_the_settings_hint():
     engine, kit = _setup()
     notices = []

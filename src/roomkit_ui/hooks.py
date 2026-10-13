@@ -6,6 +6,7 @@ from typing import Any
 
 from roomkit_ui.engine_state import EngineState
 from roomkit_ui.engine_vc_helpers import LOCAL_TOOL_REFUSAL
+from roomkit_ui.providers.llamacpp import context_overflow
 from roomkit_ui.speaker_naming import labelled_turn
 from roomkit_ui.vc_agent import BACKGROUND_WORKER
 
@@ -238,7 +239,7 @@ def _register_vc_error_hooks(kit: Any, engine: Any) -> None:
         if LOCAL_TOOL_REFUSAL in error:
             return  # register_local_tool_hint names the setting to change instead
         try:
-            engine.session_notice.emit(_turn_error_notice(error))
+            engine.session_notice.emit(context_overflow(error) or _turn_error_notice(error))
         except Exception:
             pass
 

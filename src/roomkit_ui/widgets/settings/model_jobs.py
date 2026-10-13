@@ -37,6 +37,12 @@ class ModelDownloads(QObject):
         self._tasks[model.id] = loop.create_task(self._run(model))
         self._notify(model.id)
 
+    def cancel(self, model_id: str) -> None:
+        """Stop *model_id*'s download; a model that resumes keeps what arrived."""
+        task = self._tasks.get(model_id)
+        if task is not None:
+            task.cancel()
+
     def clear(self, model_id: str) -> None:
         if model_id not in self._tasks:
             self.states.pop(model_id, None)

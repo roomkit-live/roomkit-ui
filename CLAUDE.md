@@ -105,6 +105,7 @@ src/roomkit_ui/
 ├── enrollment.py        # Speaker embedding recording/extraction (sherpa-onnx)
 ├── model_catalog.py     # Downloadable local models + on-disk locations
 ├── model_download.py    # Download plumbing: raw GitHub, Git LFS (oid-checked), release assets; 30 s timeouts
+├── gguf_models.py       # llama.cpp models from Hugging Face: search, repo files, HF-cache downloads, resolve, fit — leaf
 ├── model_manager.py     # Download/delete entry points per model kind (edge-ai-models)
 ├── download_flight.py   # One download per model across Settings dialogs — leaf
 ├── skill_manager.py     # Skill source dirs, discovery, SkillRegistry build
@@ -165,6 +166,7 @@ src/roomkit_ui/
                            #  catalogs, reasoning) for Think · LLM, the Agent tab's tasks and Text
                            #  chat; model_combos.py shares the model/choice dropdowns;
                            #  images_setup.py is the Images tab;
+                           #  llm_library_page.py is Models & components → LLMs (GGUF downloads);
                            #  audio_page.py owns audio_processing.py and speakers_page.py.
                            #  providers_page.py owns every shared provider credential; privacy_page.py
                            #  owns memory and session recording. diagnostics_page.py groups
@@ -249,6 +251,7 @@ Every AI backend lives behind an extra declared in `pyproject.toml` AND mirrored
 - No shell means the Command field is not one: `FOO=1 mycli` makes `resolve_command()` look for a binary literally named `FOO=1` and the whole tool gets dropped. Env vars go in the tool's Env field (`KEY=VALUE` per line, parsed by `env_config.parse_env_block`), same as an MCP server. They reach the `--help` probe too, so seeded help describes the CLI as configured
 - git for skills runs through `skill_git` and drops `GIT_DIR` & co. (`_GIT_REDIRECTS`): an app started from a git hook or `rebase --exec` would otherwise act on that repository. Tests that run git must clear them too
 - llama.cpp: roomkit spawns `llama-server` with a copy of the app's environment, PyInstaller's library path included; since 0.97.0 roomkit sets the host's own loader path back for it (`cli_exec` does the same for CLI tools). The server runs on its own thread and loop (`providers/llamacpp.py`) so it survives sessions and the end-of-session FD cleanup
+- llama.cpp models (`gguf_models.py`): the app downloads into the Hugging Face hub cache, in its own layout (`blobs/<sha256>`, `snapshots/<commit>/<file>` linking it, `refs/main`) — the cache llama-server's `-hf` uses, so either one's downloads are listed. A session hands llama-server a downloaded `repo:quant` as its file (`providers.llamacpp.local_model` → `gguf_models.resolve`): no network at start, and llama-server never sees the Hugging Face token. The token is only for the app's own requests (Authorization to huggingface.co; httpx drops it on the redirect to the CDN). Each part is held to the listing's size and SHA-256 and confined to its snapshot folder (a file name from a listing is data). Whether a model fits is an estimate (`fit`: file + KV cache + margin against `machine().budget`) that warns, never refuses. Tests point `HF_HUB_CACHE` at a temp folder (conftest)
 
 ### Packaging
 - Source macOS camera capture needs a bundle `NSCameraUsageDescription`. Only `camera_capture` re-execs through `macos_app`'s cached interpreter copy, preserving the venv via `__PYVENV_LAUNCHER__`. Never relaunch the main app this way: changing its executable identity triggers Keychain prompts for saved API keys. The helper must not import `settings`, `secret_store`, providers or the main app; use the supplied theme, and return the reviewed image through the bounded stdout pipe. Cancellation and stdin EOF close capture. Frozen apps use their own bundle and an in-process dialog. Never patch shared Python, change Keychain ACLs or reset TCC grants.

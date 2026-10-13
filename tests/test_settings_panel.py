@@ -695,7 +695,8 @@ def test_revisiting_the_dictation_tab_keeps_the_picked_model(open_panel, all_mod
     ("query", "tab", "field"),
     [
         ("whisper small", 0, "models.rows.whisper-small"),
-        ("gradium component", 1, "components.rows.gradium"),
+        ("local LLMs llama.cpp", 1, "llms.search"),
+        ("gradium component", 2, "components.rows.gradium"),
     ],
 )
 def test_library_search_clears_filters_and_opens_the_exact_item(panel, qapp, query, tab, field):
@@ -732,7 +733,7 @@ def test_model_library_links_keep_pending_edits_and_restore_the_model_tab(panel,
     assert load_settings()["system_prompt"] != "Still pending."
 
 
-@pytest.mark.parametrize("tab", [0, 1])
+@pytest.mark.parametrize("tab", [0, 1, 2])
 def test_library_fits_the_minimum_window_width(panel, qapp, tab):
     panel.show()
     panel.resize(panel.minimumSize())
@@ -956,3 +957,15 @@ def test_provider_component_and_key_status_are_distinct(panel, monkeypatch):
     assert page.cards["api_key"].status.text() == "Component needed"
     assert "Key added" in page.cards["api_key"].status.toolTip()
     assert "not tested" in page.cards["api_key"].status.toolTip()
+
+
+def test_downloads_use_the_hugging_face_token_before_settings_saves_it(panel):
+    panel._providers.fields["huggingface_token"].setText(" hf_typed_now ")
+    assert panel._models.llms.token() == "hf_typed_now"
+    assert load_settings()["huggingface_token"] == ""
+
+
+def test_the_llama_cpp_provider_row_opens_the_llm_tab(panel):
+    panel._providers.llamacpp.manage.click()
+    assert panel._stack.currentWidget() is panel._scrolls["models"]
+    assert panel._models.tabs.bar.currentIndex() == 1

@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import socket
 import threading
 from typing import Any
@@ -29,6 +30,16 @@ logger = logging.getLogger(__name__)
 
 # roomkit's own documented default (LlamaCppConfig, examples/llamacpp_tools.py).
 DEFAULT_MODEL = "unsloth/Qwen3-4B-Instruct-2507-GGUF:Q4_K_M"
+
+# The context window when the user sets none.  Above roomkit's 8192: the tool
+# declarations alone (sixty from one home-automation server) took 23,000
+# tokens, and Tool Search stays off for a local model.  Every recommended
+# model takes at least this much.
+DEFAULT_CONTEXT = 32768
+
+_OVERFLOW = re.compile(
+    r"request \((\d+) tokens\) exceeds the available context size \((\d+) tokens\)"
+)
 
 # A spoken reply's output cap without reasoning: LlamaCppConfig's default.
 _REPLY_MAX_TOKENS = 1024
@@ -43,7 +54,7 @@ def create(settings: dict, *, role: str = "conversation") -> Any:
     """Create this session's llama.cpp provider, a client of *role*'s server."""
     from roomkit.providers.llamacpp import LlamaCppAIProvider, LlamaCppConfig
 
-    model = (settings.get("vc_llamacpp_model", "") or "").strip() or DEFAULT_MODEL
+    model = local_model((settings.get("vc_llamacpp_model", "") or "").strip() or DEFAULT_MODEL)
     server = _shared_server(model, _context_size(settings), role)
     thinking = bool(settings.get("vc_llamacpp_thinking", False))
 
@@ -72,6 +83,20 @@ def create(settings: dict, *, role: str = "conversation") -> Any:
     )
 
 
+def local_model(model: str) -> str:
+    """*model* as llama-server should load it: a ``repo:quant`` already in
+    the Hugging Face cache (Settings → Models & components, or an earlier
+    ``-hf`` download) becomes its file, so the server starts without the
+    network and never needs the Hugging Face token.  Anything else as given:
+    llama-server downloads a ``repo:quant`` it does not have."""
+    if model.endswith(".gguf"):
+        return model
+    from roomkit_ui.gguf_models import resolve
+
+    path = resolve(model)
+    return str(path) if path is not None else model
+
+
 def _max_tokens(context_size: int, *, thinking: bool) -> int:
     """A turn's output cap.  The reasoning counts against it: at roomkit's
     1024, a model that thinks could spend them all and say nothing.  Thinking,
@@ -80,14 +105,29 @@ def _max_tokens(context_size: int, *, thinking: bool) -> int:
     return context_size if thinking else _REPLY_MAX_TOKENS
 
 
-def _context_size(settings: dict) -> int | None:
-    """The context window the user set, or None for roomkit's default."""
+def _context_size(settings: dict) -> int:
+    """The context window the user set, else :data:`DEFAULT_CONTEXT`."""
     raw = str(settings.get("vc_llamacpp_context", "") or "").strip()
     try:
         value = int(raw)
     except ValueError:
+        return DEFAULT_CONTEXT
+    return value if value > 0 else DEFAULT_CONTEXT
+
+
+def context_overflow(error: str) -> str | None:
+    """llama-server's refusal of a prompt longer than its context, said so the
+    user knows what to change; None for any other error."""
+    match = _OVERFLOW.search(error)
+    if match is None:
         return None
-    return value if value > 0 else None
+    needed, available = (int(group) for group in match.groups())
+    return (
+        f"This conversation needs {needed:,} tokens, more than the {available:,} the local "
+        "model's context holds. Raise its Context in Settings → Conversation (where this "
+        "llama.cpp model is chosen), or turn on Tool search in Settings → Integrations so "
+        "the tools no longer fill it."
+    )
 
 
 def _shared_server(model: str, context_size: int | None, role: str) -> _ServerThread:

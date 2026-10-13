@@ -33,6 +33,7 @@ _SECRET_KEYS = frozenset(
         "azure_speech_api_key",
         "meta_api_key",
         "typesafe_api_key",
+        "huggingface_token",
     }
 )
 
@@ -205,7 +206,9 @@ _DEFAULTS = {
     "gemini_custom_vocabulary": "",  # comma-separated names/terms for the user transcript
     # llama.cpp local LLM (roomkit 0.90+): roomkit downloads llama-server + model
     "vc_llamacpp_model": "",  # "repo:quant" or a .gguf path (empty = Qwen3-4B Q4_K_M)
-    "vc_llamacpp_context": "",  # context window in tokens (empty = 8192)
+    # Hugging Face access token: llama.cpp model downloads (gated ones), never llama-server
+    "huggingface_token": "",  # nosec B105 — secret: keyring, never QSettings
+    "vc_llamacpp_context": "",  # context window in tokens (empty = 32768)
     "vc_llamacpp_thinking": False,  # off: the reply does not wait on hidden reasoning
     # Pocket TTS (roomkit 0.90+, Kyutai): one language per model, voice by name or clip
     # "" = the STT language's model (English when Pocket has none) | english | french_24l…

@@ -93,12 +93,22 @@ async def test_a_new_configuration_stops_the_old_server():
     assert new.config.model == "b/model-GGUF:Q4_K_M"
 
 
+def test_only_a_context_overflow_gets_its_own_message():
+    from roomkit_ui.providers.llamacpp import context_overflow
+
+    assert context_overflow("401 invalid key") is None
+    message = context_overflow(
+        "request (40000 tokens) exceeds the available context size (32512 tokens)"
+    )
+    assert message is not None and "40,000 tokens" in message and "32,512" in message
+
+
 def test_the_context_window_reaches_the_server_and_garbage_falls_back():
     _provider(vc_llamacpp_context="24576")
     assert _FakeServer.instances[-1].config.context_size == 24576
 
     _provider(vc_llamacpp_context="lots")
-    assert _FakeServer.instances[-1].config.context_size == 8192
+    assert _FakeServer.instances[-1].config.context_size == 32768
 
 
 async def _request_body(monkeypatch, **settings) -> dict:

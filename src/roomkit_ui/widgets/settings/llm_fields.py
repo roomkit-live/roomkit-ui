@@ -15,10 +15,11 @@ from __future__ import annotations
 
 import importlib
 from collections.abc import Callable
+from functools import cache
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal, Slot
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -31,9 +32,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from roomkit_ui import gguf_models as hub
 from roomkit_ui.features import AI_PROVIDER_FEATURES
 from roomkit_ui.providers import LLM_PROVIDERS, LLM_ROLES
-from roomkit_ui.widgets.settings.controls import SettingsForm
+from roomkit_ui.providers.llamacpp import DEFAULT_CONTEXT
+from roomkit_ui.widgets.settings.controls import FeedbackLabel, SettingsForm
 from roomkit_ui.widgets.settings.feature_hints import offer_install, populate_provider_combo
 from roomkit_ui.widgets.settings.model_combos import (
     choice_combo,
@@ -211,11 +214,105 @@ CONVERSATION_THINKING_HINTS = {
 
 _DEFAULT_LOCAL_URL = "http://localhost:11434/v1"
 _LOCAL_MODEL_EXAMPLE = "e.g. qwen2.5:7b"
-_DEFAULT_CONTEXT = "8192"
+_DEFAULT_CONTEXT = str(DEFAULT_CONTEXT)
 _LLAMACPP_NOTE = (
-    "Nothing to install: the first session downloads llama.cpp and the model "
-    "(several GB), then the server stays up between sessions."
+    "Nothing to install: the first session downloads llama.cpp, and the model unless "
+    "it is already here (Models & components → LLMs, which shows each download's "
+    "progress); the server then stays up between sessions."
 )
+
+
+@cache
+def _machine() -> hub.Machine:
+    return hub.machine()
+
+
+def gguf_status(model: str, context: int) -> tuple[str, str]:
+    """Whether *model* (``repo:quant`` or a ``.gguf`` path) is here, and
+    whether it fits this computer for *context* tokens: a warning, never a
+    refusal."""
+    if model.endswith(".gguf"):
+        path = Path(model).expanduser()
+        if not path.is_file():
+            return "No file at this path.", "error"
+        size, params = path.stat().st_size, 0
+        prefix = hub.gb(size)
+    else:
+        found = hub.cached(model)
+        known = hub.recommended(model)
+        if found is not None:
+            size, params = found.size, known.params if known else 0
+            prefix = f"Downloaded · {hub.gb(size)}"
+        elif known is not None:
+            size, params = known.size, known.params
+            prefix = f"Not downloaded yet ({hub.gb(size)})"
+        else:
+            return (
+                "Not downloaded: the first session downloads it, without showing its "
+                "progress. Download it in Models & components → LLMs to follow it.",
+                "neutral",
+            )
+    here = _machine()
+    verdict = hub.fit(size, params, context, here)
+    text, _tone = hub.FIT_LABELS[verdict]
+    if verdict == hub.TOO_BIG:
+        need = hub.gb(hub.memory_needed(size, params, context))
+        return (
+            f"{prefix} · {text}: it needs about {need}, about {hub.gb(here.budget)} is "
+            "available. It may not load, or run slowly.",
+            "error",
+        )
+    return f"{prefix} · {text}", "success" if verdict == hub.FITS else "neutral"
+
+
+class GGUFCombo(QComboBox):
+    """The GGUF field: the models downloaded into the Hugging Face cache to
+    pick from, or any ``repo:quant`` or ``.gguf`` path typed in."""
+
+    refilled = Signal()
+
+    def __init__(self, current: str, placeholder: str) -> None:
+        super().__init__()
+        self.setEditable(True)
+        self.setInsertPolicy(QComboBox.NoInsert)
+        edit = self.lineEdit()
+        assert edit is not None  # editable
+        self._edit: QLineEdit = edit
+        edit.setPlaceholderText(placeholder)
+        self.setAccessibleName("GGUF model")
+        self._fill(current)
+        from roomkit_ui.widgets.settings.model_jobs import model_downloads
+
+        self._runner = model_downloads()
+        self._runner.changed.connect(self._download_changed)
+
+    def _fill(self, current: str) -> None:
+        self.blockSignals(True)
+        self.clear()
+        for model in hub.cached_models():
+            self.addItem(model.reference, model.reference)
+            self.setItemData(
+                self.count() - 1, f"{model.name} · {hub.gb(model.size)}", Qt.ToolTipRole
+            )
+        self.setCurrentIndex(self.findText(current) if current else -1)
+        self.setEditText(current)
+        self.blockSignals(False)
+        self.refilled.emit()
+
+    def text(self) -> str:
+        return self.currentText().strip()
+
+    def setText(self, text: str) -> None:  # noqa: N802 — the QLineEdit it replaced
+        self.setEditText(text)
+
+    def placeholderText(self) -> str:  # noqa: N802
+        return self._edit.placeholderText()
+
+    @Slot(str)
+    def _download_changed(self, key: str) -> None:
+        # A GGUF download finished, or one was deleted.
+        if key.startswith("gguf:") and key not in self._runner.states:
+            self._fill(self.text())
 
 
 def _hint(text: str) -> QLabel:
@@ -385,12 +482,15 @@ class LLMFields:
     def _add_llamacpp(self, form: QFormLayout) -> None:
         from roomkit_ui.providers.llamacpp import DEFAULT_MODEL
 
-        gguf = QLineEdit(str(self._own("llamacpp_model")))
-        think_llm = _short_model(self._think_llm("llamacpp_model", DEFAULT_MODEL))
-        gguf.setPlaceholderText(
-            f"As in Think · LLM: {think_llm}" if self._inherits else DEFAULT_MODEL
+        fallback = self._think_llm("llamacpp_model", DEFAULT_MODEL) or DEFAULT_MODEL
+        gguf = GGUFCombo(
+            str(self._own("llamacpp_model")),
+            f"As in Think · LLM: {_short_model(fallback)}" if self._inherits else DEFAULT_MODEL,
         )
-        gguf.setToolTip("A Hugging Face GGUF as repo:quant, or the path of a local .gguf file.")
+        gguf.setToolTip(
+            "A model downloaded in Models & components → LLMs, a Hugging Face GGUF as "
+            "repo:quant, or the path of a local .gguf file."
+        )
         browse = QPushButton("Browse…")
         browse.setCursor(Qt.PointingHandCursor)
         browse.setAutoDefault(False)
@@ -408,8 +508,24 @@ class LLMFields:
         )
         context_label = QLabel("Context")
         form.addRow(context_label, context)
+        status = FeedbackLabel()
+        form.addRow("", status)
         note = _hint(_LLAMACPP_NOTE)
         form.addRow("", note)
+
+        def show_status() -> None:
+            model = gguf.text() or fallback
+            fallback_context = self._think_llm("llamacpp_context", _DEFAULT_CONTEXT)
+            try:
+                tokens = int(context.text().strip() or fallback_context or _DEFAULT_CONTEXT)
+            except ValueError:
+                tokens = int(_DEFAULT_CONTEXT)
+            status.set_status(*gguf_status(model, tokens))
+
+        gguf.editTextChanged.connect(lambda _text: show_status())
+        gguf.refilled.connect(show_status)
+        context.textChanged.connect(lambda _text: show_status())
+        show_status()
         readers: dict[str, Callable[[], Any]] = {
             "llamacpp_model": lambda: gguf.text().strip(),
             "llamacpp_context": lambda: context.text().strip(),
@@ -422,6 +538,7 @@ class LLMFields:
             browse,
             context_label,
             context,
+            status,
             note,
             *thinking,
         ]
@@ -441,7 +558,7 @@ class LLMFields:
         self.fields[name] = box
         return [label, box, hint]
 
-    def _browse_gguf(self, field: QLineEdit) -> None:
+    def _browse_gguf(self, field: GGUFCombo) -> None:
         path, _ = QFileDialog.getOpenFileName(
             self._parent, "Select a GGUF Model", "", "GGUF models (*.gguf)"
         )

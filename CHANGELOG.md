@@ -12,6 +12,19 @@ Each released section is the source for that version's GitHub release notes.
 ## [Unreleased]
 
 ### Added
+- **Local LLMs from Hugging Face** (Settings → Models & components → LLMs) — download
+  GGUF models for llama.cpp: seven recommended models checked for conversation and tool
+  calls, from LFM2.5 1.2B (0.7 GB) to Qwen3 30B-A3B, a search of the models llama.cpp
+  runs (by default only those this computer can run), and the models already on this
+  computer, those llama.cpp downloaded itself included. Each size says whether it runs
+  well here, is tight on memory or is too big, from its file, the conversation's memory
+  and a margin against this computer's memory; it warns and never blocks. Downloads show
+  their progress, can be cancelled and resume, continue when Settings closes, and are
+  checked against their SHA-256. They go to the Hugging Face cache llama.cpp reads, and a
+  session starts a downloaded model from its file, offline included. The GGUF field of
+  Think · LLM, the Agent tab's tasks and Text chat lists the downloaded models and says
+  whether the chosen one is here and fits. Providers & keys gains Hugging Face: an
+  optional access token for gated models (Llama, Gemma), used only for downloads.
 - **The same LLM rows in every place a model is chosen** — Think · LLM, the Agent tab's
   background tasks and the Text chat tab now build one component: the provider, its model,
   its reasoning (Claude's thinking and effort, Gemini's thinking level, with what the model
@@ -327,6 +340,13 @@ Each released section is the source for that version's GitHub release notes.
   canceller sees, for roomkit's offline AEC bench.
 
 ### Changed
+- **llama.cpp's context is 32,768 tokens by default** (roomkit's was 8,192) — the tool
+  declarations alone can fill 23,000 tokens (sixty from one home-automation server), and
+  Tool search stays off for a local model. Every recommended model takes it; on a small
+  computer the GGUF field and the LLMs tab say when a model no longer fits with it. A
+  context set by hand is kept. A prompt still too long now says so in the chat — how
+  many tokens it needs and the context holds — and what to change (Context, or Tool
+  search), instead of llama-server's raw error.
 - **Popup menus** — image attachments, conversation actions and editor context menus
   share the Settings palette, rounded corners, spacious rows and violet selection in
   both themes. Attachment and conversation actions use matching outline icons; the

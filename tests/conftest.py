@@ -12,7 +12,9 @@ from roomkit_ui.secret_store import (
 
 @pytest.fixture(autouse=True)
 def isolated_qsettings(tmp_path, monkeypatch):
-    """Point QSettings at a per-test temp ini file under a test-only org name."""
+    """Point QSettings at a per-test temp ini file under a test-only org name,
+    and the Hugging Face cache at an empty folder: no test reads the user's models."""
+    monkeypatch.setenv("HF_HUB_CACHE", str(tmp_path / "hf-hub"))
     monkeypatch.setattr(
         "roomkit_ui.memory.conversations_db_path", lambda: tmp_path / "conversations.db"
     )

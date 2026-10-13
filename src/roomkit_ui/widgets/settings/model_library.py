@@ -22,6 +22,8 @@ class LibraryModel:
     downloaded: Callable[[], bool]
     download: Download
     delete: Callable[[], None]
+    # Its download stops on Cancel and resumes later (model_jobs.cancel).
+    cancellable: bool = False
 
 
 @dataclass(frozen=True)

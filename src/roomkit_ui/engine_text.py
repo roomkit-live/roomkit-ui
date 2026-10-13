@@ -19,6 +19,7 @@ from roomkit_ui.features import FeatureUnavailableError
 from roomkit_ui.image_messages import ImageSessionWindow, message_content
 from roomkit_ui.images import ImageAttachment
 from roomkit_ui.providers import create_ai_provider, has_own_llm, llm_settings
+from roomkit_ui.providers.llamacpp import context_overflow
 from roomkit_ui.text_chat import text_chat_unavailable
 from roomkit_ui.toolset import tool_search_options
 
@@ -176,7 +177,8 @@ class TextMixin:
         except Exception as exc:
             self._safe_emit(self.text_reply_stopped)  # type: ignore[attr-defined]
             logger.warning("Text response failed: %s", exc)
-            self._safe_emit(self.error_occurred, str(exc))  # type: ignore[attr-defined]
+            message = context_overflow(str(exc)) or str(exc)
+            self._safe_emit(self.error_occurred, message)  # type: ignore[attr-defined]
         # Reply completion is not a session teardown: apps may still load or run tools.
         if self.state == EngineState.ACTIVE:  # type: ignore[attr-defined]
             self._set_state(EngineState.READY)  # type: ignore[attr-defined]

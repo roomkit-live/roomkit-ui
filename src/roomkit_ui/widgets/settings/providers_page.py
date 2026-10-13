@@ -39,6 +39,11 @@ PROVIDERS = (
     ("meta_api_key", "Meta", "Muse Voice transcription, speaker identification and images"),
     ("typesafe_api_key", "TypeSafe", "Jev speaking decisions"),
     (
+        "huggingface_token",
+        "Hugging Face",
+        "Downloads of llama.cpp models, gated ones included",
+    ),
+    (
         "vc_local_api_key",
         "Local server",
         "Optional authentication for an OpenAI-compatible server",
@@ -46,7 +51,21 @@ PROVIDERS = (
 )
 
 
-_SYMBOLS = ("◎", "✦", "A", "D", "Ⅱ", "G", "x", "Az", "M", "T", ">_")
+_SYMBOLS = ("◎", "✦", "A", "D", "Ⅱ", "G", "x", "Az", "M", "T", "HF", ">_")
+# Rows of the "Local providers" section; the others are cloud providers.
+_LOCAL = ("huggingface_token", "vc_local_api_key")
+# A key some rows may go without, and what to call it.
+_OPTIONAL = {
+    "vc_local_api_key": "Key optional",
+    "huggingface_token": "Token optional",  # nosec B105 — a status label
+}
+
+
+def credential_name(key: str) -> str:
+    """What the provider calls the credential: an access token, or an API key."""
+    return "access token" if key == "huggingface_token" else "API key"
+
+
 _COMPONENTS = {
     "openai_api_key": ("openai", "openai-realtime"),
     "api_key": ("gemini",),
@@ -58,8 +77,17 @@ _COMPONENTS = {
     "azure_speech_api_key": ("azure-stt", "azure-tts"),
     "meta_api_key": ("meta-stt",),
     "typesafe_api_key": ("typesafe",),
+    "huggingface_token": ("llamacpp",),
     "vc_local_api_key": ("openai",),
 }
+
+
+_HF_HINT = (
+    "Optional: models anyone may download need no token. A gated model (Llama, "
+    "Gemma) needs one, from an account that accepted its terms; a token also raises "
+    "Hugging Face's request limits. Only downloads use it. Leave empty to remove it "
+    "when you close Settings."
+)
 
 
 class ProvidersPage(QWidget):
@@ -102,12 +130,13 @@ class ProvidersPage(QWidget):
             component = label("", "settingsHint")
             form.addRow(component)
             self._components[key] = component
+            credential = credential_name(key)
             field = QLineEdit(str(settings.get(key, "")))
             field.setEchoMode(QLineEdit.Password)
             field.setPlaceholderText(
-                "Optional API key" if key == "vc_local_api_key" else "API key"
+                f"Optional {credential}" if key in _OPTIONAL else credential.capitalize()
             )
-            field.setAccessibleName(f"{title} API key")
+            field.setAccessibleName(f"{title} {credential}")
             field.setAccessibleDescription(uses)
             field.textChanged.connect(lambda _text, k=key: self._update_status(k))
             field_row = QWidget()
@@ -117,13 +146,15 @@ class ProvidersPage(QWidget):
             reveal = QPushButton("Show")
             reveal.setCheckable(True)
             reveal.setAutoDefault(False)
-            reveal.setAccessibleName(f"Show {title} API key")
-            reveal.toggled.connect(partial(self._reveal, field, reveal, title))
+            reveal.setAccessibleName(f"Show {title} {credential}")
+            reveal.toggled.connect(partial(self._reveal, field, reveal, f"{title} {credential}"))
             row.addWidget(reveal)
-            form.addRow("API key", field_row)
+            form.addRow(credential.capitalize(), field_row)
             form.addRow(
                 label(
-                    "Leave empty to remove this key when you close Settings. "
+                    _HF_HINT
+                    if key == "huggingface_token"
+                    else "Leave empty to remove this key when you close Settings. "
                     "The connection is not tested here.",
                     "settingsHint",
                 )
@@ -135,7 +166,7 @@ class ProvidersPage(QWidget):
             form.addRow(components_link)
             card.grid.addWidget(editor, 2, 0, 1, 3)
             editor.hide()
-            section = self.local if key == "vc_local_api_key" else self.cloud
+            section = self.local if key in _LOCAL else self.cloud
             section.content.addWidget(card)
             self.fields[key] = field
             self.cards[key] = card
@@ -143,12 +174,15 @@ class ProvidersPage(QWidget):
             self._reveals.append(reveal)
         self.llamacpp = CatalogRow(icon="cube")
         self.llamacpp.set_summary(
-            "llama.cpp", "Run a GGUF model through RoomKit's managed server.", ""
+            "llama.cpp",
+            "Run a GGUF model through RoomKit's managed server. Download one in "
+            "Models & components → LLMs.",
+            "",
         )
         self.llamacpp.status.hide()
-        self.llamacpp.manage.setText("Models & components →")
+        self.llamacpp.manage.setText("Local LLMs →")
         self.llamacpp.manage.setObjectName("settingsLink")
-        self.llamacpp.manage.clicked.connect(lambda: self.navigate_requested.emit("models"))
+        self.llamacpp.manage.clicked.connect(lambda: self.navigate_requested.emit("models:llms"))
         self.local.content.addWidget(self.llamacpp)
         layout.addWidget(self.cloud)
         self.key_note = label(
@@ -168,20 +202,20 @@ class ProvidersPage(QWidget):
     def _update_status(self, key: str) -> None:
         missing = [feature for feature in _COMPONENTS[key] if unavailable_reason(feature)]
         has_key = bool(self.fields[key].text().strip())
-        text = "Component needed" if missing else "Key added" if has_key else "No key"
-        if key == "vc_local_api_key" and not missing and not has_key:
-            text = "Key optional"
+        noun = "Token" if key == "huggingface_token" else "Key"
+        stored = f"{noun} added" if has_key else f"No {noun.lower()}"
+        text = "Component needed" if missing else stored
+        if key in _OPTIONAL and not missing and not has_key:
+            text = _OPTIONAL[key]
         self.cards[key].status.set_status(
             text,
             "success"
             if has_key and not missing
             else "neutral"
-            if text == "Key optional"
+            if text in _OPTIONAL.values()
             else "warning",
         )
-        self.cards[key].status.setToolTip(
-            f"{'Key added' if has_key else 'No key'} · Connection not tested"
-        )
+        self.cards[key].status.setToolTip(f"{stored} · Connection not tested")
         self._components[key].setText(
             "Components needed: " + ", ".join(FEATURES[f].label for f in missing)
             if missing
@@ -209,10 +243,10 @@ class ProvidersPage(QWidget):
             self._toggle_editor(key, True)
 
     @staticmethod
-    def _reveal(field: QLineEdit, button: QPushButton, title: str, checked: bool) -> None:
+    def _reveal(field: QLineEdit, button: QPushButton, name: str, checked: bool) -> None:
         field.setEchoMode(QLineEdit.Normal if checked else QLineEdit.Password)
         button.setText("Hide" if checked else "Show")
-        button.setAccessibleName(f"{'Hide' if checked else 'Show'} {title} API key")
+        button.setAccessibleName(f"{'Hide' if checked else 'Show'} {name}")
 
     def _filter(self, query: str) -> None:
         words = query.strip().casefold().split()
@@ -227,8 +261,8 @@ class ProvidersPage(QWidget):
         self.llamacpp.setVisible(
             all(word in "llama.cpp local gguf models components" for word in words)
         )
-        cloud_rows = [row for key, row in self.cards.items() if key != "vc_local_api_key"]
-        local_rows = [self.cards["vc_local_api_key"], self.llamacpp]
+        cloud_rows = [row for key, row in self.cards.items() if key not in _LOCAL]
+        local_rows = [*(self.cards[key] for key in _LOCAL), self.llamacpp]
         has_cloud = any(not row.isHidden() for row in cloud_rows)
         has_local = any(not row.isHidden() for row in local_rows)
         self.cloud.setVisible(has_cloud)

@@ -108,7 +108,7 @@ class SettingsPanel(QDialog):
             self._diagnostics.tabs.bar.setCurrentIndex(2 if section == "telemetry" else 0)
             self._diagnostics.reveal_search_target()
         if key == "models":
-            self._models.tabs.bar.setCurrentIndex(1 if section == "components" else 0)
+            self._models.tabs.bar.setCurrentIndex({"llms": 1, "components": 2}.get(section, 0))
             self._models.models.clear_filters()
 
     def _restore_size(self) -> None:
@@ -140,6 +140,9 @@ class SettingsPanel(QDialog):
         self._privacy.recording_directory_changed.connect(
             self._diagnostics.set_recording_directory
         )
+        # A token typed in Providers & keys serves downloads before Settings saves it.
+        token = self._providers.fields["huggingface_token"]
+        self._models.llms.token = lambda: token.text().strip()
 
     def _build_sidebar(self) -> QWidget:
         sidebar = QWidget()
