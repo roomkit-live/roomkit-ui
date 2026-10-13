@@ -83,22 +83,29 @@ PAGE_SPECS = (
                 (("tabs", 1),),
             ),
             SearchTarget(
+                "Image generation",
+                "images draw drawing picture illustration génération d'images dessin "
+                "openai gemini nano banana grok imagine muse",
+                "images.provider",
+                (("tabs", 2),),
+            ),
+            SearchTarget(
                 "System instructions",
                 "system prompt instructions système",
                 "prompt",
-                (("tabs", 2),),
+                (("tabs", 3),),
             ),
             SearchTarget(
                 "Default personality",
                 "attitudes persona personnalité ton",
                 "attitude_combo",
-                (("tabs", 2),),
+                (("tabs", 3),),
             ),
             SearchTarget(
                 "Personality presets",
                 "attitudes custom personnalités",
                 "attitudes",
-                (("tabs", 2),),
+                (("tabs", 3),),
             ),
             SearchTarget(
                 "Listen · STT",

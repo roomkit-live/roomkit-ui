@@ -28,6 +28,11 @@ class ImageAttachment:
     def image(self) -> QImage:
         return QImage.fromData(self.bytes())
 
+    @property
+    def mime_type(self) -> str:
+        """``image/png`` or ``image/jpeg``, as its data URL says."""
+        return self.data_url.split(";", 1)[0].removeprefix("data:")
+
     def bytes(self) -> bytes:
         try:
             prefix, encoded = self.data_url.split(",", 1)

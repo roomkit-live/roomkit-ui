@@ -338,6 +338,24 @@ makes the assistant answer only utterances attributed to the enrolled primary sp
   Data fetched by the page itself is saved too, so views such as the dice tray
   can retrieve their original display data when reopened.
 
+### Images the assistant draws (Settings → Conversation → Images)
+
+Off by default. Picked a provider (OpenAI, Google Gemini, xAI Grok or Meta Muse) and
+its model from roomkit's catalog, the assistant gets a `generate_image` tool in every
+mode, spoken or typed. Asked for a picture, it draws one and the image shows in the
+chat as its entry, kept in the conversation's history; it then says in a few words
+what it drew. The assistant sees what it drew: the tool gives it the image's id,
+size and dominant colours (so "set my lights to its colours" needs no guess) and a
+copy at most 768 px long; roomkit keeps the latest two in view on the next turns.
+`edit` changes an image of the conversation, the latest (one the user shared or one
+it drew) or a drawing by its id. It uses the provider's key from Providers & keys; a provider
+not installed or without its key leaves the tool out, and the chat says why. Each
+image is billed by the provider and one that fails is never drawn again on its own
+(roomkit's rule); an image billed before a failure is still shown. The session's cost
+counts an image when roomkit's catalog prices the model (OpenAI, Gemini). Any image in
+the chat, drawn or shared, opens larger on a click, with a Save… button; a right-click
+offers Save image…. The file is the image as the chat keeps it (PNG or JPEG).
+
 ### Skills & attitudes
 
 - **Skills**: instruction packages discovered from git repos or local folders;

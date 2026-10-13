@@ -143,6 +143,11 @@ _PATHS = {
         " 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667"
         ' 48.667 0 0 0-7.5 0"/>'
     ),
+    "arrow-down-tray": (
+        '<path stroke-linecap="round" stroke-linejoin="round" '
+        'd="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5'
+        'M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"/>'
+    ),
     "sparkles": (
         '<path stroke-linecap="round" stroke-linejoin="round" '
         'd="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09'

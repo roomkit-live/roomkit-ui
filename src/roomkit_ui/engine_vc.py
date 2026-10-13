@@ -97,6 +97,7 @@ class VoiceChannelMixin:
     _primary_speaker_name: str
     _ai_pricing: Any
     _task_pricing: Any
+    _images_priced: bool
     _usage_cost: float
     _usage_in: int
     _usage_out: int
@@ -126,7 +127,31 @@ class VoiceChannelMixin:
                 self._usage_cost += pricing.cost_for(usage)
             except Exception:
                 logger.debug("cost_for() failed for usage=%s", usage, exc_info=True)
-        priced = self._ai_pricing is not None or self._task_pricing is not None
+        self._emit_usage()
+
+    def _add_image_cost(self, usage: dict, pricing: Any) -> None:
+        """Add a drawing's cost: priced by its image model's catalog entry, or
+        the amount the vendor reports it billed (``usage["cost"]``).  Its
+        tokens are the image model's, kept out of the conversation's counts.
+        A model billed per image with no price in roomkit adds nothing."""
+        cost: float | None = None
+        if pricing is not None:
+            try:
+                cost = pricing.cost_for(usage)
+            except Exception:
+                logger.debug("cost_for() failed for image usage=%s", usage, exc_info=True)
+        elif isinstance(usage.get("cost"), int | float):
+            cost = float(usage["cost"])
+        if cost is None:
+            return
+        self._usage_cost += cost
+        self._images_priced = True
+        self._emit_usage()
+
+    def _emit_usage(self) -> None:
+        priced = (
+            self._ai_pricing is not None or self._task_pricing is not None or self._images_priced
+        )
         payload = {
             "cost_usd": self._usage_cost if priced else None,
             "input_tokens": self._usage_in,

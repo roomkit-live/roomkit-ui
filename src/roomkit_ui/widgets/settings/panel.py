@@ -103,7 +103,7 @@ class SettingsPanel(QDialog):
         key, _, section = key.partition(":")
         self._sidebar.select_page(key)
         if key == "conversation" and section == "personality":
-            self._conversation.tabs.bar.setCurrentIndex(2)
+            self._conversation.tabs.bar.setCurrentIndex(3)
         if key == "diagnostics":
             self._diagnostics.tabs.bar.setCurrentIndex(2 if section == "telemetry" else 0)
             self._diagnostics.reveal_search_target()

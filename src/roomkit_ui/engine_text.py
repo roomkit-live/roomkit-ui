@@ -36,6 +36,7 @@ class TextMixin:
     _text_images: tuple[ImageAttachment, ...]
     _resume_image_entries: list[dict]
     _text_vision: bool
+    _images: Any
 
     async def _start_text(self, settings: dict, text: str) -> None:
         from roomkit import RoomKit
@@ -150,6 +151,9 @@ class TextMixin:
                 raise ValueError(
                     "This model does not accept images. Choose a vision model in Settings."
                 )
+            if self._text_images and self._images is not None:
+                # The image the next "change it" edits is the one just shared.
+                self._images.last = self._text_images[-1]
             result = await self._kit.process_inbound(
                 InboundMessage(
                     channel_id="text",

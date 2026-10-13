@@ -39,6 +39,7 @@ _TITLES = {
     "end_conversation": "End conversation",
     "name_speaker": "Name a speaker",
     "recall_conversations": "Search past conversations",
+    "generate_image": "Draw an image",
 }
 _STATUS = {"running": "Working…", "completed": "Done", "failed": "Failed", "cancelled": "Stopped"}
 _PREVIEW_LIMIT = 20_000

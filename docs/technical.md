@@ -30,6 +30,7 @@ src/roomkit_ui/
 ├── engine.py, engine_state.py  # Engine shell: start task / stop, state machine, model cache, teardown
 ├── engine_text.py, text_chat.py # Typed turns via AIChannel, streaming delivery and local readiness gate
 ├── images.py, image_messages.py # Prepared images, multimodal content and bounded image resume context
+├── image_generation.py       # Images the assistant draws: provider, generate_image tool, drawing → chat
 ├── engine_vc.py, engine_vc_helpers.py, vc_stt.py  # Voice Channel mode (mixin + stateless builders)
 ├── vc_agent.py, agent_hooks.py                 # VC agent: speak policy, thinker, background work + chat lines
 ├── engine_realtime.py, realtime_providers.py   # Realtime mode (mixin + provider builders, audio wiring)

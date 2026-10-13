@@ -145,6 +145,14 @@ data URLs. `ImageSessionWindow` also supplies up to four earlier images when reo
 a thread, alongside its fenced transcript. Provider vision capability is checked before
 inbound processing, so a text-only provider cannot silently discard current images.
 
+`image_generation.py` gives every mode the images the assistant draws. The Images tab
+picks a provider of roomkit's image surface (RFC §25: OpenAI, Gemini, xAI, Meta), and
+`Engine._setup_tools` declares one engine tool, `generate_image`, when it can run.
+`ImageStudio.draw` calls the provider, `edit` passing the latest image drawn or shared
+as its reference, and turns each result into an `ImageAttachment`. The engine emits
+`image_generated`; the chat adds an assistant entry the history keeps; the model gets
+a line saying the image is shown. A paid generation is never retried.
+
 `CameraDialog` owns its permission callback, camera, capture session and preview.
 It uses [`QImageCapture.capture()`](https://doc.qt.io/qtforpython-6/PySide6/QtMultimedia/QImageCapture.html)
 to receive a `QImage` without saving to the system photo folder. A reviewed photo joins

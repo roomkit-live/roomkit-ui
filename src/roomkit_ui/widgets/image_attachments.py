@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from roomkit_ui.widgets.camera_dialog import CameraDialog
     from roomkit_ui.widgets.camera_process import CameraProcess
 
-from PySide6.QtCore import QMimeData, QSize, Qt, Signal, Slot
+from PySide6.QtCore import QMimeData, QPoint, QSize, QStandardPaths, Qt, Signal, Slot
 from PySide6.QtGui import QIcon, QImage, QPixmap
 from PySide6.QtWidgets import (
     QDialog,
@@ -16,6 +17,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMenu,
+    QMessageBox,
     QPushButton,
     QToolButton,
     QVBoxLayout,
@@ -27,6 +29,30 @@ from roomkit_ui.images import MAX_IMAGES, ImageAttachment
 from roomkit_ui.theme import colors
 from roomkit_ui.theme_live import bind_theme, themed_style
 from roomkit_ui.widgets.menus import menu_action, popup_above
+
+
+def save_image(image: ImageAttachment, parent: QWidget) -> None:
+    """Save *image* where the user picks, as the chat keeps it (PNG or JPEG):
+    its bytes as they are, never encoded again."""
+    png = image.mime_type == "image/png"
+    suffix = ".png" if png else ".jpg"
+    folder = QStandardPaths.writableLocation(QStandardPaths.PicturesLocation) or str(Path.home())
+    stem = Path(image.name).stem.strip() or "Image"
+    path, _ = QFileDialog.getSaveFileName(
+        parent,
+        "Save Image",
+        str(Path(folder) / f"{stem}{suffix}"),
+        "PNG image (*.png)" if png else "JPEG image (*.jpg *.jpeg)",
+    )
+    if not path:
+        return
+    target = Path(path)
+    if target.suffix.lower() not in ((".png",) if png else (".jpg", ".jpeg")):
+        target = target.with_name(target.name + suffix)
+    try:
+        target.write_bytes(image.bytes())
+    except (OSError, ValueError) as exc:
+        QMessageBox.warning(parent, "Save Image", f"The image could not be saved: {exc}")
 
 
 def show_image(image: ImageAttachment, parent: QWidget) -> None:
@@ -42,9 +68,17 @@ def show_image(image: ImageAttachment, parent: QWidget) -> None:
         QPixmap.fromImage(image.image()).scaled(size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
     )
     layout.addWidget(label)
+    buttons = QHBoxLayout()
+    save = QPushButton("Save…")
+    save.setIcon(svg_icon("arrow-down-tray", colors()["TEXT_PRIMARY"], 18))
+    save.setAccessibleName(f"Save image: {image.name}")
+    save.clicked.connect(lambda: save_image(image, dialog))
     close = QPushButton("Close")
     close.clicked.connect(dialog.accept)
-    layout.addWidget(close, 0, Qt.AlignRight)
+    buttons.addWidget(save)
+    buttons.addStretch()
+    buttons.addWidget(close)
+    layout.addLayout(buttons)
     dialog.open()
 
 
@@ -70,6 +104,15 @@ class ImagePreview(QToolButton):
             ),
         )
         self.clicked.connect(lambda: show_image(image, self))
+        self.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.customContextMenuRequested.connect(lambda pos: self._menu(image, pos))
+
+    def _menu(self, image: ImageAttachment, pos: QPoint) -> None:
+        menu = QMenu(self)
+        save = menu_action(menu, "Save image…", "arrow-down-tray")
+        save.triggered.connect(lambda: save_image(image, self))
+        menu.setAttribute(Qt.WA_DeleteOnClose)
+        menu.popup(self.mapToGlobal(pos))
 
 
 class ImageAttachments(QWidget):

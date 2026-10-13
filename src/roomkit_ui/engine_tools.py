@@ -44,6 +44,15 @@ def compose_attitude_prompt(base_prompt: str, attitude_description: str) -> str:
 _DEFAULT_SYSTEM_PROMPT = "You are a friendly voice assistant. Be concise and helpful."
 
 
+# What a tool answers: text, or text and images (roomkit's ToolResult).
+ToolOutput = str | list[Any]
+
+
+def _output_text(output: list[Any]) -> str:
+    """The text parts of a content-part result, joined."""
+    return "\n".join(str(part.text) for part in output if getattr(part, "text", None))
+
+
 class ToolMixin:
     """Tool / attitude / paste handlers for ``Engine``.
 
@@ -60,6 +69,7 @@ class ToolMixin:
     _watchdog: Any
     _end_conv_handle: asyncio.TimerHandle | None
     _pending_tool_calls: int
+    _images: Any
     _attitude: str
     _attitude_name: str
     _base_system_prompt: str
@@ -105,7 +115,7 @@ class ToolMixin:
         self,
         name: str,
         arguments: dict[str, Any],
-    ) -> str:
+    ) -> ToolOutput:
         """Handle built-in tools or forward to MCP manager.
 
         Unified 0.7.x ToolHandler signature: ``async (name, arguments) -> str``
@@ -127,7 +137,7 @@ class ToolMixin:
             pass  # Qt may already have destroyed the engine during teardown.
 
         try:
-            text = await self._dispatch_tool_call(name, arguments)
+            output = await self._dispatch_tool_call(name, arguments)
         except asyncio.CancelledError:
             self._show_tool_result(
                 ToolResult(call.id, "cancelled", '{"error": "Tool call stopped."}')
@@ -140,14 +150,16 @@ class ToolMixin:
             raise  # Providers must still receive ToolFailedError / ToolRefusedError.
         else:
             # Managers can return an unknown-tool envelope. Preserve it for
-            # roomkit, but don't present an unserved call as a success.
+            # roomkit, but don't present an unserved call as a success. A
+            # result with images (a drawing) shows its text in the chat's row.
+            text = output if isinstance(output, str) else _output_text(output)
             try:
                 body = json.loads(text)
             except (ValueError, RecursionError):
                 body = None
             failed = isinstance(body, dict) and bool(body.get("error"))
             self._show_tool_result(ToolResult(call.id, "failed" if failed else "completed", text))
-            return text
+            return output
 
     def _show_tool_result(self, result: ToolResult) -> None:
         try:
@@ -155,7 +167,7 @@ class ToolMixin:
         except RuntimeError:
             pass
 
-    async def _dispatch_tool_call(self, name: str, arguments: dict[str, Any]) -> str:
+    async def _dispatch_tool_call(self, name: str, arguments: dict[str, Any]) -> ToolOutput:
         """Keep dispatch and provider failure semantics separate from UI events."""
 
         engine_result = await self._handle_engine_tool(name, arguments)
@@ -184,7 +196,7 @@ class ToolMixin:
 
         return await self._call_mcp_tool(self._mcp, name, arguments)
 
-    async def _handle_engine_tool(self, name: str, arguments: dict[str, Any]) -> str | None:
+    async def _handle_engine_tool(self, name: str, arguments: dict[str, Any]) -> ToolOutput | None:
         """The built-ins that need the engine's state; None for any other tool."""
         if name == "paste_text":
             return await self._paste_text(arguments.get("text", ""))
@@ -196,6 +208,8 @@ class ToolMixin:
             from roomkit_ui.speaker_naming import name_speaker_tool
 
             return name_speaker_tool(self, arguments)
+        if name == "generate_image":
+            return await self._generate_image(arguments)
         if name == "recall_conversations":
             # Past-conversation search needs the session's kit and store.
             from roomkit_ui.memory import recall_conversations
@@ -204,6 +218,38 @@ class ToolMixin:
                 getattr(self, "_kit", None), arguments, self._room_id
             )
         return None
+
+    async def _generate_image(self, arguments: dict[str, Any]) -> list[Any]:
+        """Draw, show the image in the chat, and give the model what it drew:
+        the text of it and a copy to look at (``drawing_result``).
+
+        A drawing takes seconds, so it brackets the watchdog as a CLI tool does.
+        """
+        from roomkit import ToolRefusedError
+
+        from roomkit_ui.image_generation import drawing_result
+
+        studio = self._images
+        if studio is None:
+            raise ToolRefusedError("Image generation is off in this session.")
+        self._pending_tool_calls += 1
+        self._watchdog.tool_call_started()
+        try:
+            drawing = await studio.draw(
+                str(arguments.get("prompt") or ""),
+                size=str(arguments.get("size") or "") or None,
+                edit=bool(arguments.get("edit")),
+                image_id=str(arguments.get("image_id") or "") or None,
+            )
+        finally:
+            self._pending_tool_calls -= 1
+            self._watchdog.tool_call_ended()
+        self._add_image_cost(drawing.usage, studio.pricing())  # type: ignore[attr-defined]
+        try:
+            self.image_generated.emit(drawing.images)  # type: ignore[attr-defined]
+        except RuntimeError:
+            pass  # Qt may already have destroyed the engine during teardown.
+        return drawing_result(drawing)
 
     def _schedule_end_conversation(self) -> str:
         """Stop the session after a delay, so the goodbye is spoken first.

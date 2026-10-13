@@ -71,10 +71,13 @@ class _FakeEngine:
     """Bare object carrying just what _accumulate_usage touches."""
 
     _accumulate_usage = VoiceChannelMixin._accumulate_usage
+    _add_image_cost = VoiceChannelMixin._add_image_cost
+    _emit_usage = VoiceChannelMixin._emit_usage
 
     def __init__(self, pricing, task_pricing=None):
         self._ai_pricing = pricing
         self._task_pricing = task_pricing
+        self._images_priced = False
         self._usage_cost = 0.0
         self._usage_in = 0
         self._usage_out = 0

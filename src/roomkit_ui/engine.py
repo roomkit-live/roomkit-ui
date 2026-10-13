@@ -34,6 +34,7 @@ from roomkit_ui.engine_state import EngineState
 from roomkit_ui.engine_text import TextMixin
 from roomkit_ui.engine_tools import ToolMixin
 from roomkit_ui.engine_vc import VoiceChannelMixin
+from roomkit_ui.image_generation import GENERATE_IMAGE_TOOL, create_image_studio, images_requested
 from roomkit_ui.images import ImageAttachment
 from roomkit_ui.mcp_config import enabled_mcp_servers
 from roomkit_ui.mcp_manager import MCPManager
@@ -131,6 +132,7 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, TextMix
     component_missing = Signal(str, str)  # feature key, what the chat says
     tool_started = Signal(object)  # ToolCall
     tool_finished = Signal(object)  # ToolResult, matched by invocation ID
+    image_generated = Signal(object)  # tuple[ImageAttachment, ...] the assistant drew
     mcp_status = Signal(str)  # MCP status message
     session_notice = Signal(str)  # non-fatal session info shown in the chat
     loading_status = Signal(str)  # loading progress message
@@ -227,6 +229,10 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, TextMix
         # The Voice Channel agent's parts (speak policy …) and the clients
         # they opened, closed after the kit (vc_agent.VCAgent).
         self._vc_agent: Any = None
+        # The image provider generate_image draws with (image_generation.py),
+        # and whether an image's cost was priced into the session's.
+        self._images: Any = None
+        self._images_priced = False
         self._usage_cost: float = 0.0
         self._usage_in: int = 0
         self._usage_out: int = 0
@@ -427,6 +433,7 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, TextMix
         if not reuse:
             self._ai_pricing = None
             self._task_pricing = None
+            self._images_priced = False
             self._usage_cost = 0.0
             self._usage_in = 0
             self._usage_out = 0
@@ -481,6 +488,16 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, TextMix
             skill_info = [
                 {"name": m.name, "description": m.description}
                 for m in skills_registry.all_metadata()
+            ]
+        if self._images is not None:
+            models = [
+                *models,
+                {
+                    "role": "Images",
+                    "provider": self._images.provider_name,
+                    "model": self._images.model,
+                    "description": "Draws when asked (generate_image).",
+                },
             ]
         info: dict = {
             "provider": provider,
@@ -568,6 +585,8 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, TextMix
 
         if memory_active(settings):
             builtin.append(dict(RECALL_TOOL))
+        if self._open_image_studio(settings):
+            builtin.append(dict(GENERATE_IMAGE_TOOL))
         mcp_tools, dropped = reachable_mcp_tools(builtin, cli_tools, mcp_tools)
         if dropped:
             self.mcp_status.emit(
@@ -575,6 +594,24 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, TextMix
             )
         instructions = self._mcp.instructions() if self._mcp is not None else {}
         return ToolSet(builtin=builtin, cli=cli_tools, mcp=mcp_tools, instructions=instructions)
+
+    def _open_image_studio(self, settings: dict) -> bool:
+        """The provider generate_image draws with, as the Images tab sets it.
+
+        One that cannot run (not installed, no key) leaves the session without
+        the tool, and the chat says why: a dead tool in the declaration
+        teaches the model to call into a void.
+        """
+        if not images_requested(settings):
+            return False
+        try:
+            self._images = create_image_studio(settings)
+        except Exception as exc:
+            logger.warning("Image generation unavailable: %s", exc)
+            self.session_notice.emit(f"The assistant cannot draw images: {exc}")
+            return False
+        logger.info("Image generation: %s (%s)", self._images.provider_name, self._images.model)
+        return True
 
     async def _setup_cli_tools(self, settings: dict) -> list[dict]:
         """Build tools for each declared CLI binary."""
@@ -681,6 +718,7 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, TextMix
         await self._close_session_models()
         await self._close_framework()
         await self._close_vc_agent()
+        await self._close_image_studio()
         # Remove the voice error log handler to prevent handler accumulation.
         logging.getLogger("roomkit.voice").removeHandler(self._log_handler)
         await self._close_tool_sources()
@@ -742,6 +780,12 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, TextMix
         the channel that asked it is closed by now."""
         if self._vc_agent is not None:
             await self._vc_agent.close()
+
+    async def _close_image_studio(self) -> None:
+        """Close the image provider's client; the session's tool goes with it."""
+        if self._images is not None:
+            await self._images.close()
+            self._images = None
 
     async def _close_tool_sources(self) -> None:
         """Disconnect the MCP servers and kill any CLI tool still running."""

@@ -133,6 +133,15 @@ AI_PROVIDER_FEATURES: dict[str, str] = {
     "llamacpp": "llamacpp",
 }
 
+# Image generation (image_generation.py): xAI and Meta draw through the
+# OpenAI SDK, as roomkit's own extras for them install it.
+IMAGE_PROVIDER_FEATURES: dict[str, str] = {
+    "openai": "openai",
+    "gemini": "gemini",
+    "xai": "openai",
+    "meta": "openai",
+}
+
 STT_PROVIDER_FEATURES: dict[str, str] = {
     "local": "local-voice",
     "gradium": "gradium",

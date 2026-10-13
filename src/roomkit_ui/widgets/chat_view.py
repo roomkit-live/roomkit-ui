@@ -160,6 +160,15 @@ class ChatView(QScrollArea):
         self._insert_bubble(bubble)
         self._scroll_to_bottom()
 
+    def add_assistant_images(self, images: tuple[ImageAttachment, ...]) -> None:
+        """Images the assistant drew: an entry of their own, where they came,
+        between the words of its reply."""
+        self._finalize_current_bubble()
+        bubble = ChatBubble("", role="assistant", images=images)
+        bubble.finalize()
+        self._insert_bubble(bubble)
+        self._scroll_to_bottom()
+
     def add_text_reply(self, text: str, is_final: bool) -> None:
         """Show provider deltas immediately, without the voice playback pacing."""
         if not text:

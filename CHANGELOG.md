@@ -12,6 +12,20 @@ Each released section is the source for that version's GitHub release notes.
 ## [Unreleased]
 
 ### Added
+- **The assistant draws images** (Settings → Conversation → Images) — pick OpenAI, Google
+  Gemini, xAI Grok or Meta Muse and a model from roomkit's catalog, and the assistant
+  gets a `generate_image` tool, by voice or in writing. The image shows in the chat as
+  its entry and stays in the conversation's history; `edit` changes the latest image,
+  one you shared or one it drew. A provider not installed or without its key leaves the
+  tool out, and the chat says why. A paid generation is never retried; an image billed
+  before a failure is still shown. The session's cost counts images roomkit can price.
+- **The assistant sees what it drew** — `generate_image` gives the conversation model the
+  image's id, size and dominant colours (so "set my lights to its colours" needs no
+  guess), and a copy at most 768 px long to look at; roomkit keeps the latest two in view
+  on the next turns. `edit` can name the drawing it changes by its id.
+- **Save an image from the chat** — the enlarged view has a Save… button, and a right-click
+  on any image in the chat offers Save image…. The file is the image as the chat keeps
+  it, PNG or JPEG, never encoded again.
 - **A model of its own for typed messages** (Settings → Conversation → Text chat) — typed
   messages run on the Voice Channel's model (Think · LLM) as before, or on any other LLM
   the app offers: Anthropic, OpenAI, Gemini, a local vLLM/Ollama server or llama.cpp, with

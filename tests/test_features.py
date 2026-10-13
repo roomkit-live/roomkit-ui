@@ -16,6 +16,7 @@ from roomkit_ui.features import (
     AI_PROVIDER_FEATURES,
     EXCLUSIVE_EXTRAS,
     FEATURES,
+    IMAGE_PROVIDER_FEATURES,
     REALTIME_PROVIDER_FEATURES,
     SPEAK_POLICY_FEATURES,
     STT_PROVIDER_FEATURES,
@@ -100,6 +101,7 @@ def test_provider_maps_point_at_known_features(provider_map):
 
 def test_settings_combos_cover_every_offered_provider():
     """Every provider the UI offers must resolve, or be core-only on purpose."""
+    from roomkit_ui.image_generation import IMAGE_PROVIDERS
     from roomkit_ui.vc_agent import SPEAK_POLICIES
     from roomkit_ui.widgets.settings.realtime_catalogs import PROVIDERS as RT_PROVIDERS
     from roomkit_ui.widgets.settings.voice_setup import (
@@ -117,6 +119,7 @@ def test_settings_combos_cover_every_offered_provider():
         (VC_STT_PROVIDERS, STT_PROVIDER_FEATURES),
         (VC_TTS_PROVIDERS, TTS_PROVIDER_FEATURES),
         (RT_PROVIDERS, REALTIME_PROVIDER_FEATURES),
+        (IMAGE_PROVIDERS[1:], IMAGE_PROVIDER_FEATURES),  # the first is "Off"
     ):
         missing = [value for _label, value in entries if value not in mapping]
         assert not missing, f"providers with no feature mapping: {missing}"

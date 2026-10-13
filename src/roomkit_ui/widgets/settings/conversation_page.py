@@ -1,5 +1,5 @@
-"""Conversation setup (voice, text chat) and personality, with one owner for
-every setting."""
+"""Conversation setup (voice, text chat, images) and personality, with one
+owner for every setting."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ from roomkit_ui.widgets.settings.controls import (
     navigation_link,
     page_layout,
 )
+from roomkit_ui.widgets.settings.images_setup import ImagesSetup
 from roomkit_ui.widgets.settings.text_chat_setup import TextChatSetup
 from roomkit_ui.widgets.settings.voice_setup import VoiceSetup
 
@@ -39,6 +40,7 @@ class ConversationPage(QWidget):
             lambda: self.navigate_requested.emit("general")
         )
         self.text_chat = TextChatSetup(settings)
+        self.images = ImagesSetup(settings)
         personality = QWidget()
         personality_layout = QVBoxLayout(personality)
         personality_layout.setContentsMargins(0, 0, 0, 0)
@@ -82,6 +84,7 @@ class ConversationPage(QWidget):
             [
                 ("Voice setup", self.voice),
                 ("Text chat", self.text_chat),
+                ("Images", self.images),
                 ("Personality & instructions", personality),
             ]
         )
@@ -123,6 +126,7 @@ class ConversationPage(QWidget):
         return {
             **self.voice.get_settings(),
             **self.text_chat.get_settings(),
+            **self.images.get_settings(),
             **self.attitudes.get_settings(),
             "system_prompt": self.prompt.toPlainText().strip(),
             "selected_attitude": self.attitude_combo.currentData() or "",

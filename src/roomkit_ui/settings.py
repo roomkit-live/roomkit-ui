@@ -283,6 +283,13 @@ _DEFAULTS = {
     "text_llamacpp_context": "",
     "text_llamacpp_thinking": False,
     "typesafe_api_key": "",  # secret — keyring, never QSettings
+    # Image generation (image_generation.py): "" (off) | openai | gemini | xai | meta,
+    # and each provider's model ("" = its default); the key is the provider's own
+    "image_provider": "",
+    "image_openai_model": "",
+    "image_gemini_model": "",
+    "image_xai_model": "",
+    "image_meta_model": "",
 }
 
 # Keys renamed since a release shipped: new key → (old key, old value → new value).

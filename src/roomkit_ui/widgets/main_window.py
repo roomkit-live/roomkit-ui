@@ -120,6 +120,7 @@ class MainWindow(QMainWindow):
         )
         self._engine.tool_started.connect(self._on_tool_started)
         self._engine.tool_finished.connect(self._on_tool_finished)
+        self._engine.image_generated.connect(self._on_image_generated)
         self._engine.mcp_status.connect(self._on_mcp_status)
         self._engine.session_notice.connect(self._chat.add_info)
         self._engine.loading_status.connect(self._on_loading_status)
@@ -583,6 +584,12 @@ class MainWindow(QMainWindow):
         widget = self._active_app_widgets.get(result.call_id)
         if widget is not None:
             widget.send_tool_result(result.text)
+
+    def _on_image_generated(self, images: tuple) -> None:
+        if self._engine.state not in (EngineState.ACTIVE, EngineState.CONNECTING):
+            return  # A late drawing must not alter a thread opened from history.
+        self._chat.add_assistant_images(images)
+        self._history.changed()
 
     def _on_error(self, msg: str) -> None:
         logger.error("Engine error: %s", msg)
