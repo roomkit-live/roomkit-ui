@@ -230,3 +230,54 @@ def test_normal_completion_shows_no_interrupted_marker(qapp, monkeypatch):
         assert bubble._interrupted_label.isHidden() is True
     finally:
         view.deleteLater()
+
+
+def test_a_reply_shows_each_segment_once_around_tool_rows_and_notices(qapp, monkeypatch):
+    """The sentence said before a call has its entry; the words after the call
+    open the next one, without repeating it, and the reply's final adds none."""
+    from roomkit_ui.tool_events import ToolCall
+
+    _fast(monkeypatch)
+    view = ChatView()
+    try:
+        view.add_transcription("Je lance ça en arrière-plan.", "assistant", False)
+        view.add_info("Working in the background: list the campaigns")
+        view.add_transcription(
+            "Je lance ça en arrière-plan. La recherche est lancée.", "assistant", False
+        )
+        view.add_tool_call(ToolCall("c1", "list_campaigns", "{}"))
+        view.add_info("Background work done in 3 s.")
+        view.add_transcription(
+            "Je lance ça en arrière-plan.\n\nLa recherche est lancée.", "assistant", True
+        )
+
+        entries = _assistant_bubbles(view)
+        assert _pump_until(lambda: all(bubble.finalized for bubble in entries))
+        assert [bubble.text() for bubble in entries] == [
+            "Je lance ça en arrière-plan.",
+            "La recherche est lancée.",
+        ]
+
+        # The task's result is a reply of its own, shown whole.
+        view.add_transcription("Une seule campagne : Le Trésor du Dragon.", "assistant", True)
+        assert _assistant_bubbles(view)[-1].text() == "Une seule campagne : Le Trésor du Dragon."
+    finally:
+        view.deleteLater()
+
+
+def test_the_final_after_a_tool_row_finishes_the_entry_it_follows(qapp, monkeypatch):
+    from roomkit_ui.tool_events import ToolCall
+
+    _fast(monkeypatch)
+    view = ChatView()
+    try:
+        view.add_transcription("Je regarde.", "assistant", False)
+        view.add_tool_call(ToolCall("c1", "list_campaigns", "{}"))
+        view.add_transcription("Je regarde. Une seule **campagne**.", "assistant", False)
+        view.add_transcription("Je regarde.\n\nUne seule **campagne**.", "assistant", True)
+
+        first, second = _assistant_bubbles(view)
+        assert _pump_until(lambda: second.finalized)
+        assert (first.text(), second.text()) == ("Je regarde.", "Une seule **campagne**.")
+    finally:
+        view.deleteLater()

@@ -91,6 +91,11 @@ class ChatView(QScrollArea):
         # finalize keeps revealing after _reply is released, and
         # a barge-in must be able to snap that reveal short.
         self._last_assistant_bubble: ChatBubble | None = None
+        # A spoken reply's text comes whole each time (all its words so far,
+        # then its final); a tool row or a notice inside it closes its entry,
+        # and the next entry shows only the words after what that one did.
+        self._reply_text = ""
+        self._reply_shown = ""
         self._tool_calls: dict[str, ToolActivity] = {}
 
         self._empty_state = ConversationWelcome()
@@ -187,10 +192,17 @@ class ChatView(QScrollArea):
         """
         reply = self._reply or self._last_assistant_bubble
         self._reply = None
+        self._end_reply()
         if reply is not None and not reply.finalized:
             reply.cut_short(heard_ms)
 
     def _add_reply_text(self, text: str, is_final: bool, speaker_name: str) -> None:
+        self._reply_text = text
+        text = self._unshown(text)
+        if not text:
+            if is_final:  # every word of it is in the entries before
+                self._end_reply()
+            return
         reply = self._reply
         if reply is None:
             # Always stream assistant text — a provider that hands the
@@ -207,6 +219,28 @@ class ChatView(QScrollArea):
         if is_final:
             reply.finalize()
             self._reply = None
+            self._end_reply()
+
+    def _unshown(self, text: str) -> str:
+        """*text*, a spoken reply's words so far, less those the entries closed
+        inside it show.  Spacing aside (its final keeps segments a blank line
+        apart), they are its start; text that does not start so is shown whole."""
+        shown = [char for char in self._reply_shown if not char.isspace()]
+        if not shown:
+            return text
+        matched = 0
+        for index, char in enumerate(text):
+            if char.isspace():
+                continue
+            if matched == len(shown):
+                return text[index:]
+            if char != shown[matched]:
+                return text
+            matched += 1
+        return ""
+
+    def _end_reply(self) -> None:
+        self._reply_text = self._reply_shown = ""
 
     def _add_turn_text(self, text: str, role: str, is_final: bool, speaker_name: str) -> None:
         turn = self._current_bubble
@@ -300,6 +334,10 @@ class ChatView(QScrollArea):
         self._scroll_to_bottom()
 
     def _finalize_current_bubble(self) -> None:
+        if self._reply is not None:
+            # Closed inside its reply: the reply's next words open an entry
+            # of their own, and show only themselves.
+            self._reply_shown = self._reply_text
         for bubble in (self._current_bubble, self._reply):
             if bubble is not None and not bubble.finalized:
                 bubble.finalize()
@@ -367,6 +405,7 @@ class ChatView(QScrollArea):
         """Settle a written reply while leaving its interactive output alive."""
         self.set_text_pending(False)
         self._finalize_current_bubble()
+        self._end_reply()
         for row in self._tool_calls.values():
             if row.result is None:
                 row.finish(ToolResult(row.call.id, "cancelled", "The request ended."))
@@ -375,6 +414,7 @@ class ChatView(QScrollArea):
         """Keep displayed results, disconnect app actions and settle pending rows."""
         self.set_text_pending(False)
         self._finalize_current_bubble()
+        self._end_reply()
         for bubble in self._bubbles():
             if not bubble.finalized:
                 bubble.restore(bubble.snapshot())
@@ -453,6 +493,7 @@ class ChatView(QScrollArea):
                 widget.deleteLater()
         self._current_bubble = None
         self._reply = None
+        self._end_reply()
         self._last_assistant_bubble = None
         self._tool_calls.clear()
         self._voice_names.clear()

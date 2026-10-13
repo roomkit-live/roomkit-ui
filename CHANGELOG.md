@@ -377,6 +377,11 @@ Each released section is the source for that version's GitHub release notes.
   session's audio callback held CoreAudio's lock and waited for Python's: the window
   stopped on "Getting ready" (seen going from a typed conversation to Live). The session
   and dictation sounds now play through PortAudio, as the session's audio does.
+- **A spoken reply around a tool call shows each part once** — since the sentence said
+  before a call is spoken before it, the chat showed it three times: in its own entry, again
+  at the head of the words after the call, and once more in the reply's final, opened
+  below a background-task notice. A tool row or a notice inside a reply now closes its
+  entry, and the next one shows only the words that follow.
 - **Voice Channel fixes from roomkit 0.100** — the assistant's own voice, heard back while
   the echo canceller is still learning the room at the start of a session, no longer cuts
   its first reply or shows as your words. The sentence said before a tool call is spoken
