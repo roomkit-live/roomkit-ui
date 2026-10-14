@@ -57,6 +57,13 @@ jobs:
       - name: Build sdist and wheel
         run: uv build
 
+      # The libraries Qt and PortAudio load, as CI installs them: without
+      # libEGL, importing PySide6.QtGui fails before --doctor can answer.
+      - name: Install the system libraries the app loads
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libdbus-1-3 libportaudio2 libpulse0
+
       # Catches a wheel whose declared extras do not resolve — the failure mode
       # this package is most exposed to, since every backend rides an extra.
       - name: Install the built wheel with every extra
