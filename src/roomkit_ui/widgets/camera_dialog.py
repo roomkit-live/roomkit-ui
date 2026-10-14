@@ -156,7 +156,9 @@ class CameraDialog(QDialog):
         self._session.setCamera(self._camera)
         self._session.setVideoOutput(self._video)
         self._session.setImageCapture(self._capture)
-        self._capture.imageCaptured.connect(self._captured)
+        # Queued: Qt's FFmpeg backend emits this from inside its V4L2 frame read, and
+        # stopping the camera there frees what that read still uses (segfault on Linux).
+        self._capture.imageCaptured.connect(self._captured, Qt.QueuedConnection)
         self._capture.readyForCaptureChanged.connect(self._ready)
         self._capture.errorOccurred.connect(lambda _id, _error, message: self._error(message))
         self._camera.errorOccurred.connect(lambda _error, message: self._error(message))

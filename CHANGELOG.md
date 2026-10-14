@@ -11,6 +11,11 @@ Each released section is the source for that version's GitHub release notes.
 
 ## [Unreleased]
 
+### Fixed
+- **Taking a photo no longer crashes the app on Linux** — the camera stopped while Qt's
+  camera backend was still delivering the photo, and the app quit with a segmentation
+  fault as soon as "Take photo" was pressed.
+
 ## [0.3.0] - 2026-10-13
 
 ### Added

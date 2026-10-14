@@ -4,13 +4,28 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QObject, Qt, Signal
 from PySide6.QtGui import QImage
 from PySide6.QtWidgets import QWidget
 
 from roomkit_ui.widgets import camera_dialog
 from roomkit_ui.widgets.camera_dialog import CameraDialog
 from roomkit_ui.widgets.image_attachments import ImageAttachments
+
+
+class _FakeCamera(QObject):
+    errorOccurred = Signal(int, str)  # noqa: N815
+
+    def __init__(self, _device, parent=None) -> None:
+        super().__init__(parent)
+        self.start = Mock()
+        self.stop = Mock()
+
+
+class _FakeImageCapture(QObject):
+    imageCaptured = Signal(int, QImage)  # noqa: N815
+    readyForCaptureChanged = Signal(bool)  # noqa: N815
+    errorOccurred = Signal(int, int, str)  # noqa: N815
 
 
 @pytest.fixture(autouse=True)
@@ -45,6 +60,28 @@ def test_capture_is_reviewed_before_use_and_camera_stops(qtbot, monkeypatch):
     assert tray._camera is None
     session.setCamera.assert_called_with(None)
     session.setVideoOutput.assert_called_with(None)
+
+
+def test_capture_is_reviewed_once_the_backend_has_returned(qtbot, monkeypatch):
+    # Qt's FFmpeg backend emits imageCaptured from inside its V4L2 frame read:
+    # stopping the camera there freed what it still used and crashed the app on Linux.
+    monkeypatch.setattr(CameraDialog, "_request_access", lambda _: None)
+    device = SimpleNamespace(description=lambda: "Webcam")
+    devices = SimpleNamespace(videoInputs=lambda: [device])
+    monkeypatch.setattr(camera_dialog, "QMediaDevices", devices, raising=False)
+    monkeypatch.setattr(camera_dialog, "QVideoWidget", QWidget, raising=False)
+    monkeypatch.setattr(camera_dialog, "QMediaCaptureSession", lambda _: Mock(), raising=False)
+    monkeypatch.setattr(camera_dialog, "QCamera", _FakeCamera, raising=False)
+    monkeypatch.setattr(camera_dialog, "QImageCapture", _FakeImageCapture, raising=False)
+    dialog = CameraDialog()
+    qtbot.addWidget(dialog)
+    dialog._open_camera()
+    image = QImage(90, 60, QImage.Format_RGB32)
+    image.fill(Qt.green)
+    dialog._capture.imageCaptured.emit(1, image)
+    dialog._camera.stop.assert_not_called()
+    qtbot.waitUntil(lambda: dialog._shutter.text() == "Use photo")
+    dialog._camera.stop.assert_called_once()
 
 
 def test_cancel_and_late_permission_never_start_camera(qtbot, monkeypatch):
