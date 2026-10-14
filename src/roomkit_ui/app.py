@@ -109,7 +109,10 @@ def _configure_logging() -> None:
         format="%(asctime)s %(name)s %(levelname)s %(message)s",
         handlers=[
             logging.StreamHandler(),
-            logging.FileHandler(os.path.join(log_dir, "roomkit-ui.log"), mode="w"),
+            # UTF-8, not the locale's: cp1252 on Windows cannot write "→".
+            logging.FileHandler(
+                os.path.join(log_dir, "roomkit-ui.log"), mode="w", encoding="utf-8"
+            ),
         ],
         force=True,
     )
