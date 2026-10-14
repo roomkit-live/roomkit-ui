@@ -161,6 +161,14 @@ PAGE_SPECS = (
                 unavailable="Select Voice Channel mode to configure agent behavior.",
             ),
             SearchTarget(
+                "Assistant role",
+                "role rôle jev classifier deciding what it is asked questions owner",
+                "voice._agent.agent_role",
+                (("tabs", 0), ("voice.pipeline_tabs", 3)),
+                fallback="voice.mode_picker",
+                unavailable="Select Voice Channel mode and a deciding model to set its role.",
+            ),
+            SearchTarget(
                 "Background tasks model",
                 "work in the background tasks worker llm model tâches de fond",
                 "voice._agent.tasks_llm.provider",

@@ -257,6 +257,7 @@ _DEFAULTS = {
     # Voice Channel agent (roomkit 0.96): who decides whether it speaks on a turn
     "vc_speak_policy": "off",  # "off" | "openai" | "jev" | "llm" (vc_agent.py)
     "vc_agent_name": "",  # what people call the assistant (empty = "Assistant")
+    "vc_agent_role": "",  # what it is there for, read by the speaking classifier
     "vc_thinker": False,  # think while listening (needs a speak policy)
     "vc_background": False,  # long requests run as background tasks (roomkit 0.97)
     # The LLM those tasks run on: "" (the conversation model) or a provider of

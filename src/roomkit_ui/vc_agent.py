@@ -116,6 +116,96 @@ def agent_name(settings: dict) -> str:
     return str(settings.get("vc_agent_name") or "").strip() or DEFAULT_AGENT_NAME
 
 
+def agent_role(settings: dict) -> str:
+    """What the assistant is there for, in the user's words: the speak policy's
+    classifier reads it with every turn, to judge whether a turn is for it."""
+    return str(settings.get("vc_agent_role") or "").strip()
+
+
+def _speak_policy(classifier: Any, settings: dict) -> Any:
+    from roomkit import ClassifierSpeakPolicy
+
+    return ClassifierSpeakPolicy(
+        classifier, agent_name=agent_name(settings), agent_role=agent_role(settings)
+    )
+
+
+def speak_policy_brief(settings: dict) -> str:
+    """What the speaking classifier reads and is asked on a turn, written out from
+    roomkit's own policy (never a copy): an example of what it reads, each question
+    word for word, and how the answers decide."""
+    import json
+    import textwrap
+
+    from roomkit.classifiers.base import ChoiceQuestion, ScoreQuestion
+    from roomkit.models.enums import ChannelType
+    from roomkit.models.event import EventSource, RoomEvent, TextContent
+    from roomkit.speaking.base import SpeakTurn
+    from roomkit.speaking.classifier import RESUME, THOUGHT_QUESTIONS, compose
+    from roomkit.speaking.listening import ASKED_ME, LIFT
+
+    policy = _speak_policy(None, settings)
+    name = agent_name(settings)
+    you = str(settings.get("user_name") or "").strip() or "You"
+
+    def said(body: str, channel: str = "voice") -> RoomEvent:
+        kind = ChannelType.AI if channel == "ai" else ChannelType.VOICE
+        return RoomEvent(
+            room_id="example",
+            source=EventSource(channel_id=channel, channel_type=kind),
+            content=TextContent(body=body),
+        )
+
+    recent = (
+        said("Shall we pick the campaign up tonight?"),
+        said("Yes. The last session stopped at the door of the crypt.", "ai"),
+        said("Sounds good to me."),
+    )
+    last = said(f"{name}, where were we exactly?")
+    speakers = {recent[0].id: you, recent[2].id: "Speaker B", last.id: you}
+    turn = SpeakTurn(
+        event=last,
+        recent=recent,
+        people=(you, "Speaker B"),
+        channel_id="ai",
+        speakers=speakers,
+    )
+
+    def question(key: str, q: Any) -> str:
+        if isinstance(q, ScoreQuestion):
+            kind = f"a score from 0 to {len(q.levels) - 1}"
+            extra = [f"{i}: {level}" for i, level in enumerate(q.levels)]
+        elif isinstance(q, ChoiceQuestion):
+            kind, extra = "a choice", [f"{k}: {v}" for k, v in q.options.items()]
+        else:
+            kind, extra = "yes or no (a probability)", []
+        lines = [
+            f"{key} — {kind}",
+            textwrap.fill(q.instructions, 88, initial_indent="  ", subsequent_indent="  "),
+        ]
+        lines += [
+            textwrap.fill(e, 88, initial_indent="    ", subsequent_indent="      ") for e in extra
+        ]
+        return "\n".join(lines)
+
+    sections = [
+        "WHAT IT READS ON EVERY TURN (an example)",
+        json.dumps(policy.state(turn), indent=2, ensure_ascii=False),
+        "THE QUESTIONS IT ANSWERS",
+        *(question(k, q) for k, q in policy.questions(turn).items()),
+        "WHILE ASKED TO ONLY LISTEN (instead of listen_request)",
+        question("asked_me", ASKED_ME),
+        question("lift", LIFT),
+        "RIGHT AFTER IT WAS CUT OFF",
+        question("resume", RESUME),
+        "WHEN IT HAS SOMETHING TO ADD (Think while listening)",
+        *(question(k, q) for k, q in THOUGHT_QUESTIONS.items()),
+        "HOW THE ANSWERS DECIDE",
+        textwrap.fill(" ".join((compose.__doc__ or "").split()), 88),
+    ]
+    return "\n\n".join(sections)
+
+
 def build_vc_agent(
     settings: dict, ai_provider: Any, notice: Callable[[str], None], *, tools: bool = True
 ) -> VCAgent:
@@ -139,11 +229,9 @@ def _add_speak_policy(agent: VCAgent, settings: dict, ai_provider: Any) -> None:
         agent.summary.append({"name": "Answers every turn", "description": reason})
         return
 
-    from roomkit import ClassifierSpeakPolicy
-
     classifier = _CLASSIFIER_BUILDERS[policy](settings, ai_provider)
     agent._closables.append(classifier)
-    agent.speak_policy = ClassifierSpeakPolicy(classifier, agent_name=agent_name(settings))
+    agent.speak_policy = _speak_policy(classifier, settings)
     agent.decision = decision_model(
         policy, classifier, ai_provider, settings.get("vc_llm_provider", "anthropic")
     )

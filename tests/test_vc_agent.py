@@ -170,6 +170,7 @@ def test_the_agent_tab_saves_its_choices(qapp):
     assert page.get_settings() == {
         "vc_speak_policy": "jev",
         "vc_agent_name": "Nova",
+        "vc_agent_role": "",
         "vc_thinker": False,
         "vc_background": False,
         "vc_background_model": "",
@@ -734,3 +735,69 @@ def test_the_session_details_list_the_tasks_model(monkeypatch):
         "model": "Ornith-Q8_0.gguf",  # no private path in the details
         "description": "Runs the background tasks. Thinking off.",
     }
+
+
+async def test_the_role_reaches_the_deciding_model():
+    from roomkit.models.enums import ChannelType
+    from roomkit.models.event import EventSource, RoomEvent, TextContent
+    from roomkit.speaking.base import SpeakTurn
+
+    agent, _ = _build(
+        {
+            "vc_speak_policy": "openai",
+            "openai_api_key": "sk-test",
+            "vc_agent_name": "Nova",
+            "vc_agent_role": "  Sylvain's assistant during his calls  ",
+        }
+    )
+    event = RoomEvent(
+        room_id="r",
+        source=EventSource(channel_id="voice", channel_type=ChannelType.VOICE),
+        content=TextContent(body="Nova?"),
+    )
+    state = agent.channel_options()["speak_policy"].state(SpeakTurn(event=event))
+    assert state["agent"] == {"name": "Nova", "role": "Sylvain's assistant during his calls"}
+    await agent.close()
+
+
+def test_what_the_deciding_model_is_asked_is_roomkits_own():
+    import json
+
+    from roomkit.speaking.classifier import QUESTIONS, RESUME, THOUGHT_QUESTIONS
+    from roomkit.speaking.listening import ASKED_ME, LIFT, LISTEN_REQUEST
+
+    brief = vc_agent.speak_policy_brief(
+        {"vc_agent_name": "Nova", "vc_agent_role": "Sylvain's assistant", "user_name": "Sylvain"}
+    )
+
+    example = json.loads(brief.split("\n\n")[1])  # what it reads, as roomkit builds it
+    assert example["agent"] == {"name": "Nova", "role": "Sylvain's assistant"}
+    assert example["last_turn"] == {"speaker": "Sylvain", "text": "Nova, where were we exactly?"}
+    assert example["people"] == ["Sylvain", "Speaker B"]
+    asked = [*QUESTIONS.items(), *THOUGHT_QUESTIONS.items()]
+    asked += [("listen_request", LISTEN_REQUEST), ("asked_me", ASKED_ME), ("lift", LIFT)]
+    asked += [("resume", RESUME)]
+    for name, question in asked:
+        assert f"\n{name} — " in brief
+        assert " ".join(question.instructions.split()) in " ".join(brief.split())
+
+
+def test_the_agent_tab_shows_what_it_is_asked_with_the_role_typed(qapp, monkeypatch):
+    from roomkit_ui.widgets.settings import vc_agent_fields
+    from roomkit_ui.widgets.settings.vc_agent_fields import VCAgentPage
+
+    shown: list[str] = []
+    monkeypatch.setattr(
+        vc_agent_fields._BriefDialog, "exec", lambda d: shown.append(d.text.toPlainText())
+    )
+    page = VCAgentPage({"vc_speak_policy": "jev", "vc_agent_role": "Saved role"})
+    assert page.agent_role.toPlainText() == "Saved role" and not page.show_brief.isHidden()
+
+    page.agent_name.setText("Nova")
+    page.agent_role.setPlainText("For the D&D table")
+    page.show_brief.click()
+    assert '"name": "Nova"' in shown[0] and '"role": "For the D&D table"' in shown[0]
+    assert page.get_settings()["vc_agent_role"] == "For the D&D table"
+
+    page.speak_policy.setCurrentIndex(0)  # Always answer: nothing is asked
+    assert page.agent_role.isHidden() and page.show_brief.isHidden()

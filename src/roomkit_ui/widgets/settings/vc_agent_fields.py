@@ -3,21 +3,29 @@ thinks while it listens, and works in the background."""
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSettings, Qt
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QDialog,
     QFormLayout,
     QFrame,
+    QHBoxLayout,
     QLabel,
     QLineEdit,
+    QPlainTextEdit,
+    QPushButton,
+    QVBoxLayout,
     QWidget,
 )
 
 from roomkit_ui.features import SPEAK_POLICY_FEATURES
-from roomkit_ui.vc_agent import DEFAULT_AGENT_NAME, SPEAK_POLICIES
+from roomkit_ui.theme import fixed_font_family
+from roomkit_ui.vc_agent import DEFAULT_AGENT_NAME, SPEAK_POLICIES, speak_policy_brief
+from roomkit_ui.widgets.settings.controls import label
 from roomkit_ui.widgets.settings.feature_hints import offer_install, populate_provider_combo
 from roomkit_ui.widgets.settings.llm_fields import LLMFields
+from roomkit_ui.widgets.settings.style import settings_stylesheet
 
 _SPEAKING_HINT = (
     "Always answer replies to every turn. Deciding, the assistant stays quiet while "
@@ -25,6 +33,11 @@ _SPEAKING_HINT = (
     "listens once asked to (“just listen”) until spoken to by its name. Each reply "
     "waits for the decision: about 0.2 s with Jev, up to half a second with OpenAI, "
     "a second or more with the conversation model."
+)
+
+_ROLE_HINT = (
+    "What the assistant is there for, and for whom, in your words: the deciding model "
+    "reads it with every turn, to judge whether a turn is for the assistant."
 )
 
 _THINKER_HINT = (
@@ -83,6 +96,24 @@ class VCAgentPage(QFrame):
         self._agent_name_label = QLabel("Name")
         form.addRow(self._agent_name_label, self.agent_name)
 
+        self.agent_role = QPlainTextEdit(settings.get("vc_agent_role", ""))
+        self.agent_role.setPlaceholderText(
+            "Sylvain's assistant during his calls and his D&D campaign"
+        )
+        self.agent_role.setAccessibleName("Role")
+        self.agent_role.setTabChangesFocus(True)
+        self.agent_role.setFixedHeight(64)
+        self._agent_role_label = QLabel("Role")
+        form.addRow(self._agent_role_label, self.agent_role)
+        self._agent_role_hint = _hint(_ROLE_HINT)
+        form.addRow("", self._agent_role_hint)
+
+        self.show_brief = QPushButton("What it is asked…")
+        self.show_brief.setAutoDefault(False)
+        self.show_brief.setToolTip("What the deciding model reads and answers on each turn")
+        self.show_brief.clicked.connect(self._show_brief)
+        form.addRow("", self.show_brief)
+
         form.addRow("", _hint(_SPEAKING_HINT))
 
         self.thinker = QCheckBox("Think while listening")
@@ -117,16 +148,63 @@ class VCAgentPage(QFrame):
 
     def _update_visibility(self) -> None:
         policy = self.current_policy()
-        self._agent_name_label.setVisible(policy != "off")
-        self.agent_name.setVisible(policy != "off")
+        for widget in (
+            self._agent_name_label,
+            self.agent_name,
+            self._agent_role_label,
+            self.agent_role,
+            self._agent_role_hint,
+            self.show_brief,
+        ):
+            widget.setVisible(policy != "off")
         self.thinker.setEnabled(policy != "off")
         self.tasks_llm.update_visibility(self.background.isChecked())
+
+    def _show_brief(self) -> None:
+        """What the deciding model reads and is asked, with the name and role as typed."""
+        brief = speak_policy_brief(self.get_settings())
+        _BriefDialog(brief, self).exec()
 
     def get_settings(self) -> dict:
         return {
             "vc_speak_policy": self.current_policy(),
             "vc_agent_name": self.agent_name.text().strip(),
+            "vc_agent_role": self.agent_role.toPlainText().strip(),
             "vc_thinker": self.thinker.isChecked(),
             "vc_background": self.background.isChecked(),
             **self.tasks_llm.get_settings(),
         }
+
+
+class _BriefDialog(QDialog):
+    """What the deciding model reads and answers on a turn: roomkit's policy, written out."""
+
+    def __init__(self, brief: str, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("What it is asked")
+        self.setObjectName("settingsPanel")
+        self.setStyleSheet(settings_stylesheet(str(QSettings().value("room/theme", "dark"))))
+        self.resize(720, 640)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setSpacing(12)
+        layout.addWidget(label("What it is asked", "settingsSectionTitle"))
+        layout.addWidget(
+            label(
+                "On each turn, the deciding model reads the conversation as below and "
+                "answers these questions; the answers decide whether the assistant speaks, "
+                "offers or stays silent. Written out from roomkit's own policy.",
+                "settingsHint",
+            )
+        )
+        self.text = QPlainTextEdit(brief)
+        self.text.setReadOnly(True)
+        self.text.setAccessibleName("What the deciding model is asked")
+        self.text.setStyleSheet(f'font-family: "{fixed_font_family()}"; font-size: 12px;')
+        layout.addWidget(self.text, 1)
+        buttons = QHBoxLayout()
+        buttons.addStretch()
+        close = QPushButton("Close")
+        close.clicked.connect(self.accept)
+        buttons.addWidget(close)
+        layout.addLayout(buttons)

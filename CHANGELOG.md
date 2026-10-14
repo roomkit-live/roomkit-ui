@@ -12,6 +12,11 @@ Each released section is the source for that version's GitHub release notes.
 ## [Unreleased]
 
 ### Added
+- **A role for the speaking decision, and what it is asked** (Voice Channel → Agent) —
+  the Role says what the assistant is there for and for whom; the model deciding when it
+  speaks (Jev, OpenAI or the conversation model) reads it with every turn. "What it is
+  asked…" shows what that model reads on a turn and each question it answers, word for
+  word, written out from roomkit's own policy.
 - **Local LLMs from Hugging Face** (Settings → Models & components → LLMs) — download
   GGUF models for llama.cpp: seven recommended models checked for conversation and tool
   calls, from LFM2.5 1.2B (0.7 GB) to Qwen3 30B-A3B, a search of the models llama.cpp
