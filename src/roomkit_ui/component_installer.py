@@ -188,6 +188,17 @@ class ComponentInstaller(QObject):
 _installer: ComponentInstaller | None = None
 
 
+def busy_reason() -> str:
+    """Why no session starts now: an install or an update is changing the code
+    a session would run ("" when none is)."""
+    runner = installer()
+    if not runner.busy:
+        return ""
+    if runner.current == UPDATE:
+        return "RoomKit UI is updating. Start again once the update is done."
+    return "A component is being installed. Start again once it is done."
+
+
 def installer() -> ComponentInstaller:
     """The app's one installer, owned by the application so it outlives dialogs."""
     global _installer
@@ -197,7 +208,14 @@ def installer() -> ComponentInstaller:
 
 
 def restart_app(app: QCoreApplication | None = None) -> None:
-    """Quit, then start again with the same command line once this one is gone."""
+    """Quit, then start again with the same command line once this one is gone.
+
+    Never while an install or an update runs: quitting kills it midway, and a
+    `uv tool install` cut short can leave the environment half built.
+    """
+    if installer().busy:
+        logger.warning("Restart refused: an install or an update is running")
+        return
     app = app or QCoreApplication.instance()
     if app is None:
         return

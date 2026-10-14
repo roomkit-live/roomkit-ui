@@ -103,7 +103,8 @@ class UpdateNotice(QWidget):
             return "Updating RoomKit UI…", ()
         result = installer().last_update
         if result is not None and result[0]:
-            return result[1], (self._restart,)
+            # No restart while a component installs: quitting would cut it short.
+            return result[1], (() if installer().busy else (self._restart,))
         if not version:
             return "", ()
         if result is not None:
@@ -120,11 +121,10 @@ class UpdateNotice(QWidget):
         self._feedback = ""
         update_service().dismiss()
 
-    def _on_started(self, key: str) -> None:
-        if key == UPDATE:
-            self.refresh()
+    def _on_started(self, _key: str) -> None:
+        self.refresh()  # any job hides Restart now
 
     def _on_finished(self, key: str, _ok: bool, _message: str) -> None:
         if key == UPDATE:
             self._feedback = ""
-            self.refresh()
+        self.refresh()

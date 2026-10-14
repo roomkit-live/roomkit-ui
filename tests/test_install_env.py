@@ -51,6 +51,15 @@ def test_a_receipt_says_what_the_tool_environment_was_made_with(tmp_path):
     )
 
 
+def test_a_receipt_extra_spelled_otherwise_is_still_exclusive(tmp_path):
+    """uv records an extra as typed: "smart_turn" is smart-turn, which
+    qwen3-tts must replace rather than join."""
+    receipt = uv_tool_receipt(_tool_env(tmp_path, RECEIPT.replace('"smart-turn"', '"Smart_Turn"')))
+
+    assert receipt.extras == ("all", "smart-turn")
+    assert with_extra(receipt.extras, "qwen3-tts") == ("all", "qwen3-tts")
+
+
 def test_a_receipt_of_another_tool_or_folder_is_not_ours(tmp_path):
     assert uv_tool_receipt(_tool_env(tmp_path, name="httpx")) is None
     other = RECEIPT.replace('name = "roomkit-ui", extras', 'name = "httpx", extras')

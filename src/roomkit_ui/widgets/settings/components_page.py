@@ -222,7 +222,7 @@ class _ComponentsPage(QWidget):
         self._cancel.setVisible(running is not None)
         self._restart.setVisible(False)
         message = f"Installing {running.title}…" if running else ""
-        if not running and runner.last_result:
+        if not runner.busy and runner.last_result:  # no restart under any job
             extra, installed, message = runner.last_result
             component = next(c for c in components() if c.extra == extra)
             self._restart.setVisible(

@@ -121,7 +121,8 @@ class _AboutPage(QWidget):
         elif updating():
             text = "Updating RoomKit UI…"
         elif result is not None and result[0]:
-            text, shown = result[1], (self.restart_button,)
+            # No restart while a component installs: quitting would cut it short.
+            text, shown = result[1], (() if installer().busy else (self.restart_button,))
         elif latest:
             text = self._update_feedback or (result[1] if result else "")
             text = text or f"RoomKit UI {latest} is available."
@@ -162,14 +163,13 @@ class _AboutPage(QWidget):
             window.accept()  # Settings saves on the way out
         QTimer.singleShot(0, restart_app)
 
-    def _on_job_started(self, key: str) -> None:
-        if key == UPDATE:
-            self._show_update()
+    def _on_job_started(self, _key: str) -> None:
+        self._show_update()  # any job hides Restart now
 
     def _on_job_finished(self, key: str, _ok: bool, _message: str) -> None:
         if key == UPDATE:
             self._update_feedback = ""
-            self._show_update()
+        self._show_update()
 
     def _copy_info(self) -> None:
         QApplication.clipboard().setText(

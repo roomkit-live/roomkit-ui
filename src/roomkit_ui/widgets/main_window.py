@@ -13,6 +13,7 @@ from PySide6.QtCore import QTimer, Signal
 from PySide6.QtWidgets import QMainWindow, QStackedWidget, QVBoxLayout
 
 from roomkit_ui.call_mode import CallRelay
+from roomkit_ui.component_installer import busy_reason
 from roomkit_ui.engine import Engine
 from roomkit_ui.engine_state import EngineState
 from roomkit_ui.idle_hangup import IdleHangup
@@ -214,6 +215,8 @@ class MainWindow(QMainWindow):
             )
         ):
             return  # the engine refuses it: keep the chat of the session ending
+        if self._environment_changing():
+            return
         settings = load_settings()
         self._history.save()
         conversation_id, context = self._history.prepare(settings)
@@ -236,6 +239,14 @@ class MainWindow(QMainWindow):
             logger.exception("Failed to schedule engine start")
             self._chat.add_error(str(e))
 
+    def _environment_changing(self) -> bool:
+        """An install or an update is replacing the code a new session would
+        run: none starts until it is done, and the chat says why."""
+        reason = busy_reason()
+        if reason:
+            self._chat.add_info(reason)
+        return bool(reason)
+
     def _refresh_text_availability(self) -> None:
         settings = load_settings()
         self._controls.set_text_availability(text_chat_unavailable(settings))
@@ -251,6 +262,8 @@ class MainWindow(QMainWindow):
             or self._engine.state not in (EngineState.IDLE, EngineState.ERROR, EngineState.READY)
         ):
             return
+        if self._engine.state != EngineState.READY and self._environment_changing():
+            return  # the draft stays
         settings = load_settings()
         reason = text_chat_unavailable(settings)
         self._controls.set_text_availability(reason)

@@ -136,6 +136,57 @@ def test_a_restart_starts_the_same_command_once_this_one_quit(monkeypatch):
     assert started == [("/usr/bin/python3", ["-m", "roomkit_ui"])]
 
 
+def test_no_restart_while_a_job_runs(runner, qtbot, monkeypatch):
+    """Quitting would kill the install midway: a cut uv tool install leaves
+    the environment half built."""
+    quits: list[bool] = []
+
+    class _App:
+        class aboutToQuit:  # noqa: N801 — mirrors the Qt signal
+            connect = staticmethod(lambda _hook: None)
+
+        @staticmethod
+        def quit():
+            quits.append(True)
+
+    runner.script["code"] = "import time; time.sleep(0.5)"
+    with qtbot.waitSignal(runner.finished, timeout=10000):
+        assert runner.install(component_of("gemini"))
+        ci.restart_app(_App)
+        assert quits == []
+        assert ci.busy_reason().startswith("A component is being installed")
+    assert ci.busy_reason() == ""
+    ci.restart_app(_App)
+    assert quits == [True]
+
+
+def test_no_session_starts_while_the_app_updates(runner, qtbot, monkeypatch):
+    """An update replaces the code a new session would import: Live and a
+    first typed message wait, the draft is kept, and the chat says why."""
+    from roomkit_ui.widgets.main_window import MainWindow
+
+    window = MainWindow()
+    qtbot.addWidget(window)
+    starts: list[dict] = []
+
+    async def start(settings, *_args, **_kwargs):
+        starts.append(settings)
+
+    monkeypatch.setattr(window._engine, "start", start)
+    told: list[str] = []
+    monkeypatch.setattr(window._chat, "add_info", told.append)
+    monkeypatch.setattr(runner, "_process", object())  # a job runs
+    monkeypatch.setattr(runner, "_key", ci.UPDATE)
+
+    window._on_start()
+    window._controls._input.setPlainText("Bonjour")
+    window._on_send("Bonjour")
+
+    assert starts == [] and window._request_task is None
+    assert window._controls._input.toPlainText() == "Bonjour"
+    assert len(told) == 2 and all("RoomKit UI is updating" in line for line in told)
+
+
 # -- the Components tab -----------------------------------------------------------------
 
 

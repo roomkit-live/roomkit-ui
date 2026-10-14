@@ -144,7 +144,8 @@ def uv_tool_receipt(prefix: Path | None = None) -> UvToolReceipt | None:
     return UvToolReceipt(
         tool_dir=env.parent,
         bin_dir=_bin_dir(tool.get("entrypoints")),
-        extras=tuple(str(extra) for extra in app.get("extras") or ()),
+        # Normalized: "smart_turn" must still be seen as exclusive (with_extra).
+        extras=tuple(normalize_name(str(extra)) for extra in app.get("extras") or ()),
         specifier=str(app.get("specifier") or ""),
         python=python if isinstance(python, str) else "",
         with_requirements=tuple(_receipt_requirement(r) for r in others),
