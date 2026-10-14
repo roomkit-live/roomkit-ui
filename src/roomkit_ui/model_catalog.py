@@ -119,6 +119,9 @@ def delete_model(model_id: str) -> None:
 
 GTCRN_MODEL_ID = "gtcrn-denoiser"
 GTCRN_URL = "https://github.com/k2-fsa/sherpa-onnx/releases/download/speech-enhancement-models/gtcrn_simple.onnx"
+# The sha256 sherpa-onnx publishes in that release's checksum.txt (GitHub
+# computes no digest for assets that old), checked against the file itself.
+GTCRN_SHA256 = "e77603ac0c23dac3227dd2d7135b3a585cbee2679048aecfa886657d3ae1b534"
 GTCRN_SIZE = "~2 MB"
 _GTCRN_FILENAME = "gtcrn_simple.onnx"
 
@@ -454,6 +457,14 @@ _SPEAKER_ASSET_URLS: dict[str, str] = {
     "wespeaker-resnet34-lm": f"{_SPEAKER_BASE}/wespeaker_en_voxceleb_resnet34_LM.onnx",
     "3dspeaker-campplus-voxceleb": (
         f"{_SPEAKER_BASE}/3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx"
+    ),
+}
+# From that release's checksum.txt, checked against the files themselves.
+_SPEAKER_ASSET_SHA256: dict[str, str] = {
+    "nemo-titanet-large": "d51abcf31717ef28162f26acb9d44dd4127c3d44c9b8624f699f3425daca8e77",
+    "wespeaker-resnet34-lm": "e9848563da86f263117134dfd7ad63c92355b37de492b55e325400c9d9c39012",
+    "3dspeaker-campplus-voxceleb": (
+        "357a834f702b80161e5b981182c038e18553c1f2ca752ed6cec2052365d4129b"
     ),
 }
 

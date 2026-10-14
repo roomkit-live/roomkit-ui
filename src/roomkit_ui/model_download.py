@@ -18,6 +18,7 @@ from roomkit_ui.model_catalog import (
     _GTCRN_FILENAME,
     _MODELS_BY_ID,
     _SMART_TURN_FILENAME,
+    _SPEAKER_ASSET_SHA256,
     _SPEAKER_ASSET_URLS,
     _SPEAKER_MODELS_BY_ID,
     _TTS_MODELS_BY_ID,
@@ -25,6 +26,7 @@ from roomkit_ui.model_catalog import (
     _VAD_REPO_PATHS,
     ESPEAK_NG_INCOMPLETE_MARKER,
     GTCRN_MODEL_ID,
+    GTCRN_SHA256,
     GTCRN_URL,
     KOKORO_ARCHIVE_BYTES,
     KOKORO_MODEL_ID,
@@ -249,7 +251,7 @@ def _download_gtcrn_sync(progress: ProgressCallback | None = None) -> None:
     target = dest / _GTCRN_FILENAME
     if target.is_file():
         return
-    _download_sized(GTCRN_URL, target, progress)
+    _download_sized(GTCRN_URL, target, progress, expected_sha256=GTCRN_SHA256)
 
 
 @single_flight
@@ -482,4 +484,4 @@ def _download_speaker_model_sync(
     if asset_url is None:
         raise ValueError(f"No download URL for speaker model: {model_id}")
 
-    _download_sized(asset_url, target, progress)
+    _download_sized(asset_url, target, progress, expected_sha256=_SPEAKER_ASSET_SHA256[model_id])

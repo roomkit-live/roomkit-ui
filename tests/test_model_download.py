@@ -260,3 +260,35 @@ def test_an_stt_model_writes_small_files_and_downloads_lfs_ones_with_one_total(
     assert sorted(d[0] for d in downloads) == sorted(lfs_files)
     total = 10 * len(lfs_files)
     assert reports[0] == (0, total) and reports[-1] == (total, total)
+
+
+# -- release assets are held to their published sha256 ------------------------------
+
+
+@pytest.mark.parametrize(
+    ("download", "expected"),
+    [
+        (lambda: md._download_gtcrn_sync(), catalog.GTCRN_SHA256),
+        *(
+            (lambda model_id=model_id: md._download_speaker_model_sync(model_id), digest)
+            for model_id, digest in catalog._SPEAKER_ASSET_SHA256.items()
+        ),
+    ],
+)
+def test_release_assets_are_checked_against_their_published_sha256(
+    models_dir, monkeypatch, download, expected
+):
+    """GTCRN and the speaker models were held to their size alone: a damaged or
+    replaced file of the right size would have been kept."""
+    checked = []
+
+    def fake_download(url, target, expected_size=0, on_bytes=None, expected_sha256=None):
+        checked.append(expected_sha256)
+        target.write_bytes(b"model")
+
+    monkeypatch.setattr(md, "_urlopen", lambda req: _FakeResponse(b"", {"Content-Length": "5"}))
+    monkeypatch.setattr(md, "_download_file", fake_download)
+
+    download()
+
+    assert checked == [expected]

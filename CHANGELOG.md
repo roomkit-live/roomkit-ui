@@ -55,6 +55,9 @@ Each released section is the source for that version's GitHub release notes.
   reopen a conversation still covers that conversation only.
 
 ### Fixed
+- **The denoiser and the speaker models are checked when downloaded** — GTCRN and the
+  three speaker-recognition models were held to their size alone; they are now held to
+  the sha256 sherpa-onnx publishes for them, as the other models are.
 - **Kroko no longer drops the last words** — the French Kroko was given roomkit's default
   0.66 s of trailing silence and cut sentences short ("demain à ne" for "demain à neuf
   heures", "de la" for "de la cuisine"). Both Kroko models now get the 1.5 s roomkit's
