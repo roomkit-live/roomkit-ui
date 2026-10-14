@@ -192,7 +192,7 @@ packaged builds keep the dialog in process.
 
 ### Dictation
 
-Global hotkey (NSEvent on macOS, pynput elsewhere) → `STTEngine` records through a short-lived RoomKit session → final transcription → clipboard copy + paste keystroke into whatever app has focus (AppleScript on macOS; xdotool or wtype on Linux; Win32 `SendInput` on Windows). A press during a start or a stop is replayed once the transition settles.
+Global hotkey (NSEvent on macOS, pynput elsewhere) → `STTEngine` records through a short-lived RoomKit session → final transcription → clipboard copy + paste keystroke into whatever app has focus (AppleScript on macOS; xdotool on X11; on Wayland the RemoteDesktop portal — GNOME and KDE, the desktop asks once and a restore token skips the question after — or wtype on Sway/Hyprland; Win32 `SendInput` on Windows). A press during a start or a stop is replayed once the transition settles.
 
 The composer uses the same `STTEngine`, owned by `MainWindow`, through
 `widgets/composer_dictation.py`. `start_input()` claims its destination synchronously;

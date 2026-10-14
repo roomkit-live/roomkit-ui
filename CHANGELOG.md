@@ -66,6 +66,13 @@ Each released section is the source for that version's GitHub release notes.
   reopen a conversation still covers that conversation only.
 
 ### Fixed
+- **Pasting works on GNOME under Wayland** — dictation and the assistant's paste copied
+  the text but never pasted it: GNOME refuses wtype ("Compositor does not support the
+  virtual keyboard protocol"), and the message only said "Auto-paste failed", so the
+  assistant told the user wtype was missing. GNOME and KDE now take Ctrl+V through the
+  desktop's remote-interaction permission: the first paste asks once, later ones paste
+  at once (60 ms). Sway and Hyprland keep wtype, and a refused keystroke now says why. A
+  missing helper names its package: `wl-clipboard`, not `wl-copy`.
 - **The denoiser and the speaker models are checked when downloaded** — GTCRN and the
   three speaker-recognition models were held to their size alone; they are now held to
   the sha256 sherpa-onnx publishes for them, as the other models are.

@@ -106,6 +106,7 @@ src/roomkit_ui/
 ├── hotkey.py            # Global hotkey (NSEvent on macOS, pynput fallback)
 ├── paste.py             # Clipboard + paste keystroke per platform (paste_into_focused)
 ├── paste_windows.py     # Windows clipboard + Ctrl+V through Win32 SendInput (ctypes)
+├── paste_portal.py      # Wayland Ctrl+V through the RemoteDesktop portal (GNOME refuses wtype); restore token, jeepney
 ├── tray.py              # System tray icon for dictation
 ├── sounds.py            # Session start/stop and dictation sounds, through sounddevice (never QSoundEffect)
 ├── speaker_manager.py   # Speaker profile JSON persistence (<data dir>/speakers)

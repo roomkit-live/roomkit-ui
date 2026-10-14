@@ -218,7 +218,7 @@ async def test_a_failed_copy_never_claims_clipboard_success_or_attempts_paste(
 async def test_paste_tool_reports_a_refused_keystroke(monkeypatch):
     """Before: the model was told "ok" and assured the user it had pasted."""
     monkeypatch.setattr(paste, "_copy_to_clipboard", lambda _text: None)
-    monkeypatch.setattr(paste, "_simulate_paste", lambda: False)
+    monkeypatch.setattr(paste, "_simulate_paste", lambda **_: False)
 
     from roomkit import ToolFailedError
 
@@ -228,7 +228,7 @@ async def test_paste_tool_reports_a_refused_keystroke(monkeypatch):
 
 async def test_paste_tool_reports_success(monkeypatch):
     monkeypatch.setattr(paste, "_copy_to_clipboard", lambda _text: None)
-    monkeypatch.setattr(paste, "_simulate_paste", lambda: True)
+    monkeypatch.setattr(paste, "_simulate_paste", lambda **_: True)
 
     result = json.loads(await ToolMixin._paste_text("hello"))
 
@@ -238,22 +238,31 @@ async def test_paste_tool_reports_success(monkeypatch):
 # -- one paste path for dictation and the tool ---------------------------------
 
 
-async def test_a_missing_helper_names_what_to_install_on_linux(monkeypatch):
+@pytest.mark.parametrize(("program", "package"), [("xclip", "xclip"), ("wl-copy", "wl-clipboard")])
+async def test_a_missing_helper_names_the_package_to_install_on_linux(
+    monkeypatch, program, package
+):
+    """Before: "Install ... wl-copy+wtype", and no package is named wl-copy."""
+
     def missing(_text):
-        raise FileNotFoundError(2, "No such file", "xclip")
+        raise FileNotFoundError(2, "No such file", program)
 
     monkeypatch.setattr(sys, "platform", "linux")
     monkeypatch.setattr(paste, "_copy_to_clipboard", missing)
 
-    with pytest.raises(paste.PasteError, match="xclip.*Install xclip"):
+    with pytest.raises(paste.PasteError) as caught:
         await paste.paste_into_focused("hello")
+
+    assert str(caught.value) == (
+        f"Missing helper program: {program}. Install the {package} package."
+    )
 
 
 async def test_dictation_reports_a_refused_paste(qapp, monkeypatch):
     from roomkit_ui.stt_engine import STTEngine
 
     monkeypatch.setattr(paste, "_copy_to_clipboard", lambda _text: None)
-    monkeypatch.setattr(paste, "_simulate_paste", lambda: False)
+    monkeypatch.setattr(paste, "_simulate_paste", lambda **_: False)
     engine = STTEngine()
     errors: list[str] = []
     engine.error_occurred.connect(errors.append)

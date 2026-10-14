@@ -114,7 +114,7 @@ xattr -cr "RoomKit UI.app"
 - [uv](https://docs.astral.sh/uv/) (recommended) or pip
 - An API key for your chosen provider — none for an all-local Voice Channel (local STT, a local LLM, Piper, Kokoro or Pocket TTS)
 - PortAudio (`libportaudio2` on Linux, included on macOS)
-- **Linux dictation deps** — `xclip` + `xdotool` (X11) or `wl-copy` + `wtype` (Wayland) for the system-wide STT dictation feature. macOS and Windows need no extra program: Windows pastes through the Win32 API
+- **Linux dictation deps** — `xclip` + `xdotool` (X11) or `wl-clipboard` (Wayland) for the system-wide STT dictation feature; on Wayland, GNOME and KDE press the paste keys through the desktop's remote-interaction permission (asked once), and Sway or Hyprland need `wtype`. macOS and Windows need no extra program: Windows pastes through the Win32 API
 
 ## Run from source
 

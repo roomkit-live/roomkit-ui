@@ -4,19 +4,26 @@ Used by both the dictation pipeline (``stt_engine``) and the voice tool
 handler (``engine_tools._paste_text``).  Kept in its own module so the
 OS-specific shell-outs (pbcopy / wl-copy / xclip, AppleScript /
 xdotool, macOS NSWorkspace) don't muddle the STT session code.  Windows
-goes through the Win32 API instead, in ``paste_windows``.
+goes through the Win32 API instead, in ``paste_windows``; GNOME and KDE on
+Wayland press the keys through the RemoteDesktop portal, in ``paste_portal``.
 """
 
 from __future__ import annotations
 
 import asyncio
+import functools
 import logging
 import os
 import re
 import subprocess
 import sys
+import threading
 
 logger = logging.getLogger(__name__)
+
+
+class PasteError(Exception):
+    """The text could not be pasted; ``str()`` is the message for the user."""
 
 
 def _is_wayland() -> bool:
@@ -119,12 +126,15 @@ def _is_terminal_focused() -> bool:
         return False
 
 
-def _simulate_paste() -> bool:
+def _simulate_paste(*, cancelled: threading.Event | None = None) -> bool:
     """Simulate paste keystroke into the focused window.
 
     Terminals typically use Ctrl+Shift+V, while other apps use Ctrl+V.
     Returns True on success, False when the keystroke was refused — the
     text is still on the clipboard then (:func:`paste_failure_message`).
+    A refusal whose reason is known raises :class:`PasteError` saying it.
+    *cancelled*, set when the caller gave up, stops a keystroke still
+    waiting for the desktop's permission.
     """
     if sys.platform == "darwin":
         return _paste_macos()
@@ -133,9 +143,34 @@ def _simulate_paste() -> bool:
 
         return paste_windows.send_ctrl_v()
     if _is_wayland():
-        return _run_paste_command(["wtype", "-M", "ctrl", "v", "-m", "ctrl"])
+        return _paste_wayland(cancelled)
     keys = "ctrl+shift+v" if _is_terminal_focused() else "ctrl+v"
     return _run_paste_command(["xdotool", "key", "--clearmodifiers", keys])
+
+
+def _paste_wayland(cancelled: threading.Event | None) -> bool:
+    """GNOME and KDE take the keystroke through the RemoteDesktop portal (GNOME
+    refuses wtype: no virtual keyboard protocol); wlroots compositors (Sway,
+    Hyprland) have no such portal and take wtype's."""
+    from roomkit_ui import paste_portal
+
+    try:
+        paste_portal.press_keys(
+            (paste_portal.CONTROL_L, paste_portal.LETTER_V), cancelled=cancelled
+        )
+    except paste_portal.PortalUnavailableError as exc:
+        logger.debug("No remote desktop portal (%s); pasting with wtype", exc)
+        return _run_paste_command(["wtype", "-M", "ctrl", "v", "-m", "ctrl"])
+    except paste_portal.PortalRefusedError as exc:
+        logger.warning("Remote desktop portal: %s", exc)
+        raise PasteError(f"{exc} {paste_failure_message()}") from exc
+    except TimeoutError as exc:
+        logger.warning("The desktop's paste permission was not answered in time")
+        raise PasteError(
+            "The desktop's request to allow pasting (remote interaction) was not "
+            f"answered in time. {paste_failure_message()}"
+        ) from exc
+    return True
 
 
 def _paste_macos() -> bool:
@@ -164,12 +199,24 @@ def _paste_macos() -> bool:
 
 
 def _run_paste_command(argv: list[str]) -> bool:
+    """Run a keystroke helper; its refusal raises PasteError in its own words
+    (wtype: "Compositor does not support the virtual keyboard protocol")."""
     try:
-        subprocess.run(argv, check=True, timeout=5)
+        subprocess.run(argv, check=True, timeout=5, capture_output=True)
     except subprocess.CalledProcessError as exc:
-        logger.warning("%s paste failed (rc=%d)", argv[0], exc.returncode)
-        return False
+        reason = _last_line(exc.stderr)
+        logger.warning("%s paste failed (rc=%d): %s", argv[0], exc.returncode, reason)
+        if not reason:
+            return False
+        raise PasteError(f"{argv[0]}: {reason}. {paste_failure_message()}") from exc
     return True
+
+
+def _last_line(stderr: bytes | str | None) -> str:
+    if isinstance(stderr, bytes):
+        stderr = stderr.decode(errors="replace")
+    lines = [line.strip() for line in (stderr or "").splitlines() if line.strip()]
+    return lines[-1][:200] if lines else ""
 
 
 def paste_failure_message(*, timed_out: bool = False) -> str:
@@ -188,10 +235,6 @@ def paste_failure_message(*, timed_out: bool = False) -> str:
             "with Ctrl+V."
         )
     return prefix + "Auto-paste failed. Text copied to clipboard — paste manually with Ctrl+V."
-
-
-class PasteError(Exception):
-    """The text could not be pasted; ``str()`` is the message for the user."""
 
 
 async def paste_into_focused(text: str) -> None:
@@ -215,8 +258,16 @@ async def paste_into_focused(text: str) -> None:
 
     # Copy has succeeded. A keystroke timeout is not a lost transcription, and
     # must not trigger an automatic retry: the target may have pasted already.
+    cancelled = threading.Event()
     try:
-        pasted = await loop.run_in_executor(None, _simulate_paste)
+        pasted = await loop.run_in_executor(
+            None, functools.partial(_simulate_paste, cancelled=cancelled)
+        )
+    except asyncio.CancelledError:
+        # The caller gave up (a tool's time bound): a permission granted later
+        # must not paste into whatever has the focus by then.
+        cancelled.set()
+        raise
     except subprocess.TimeoutExpired as exc:
         logger.warning("Automatic paste was not confirmed within %s seconds", exc.timeout)
         raise PasteError(paste_failure_message(timed_out=True)) from exc
@@ -231,10 +282,24 @@ async def paste_into_focused(text: str) -> None:
         raise PasteError(paste_failure_message())
 
 
+# The package each Linux helper program comes in: wl-copy is not one.
+_HELPER_PACKAGES = {
+    "wl-copy": "wl-clipboard",
+    "wtype": "wtype",
+    "xclip": "xclip",
+    "xdotool": "xdotool",
+}
+
+
 def _missing_helper_message(program: str | None) -> str:
     message = f"Missing helper program: {program}."
     if sys.platform.startswith("linux"):
-        message += " Install xclip+xdotool (X11) or wl-copy+wtype (Wayland)."
+        package = _HELPER_PACKAGES.get(program or "")
+        message += (
+            f" Install the {package} package."
+            if package
+            else " Install xclip and xdotool (X11), or wl-clipboard and wtype (Wayland)."
+        )
     return message
 
 

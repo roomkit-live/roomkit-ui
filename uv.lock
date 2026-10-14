@@ -4076,6 +4076,7 @@ version = "0.3.1"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },
+    { name = "jeepney", marker = "sys_platform == 'linux' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
     { name = "keyring" },
     { name = "markdown-it-py" },
     { name = "mcp" },
@@ -4190,6 +4191,7 @@ wakeword = [
 requires-dist = [
     { name = "bandit", marker = "extra == 'dev'", specifier = ">=1.7" },
     { name = "httpx", specifier = ">=0.27" },
+    { name = "jeepney", marker = "sys_platform == 'linux'", specifier = ">=0.8" },
     { name = "keyring", specifier = ">=25.0" },
     { name = "markdown-it-py", specifier = ">=3.0" },
     { name = "mcp", specifier = ">=2.0" },

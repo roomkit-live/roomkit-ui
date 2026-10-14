@@ -13,7 +13,8 @@ Goal: productive in under 30 minutes. Deeper context:
 - An API key for at least one cloud provider (Gemini, OpenAI, Anthropic, …) — entered in
   the app's Settings UI, not in env vars. An all-local Voice Channel (local STT, Ollama or
   llama.cpp, Piper) needs none
-- Linux dictation extras: `xclip` + `xdotool` (X11) or `wl-copy` + `wtype` (Wayland)
+- Linux dictation extras: `xclip` + `xdotool` (X11) or `wl-clipboard` (Wayland), plus `wtype`
+  on Sway/Hyprland (GNOME and KDE paste through the RemoteDesktop portal)
 
 ## Setup
 
