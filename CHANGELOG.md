@@ -12,6 +12,10 @@ Each released section is the source for that version's GitHub release notes.
 ## [Unreleased]
 
 ### Added
+- **Vui and Pocket TTS download ahead of a conversation** (Models & components → Speech
+  & voices) — their weights came at the first session start: 2.2 GB for Vui (2.5 GB more
+  to clone a clip), about 230 MB per Pocket language, while you waited to talk. Download
+  them beforehand; a session then starts from the cache, offline included.
 - **Kokoro, a local voice in five languages** (Conversation → Speak) — Kokoro-82M through
   sherpa-onnx, on the CPU, with nothing to install beyond the core. Download it once in
   Models & components (126 MB, checked against the sha256 GitHub publishes before it is

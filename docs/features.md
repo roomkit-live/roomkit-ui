@@ -405,7 +405,10 @@ offers Save image…. The file is the image as the chat keeps it (PNG or JPEG).
 Settings → Models & components → Local models manages local models: STT (Whisper, Parakeet, Zipformer,
 Kroko-FR), TTS (3 Piper French voices, espeak-ng data), VAD (TEN, Silero), speaker
 embeddings (TitaNet, WeSpeaker, CAM++), GTCRN denoiser, Smart Turn v3.2 and the wake-word
-encoder. Downloads resolve
+encoder. Vui's weights (model, codec, four voices; and the speaker encoder it clones a clip
+with) and Pocket TTS's (the model and voice of the saved language) download here too,
+into the Hugging Face cache those libraries read, so a session no longer fetches
+gigabytes as it starts. Downloads resolve
 GitHub LFS pointers, give up on a stalled connection, and run once per model even if
 Settings is reopened mid-download; GPU inference (CUDA/CoreML) is selectable.
 The catalogue groups models by use and filters by name, category and download status.

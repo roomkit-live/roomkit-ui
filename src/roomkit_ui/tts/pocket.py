@@ -35,10 +35,10 @@ def create(settings: dict) -> tuple[Any, int]:
     """Create a Pocket TTS provider. Returns (provider, 24000)."""
     from roomkit.voice.tts.pocket import SAMPLE_RATE, PocketTTSConfig, PocketTTSProvider
 
-    language = _language(settings)
+    language = model_language(settings)
     config = PocketTTSConfig(
         language=language,
-        voices={"default": _voice(settings, language)},
+        voices={"default": voice_for(settings, language)},
         device=_device(settings),
     )
     return PocketTTSProvider(config), SAMPLE_RATE
@@ -50,8 +50,8 @@ def cache_fields(settings: dict) -> tuple:
     A cloned voice speaks with the clip it was built from: the file's
     modification time counts, so a clip replaced in place does too.
     """
-    language = _language(settings)
-    voice = _voice(settings, language)
+    language = model_language(settings)
+    voice = voice_for(settings, language)
     try:
         clip_mtime: int | None = os.stat(voice).st_mtime_ns
     except OSError:
@@ -71,7 +71,7 @@ _STT_TO_POCKET = {
 }
 
 
-def _language(settings: dict) -> str:
+def model_language(settings: dict) -> str:
     """The chosen model, or by default the language speech recognition is set to.
 
     A language Pocket has no model for (or STT on auto-detect) speaks English.
@@ -82,7 +82,7 @@ def _language(settings: dict) -> str:
     return _STT_TO_POCKET.get((settings.get("stt_language", "") or "").strip(), "english")
 
 
-def _voice(settings: dict, language: str) -> str:
+def voice_for(settings: dict, language: str) -> str:
     """A pre-made voice name or the path of a clip to clone."""
     voice = (settings.get("vc_pocket_voice", "") or "").strip()
     if voice:

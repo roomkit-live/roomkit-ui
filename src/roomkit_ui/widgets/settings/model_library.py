@@ -51,6 +51,52 @@ def wakeword_encoder_model() -> LibraryModel:
     )
 
 
+def tts_weight_models() -> tuple[LibraryModel, ...]:
+    """Vui's and Pocket's weights, fetched before a session would (``tts_weights``)."""
+    from roomkit_ui import tts_weights
+
+    def row(key: str, name: str, detail: str, size: str) -> LibraryModel:
+        return LibraryModel(
+            f"tts-weights-{key}",
+            name,
+            detail,
+            size,
+            partial(tts_weights.is_downloaded, key),
+            partial(tts_weights.download, key),
+            partial(tts_weights.delete, key),
+        )
+
+    return (
+        row(
+            "vui",
+            "Vui",
+            "Text to speech · English, NVIDIA GPU · model, codec, four voices",
+            "~2.2 GB",
+        ),
+        row(
+            "vui-cloning",
+            "Vui voice cloning",
+            "The speaker encoder Vui clones your clip with",
+            "~2.5 GB",
+        ),
+        row(
+            "pocket",
+            "Pocket TTS",
+            f"Text to speech · {_pocket_language()} model and voice",
+            "~230 MB",
+        ),
+    )
+
+
+def _pocket_language() -> str:
+    """The saved language's label: Pocket's files follow it (Conversation → Speak)."""
+    from roomkit_ui.tts import pocket
+    from roomkit_ui.tts_weights import pocket_settings
+
+    language = pocket.model_language(pocket_settings())
+    return next((label for label, value in pocket.LANGUAGES if value == language), language)
+
+
 def model_groups() -> tuple[ModelGroup, ...]:
     return (
         ModelGroup(
@@ -85,6 +131,7 @@ def model_groups() -> tuple[ModelGroup, ...]:
                     models.download_kokoro,
                     catalog.delete_kokoro,
                 ),
+                *tts_weight_models(),
                 LibraryModel(
                     "espeak-ng-data",
                     "espeak-ng data",

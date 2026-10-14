@@ -18,6 +18,15 @@ from roomkit_ui.widgets.settings.voice_setup import VC_TTS_PROVIDERS, VoiceSetup
 _VUI = {"vc_tts_provider": "vui"}
 
 
+@pytest.fixture(autouse=True)
+def fresh_probes():
+    """Probe results are cached per feature key: a test that swaps the Feature
+    must not read the real one's, nor leave its own to the next test."""
+    features.refresh()
+    yield
+    features.refresh()
+
+
 def test_the_app_lists_roomkits_voices_and_tags():
     assert vui.PRESETS == roomkit_vui.PRESET_VOICES
     # In another order: the prompt's example opens with the list's laugh.
