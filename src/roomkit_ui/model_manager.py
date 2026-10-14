@@ -122,6 +122,7 @@ def build_stt_config(
     # Offline-only transducers need model_type set so the provider knows
     # they don't support streaming (uses OfflineRecognizer instead).
     model_type = "nemo_transducer" if m.type == "offline" else ""
+    padding = {} if m.tail_padding_s is None else {"tail_padding_s": m.tail_padding_s}
     return SherpaOnnxSTTConfig(
         mode="transducer",
         encoder=str(d / m.files[0]),
@@ -131,6 +132,7 @@ def build_stt_config(
         language=language or "en",
         model_type=model_type,
         provider=provider,
+        **padding,
     )
 
 

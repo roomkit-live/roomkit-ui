@@ -85,3 +85,15 @@ def test_download_file_counts_bytes(tmp_path, served_bytes):
     seen: list[int] = []
     _download_file("https://example.invalid/f", target, on_bytes=seen.append)
     assert sum(seen) == len(served_bytes)
+
+
+@pytest.mark.parametrize(
+    ("model_id", "padding"),
+    [("kroko-streaming-fr", 1.5), ("kroko-streaming-en", 1.5), ("zipformer-streaming", 0.66)],
+)
+def test_kroko_gets_the_trailing_silence_its_last_words_need(model_id, padding):
+    """With roomkit's 0.66 s Kroko dropped the last words ("demain à ne");
+    a model that declares nothing keeps roomkit's default."""
+    from roomkit_ui.model_manager import build_stt_config
+
+    assert build_stt_config(model_id).tail_padding_s == padding

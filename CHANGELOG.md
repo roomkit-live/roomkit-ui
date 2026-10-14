@@ -12,6 +12,8 @@ Each released section is the source for that version's GitHub release notes.
 ## [Unreleased]
 
 ### Added
+- **Kroko Streaming (EN)** (Models & components → Transcription) — the English Kroko,
+  streaming like the French one: it transcribes while you speak, on the CPU. 154 MB.
 - **Vui and Pocket TTS download ahead of a conversation** (Models & components → Speech
   & voices) — their weights came at the first session start: 2.2 GB for Vui (2.5 GB more
   to clone a clip), about 230 MB per Pocket language, while you waited to talk. Download
@@ -53,6 +55,10 @@ Each released section is the source for that version's GitHub release notes.
   reopen a conversation still covers that conversation only.
 
 ### Fixed
+- **Kroko no longer drops the last words** — the French Kroko was given roomkit's default
+  0.66 s of trailing silence and cut sentences short ("demain à ne" for "demain à neuf
+  heures", "de la" for "de la cuisine"). Both Kroko models now get the 1.5 s roomkit's
+  example measured for it; three test sentences in each language come out whole.
 - **Vui starts on a machine with the system's cuDNN** — with torch 2.13 and its cuDNN
   9.20, which lacks one engine library, cuDNN loaded that library from a system install
   (9.27, as the sherpa-onnx CUDA guide sets up) and Vui failed with

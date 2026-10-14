@@ -16,6 +16,10 @@ class STTModel:
     type: str  # "offline" or "streaming"
     size: str
     files: tuple[str, ...]
+    # Silence fed to a streaming transducer after the audio ends; None keeps
+    # roomkit's 0.66 s.  Kroko needs 1.5: with less it dropped the last words
+    # ("demain à ne", "the lights" for "the lights in the kitchen").
+    tail_padding_s: float | None = None
 
 
 STT_MODELS: list[STTModel] = [
@@ -49,6 +53,20 @@ STT_MODELS: list[STTModel] = [
             "joiner.int8.onnx",
             "tokens.txt",
         ),
+        tail_padding_s=1.5,
+    ),
+    STTModel(
+        id="kroko-streaming-en",
+        name="Kroko Streaming (EN)",
+        type="streaming",
+        size="~154 MB",
+        files=(
+            "encoder.int8.onnx",
+            "decoder.int8.onnx",
+            "joiner.int8.onnx",
+            "tokens.txt",
+        ),
+        tail_padding_s=1.5,
     ),
     STTModel(
         id="zipformer-streaming",
