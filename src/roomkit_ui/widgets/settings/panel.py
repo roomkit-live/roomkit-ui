@@ -43,8 +43,6 @@ class SettingsPanel(QDialog):
         self._stack = QStackedWidget()
         self._page_widgets: dict[str, QWidget] = {}
         self._scrolls: dict[str, QScrollArea] = {}
-        self._build_pages(settings)
-        self._general.theme_picker.theme_changed.connect(apply_theme)
         self._sidebar = SettingsNavigation(PAGE_SPECS)
         self._breadcrumb = label("", "settingsBreadcrumb", wrap=False)
         self._search = QLineEdit()
@@ -81,6 +79,9 @@ class SettingsPanel(QDialog):
         content.setSpacing(0)
         content.addWidget(self._build_sidebar())
         content.addWidget(self._build_workspace(), 1)
+        # Pages last, each straight into its place in the dialog (_build_pages).
+        self._build_pages(settings)
+        self._general.theme_picker.theme_changed.connect(apply_theme)
         self._sidebar.page_selected.connect(self._on_page_changed)
         self._sidebar.itemClicked.connect(lambda _: self._search.clear())
         self._search.textChanged.connect(self._search_changed)
@@ -121,21 +122,25 @@ class SettingsPanel(QDialog):
         self.resize(size.expandedTo(minimum).boundedTo(available))
 
     def _build_pages(self, settings: dict) -> None:
+        # Under the app's stylesheet every widget that changes parent is restyled
+        # with all it holds: a page built first and then moved scroll by scroll
+        # into the dialog was restyled at each level (4 s to open on Windows).
+        # The empty frame goes in first, each page moves once.
         for spec in PAGE_SPECS:
-            page = spec.create(settings)
-            setattr(self, f"_{spec.key}", page)
-            self._page_widgets[spec.key] = page
             scroll = QScrollArea()
             scroll.setWidgetResizable(True)
             scroll.setFrameShape(QScrollArea.NoFrame)
+            self._stack.addWidget(scroll)
             # Keep long legacy provider forms scrollable while the pages migrate.
             container = QWidget()
             layout = QVBoxLayout(container)
             layout.setContentsMargins(32, 28, 32, 28)
-            layout.addWidget(page)
             scroll.setWidget(container)
             self._scrolls[spec.key] = scroll
-            self._stack.addWidget(scroll)
+            page = spec.create(settings)
+            setattr(self, f"_{spec.key}", page)
+            self._page_widgets[spec.key] = page
+            layout.addWidget(page)
         self._pages = tuple(self._page_widgets.values())
         self._privacy.recording_directory_changed.connect(
             self._diagnostics.set_recording_directory
