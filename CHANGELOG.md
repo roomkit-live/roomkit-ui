@@ -11,6 +11,8 @@ Each released section is the source for that version's GitHub release notes.
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-13
+
 ### Fixed
 - **Taking a photo no longer crashes the app on Linux** — the camera stopped while Qt's
   camera backend was still delivering the photo, and the app quit with a segmentation
@@ -860,7 +862,8 @@ Each released section is the source for that version's GitHub release notes.
 - Initial release: RoomKit UI desktop voice assistant, with a cross-platform build
   script and a GitHub Actions workflow.
 
-[Unreleased]: https://github.com/roomkit-live/roomkit-ui/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/roomkit-live/roomkit-ui/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/roomkit-live/roomkit-ui/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/roomkit-live/roomkit-ui/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/roomkit-live/roomkit-ui/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/roomkit-live/roomkit-ui/compare/v0.1.6...v0.2.0
