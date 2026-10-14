@@ -29,8 +29,11 @@ class FakePortal:
 
     unique_name = ":1.42"
 
-    def __init__(self, *, portal=True, device_types=7, answer=0, new_token="token-2"):
+    def __init__(
+        self, *, portal=True, device_types=7, answer=0, new_token="token-2", refused_key=None
+    ):
         self.portal = portal
+        self.refused_key = refused_key
         self.device_types = device_types
         self.answer = answer
         self.new_token = new_token
@@ -50,6 +53,8 @@ class FakePortal:
             if not self.portal:
                 return new_error(msg, "org.freedesktop.DBus.Error.UnknownInterface")
             return new_method_return(msg, "v", (("u", self.device_types),))
+        if member == "NotifyKeyboardKeysym" and msg.body[2:] == (self.refused_key, 1):
+            return new_error(msg, "org.freedesktop.DBus.Error.AccessDenied")
         if member in ("CreateSession", "SelectDevices", "Start"):
             self._response = self._answer(member)
             return new_method_return(msg, "o", ("/request",))
@@ -154,6 +159,30 @@ def test_a_caller_that_gave_up_gets_no_late_keystroke(bus):
     assert portal.keys() == []
     assert portal.members()[-1] == "Close"
     assert paste_portal.token_path().read_text() == "token-2"  # the yes still counts
+
+
+def test_a_key_the_portal_refuses_releases_the_ones_it_took(bus):
+    """Before: jeepney's error escaped every handler, and dictation said
+    nothing although the text was on the clipboard."""
+    portal = bus(refused_key=paste_portal.LETTER_V)
+
+    with pytest.raises(paste_portal.PortalRefusedError, match="refused the paste keystroke"):
+        paste_portal.press_keys(CTRL_V)
+
+    assert portal.keys() == [(0xFFE3, 1), (0x76, 1), (0xFFE3, 0)]  # Ctrl not left held
+    assert portal.members()[-1] == "Close"
+
+
+def test_a_bus_that_refuses_the_app_is_no_portal(bus, monkeypatch):
+    from jeepney.auth import AuthenticationError
+
+    def refused(bus):
+        raise AuthenticationError(b"REJECTED")
+
+    monkeypatch.setattr("jeepney.io.blocking.open_dbus_connection", refused)
+
+    with pytest.raises(paste_portal.PortalUnavailableError):
+        paste_portal.press_keys(CTRL_V)
 
 
 @pytest.mark.parametrize("kwargs", [{"portal": False}, {"device_types": 2}])

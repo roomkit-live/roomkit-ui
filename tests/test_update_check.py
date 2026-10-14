@@ -97,6 +97,22 @@ async def test_offline_the_check_says_nothing_and_tries_again_later(service):
     assert service.due()  # a failure is no check
 
 
+async def test_a_refused_check_reads_as_one_line_on_the_about_page(service):
+    """Before: httpx's three lines, the URL and a link to MDN."""
+    import httpx
+
+    request = httpx.Request("GET", "https://api.github.com/repos/x/y/releases/latest")
+    response = httpx.Response(403, request=request)
+    try:
+        response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        service._fetch = FakeRelease(error=exc)
+
+    await service.check()
+
+    assert service.error == "the release server answered 403"
+
+
 async def test_a_dismissed_release_stays_quiet_until_a_newer_one(service):
     await service.check()
     service.dismiss()

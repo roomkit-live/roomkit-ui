@@ -118,8 +118,8 @@ class UpdateService(QObject):
         try:
             found = await self._fetch(self.kind, str(load_setting("update_etag") or ""))
         except Exception as exc:  # offline, a timeout, a server or JSON error
-            self.error = str(exc) or type(exc).__name__
-            logger.info("Update check failed: %s", self.error)
+            self.error = _short_reason(exc)
+            logger.info("Update check failed: %s", exc)
             return
         else:
             self.error = ""
@@ -155,6 +155,17 @@ class UpdateService(QObject):
         if not installer().update(plan):
             return "Another installation is running: try again once it ends."
         return ""
+
+
+def _short_reason(exc: Exception) -> str:
+    """One line for the About page: httpx's status error spans three, with the
+    URL and a link to MDN."""
+    import httpx
+
+    if isinstance(exc, httpx.HTTPStatusError):
+        return f"the release server answered {exc.response.status_code}"
+    lines = str(exc).strip().splitlines()
+    return lines[0] if lines else type(exc).__name__
 
 
 def _seconds(value: object) -> float:

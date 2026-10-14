@@ -51,7 +51,8 @@ _BUILT = frozenset({InstallKind.FROZEN, InstallKind.HOMEBREW})
 _RELEASE = re.compile(r"v?(\d+)\.(\d+)(?:\.(\d+))?")
 _PRE_RELEASE = re.compile(r"[-_.]?(a|b|c|rc|alpha|beta|pre|preview|dev)\d*", re.IGNORECASE)
 _WINDOWS_NOTE = (
-    "Quit RoomKit UI first, then run it: Windows keeps the app's files locked while it runs."
+    "Quit RoomKit UI first, then run it in PowerShell: Windows keeps the app's files "
+    "locked while it runs."
 )
 
 
@@ -145,7 +146,10 @@ def update_plan(kind: InstallKind | None = None) -> InstallPlan:
     kind = kind or install_kind()
     plan = _PLANS[kind]()
     if sys.platform == "win32" and plan.how is Installer.APP:
-        return InstallPlan(Installer.COMMAND, command=plan.command, note=_WINDOWS_NOTE)
+        # The user's shell lacks what the app would have set (UV_TOOL_DIR):
+        # without it, uv would update another environment than this one.
+        command = shown_command(plan.argv, plan.env)
+        return InstallPlan(Installer.COMMAND, command=command, note=_WINDOWS_NOTE)
     return plan
 
 

@@ -67,7 +67,8 @@ def press_keys(
         from jeepney.io.blocking import open_dbus_connection
 
         conn = open_dbus_connection(bus="SESSION")
-    except (ImportError, KeyError, OSError) as exc:
+    # ValueError: jeepney's AuthenticationError, a bus that refused the app.
+    except (ImportError, KeyError, OSError, ValueError) as exc:
         raise PortalUnavailableError(f"no session bus ({type(exc).__name__})") from exc
     with conn:
         _require_keyboard(conn)
@@ -78,12 +79,29 @@ def press_keys(
             if cancelled is not None and cancelled.is_set():
                 logger.info("Paste abandoned before the desktop answered; no keys sent")
                 return
-            for keysym in keysyms:
-                _notify_keysym(conn, session, keysym, pressed=True)
-            for keysym in reversed(keysyms):
-                _notify_keysym(conn, session, keysym, pressed=False)
+            _press(conn, session, keysyms)
         finally:
             _close_session(conn, session)
+
+
+def _press(conn: Any, session: str, keysyms: Sequence[int]) -> None:
+    """Press the keys, then release in reverse every key the portal took, so a
+    failure halfway leaves no modifier held."""
+    from jeepney.wrappers import DBusErrorResponse
+
+    pressed: list[int] = []
+    try:
+        for keysym in keysyms:
+            _notify_keysym(conn, session, keysym, pressed=True)
+            pressed.append(keysym)
+    except DBusErrorResponse as exc:
+        raise PortalRefusedError(f"The desktop refused the paste keystroke ({exc.name}).") from exc
+    finally:
+        for keysym in reversed(pressed):
+            try:
+                _notify_keysym(conn, session, keysym, pressed=False)
+            except (DBusErrorResponse, OSError) as exc:
+                logger.warning("Remote desktop key release failed: %s", exc)
 
 
 def _require_keyboard(conn: Any) -> None:

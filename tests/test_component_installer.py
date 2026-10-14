@@ -171,6 +171,25 @@ def test_no_restart_while_a_job_runs(runner, qtbot, monkeypatch):
     assert quits == [True]
 
 
+def test_quit_waits_for_a_running_job_to_finish(runner, qtbot):
+    """Before: the tray's Quit killed uv midway, which can leave the
+    environment half built."""
+    quits: list[bool] = []
+
+    class _App:
+        @staticmethod
+        def quit():
+            quits.append(True)
+
+    runner.script["code"] = "import time; time.sleep(0.5)"
+    with qtbot.waitSignal(runner.finished, timeout=10000):
+        assert runner.install(component_of("gemini"))
+        assert ci.quit_app(_App) is False
+        assert quits == []
+    assert quits == [True]
+    assert ci.quit_app(_App) is True
+
+
 def test_no_session_starts_while_the_app_updates(runner, qtbot, monkeypatch):
     """An update replaces the code a new session would import: Live and a
     first typed message wait, the draft is kept, and the chat says why."""

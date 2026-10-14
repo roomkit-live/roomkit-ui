@@ -41,8 +41,8 @@ Each released section is the source for that version's GitHub release notes.
   that version quiet. Settings → About shows it with the release notes and Check now, and
   turns the check off. Update runs `uv tool upgrade`, `pipx upgrade` or pip in the app's
   own environment, then offers a restart; a source checkout and Homebrew get the command
-  to copy, the built app the release page. On Windows, copy the command and run it once
-  the app has quit.
+  to copy, the built app the release page. On Windows, copy the command and run it in
+  PowerShell once the app has quit.
 - **Vui, a local voice that answers inside the conversation** (Conversation → Speak) —
   Vui Nano by fluxions.ai, on an NVIDIA GPU, in English. It hears the dialogue, your
   voice included, so a reply sounds like an answer to how you said it, and a barge-in
@@ -66,6 +66,9 @@ Each released section is the source for that version's GitHub release notes.
   reopen a conversation still covers that conversation only.
 
 ### Fixed
+- **Quitting during an install waits for it** — the tray's Quit stopped a component
+  install midway, which can leave the app's environment half installed. It now quits once
+  the install is done, and says so.
 - **Pasting works on GNOME under Wayland** — dictation and the assistant's paste copied
   the text but never pasted it: GNOME refuses wtype ("Compositor does not support the
   virtual keyboard protocol"), and the message only said "Auto-paste failed", so the

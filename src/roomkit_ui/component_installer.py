@@ -208,6 +208,22 @@ def installer() -> ComponentInstaller:
     return _installer
 
 
+def quit_app(app: QCoreApplication | None = None) -> bool:
+    """Quit now, or once the running install or update is done: quitting kills
+    it midway, and a `uv tool install` cut short can leave the environment half
+    built.  Returns False when the quit waits for it."""
+    app = app or QCoreApplication.instance()
+    if app is None:
+        return True
+    runner = installer()
+    if not runner.busy:
+        app.quit()
+        return True
+    logger.info("Quit deferred until the running install or update finishes")
+    runner.finished.connect(lambda *_: app.quit())
+    return False
+
+
 def restart_app(app: QCoreApplication | None = None) -> None:
     """Quit, then start again with the same command line once this one is gone.
 

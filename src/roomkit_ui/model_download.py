@@ -145,7 +145,9 @@ def _download_file(
             )
         if hasher is not None and hasher.hexdigest() != expected_sha256:
             raise RuntimeError(f"sha256 mismatch for {target.name}: download corrupted")
-        tmp.rename(target)
+        # replace, not rename: on Windows rename refuses a file already there (an
+        # archive left by a crash), and every retry failed after the download.
+        tmp.replace(target)
     except Exception:
         tmp.unlink(missing_ok=True)
         raise

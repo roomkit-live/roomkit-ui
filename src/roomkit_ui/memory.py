@@ -37,7 +37,9 @@ RECAP_TAG = "conversation_summary"
 # Exchanges recall gives the model, read from a wider search: the current
 # session's own lines and rooms that are no conversation are set aside first.
 _RECALL_RESULTS = 8
-_RECALL_SEARCH = 40
+# Wide enough that a word said all through the current session (set aside)
+# leaves room for the older exchanges that match it.
+_RECALL_SEARCH = 200
 # Conversations listed when nothing matches.
 _RECENT_CONVERSATIONS = 5
 

@@ -7,7 +7,7 @@ import httpx
 import pytest
 
 from roomkit_ui import updates
-from roomkit_ui.components import Installer
+from roomkit_ui.components import Installer, shown_command
 from roomkit_ui.install_env import InstallKind
 from roomkit_ui.updates import fetch_latest, final_version, is_newer, update_plan
 
@@ -165,8 +165,30 @@ def test_on_windows_the_user_runs_it_once_the_app_has_quit(tool_env, linux):
     plan = update_plan(InstallKind.UV_TOOL)
 
     assert plan.how is Installer.COMMAND
-    assert plan.command == "/usr/bin/uv tool upgrade roomkit-ui"
-    assert plan.note.startswith("Quit RoomKit UI first")
+    # The user's shell lacks the UV_TOOL_DIR the app would have set.
+    tools = tool_env.parent
+    assert plan.command == f"$env:UV_TOOL_DIR='{tools}'; /usr/bin/uv tool upgrade roomkit-ui"
+    assert plan.note.startswith("Quit RoomKit UI first, then run it in PowerShell")
+
+
+def test_on_windows_a_program_path_with_a_space_is_one_powershell_runs(tool_env, linux):
+    """Before: "C:\\Users\\Jane Doe\\…\\uv.exe" tool upgrade …, a parse error in
+    PowerShell, so a Windows user could not paste the update command."""
+    linux.setattr(updates.sys, "platform", "win32")
+    linux.setattr(updates, "kept_extras", lambda recorded: tuple(recorded))
+    linux.setattr(updates, "uv_path", lambda: r"C:\Users\Jane Doe\.local\bin\uv.exe")
+
+    command = update_plan(InstallKind.UV_TOOL).command
+
+    assert command.endswith(r"& 'C:\Users\Jane Doe\.local\bin\uv.exe' tool upgrade roomkit-ui")
+
+
+def test_a_shown_command_quotes_what_powershell_would_read_as_syntax(linux):
+    linux.setattr(updates.sys, "platform", "win32")
+
+    command = shown_command(("uv", "tool", "install", "roomkit-ui[all]", "--with", "foo>=1,<2"))
+
+    assert command == "uv tool install 'roomkit-ui[all]' --with 'foo>=1,<2'"
 
 
 def test_pipx_upgrades_its_own_environment(linux, tmp_path):

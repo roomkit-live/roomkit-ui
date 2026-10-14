@@ -7,8 +7,9 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, Slot
 from PySide6.QtGui import QAction, QColor, QIcon, QPainter, QPen
-from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
+from PySide6.QtWidgets import QMenu, QSystemTrayIcon
 
+from roomkit_ui.component_installer import quit_app
 from roomkit_ui.icons import svg_icon
 
 logger = logging.getLogger(__name__)
@@ -76,7 +77,7 @@ class TrayService(QObject):
         menu.addAction(self._log_action)
         menu.addSeparator()
         quit_action = QAction("Quit", menu)
-        quit_action.triggered.connect(QApplication.quit)
+        quit_action.triggered.connect(self._quit)
         menu.addAction(quit_action)
 
         self._tray.setContextMenu(menu)
@@ -98,6 +99,14 @@ class TrayService(QObject):
     def log_action(self) -> QAction:
         """Expose the log action so ``app.py`` can connect it."""
         return self._log_action
+
+    def _quit(self) -> None:
+        if not quit_app():
+            self._tray.showMessage(
+                "RoomKit UI",
+                "An install is running: RoomKit UI quits once it is done.",
+                QSystemTrayIcon.MessageIcon.Information,
+            )
 
     def _on_activated(self, reason: QSystemTrayIcon.ActivationReason) -> None:
         """Left-click the tray icon to show the main window."""

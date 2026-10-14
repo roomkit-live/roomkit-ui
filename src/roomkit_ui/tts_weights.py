@@ -230,7 +230,8 @@ def _remove_cached_file(root: Path, name: str, revision: str | None) -> None:
         return  # a name from a list is data: never a path out of the cache
     blob = link.resolve() if link.is_symlink() else None
     link.unlink(missing_ok=True)
-    if blob is not None and blob.is_relative_to(root / "blobs"):
+    # resolve() followed the cache root too, when it is reached through a link.
+    if blob is not None and blob.is_relative_to(root.resolve() / "blobs"):
         blob.unlink(missing_ok=True)
 
 

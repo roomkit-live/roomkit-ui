@@ -199,6 +199,19 @@ def test_delete_removes_whole_repositories_and_only_the_named_files(
     assert not whole.exists()
 
 
+def test_a_cache_reached_through_a_link_loses_its_blob_too(tmp_path):
+    """Before: resolve() followed the link to the cache as well, the blob was
+    outside the unresolved root, and its hundreds of MB stayed on disk."""
+    real = _cache(tmp_path / "drive", "kyutai/pocket-tts", ["model.safetensors"])
+    blob = (real / "snapshots" / ("c" * 40) / "model.safetensors").resolve()
+    linked = tmp_path / "linked"
+    linked.symlink_to(real)
+
+    tts_weights._remove_cached_file(linked, "model.safetensors", None)
+
+    assert not blob.exists()
+
+
 # -- in Models & components --------------------------------------------------------
 
 

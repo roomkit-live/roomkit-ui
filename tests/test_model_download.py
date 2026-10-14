@@ -5,6 +5,7 @@ import io
 import socket
 import threading
 import time
+from pathlib import Path
 
 import pytest
 
@@ -260,6 +261,26 @@ def test_an_stt_model_writes_small_files_and_downloads_lfs_ones_with_one_total(
     assert sorted(d[0] for d in downloads) == sorted(lfs_files)
     total = 10 * len(lfs_files)
     assert reports[0] == (0, total) and reports[-1] == (total, total)
+
+
+def test_a_file_a_crash_left_at_the_target_is_replaced(models_dir, monkeypatch):
+    """Windows' rename refuses a target that exists: an archive a crash left
+    behind made every retry fail after the whole download."""
+    target = models_dir / ".model.tar.bz2"
+    target.write_bytes(b"old")
+    rename = Path.rename
+
+    def windows_rename(self, dest):
+        if Path(dest).exists():
+            raise FileExistsError(dest)
+        return rename(self, dest)
+
+    monkeypatch.setattr(Path, "rename", windows_rename)
+    monkeypatch.setattr(md, "_urlopen", lambda req: _FakeResponse(b"new", {"Content-Length": "3"}))
+
+    md._download_file("https://example.invalid/model.tar.bz2", target, expected_size=3)
+
+    assert target.read_bytes() == b"new"
 
 
 # -- release assets are held to their published sha256 ------------------------------

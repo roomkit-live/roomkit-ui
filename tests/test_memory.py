@@ -199,6 +199,18 @@ async def test_recall_returns_hits_with_their_conversation_and_local_time(utc_mi
     ]
 
 
+async def test_a_word_said_all_through_this_session_leaves_room_for_older_matches():
+    """Before: the 40 best hits were this session's own lines, set aside, and
+    the older exchange that matched was never read."""
+    this_session = [_event("la facture", "user", "2026-10-14 09:00") for _ in range(50)]
+    older = _event("la facture de juillet", "assistant", "2026-07-30 18:22")
+    store = _FakeStore(hits=[*this_session, older])
+
+    out = json.loads(await _recall(_kit(store), "facture"))
+
+    assert [r["text"] for r in out["results"]] == ["la facture de juillet"]
+
+
 async def test_technical_and_refused_events_never_enter_recap_or_recall():
     technical = _event("Channel voice attached", "user")
     technical.type = "channel_attached"

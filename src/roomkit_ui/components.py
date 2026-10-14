@@ -23,9 +23,9 @@ from __future__ import annotations
 import functools
 import importlib.metadata
 import importlib.util
+import re
 import shlex
 import shutil
-import subprocess  # nosec B404 — list2cmdline only: nothing is run here
 import sys
 from dataclasses import dataclass
 from enum import StrEnum
@@ -211,11 +211,32 @@ def uv_path() -> str | None:
     return shutil.which("uv", path=search_path())
 
 
-def shown_command(argv: tuple[str, ...]) -> str:
-    """*argv* as the user would type it in this system's shell."""
+def shown_command(argv: tuple[str, ...], env: tuple[tuple[str, str], ...] = ()) -> str:
+    """*argv*, after *env*, as the user would type it in this system's shell:
+    PowerShell on Windows, its default terminal."""
     if sys.platform == "win32":
-        return subprocess.list2cmdline(argv)
-    return shlex.join(argv)
+        return _powershell_command(argv, env)
+    sets = "".join(f"{name}={shlex.quote(value)} " for name, value in env)
+    return sets + shlex.join(argv)
+
+
+# A word PowerShell hands a program as typed; any other is single-quoted.
+_POWERSHELL_PLAIN = re.compile(r"[\w.:/\\+-]+")
+
+
+def _powershell_command(argv: tuple[str, ...], env: tuple[tuple[str, str], ...]) -> str:
+    """``"C:\\Users\\Jane Doe\\uv.exe" tool …`` is a parse error in PowerShell: a
+    quoted program needs the call operator, and ``>=`` or ``,`` in a bare word
+    would be read as syntax."""
+
+    words = [arg if _POWERSHELL_PLAIN.fullmatch(arg) else _powershell_quote(arg) for arg in argv]
+    call = ("& " if words and words[0].startswith("'") else "") + " ".join(words)
+    sets = "".join(f"$env:{name}={_powershell_quote(value)}; " for name, value in env)
+    return sets + call
+
+
+def _powershell_quote(text: str) -> str:
+    return "'" + text.replace("'", "''") + "'"
 
 
 def _conflicts(component: Component) -> tuple[str, ...]:
