@@ -72,6 +72,12 @@ llamacpp = ["roomkit[llamacpp]>=0.101.0"]
 # `all` like the two above: pocket-tts pulls torch (the CUDA build on Linux).
 pocket-tts = ["roomkit[pocket-tts]>=0.101.0"]
 
+# Vui Nano (fluxions.ai): replies generated inside the conversation, the user's
+# voice included.  English only, a CUDA GPU for real time, and vui-tts runs on
+# Python 3.12 alone: roomkit's extra installs nothing on 3.13, and the app says
+# so (features.Feature.python_below).  Outside `all`: it pulls torch.
+vui = ["roomkit[vui]>=0.101.0"]
+
 # Smart Turn turn detector (Voice Channel): onnxruntime runs the model and
 # transformers' WhisperFeatureExtractor feeds it. Outside `all`: it needs
 # transformers>=5.5, which qwen-tts's 4.57.3 pin and neutts's 5.1.0 refuse.

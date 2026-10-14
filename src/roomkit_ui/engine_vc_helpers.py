@@ -156,7 +156,9 @@ def build_tts_filter(settings: dict) -> Any:
       except on a TTS that performs audio tags (ElevenLabs v3/v4, Gemini),
       where ``[laughs]`` is a cue the voice acts out.  Their tags are
       open-ended, so no keep-list would cover them: brackets all pass there,
-      as roomkit advises for both (``audio_tags.performed_tags``).
+      as roomkit advises for both (``audio_tags.performed_tags``).  Vui's
+      form a closed list: its own pass, any other is stripped
+      (``audio_tags.closed_tags``).
     - Emoji, which a TTS names or garbles.
 
     AFTER_TTS gets the filtered text, and the assistant bubble filters what
@@ -170,14 +172,29 @@ def build_tts_filter(settings: dict) -> Any:
         TTSFilterChain,
     )
 
-    from roomkit_ui.audio_tags import performed_tags
+    from roomkit_ui.audio_tags import closed_tags, performed_tags
 
     # Technical text first: brackets left around a removed JSON array go next.
     filters: list[Any] = [StripTechnicalText()]
-    if not performed_tags(settings):
-        filters.append(StripBrackets())
+    keep = closed_tags(settings)
+    if keep or not performed_tags(settings):
+        filters.append(StripBrackets(keep=keep))
     filters.append(StripEmoji())
     return TTSFilterChain(*filters)
+
+
+def tts_context(tts: Any) -> Any:
+    """The dialogue a TTS that generates inside it hears; None for any other.
+
+    roomkit keeps the text of each turn for a context-aware TTS.  One that
+    reads audio (Vui: ``TTSContextLevel.AUDIO``) also gets the user's voice,
+    as roomkit's Vui example runs it, so its reply answers how it was said.
+    """
+    from roomkit import TTSContextConfig, TTSContextLevel
+
+    if getattr(tts, "context_level", None) != TTSContextLevel.AUDIO:
+        return None
+    return TTSContextConfig(include_audio=True)
 
 
 def smart_turn_config(settings: dict, inference_device: str) -> Any:

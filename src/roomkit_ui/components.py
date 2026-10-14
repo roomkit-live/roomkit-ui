@@ -35,6 +35,7 @@ _NOTES = {
     "pocket-tts": "A very large download: PyTorch, several GB.",
     "qwen3-tts": "A very large download: PyTorch, several GB.",
     "neutts": "A very large download: PyTorch, several GB.",
+    "vui": "A very large download: PyTorch, several GB. Speaks English, on an NVIDIA GPU.",
 }
 
 # Components a running app only picks up once restarted: Qt modules it
@@ -103,9 +104,21 @@ def component_of(feature: str) -> Component:
     return next(c for c in components() if c.extra == extra)
 
 
+def _python_refused(component: Component) -> str | None:
+    """Why this Python cannot install *component* (vui-tts runs on 3.12 alone)."""
+    refused = next(
+        (r for key in component.features if (r := FEATURES[key].python_refused()) is not None),
+        None,
+    )
+    return f"It {refused}" if refused is not None else None
+
+
 def install_plan(component: Component) -> InstallPlan:
     """How this install takes *component*."""
     conflicts = _conflicts(component)
+    refused = _python_refused(component)
+    if refused is not None:
+        return InstallPlan(Installer.NONE, note=refused)
     if getattr(sys, "frozen", False):
         return InstallPlan(
             Installer.NONE,

@@ -123,6 +123,9 @@ def _tts_model(settings: dict, tts: Any) -> SessionModel:
         source = voices.get(voice, "") if isinstance(voices, dict) else ""
         if isinstance(source, str) and source:
             voice = f"Cloned · {Path(source).name}" if "/" in source or "\\" in source else source
+    elif provider == "vui":
+        model = _text(config, "checkpoint")
+        voice = "Cloned voice" if voice == "clone" else voice.capitalize()
     elif provider in {"qwen3", "neutts"}:
         voice = "Cloned voice"
         codec = _text(config, "codec_repo")

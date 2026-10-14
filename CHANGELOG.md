@@ -11,6 +11,23 @@ Each released section is the source for that version's GitHub release notes.
 
 ## [Unreleased]
 
+### Added
+- **Vui, a local voice that answers inside the conversation** (Conversation → Speak) —
+  Vui Nano by fluxions.ai, on an NVIDIA GPU, in English. It hears the dialogue, your
+  voice included, so a reply sounds like an answer to how you said it, and a barge-in
+  cuts it to what you heard. One of four voices (Maeve, Abraham, Rhian, Harry) or your
+  clip in Ref Audio and Ref Text. The session asks the model to answer in English; with
+  audio tags on, it hands it Vui's sounds (`[laugh]`, `[sigh]`, `[breath]`…), and any
+  other bracketed word is kept from the voice. The `vui` component installs on Python
+  3.12 only: on another Python, Settings and `--doctor` say so instead of offering it.
+  Measured on an RTX 4070: first audio after 0.3 s, a reply rendered in under half its
+  spoken length.
+
+### Changed
+- **A local voice replaced by another frees its model first** — changing the voice of a
+  cached local TTS (Pocket, Vui, Qwen3-TTS, NeuTTS) closed nothing: the previous model
+  stayed loaded until garbage collection, beside the new one on the same GPU.
+
 ## [0.3.1] - 2026-10-13
 
 ### Fixed

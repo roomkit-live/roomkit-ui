@@ -46,7 +46,7 @@ src/roomkit_ui/
 ├── model_catalog.py, model_download.py, model_manager.py, download_flight.py
 ├── settings.py, settings_secrets.py, secret_store.py, constants.py, icons.py, theme.py
 ├── providers/                  # LLM factories: anthropic, openai, gemini, local, llamacpp (lazy registry)
-├── tts/                        # TTS factories: piper, pocket, qwen3, neutts, gradium, elevenlabs, azure
+├── tts/                        # TTS factories: piper, pocket, vui, qwen3, neutts, gradium, elevenlabs, azure
 ├── wakeword/                   # Wake word: controller, listener, capture, detection, enrolment
 └── widgets/                    # Main window, chat, tool activity, MCP App views, startup progress,
                                 #  wake-word wizard, settings/ (grouped settings workspace)

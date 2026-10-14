@@ -1,4 +1,4 @@
-"""Voice Channel local provider fields: local STT, Piper TTS, voice clone.
+"""Voice Channel local provider fields: local STT, Piper TTS, voice clone, Pocket, Vui.
 
 A local LLM's fields are ``llm_fields.LLMFields``, as in every place a model is
 chosen."""
@@ -79,6 +79,7 @@ class VCLocalFields:
         form.addRow(self._vc_ref_text_label, self.vc_tts_ref_text)
 
         self._add_pocket_fields(form)
+        self._add_vui_fields(form)
 
     def _add_pocket_fields(self, form: QFormLayout) -> None:
         """Pocket TTS: a language model, and a pre-made voice or a clip to clone."""
@@ -112,6 +113,27 @@ class VCLocalFields:
         self._vc_pocket_voice_label = QLabel("Voice")
         form.addRow(self._vc_pocket_voice_label, voice_row)
 
+    def _add_vui_fields(self, form: QFormLayout) -> None:
+        """Vui: one of its voices, or the clip in Ref Audio and Ref Text."""
+        from roomkit_ui.tts.vui import CLONE, PRESETS
+
+        self.vc_vui_voice = QComboBox()
+        for name in PRESETS:
+            self.vc_vui_voice.addItem(name.capitalize(), name)
+        self.vc_vui_voice.addItem("Clone the clip below", CLONE)
+        index = self.vc_vui_voice.findData(self._settings.get("vc_vui_voice", ""))
+        self.vc_vui_voice.setCurrentIndex(max(index, 0))
+        self.vc_vui_voice.setToolTip(
+            "Vui speaks English only, on an NVIDIA GPU. Cloning takes a clean clip "
+            "under 15 seconds and its exact transcript."
+        )
+        self._vc_vui_voice_label = QLabel("Voice")
+        form.addRow(self._vc_vui_voice_label, self.vc_vui_voice)
+        self._tts_provider = ""
+        self.vc_vui_voice.currentIndexChanged.connect(
+            lambda: self.update_tts_visibility(self._tts_provider)
+        )
+
     # -- Visibility --
 
     def update_stt_visibility(self, provider: str) -> None:
@@ -127,8 +149,14 @@ class VCLocalFields:
         self._vc_stt_no_models.setVisible(is_local and (missing or self.vc_stt_model.count() == 0))
 
     def update_tts_visibility(self, provider: str) -> None:
+        from roomkit_ui.tts.vui import CLONE
+
+        self._tts_provider = provider
         is_piper = provider == "piper"
-        is_voice_clone = provider in ("qwen3", "neutts")
+        is_vui = provider == "vui"
+        is_voice_clone = provider in ("qwen3", "neutts") or (
+            is_vui and self.vc_vui_voice.currentData() == CLONE
+        )
         self._vc_tts_model_label.setVisible(is_piper and self.vc_tts_model.count() > 0)
         self.vc_tts_model.setVisible(is_piper and self.vc_tts_model.count() > 0)
         missing = bool(self.vc_tts_model.currentData(_MODEL_MISSING_ROLE))
@@ -152,6 +180,8 @@ class VCLocalFields:
             self._vc_pocket_browse,
         ):
             widget.setVisible(is_pocket)
+        self._vc_vui_voice_label.setVisible(is_vui)
+        self.vc_vui_voice.setVisible(is_vui)
 
     # -- Model combos --
 
@@ -223,4 +253,5 @@ class VCLocalFields:
             "vc_tts_ref_text": self.vc_tts_ref_text.text().strip(),
             "vc_pocket_language": self.vc_pocket_language.currentData() or "",
             "vc_pocket_voice": self.vc_pocket_voice.text().strip(),
+            "vc_vui_voice": self.vc_vui_voice.currentData() or "",
         }

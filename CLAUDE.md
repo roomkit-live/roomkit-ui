@@ -29,10 +29,11 @@ uv run --no-sync --with-editable ../roomkit python -m roomkit_ui
 QT_QPA_PLATFORM=offscreen uv run --no-sync --with-editable ../roomkit pytest -q
 ```
 
-`all` leaves four extras out. `qwen3-tts`, `neutts` and `smart-turn` pin conflicting
+`all` leaves five extras out. `qwen3-tts`, `neutts` and `smart-turn` pin conflicting
 `transformers` versions: they are declared in `[tool.uv].conflicts`, mirrored by
 `features.EXCLUSIVE_EXTRAS` (a test keeps the two equal), and at most one goes in an
-environment. `pocket-tts` stays out because it pulls torch.
+environment. `pocket-tts` and `vui` stay out because they pull torch; `vui` installs on
+Python 3.12 only (`Feature.python_below`).
 
 ## Architecture
 
@@ -121,7 +122,7 @@ src/roomkit_ui/
 ├── theme.py             # Dark/Light theme stylesheets
 ├── providers/           # LLM factories, lazy registry: anthropic, openai, gemini, local (vLLM/Ollama), llamacpp;
 │                        #  llm_settings(): a role's own model (background tasks, text chat) over Think · LLM's
-├── tts/                 # TTS factories, lazy registry: piper, qwen3, neutts, pocket, gradium, elevenlabs, azure, gemini, _util
+├── tts/                 # TTS factories, lazy registry: piper, qwen3, neutts, pocket, vui, gradium, elevenlabs, azure, gemini, _util
 ├── wakeword/            # controller (shared mic + listener lifetime), listener, capture (mic → VAD → segments),
 │                        #  resample, jobs (SerialWorker), detector, features (whisper encoder), dtw, fingerprint,
 │                        #  enroller, encoder_download, page_sensitivity

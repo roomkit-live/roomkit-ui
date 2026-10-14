@@ -43,6 +43,7 @@ from roomkit_ui.engine_vc_helpers import (
     register_local_tool_hint,
     smart_turn_config,
     start_local_llm,
+    tts_context,
     turn_incomplete_wait_ms,
 )
 from roomkit_ui.features import (
@@ -62,7 +63,12 @@ from roomkit_ui.speaker_naming import (
     with_speaker_note,
 )
 from roomkit_ui.toolset import ToolSet, tool_search_options
-from roomkit_ui.tts import create_tts_provider, is_cached_tts, tts_cache_fields
+from roomkit_ui.tts import (
+    create_tts_provider,
+    is_cached_tts,
+    tts_cache_fields,
+    tts_prompt_note,
+)
 from roomkit_ui.vc_agent import BACKGROUND_WORKER, build_vc_agent, warm_up_worker
 from roomkit_ui.vc_stt import CLOUD_STT_BUILDERS, build_turn_vad, stt_needs_turn_vad
 
@@ -165,8 +171,7 @@ class VoiceChannelMixin:
 
     async def _start_voice_channel(self, settings: dict) -> None:
         try:
-            voice_note = audio_tags_note(settings)
-            logger.info("Audio tags: %s", "in the prompt" if voice_note else "off")
+            voice_note = _voice_note(settings)
             system_prompt = self._compose_session_prompt(  # type: ignore[attr-defined]
                 settings, voice_note=voice_note
             )
@@ -552,6 +557,9 @@ class VoiceChannelMixin:
             tts, output_sample_rate = cached_tts
             logger.info("TTS: reusing cached %s/%s", tts_provider_name, tts_model_id)
         else:
+            if is_cached_tts(tts_provider_name):
+                # The model it replaces goes first: two on one GPU may not fit.
+                await self._evict_cached("tts")  # type: ignore[attr-defined]
             self.loading_status.emit("Loading TTS model…")  # type: ignore[attr-defined]
             tts, output_sample_rate = create_tts_provider(tts_provider_name, settings)
             if hasattr(tts, "warmup"):
@@ -660,6 +668,15 @@ class VoiceChannelMixin:
             return None
 
 
+def _voice_note(settings: dict) -> str:
+    """What the prompt says about the session's voice: the audio tags it
+    performs, and what its TTS needs of a reply (Vui: English)."""
+    tags = audio_tags_note(settings)
+    logger.info("Audio tags: %s", "in the prompt" if tags else "off")
+    needs = tts_prompt_note(settings.get("vc_tts_provider", "piper"), settings)
+    return "\n\n".join(note for note in (tags, needs) if note)
+
+
 def _build_voice_channel(stt: Any, tts: Any, backend: Any, pipeline: Any, tts_filter: Any) -> Any:
     """The session's VoiceChannel.
 
@@ -681,6 +698,7 @@ def _build_voice_channel(stt: Any, tts: Any, backend: Any, pipeline: Any, tts_fi
         backend=backend,
         pipeline=pipeline,
         tts_filter=tts_filter,
+        tts_context=tts_context(tts),
         close_providers=False,
         pipeline_speakers=pipeline.diarization is not None,
     )

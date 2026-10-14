@@ -14,6 +14,7 @@ _REGISTRY: dict[str, str] = {
     "gradium": "roomkit_ui.tts.gradium",
     "elevenlabs": "roomkit_ui.tts.elevenlabs",
     "pocket": "roomkit_ui.tts.pocket",
+    "vui": "roomkit_ui.tts.vui",
     "azure": "roomkit_ui.tts.azure",
     "gemini": "roomkit_ui.tts.gemini",
 }
@@ -21,7 +22,7 @@ _REGISTRY: dict[str, str] = {
 # Local models, expensive to load: the engine keeps the last one built for
 # the next session while nothing it was built from changes.  Cloud TTS is a
 # connection, closed with its session.
-_CACHED: frozenset[str] = frozenset({"piper", "qwen3", "neutts", "pocket"})
+_CACHED: frozenset[str] = frozenset({"piper", "qwen3", "neutts", "pocket", "vui"})
 
 
 def create_tts_provider(name: str, settings: dict) -> tuple[Any, int]:
@@ -53,3 +54,16 @@ def tts_cache_fields(name: str, settings: dict) -> tuple:
         return ()
     fields = getattr(importlib.import_module(module_path), "cache_fields", None)
     return tuple(fields(settings)) if fields is not None else ()
+
+
+def tts_prompt_note(name: str, settings: dict) -> str:
+    """What the session's prompt must tell the model about this TTS, "" for most.
+
+    A factory module may define ``prompt_note(settings)``: Vui, which reads
+    English only, asks for replies in English.
+    """
+    module_path = _REGISTRY.get(name)
+    if module_path is None:
+        return ""
+    note = getattr(importlib.import_module(module_path), "prompt_note", None)
+    return note(settings) if note is not None else ""

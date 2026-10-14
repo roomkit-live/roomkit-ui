@@ -59,6 +59,20 @@ class Feature:
     probes: tuple[str, ...]
     """Modules that must all be importable for the feature to work."""
 
+    python_below: tuple[int, int] | None = None
+    """First Python version the feature's packages do not install on, if any."""
+
+    def python_refused(self) -> str | None:
+        """Why this Python cannot run the feature, as a predicate ("needs Python
+        older than 3.13; …"), or ``None`` when it can."""
+        if self.python_below is None or sys.version_info[:2] < self.python_below:
+            return None
+        major, minor = self.python_below
+        return (
+            f"needs Python older than {major}.{minor}; this install runs "
+            f"Python {sys.version_info.major}.{sys.version_info.minor}."
+        )
+
 
 FEATURES: dict[str, Feature] = {
     "anthropic": Feature("anthropic", "Anthropic (Claude)", ("anthropic",)),
@@ -108,6 +122,8 @@ FEATURES: dict[str, Feature] = {
     "pocket-tts": Feature(
         "pocket-tts", "Pocket TTS (local, voice cloning)", ("pocket_tts", "torch")
     ),
+    # roomkit imports vui-tts and torch when the model loads, at warmup.
+    "vui": Feature("vui", "Vui (local, English, NVIDIA GPU)", ("vui", "torch"), (3, 13)),
     # One extra, two code paths with different needs: MAI-Transcribe streams
     # over a websocket, Azure Speech TTS posts SSML with httpx (a core dep).
     "azure-stt": Feature("azure-speech", "Azure MAI-Transcribe", ("websockets",)),
@@ -158,6 +174,7 @@ TTS_PROVIDER_FEATURES: dict[str, str] = {
     "gradium": "gradium",
     "elevenlabs": "elevenlabs",
     "pocket": "pocket-tts",
+    "vui": "vui",
     "azure": "azure-tts",
     "gemini": "gemini",
 }
@@ -226,6 +243,9 @@ def unavailable_reason(key: str) -> str | None:
     if is_available(key):
         return None
     label = FEATURES[key].label
+    refused = FEATURES[key].python_refused()
+    if refused is not None:
+        return f"{label} {refused}"
     if getattr(sys, "frozen", False):
         # A frozen build bundles its extras; a gap here is a packaging bug, and
         # telling the user to pip install into a .app would not help them.
@@ -293,7 +313,11 @@ def format_report(marks: tuple[str, str] = ("✓", "✗")) -> str:
         mark = marks[1] if absent else marks[0]
         line = f"  {mark} {feature.label.ljust(width)}"
         if absent:
-            line += f"  missing: {', '.join(absent)}"
+            refused = feature.python_refused()
+            if refused:
+                line += f"  {refused}"
+            else:
+                line += f"  missing: {', '.join(absent)}"
             missing.append(key)
         lines.append(line)
 
@@ -307,7 +331,10 @@ def format_report(marks: tuple[str, str] = ("✓", "✗")) -> str:
 
     # Two features can share one extra (a vendor SDK and its realtime
     # transport), so dedupe while keeping registry order.
-    wanted = list(dict.fromkeys(FEATURES[k].extra for k in missing))
+    # No command installs a feature this Python refuses: its line says why.
+    wanted = list(
+        dict.fromkeys(FEATURES[k].extra for k in missing if FEATURES[k].python_refused() is None)
+    )
     combinable = [e for e in wanted if e not in EXCLUSIVE_EXTRAS]
     if combinable:
         lines.append(

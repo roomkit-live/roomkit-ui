@@ -172,7 +172,7 @@ packaged builds keep the dialog in process.
    engine claims CONNECTING before its first await and runs the start as its own task, so a
    stop (the Cancel button on the loading overlay) can cancel it where it waits.
 2. The engine builds the session from settings:
-   - **Voice Channel mode** (`engine_vc.py`): STT provider (sherpa-onnx / Gradium / Deepgram / Azure MAI-Transcribe / Meta Muse) + LLM provider (Anthropic / OpenAI / Gemini / vLLM-Ollama / llama.cpp) + TTS provider (Piper / Pocket TTS / Qwen3 / NeuTTS / Gradium / ElevenLabs / Azure MAI-Voice) composed into a `VoiceChannel` plus an `AIChannel`.
+   - **Voice Channel mode** (`engine_vc.py`): STT provider (sherpa-onnx / Gradium / Deepgram / Azure MAI-Transcribe / Meta Muse) + LLM provider (Anthropic / OpenAI / Gemini / vLLM-Ollama / llama.cpp) + TTS provider (Piper / Pocket TTS / Vui / Qwen3 / NeuTTS / Gradium / ElevenLabs / Azure MAI-Voice) composed into a `VoiceChannel` plus an `AIChannel`.
    - **Realtime mode** (`engine_realtime.py`, builders in `realtime_providers.py`): `GeminiLiveProvider`, `OpenAIRealtimeProvider`, OpenAI GPT-Live, `DeepgramAgentProvider`, `ElevenLabsRealtimeProvider` or `XAIRealtimeProvider` (Grok) in a `RealtimeVoiceChannel`. ElevenLabs runs a fixed 16 kHz contract; the others stream 24 kHz.
 3. Both modes use `LocalAudioBackend` (mic/speaker) and a pipeline built by `engine_audio.py`.
    Voice Channel: AEC, denoiser, VAD, optional diarization with enrolled speakers, optional

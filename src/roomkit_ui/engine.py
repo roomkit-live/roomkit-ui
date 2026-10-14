@@ -268,6 +268,25 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, TextMix
     def _set_cached(self, model_type: str, cache_key: tuple, provider: Any) -> None:
         self._cached_models[model_type] = (cache_key, provider)
 
+    async def _evict_cached(self, model_type: str) -> None:
+        """Drop and close what the cache holds for *model_type*, before a new one loads.
+
+        No session uses it: a session closes what it does not share with the
+        cache (``_close_session_models``).  Vui, dropped unclosed, would leave
+        its thread and torch's inference mode behind.
+        """
+        entry = self._cached_models.pop(model_type, None)
+        if entry is None:
+            return
+        provider = entry[1][0] if model_type == "tts" else entry[1]
+        close = getattr(provider, "close", None)
+        if close is None:
+            return
+        try:
+            await close()
+        except Exception:
+            logger.exception("cleanup: cached %s.close() failed", model_type)
+
     def clear_model_cache(self) -> None:
         """Release all cached models (call on app quit)."""
         self._cached_models.clear()

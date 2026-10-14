@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.15' and sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
@@ -1653,6 +1653,18 @@ wheels = [
 ]
 
 [[package]]
+name = "julius"
+version = "0.2.8"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "torch", marker = "python_full_version < '3.13' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/1d/c6/5c2aea2b11ead1680bb5b17c996def31f8ccade471cada37cdb93855e06f/julius-0.2.8.tar.gz", hash = "sha256:d691e651200930affea4f6c849c26e95fec846087281ae3d1a7757eac90253d5", size = 48081, upload-time = "2026-06-03T16:05:34.52Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/86/43/efdb0bcb07c47826fa55857cec0deb743f74cd83b6ba5ec9e413505a72e6/julius-0.2.8-py3-none-any.whl", hash = "sha256:6891235cbc355e629d839f87489bff8ca46e57a0e7cc35abb909c7a2aa538c25", size = 21819, upload-time = "2026-06-03T16:05:33.443Z" },
+]
+
+[[package]]
 name = "kagglehub"
 version = "1.0.2"
 source = { registry = "https://pypi.org/simple" }
@@ -2070,6 +2082,61 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/d6/54/cfe61301667036ec958cb99bd3efefba235e65cdeb9c84d24a8293ba1d90/mdurl-0.1.2.tar.gz", hash = "sha256:bb413d29f5eea38f31dd4754dd7377d4465116fb207585f97bf925588687c1ba", size = 8729, upload-time = "2022-08-14T12:40:10.846Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b3/38/89ba8ad64ae25be8de66a6d463314cf1eb366222074cfda9ee839c56a4b4/mdurl-0.1.2-py3-none-any.whl", hash = "sha256:84008a41e51615a49fc9966191ff91509e3c40b939176e643fd50a5c2196b8f8", size = 9979, upload-time = "2022-08-14T12:40:09.779Z" },
+]
+
+[[package]]
+name = "mlx"
+version = "0.32.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "mlx-metal", marker = "(python_full_version < '3.13' and sys_platform == 'darwin') or (python_full_version >= '3.13' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (python_full_version >= '3.13' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (python_full_version >= '3.13' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform != 'darwin' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform != 'darwin' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform != 'darwin' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/26/8c/2f8b796885b4c02ab9644916bebf656cd1d6d366df94d174b046903ea250/mlx-0.32.3-cp312-cp312-macosx_14_0_arm64.whl", hash = "sha256:7aecc3d4a904279492dae58e28378a3c4bec4533e7066e64ae5c78c7a5511f22", size = 651041, upload-time = "2026-09-29T00:22:36.481Z" },
+    { url = "https://files.pythonhosted.org/packages/6e/06/aacd94119d4a999d43f07f24b02904d7f895ee074ed4678b28456c319ea3/mlx-0.32.3-cp312-cp312-macosx_15_0_arm64.whl", hash = "sha256:a6241ea8f56a08a6c3a06bbaad7d7fc2fc1c05f23757c61fe0a8797325ac6d46", size = 651042, upload-time = "2026-09-29T00:22:38.071Z" },
+    { url = "https://files.pythonhosted.org/packages/4a/c1/13ff85d72f7cf01239c1031688b11cf1c7a3f0c7380636728976e510bfbd/mlx-0.32.3-cp312-cp312-macosx_26_0_arm64.whl", hash = "sha256:72711cb23cc6dccc5a460f63f39c11931a00b2c6dcd6fba253921090072e21bc", size = 651118, upload-time = "2026-09-29T00:22:39.503Z" },
+    { url = "https://files.pythonhosted.org/packages/0e/c7/68b17902b5c38667e1ea1303a0c430ba1375cc5eea5e40d6b3a48b4d9f6d/mlx-0.32.3-cp312-cp312-manylinux_2_35_aarch64.whl", hash = "sha256:e75fa55161d9477e694f852cad0d383c6b4a5c3b505a5d08339f0e2260c2556c", size = 680634, upload-time = "2026-09-29T00:22:41.394Z" },
+    { url = "https://files.pythonhosted.org/packages/9a/15/b7d62225c126c73ef65cc3ea9478f4c06bb7a4b39cf9e12237b9ca88554a/mlx-0.32.3-cp312-cp312-manylinux_2_35_x86_64.whl", hash = "sha256:b91012fdd5ec5cbedcec2cae6adfaad9a8f547023e570fc5781cb7eb4bfe2567", size = 754620, upload-time = "2026-09-29T00:22:43.068Z" },
+    { url = "https://files.pythonhosted.org/packages/dc/82/372271f6daf3d73da955b0e9438327f83f66dfb4855465d53d8d1666b61c/mlx-0.32.3-cp312-cp312-win_amd64.whl", hash = "sha256:be5cb6554873d3c86f083fb0b35aedf4a1f12657adee4ac0fc90665ffd7e6722", size = 629327, upload-time = "2026-09-29T00:22:44.845Z" },
+    { url = "https://files.pythonhosted.org/packages/6e/bc/401cad7f79b1ef5ecae0c4e452d52279c10be76c9e866963c25c5d41b0ce/mlx-0.32.3-cp312-cp312-win_arm64.whl", hash = "sha256:e32d595df067f19739f1e214e723035ed2a9c216fb1ed3cd118d08f19b9cfabd", size = 620647, upload-time = "2026-09-29T00:22:46.481Z" },
+    { url = "https://files.pythonhosted.org/packages/8c/e1/0039c25cb2e40e605de6409e6ede52b01b7c79d6a0727e0c103ec60d88b2/mlx-0.32.3-cp313-cp313-macosx_14_0_arm64.whl", hash = "sha256:f5716b51fea3d06352d4d8c851fb6c5141b1a7de5a5164d44de5a6d368d84a7e", size = 651142, upload-time = "2026-09-29T00:22:48.119Z" },
+    { url = "https://files.pythonhosted.org/packages/29/dc/01ac6c32fb405a542be80f021bc978125af51d2ee5ae1db624bfd954e756/mlx-0.32.3-cp313-cp313-macosx_15_0_arm64.whl", hash = "sha256:656df5e36b9bfa862fd633d55dee4da072d292def9f27f22134c594e03ff28a7", size = 651143, upload-time = "2026-09-29T00:22:49.702Z" },
+    { url = "https://files.pythonhosted.org/packages/53/a9/70bf746c2cd13a198a429e33244d2f072ecd0c89508299a636529d3317cb/mlx-0.32.3-cp313-cp313-macosx_26_0_arm64.whl", hash = "sha256:75333afef55819afd2a31e87ffbed0bf59f379bca21771e6b13a95a675e4c85b", size = 651075, upload-time = "2026-09-29T00:22:51.636Z" },
+    { url = "https://files.pythonhosted.org/packages/f7/2c/d9a53850cb64f1dec9852aea3951b5aa5f83e8bce6b27800dedfc4147022/mlx-0.32.3-cp313-cp313-manylinux_2_35_aarch64.whl", hash = "sha256:097856504e6cf5944b9aaa7c2e1d5be0693428abd9175429cae3893e7ec2f681", size = 680699, upload-time = "2026-09-29T00:22:53.167Z" },
+    { url = "https://files.pythonhosted.org/packages/e5/14/fe8cba4d2c35f746a2631bbeb2ebc344eccaa5599aee6f4f6ca4a7acb7a4/mlx-0.32.3-cp313-cp313-manylinux_2_35_x86_64.whl", hash = "sha256:936cc82b0c050686c43230c85f3a0bd9f179f650377ce9590f7af3ba659e2fce", size = 754734, upload-time = "2026-09-29T00:22:54.991Z" },
+    { url = "https://files.pythonhosted.org/packages/dd/71/6e03d66dd60f634b000c64205f36bc27ac440e731762066a1de7773b9d78/mlx-0.32.3-cp313-cp313-win_amd64.whl", hash = "sha256:ac4472834f38e61d294aa1bf2fdc9f687f3b3162b9729dc9dc15e8c149f8c216", size = 629471, upload-time = "2026-09-29T00:22:56.618Z" },
+    { url = "https://files.pythonhosted.org/packages/dc/be/7d0fb383d5a77dec60b50d5b116b409ff1fc2b269f6c885623776f4c008c/mlx-0.32.3-cp313-cp313-win_arm64.whl", hash = "sha256:8ef541373a94a78fd59ac59368501e976cef5fa07738438362e942315be22ea4", size = 620933, upload-time = "2026-09-29T00:22:58.245Z" },
+    { url = "https://files.pythonhosted.org/packages/68/73/f1511b38c9b200fc84bff84470ff1e4303f2f7b47f614b14a2d3f4cd6226/mlx-0.32.3-cp313-cp313t-macosx_14_0_arm64.whl", hash = "sha256:65122a7eeb718df56641d7ac6f7fdb0ada573fd841d1fb0a61a6a443e33f11b5", size = 675637, upload-time = "2026-09-29T00:22:59.92Z" },
+    { url = "https://files.pythonhosted.org/packages/3e/40/20733670ac7a5571e10d80fb510bc0fbed6d0917a8e34cdf6c3de52b5a8e/mlx-0.32.3-cp313-cp313t-macosx_15_0_arm64.whl", hash = "sha256:e13f5ce391293dab946edf18e7ae7bb55768beef1140deb509f67a2b14edcf7c", size = 675638, upload-time = "2026-09-29T00:23:01.529Z" },
+    { url = "https://files.pythonhosted.org/packages/15/ac/65a1b9484f3eedb57dc73589af213d03821d13d99caa76430ad849be6114/mlx-0.32.3-cp313-cp313t-macosx_26_0_arm64.whl", hash = "sha256:15e8578c9d10b4fd4728243cd6c926bc46e1da267c6a849cdbceca21d51caa51", size = 675600, upload-time = "2026-09-29T00:23:03.249Z" },
+    { url = "https://files.pythonhosted.org/packages/f7/53/91f4030bed4ce920ab781b4f3e8843d74bed5c171b425d3ecca8a5ae2830/mlx-0.32.3-cp313-cp313t-manylinux_2_35_aarch64.whl", hash = "sha256:942f0da5328986cdae29ec0eba57b2a08eb9dc6125cfe196853de7498f2c5359", size = 686475, upload-time = "2026-09-29T00:23:04.777Z" },
+    { url = "https://files.pythonhosted.org/packages/c1/5c/52651813664c3869d9ea4aab93d027f30b7208554254106120256bd90c4f/mlx-0.32.3-cp313-cp313t-manylinux_2_35_x86_64.whl", hash = "sha256:19da79adad1aa9653c70819040ac58d65d7a9610a375a30d03c7cce708d4d2bb", size = 755078, upload-time = "2026-09-29T00:23:06.436Z" },
+    { url = "https://files.pythonhosted.org/packages/96/a2/5752afdc0554e4e630f4804c95345125b93f28b904f962d7dec5e291a17f/mlx-0.32.3-cp313-cp313t-win_amd64.whl", hash = "sha256:d3b9494b45400b803eeed7d05e6e566aa135f1dd2d121c29016ee9492e7ead67", size = 655613, upload-time = "2026-09-29T00:23:07.924Z" },
+    { url = "https://files.pythonhosted.org/packages/0b/b0/2977a4e0d97b5e08f34e14843aadca4434e6bec8106aeea05f0a71da083d/mlx-0.32.3-cp313-cp313t-win_arm64.whl", hash = "sha256:a5e165179e3d86672cc0d594587bba2b9c3be511ccb99ffdc63e4cc7119eec55", size = 638696, upload-time = "2026-09-29T00:23:09.601Z" },
+    { url = "https://files.pythonhosted.org/packages/74/91/4d7dc37533d5439e27e57b09d2200b1a7988e433259d9beac8f8241197e4/mlx-0.32.3-cp314-cp314-macosx_14_0_arm64.whl", hash = "sha256:2dc1085f5c2eba18cdac095d7fb0b68ddfadd51bf695b18a1102eda15e77e76d", size = 652868, upload-time = "2026-09-29T00:23:10.986Z" },
+    { url = "https://files.pythonhosted.org/packages/ed/50/b79bf60cad0cf3c6a0040c18963e682a628ad12bdd83ff0f45e9b5893b2d/mlx-0.32.3-cp314-cp314-macosx_15_0_arm64.whl", hash = "sha256:712ca29119d9e2aae04af8f8e416bfb0097538d9ff73e6fab8b028053fb45ff8", size = 652868, upload-time = "2026-09-29T00:23:12.509Z" },
+    { url = "https://files.pythonhosted.org/packages/d6/34/3bccf8ee413afb055b739215be3b74cb810ec655e508dc90bb3c79e4d16b/mlx-0.32.3-cp314-cp314-macosx_26_0_arm64.whl", hash = "sha256:452c621862684e8769be93c1517420c8ba2fd6e8b01a1c970c8ba8069022f0ac", size = 652880, upload-time = "2026-09-29T00:23:14.967Z" },
+    { url = "https://files.pythonhosted.org/packages/3b/44/a03ebe19b1d2bb1786c9ab2f68d058d951f4bff27c741e94061635c0c2ff/mlx-0.32.3-cp314-cp314-manylinux_2_35_aarch64.whl", hash = "sha256:231a278b4fd2804ea16d297960ab169d1749ee1adbf820173e704fbed97bf1b6", size = 681931, upload-time = "2026-09-29T00:23:17.18Z" },
+    { url = "https://files.pythonhosted.org/packages/fb/3a/d0f8448103b3ab3ef2d408c8ad88b228bd60178751c4cdf3d802bf7c082b/mlx-0.32.3-cp314-cp314-manylinux_2_35_x86_64.whl", hash = "sha256:177bbb598bcb37963568f69b84e7d972f7f9499cdd39d1c6d6dab35a718aeb92", size = 754480, upload-time = "2026-09-29T00:23:19.246Z" },
+    { url = "https://files.pythonhosted.org/packages/70/19/6d7d850ba70c3efb1e8e3afa5388407bf5824f8c40e911634e67dcb3e999/mlx-0.32.3-cp314-cp314-win_amd64.whl", hash = "sha256:32fa23e57297fdca23e016570229b459f20f645eeb5965527cd890f74143f1d0", size = 644575, upload-time = "2026-09-29T00:23:20.819Z" },
+    { url = "https://files.pythonhosted.org/packages/5d/76/6e99c1c2f79a49adb841eee5e3ac46d30c1d9b804dcd13a9827c481750a0/mlx-0.32.3-cp314-cp314-win_arm64.whl", hash = "sha256:448fdbc99c5fb0c26f11337e5a182cd6516f8a1a65848184be063d00ad3107dc", size = 637364, upload-time = "2026-09-29T00:23:22.607Z" },
+    { url = "https://files.pythonhosted.org/packages/ae/31/254d11d662a0f68157f659ab7eb90216d51a71acabeb38e61e54c6927623/mlx-0.32.3-cp314-cp314t-macosx_14_0_arm64.whl", hash = "sha256:d17f0c33789009a3b3e609a52af34dc687ed39816836e20ab466aab669c14e6c", size = 675632, upload-time = "2026-09-29T00:23:24.175Z" },
+    { url = "https://files.pythonhosted.org/packages/3f/94/32e6f4c3e24635ec79fb751fccecd624d9f40d6c15e013acb40973501443/mlx-0.32.3-cp314-cp314t-macosx_15_0_arm64.whl", hash = "sha256:5d12de01f23d2fae739ecfecd9c1d4c07c1f9b778a3729f7c0884ea1168ec14d", size = 675635, upload-time = "2026-09-29T00:23:25.823Z" },
+    { url = "https://files.pythonhosted.org/packages/c5/c2/b94c58c0d634907fed225abe81bacc73901b5f1a9fb1b976d7232f03afcb/mlx-0.32.3-cp314-cp314t-macosx_26_0_arm64.whl", hash = "sha256:f2909f683ffc5a2720f6c8099398a64fd1be53f1b6538e4e728ee55816ce699b", size = 675564, upload-time = "2026-09-29T00:23:27.737Z" },
+    { url = "https://files.pythonhosted.org/packages/48/5e/4164aaf0c7ca06307980a5ee0d757ccc641e4edd9d39b8d7f6fa50c21e02/mlx-0.32.3-cp314-cp314t-manylinux_2_35_aarch64.whl", hash = "sha256:8edf996749b331659ab9bb8ecdc895c292f9e7020d02e534147e07cae22bec7c", size = 686431, upload-time = "2026-09-29T00:23:29.838Z" },
+    { url = "https://files.pythonhosted.org/packages/ec/d2/d8d6a42050cd92dcc36748db5360efc96cea42d92dc7f9cc00a2ed87eb07/mlx-0.32.3-cp314-cp314t-manylinux_2_35_x86_64.whl", hash = "sha256:f348705a72fa236f310c2cbb9c393d3b620a942c9b34ac641fd0f098bdc5be44", size = 755034, upload-time = "2026-09-29T00:23:31.417Z" },
+    { url = "https://files.pythonhosted.org/packages/e5/a2/c29e31a1f5ea0954e0409e87581cf11995f382d751109c772111d1d914c2/mlx-0.32.3-cp314-cp314t-win_amd64.whl", hash = "sha256:8564a59943346fac01ab498870a9350d0f79b1cdea95c46c895934ee027d6197", size = 676319, upload-time = "2026-09-29T00:23:32.888Z" },
+    { url = "https://files.pythonhosted.org/packages/ba/e1/8acaa8ec37361e1f8daf1366df89a35effd44f6c28e3dfcbab00c13f60a7/mlx-0.32.3-cp314-cp314t-win_arm64.whl", hash = "sha256:50939a8bd54250e6092ef3427a724c7a72c0911dcee09d70f6543431e7f28d3c", size = 653601, upload-time = "2026-09-29T00:23:34.434Z" },
+]
+
+[[package]]
+name = "mlx-metal"
+version = "0.32.3"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f8/ed/8510985bcb24a6eae359a5441ce4cedcee13b84258a010cd0e515e9fb0bc/mlx_metal-0.32.3-py3-none-macosx_14_0_arm64.whl", hash = "sha256:fdba88ed9131448cf163be2c7ad6374746d8818205f28657aa91b6c69050f691", size = 42205858, upload-time = "2026-09-29T00:14:27.819Z" },
+    { url = "https://files.pythonhosted.org/packages/3c/dc/4f852295fbe357bb9d3a2bfd55361a520b94ded873b72dc58b34a7f507cd/mlx_metal-0.32.3-py3-none-macosx_15_0_arm64.whl", hash = "sha256:feea99fe4d01f9e9f33ca73d869f988219a1725de1c18870baa7d5cd5aef6cb3", size = 42187333, upload-time = "2026-09-29T00:14:33.861Z" },
+    { url = "https://files.pythonhosted.org/packages/ee/38/cb985ca86979ca6f954a2a45eb6e3f9b787c5d55227564a04f87953b3d56/mlx_metal-0.32.3-py3-none-macosx_26_0_arm64.whl", hash = "sha256:34ae9b83ad2f0ccdd3e5d48ec35176e7119f57069eef187122916dc941a4ae1f", size = 67661845, upload-time = "2026-09-29T00:14:41.248Z" },
 ]
 
 [[package]]
@@ -3996,6 +4063,9 @@ smart-turn = [
 typesafe = [
     { name = "typesafe-sdk" },
 ]
+vui = [
+    { name = "vui-tts", marker = "python_full_version < '3.13' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+]
 webrtc-aec = [
     { name = "aec-audio-processing" },
 ]
@@ -4107,6 +4177,9 @@ telemetry = [
 typesafe = [
     { name = "roomkit", extra = ["typesafe"] },
 ]
+vui = [
+    { name = "roomkit", extra = ["vui"] },
+]
 wakeword = [
     { name = "onnxruntime" },
     { name = "roomkit", extra = ["sherpa-onnx"] },
@@ -4150,6 +4223,7 @@ requires-dist = [
     { name = "roomkit", extras = ["sherpa-onnx"], marker = "extra == 'local-voice'", specifier = ">=0.101.0" },
     { name = "roomkit", extras = ["smart-turn"], marker = "extra == 'smart-turn'", specifier = ">=0.101.0" },
     { name = "roomkit", extras = ["typesafe"], marker = "extra == 'typesafe'", specifier = ">=0.101.0" },
+    { name = "roomkit", extras = ["vui"], marker = "extra == 'vui'", specifier = ">=0.101.0" },
     { name = "roomkit-ui", extras = ["all"], marker = "extra == 'dev'" },
     { name = "roomkit-ui", extras = ["anthropic"], marker = "extra == 'cloud'" },
     { name = "roomkit-ui", extras = ["azure-speech"], marker = "extra == 'cloud'" },
@@ -4173,7 +4247,7 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6" },
     { name = "sherpa-onnx-core", marker = "extra == 'local-voice'", specifier = ">=1.13" },
 ]
-provides-extras = ["anthropic", "openai", "gemini", "deepgram", "elevenlabs", "gradium", "azure-speech", "meta-stt", "typesafe", "local-voice", "qwen3-tts", "neutts", "llamacpp", "pocket-tts", "smart-turn", "dictation", "mcp-apps", "camera", "wakeword", "telemetry", "cloud", "all", "dev"]
+provides-extras = ["anthropic", "openai", "gemini", "deepgram", "elevenlabs", "gradium", "azure-speech", "meta-stt", "typesafe", "local-voice", "qwen3-tts", "neutts", "llamacpp", "pocket-tts", "vui", "smart-turn", "dictation", "mcp-apps", "camera", "wakeword", "telemetry", "cloud", "all", "dev"]
 
 [[package]]
 name = "rpds-py"
@@ -4636,23 +4710,25 @@ name = "soundfile"
 version = "0.14.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version >= '3.15' and sys_platform == 'win32'",
-    "python_full_version >= '3.15' and sys_platform == 'emscripten'",
-    "python_full_version >= '3.15' and sys_platform != 'emscripten' and sys_platform != 'win32'",
-    "python_full_version == '3.14.*' and sys_platform == 'win32'",
-    "python_full_version == '3.14.*' and sys_platform == 'emscripten'",
-    "python_full_version == '3.14.*' and sys_platform != 'emscripten' and sys_platform != 'win32'",
-    "python_full_version == '3.13.*' and sys_platform == 'win32'",
-    "python_full_version == '3.13.*' and sys_platform == 'emscripten'",
-    "python_full_version == '3.13.*' and sys_platform != 'emscripten' and sys_platform != 'win32'",
-    "python_full_version < '3.13' and sys_platform == 'win32'",
-    "python_full_version < '3.13' and sys_platform == 'emscripten'",
-    "python_full_version < '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version >= '3.15' and sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version >= '3.15' and sys_platform == 'emscripten' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version >= '3.15' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version == '3.14.*' and sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version == '3.14.*' and sys_platform == 'emscripten' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version == '3.14.*' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version == '3.13.*' and sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version == '3.13.*' and sys_platform == 'emscripten' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version == '3.13.*' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version < '3.13' and sys_platform == 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version < '3.13' and sys_platform == 'emscripten' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version < '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version < '3.13' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn'",
+    "python_full_version < '3.13' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts' and extra != 'extra-10-roomkit-ui-smart-turn'",
 ]
 dependencies = [
-    { name = "cffi", marker = "extra == 'extra-10-roomkit-ui-qwen3-tts' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
-    { name = "numpy", marker = "extra == 'extra-10-roomkit-ui-qwen3-tts' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
-    { name = "typing-extensions", marker = "extra == 'extra-10-roomkit-ui-qwen3-tts' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "cffi", marker = "(python_full_version < '3.13' and extra != 'extra-10-roomkit-ui-neutts') or extra == 'extra-10-roomkit-ui-qwen3-tts' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "numpy", marker = "(python_full_version < '3.13' and extra != 'extra-10-roomkit-ui-neutts') or extra == 'extra-10-roomkit-ui-qwen3-tts' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "typing-extensions", marker = "(python_full_version < '3.13' and extra != 'extra-10-roomkit-ui-neutts') or extra == 'extra-10-roomkit-ui-qwen3-tts' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/d2/db/949331952a6fb1c5b12e9de80fd08747966c2039d1a61db4764fbd3981c2/soundfile-0.14.0.tar.gz", hash = "sha256:ba1c1a2d618bca5c406647c83b89f07cc8810fa506a50622a6993ba130c1de11", size = 47842, upload-time = "2026-06-06T08:58:47.869Z" }
 wheels = [
@@ -5023,6 +5099,28 @@ wheels = [
 ]
 
 [[package]]
+name = "torchcodec"
+version = "0.17.0"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e0/53/33acd60b2880ed4b0d6526436f691a0f447de7b53aceb42eb58a9719e474/torchcodec-0.17.0-cp312-cp312-macosx_14_0_arm64.whl", hash = "sha256:3d69d30fbd2d5f9cc6d63c6d970acb5fa3aeddb5524a059f0ca538a83972f65c", size = 4219893, upload-time = "2026-09-30T12:52:54.86Z" },
+    { url = "https://files.pythonhosted.org/packages/75/20/5692a1177b4be33086770970dcf83effa821376f447899cea3ba850ea2fa/torchcodec-0.17.0-cp312-cp312-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:81655cf25e168e74f27aee29db9fc16e37a9f5b2a188a0f7fe25cdfaab2ddd2e", size = 8854331, upload-time = "2026-09-30T12:52:56.445Z" },
+    { url = "https://files.pythonhosted.org/packages/05/44/d00a4df9c8985c6ce9e6d1e3f861496cdcde8b5b4b7543358d49e03f7337/torchcodec-0.17.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:defd5f0901999c9e981f6465a0f4aac8b5a5147e38e539b77c0711c015cf5349", size = 9972897, upload-time = "2026-09-30T12:52:59.059Z" },
+    { url = "https://files.pythonhosted.org/packages/f4/e4/0f2a356d6d08b1e2ece096288a02f2978806d077cac7a8340adf312b21ed/torchcodec-0.17.0-cp312-cp312-win_amd64.whl", hash = "sha256:0771bc114ff75a30f0ea8aa82cc7b259c518214eafe73fee2e606d745d77942b", size = 6810114, upload-time = "2026-09-30T12:53:00.966Z" },
+    { url = "https://files.pythonhosted.org/packages/80/58/ff4d086c2b5e0807d1617b083eafcedebf8a9fbcabf2363ea8a92ad1c098/torchcodec-0.17.0-cp313-cp313-macosx_14_0_arm64.whl", hash = "sha256:509558ec5d4f431fe2411d8f57e8e4fd6772f799bd44e570946b66989853c402", size = 4219907, upload-time = "2026-09-30T12:53:02.677Z" },
+    { url = "https://files.pythonhosted.org/packages/8b/12/860dce5e7ef82879665ceeffd6f94e27fe51e390e66538205d8533311792/torchcodec-0.17.0-cp313-cp313-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:b7a2a30f0372f4b0caae71a598c20e6d5ef7bf55dae2576003d6a6ffeccb9153", size = 8852117, upload-time = "2026-09-30T12:53:04.258Z" },
+    { url = "https://files.pythonhosted.org/packages/68/2f/11ed8af589bcac10e6de4801728d21e44a71492578b6bb3d423841de2141/torchcodec-0.17.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:9eb27bc90ad1d60fbded1415e8106961d5f9e4bc80b3010217cfe6a08ad967ce", size = 9973287, upload-time = "2026-09-30T12:53:06.288Z" },
+    { url = "https://files.pythonhosted.org/packages/cd/70/f0d7aa8e04ec12acfdb629f8c02a4bd3ec76186a6dc3002d2f6f1bdcb30f/torchcodec-0.17.0-cp313-cp313-win_amd64.whl", hash = "sha256:0af78216e6b2d13e33ecaa7b49bb06d6795cab39515449d40d2193cf1fa3e447", size = 6810219, upload-time = "2026-09-30T12:53:08.184Z" },
+    { url = "https://files.pythonhosted.org/packages/c7/e0/78fd92b246cc0a9a0800306d82a743ec990105310595b68698061964574e/torchcodec-0.17.0-cp314-cp314-macosx_14_0_arm64.whl", hash = "sha256:9567427ba28cee36704104f66bbaebfc210b89204fceb3063ca09a3fdeb0ac02", size = 4220040, upload-time = "2026-09-30T12:53:10.152Z" },
+    { url = "https://files.pythonhosted.org/packages/01/36/75ba1e9bb6b226dce3e1cc2f6a1f589885e71aa4b831e96d1b00b9a000fd/torchcodec-0.17.0-cp314-cp314-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:d9e682f91bc70a34a8c7ea3d302b3d6f52970b97c5b81aa098478197abf17fc6", size = 8853671, upload-time = "2026-09-30T12:53:11.75Z" },
+    { url = "https://files.pythonhosted.org/packages/f7/98/986613945043b8beefd482c32c68fe20d7b9c79f28a5bd4da78a4144184e/torchcodec-0.17.0-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:aa5cf864c6a3ee42fa45961ec469ae359fbca448fb3440b86c84c9f77dd130aa", size = 9973805, upload-time = "2026-09-30T12:53:13.748Z" },
+    { url = "https://files.pythonhosted.org/packages/86/59/c57bb24ffedebe1931be467371266234fb7292f462a4f65e0e4fe880ed9b/torchcodec-0.17.0-cp314-cp314-win_amd64.whl", hash = "sha256:916ff04f0accda465b6b33a9926d1b9daae6414e81abed5987b78c87374e6e8a", size = 6812058, upload-time = "2026-09-30T12:53:15.778Z" },
+    { url = "https://files.pythonhosted.org/packages/a1/38/e27754be64b351b99d16e146c27fe1c8ef0abdd92186d33282afbf81801e/torchcodec-0.17.0-cp314-cp314t-macosx_14_0_arm64.whl", hash = "sha256:7c6004dbeb27a9e58bad0b3d10b4d7f7cda4407c0f10ba45a5a2ebd60aa33dbe", size = 4223965, upload-time = "2026-09-30T12:53:17.46Z" },
+    { url = "https://files.pythonhosted.org/packages/3f/6e/838b73f42dcc8d892bba0b6f278f3ea7db577bce28b30b7306ae02224043/torchcodec-0.17.0-cp314-cp314t-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:8806e967d598d0d8ff0214837d9fb7565f06c7676f56ec172d5c57574e59d5b8", size = 8858951, upload-time = "2026-09-30T12:53:19.286Z" },
+    { url = "https://files.pythonhosted.org/packages/a8/6a/3e1cad0310001fb50a222406f16c983c7bf1dbdbae73ae26c63288ddc308/torchcodec-0.17.0-cp314-cp314t-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:7d58e5211ed6f04aca2bd57e6a6104f9993ceb36a290db31de3f4e6096148f0b", size = 9975758, upload-time = "2026-09-30T12:53:21.471Z" },
+]
+
+[[package]]
 name = "torchdata"
 version = "0.11.0"
 source = { registry = "https://pypi.org/simple" }
@@ -5090,16 +5188,16 @@ resolution-markers = [
     "python_full_version < '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 dependencies = [
-    { name = "filelock" },
-    { name = "huggingface-hub", version = "0.36.2", source = { registry = "https://pypi.org/simple" } },
-    { name = "numpy" },
-    { name = "packaging" },
-    { name = "pyyaml" },
-    { name = "regex" },
-    { name = "requests" },
-    { name = "safetensors" },
-    { name = "tokenizers", version = "0.22.2", source = { registry = "https://pypi.org/simple" } },
-    { name = "tqdm" },
+    { name = "filelock", marker = "extra == 'extra-10-roomkit-ui-qwen3-tts' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "huggingface-hub", version = "0.36.2", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-10-roomkit-ui-qwen3-tts' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "numpy", marker = "extra == 'extra-10-roomkit-ui-qwen3-tts' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "packaging", marker = "extra == 'extra-10-roomkit-ui-qwen3-tts' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "pyyaml", marker = "extra == 'extra-10-roomkit-ui-qwen3-tts' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "regex", marker = "extra == 'extra-10-roomkit-ui-qwen3-tts' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "requests", marker = "extra == 'extra-10-roomkit-ui-qwen3-tts' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "safetensors", marker = "extra == 'extra-10-roomkit-ui-qwen3-tts' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "tokenizers", version = "0.22.2", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-10-roomkit-ui-qwen3-tts' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "tqdm", marker = "extra == 'extra-10-roomkit-ui-qwen3-tts' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/dd/70/d42a739e8dfde3d92bb2fff5819cbf331fe9657323221e79415cd5eb65ee/transformers-4.57.3.tar.gz", hash = "sha256:df4945029aaddd7c09eec5cad851f30662f8bd1746721b34cc031d70c65afebc", size = 10139680, upload-time = "2025-11-25T15:51:30.139Z" }
 wheels = [
@@ -5125,15 +5223,15 @@ resolution-markers = [
     "python_full_version < '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 dependencies = [
-    { name = "huggingface-hub", version = "1.27.0", source = { registry = "https://pypi.org/simple" } },
-    { name = "numpy" },
-    { name = "packaging" },
-    { name = "pyyaml" },
-    { name = "regex" },
-    { name = "safetensors" },
-    { name = "tokenizers", version = "0.22.2", source = { registry = "https://pypi.org/simple" } },
-    { name = "tqdm" },
-    { name = "typer-slim" },
+    { name = "huggingface-hub", version = "1.27.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-10-roomkit-ui-neutts' or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "numpy", marker = "extra == 'extra-10-roomkit-ui-neutts' or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "packaging", marker = "extra == 'extra-10-roomkit-ui-neutts' or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "pyyaml", marker = "extra == 'extra-10-roomkit-ui-neutts' or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "regex", marker = "extra == 'extra-10-roomkit-ui-neutts' or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "safetensors", marker = "extra == 'extra-10-roomkit-ui-neutts' or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "tokenizers", version = "0.22.2", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-10-roomkit-ui-neutts' or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "tqdm", marker = "extra == 'extra-10-roomkit-ui-neutts' or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "typer-slim", marker = "extra == 'extra-10-roomkit-ui-neutts' or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/c9/1d/a7d91500a6c02ec76058bc9e65fcdec1bdb8882854dec8e4adf12d0aa8b0/transformers-5.1.0.tar.gz", hash = "sha256:c60d6180e5845ea1b4eed38d7d1b06fcc4cc341c6b7fa5c1dc767d7e25fe0139", size = 8531810, upload-time = "2026-02-05T15:41:42.932Z" }
 wheels = [
@@ -5151,15 +5249,15 @@ resolution-markers = [
     "python_full_version < '3.13'",
 ]
 dependencies = [
-    { name = "huggingface-hub", version = "2.2.0", source = { registry = "https://pypi.org/simple" } },
-    { name = "numpy" },
-    { name = "packaging" },
-    { name = "pyyaml" },
-    { name = "regex" },
-    { name = "safetensors" },
-    { name = "tokenizers", version = "0.23.3", source = { registry = "https://pypi.org/simple" } },
-    { name = "tqdm" },
-    { name = "typer" },
+    { name = "huggingface-hub", version = "2.2.0", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.13' and extra == 'extra-10-roomkit-ui-smart-turn') or (python_full_version < '3.13' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "numpy", marker = "(python_full_version >= '3.13' and extra == 'extra-10-roomkit-ui-smart-turn') or (python_full_version < '3.13' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "packaging", marker = "(python_full_version >= '3.13' and extra == 'extra-10-roomkit-ui-smart-turn') or (python_full_version < '3.13' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "pyyaml", marker = "(python_full_version >= '3.13' and extra == 'extra-10-roomkit-ui-smart-turn') or (python_full_version < '3.13' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "regex", marker = "(python_full_version >= '3.13' and extra == 'extra-10-roomkit-ui-smart-turn') or (python_full_version < '3.13' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "safetensors", marker = "(python_full_version >= '3.13' and extra == 'extra-10-roomkit-ui-smart-turn') or (python_full_version < '3.13' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "tokenizers", version = "0.23.3", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.13' and extra == 'extra-10-roomkit-ui-smart-turn') or (python_full_version < '3.13' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "tqdm", marker = "(python_full_version >= '3.13' and extra == 'extra-10-roomkit-ui-smart-turn') or (python_full_version < '3.13' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "typer", marker = "(python_full_version >= '3.13' and extra == 'extra-10-roomkit-ui-smart-turn') or (python_full_version < '3.13' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/65/4c/70012ed0795235fb6bd7806fafd4a1842f03e49ebbfa3bb9580e451948ce/transformers-5.19.0.tar.gz", hash = "sha256:87f38dd25e4521151b97e94520ac457f44a0ae8a8358a5b112daff6c64a822d6", size = 10032022, upload-time = "2026-10-06T16:39:00.229Z" }
 wheels = [
@@ -5210,7 +5308,7 @@ name = "typer-slim"
 version = "0.24.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "typer" },
+    { name = "typer", marker = "extra == 'extra-10-roomkit-ui-neutts' or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/a7/a7/e6aecc4b4eb59598829a3b5076a93aff291b4fdaa2ded25efc4e1f4d219c/typer_slim-0.24.0.tar.gz", hash = "sha256:f0ed36127183f52ae6ced2ecb2521789995992c521a46083bfcdbb652d22ad34", size = 4776, upload-time = "2026-02-16T22:08:51.2Z" }
 wheels = [
@@ -5299,6 +5397,38 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/57/58/2a8c3b2f6b13ee34aaa940e552109becf0148f3cccbdea22b7d3b2fcbdc3/vector_quantize_pytorch-1.17.8.tar.gz", hash = "sha256:3b9b9514dcdce7af122b7e8abae1a01b4050c3446b78b4b8a07da74f0008d3ea", size = 592912, upload-time = "2024-09-26T17:07:40.04Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/fb/2e/58e1dae68baea6e55caf78be53b0d6fb3ff800f70df950a3a1462242cbbd/vector_quantize_pytorch-1.17.8-py3-none-any.whl", hash = "sha256:63fd86b5d951a8e7dcb70b499a8ae684a51ec05a4ffe8f2c0912c1af4848ae78", size = 40324, upload-time = "2024-09-26T17:07:38.325Z" },
+]
+
+[[package]]
+name = "vui-tts"
+version = "1.2.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "einops", marker = "python_full_version < '3.13' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "httpx", marker = "python_full_version < '3.13' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "huggingface-hub", version = "0.36.2", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.13' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "huggingface-hub", version = "1.27.0", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.13' and extra == 'extra-10-roomkit-ui-neutts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "huggingface-hub", version = "2.2.0", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.13' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "julius", marker = "python_full_version < '3.13' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "mlx", marker = "(python_full_version < '3.13' and platform_machine == 'arm64' and sys_platform == 'darwin') or (python_full_version >= '3.13' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (python_full_version >= '3.13' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (python_full_version >= '3.13' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (platform_machine != 'arm64' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (platform_machine != 'arm64' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (platform_machine != 'arm64' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform != 'darwin' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (sys_platform != 'darwin' and extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (sys_platform != 'darwin' and extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "numpy", marker = "python_full_version < '3.13' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "pydantic", marker = "python_full_version < '3.13' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "safetensors", marker = "python_full_version < '3.13' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "soundfile", version = "0.13.1", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.13' and extra == 'extra-10-roomkit-ui-neutts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "soundfile", version = "0.14.0", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.13' and extra != 'extra-10-roomkit-ui-neutts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "tiktoken", marker = "python_full_version < '3.13' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "tokenizers", version = "0.22.2", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.13' and extra == 'extra-10-roomkit-ui-neutts') or (python_full_version < '3.13' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "tokenizers", version = "0.23.3", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.13' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "torch", marker = "python_full_version < '3.13' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "torchaudio", marker = "python_full_version < '3.13' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "torchcodec", marker = "python_full_version < '3.13' or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "transformers", version = "4.57.3", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.13' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "transformers", version = "5.1.0", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.13' and extra == 'extra-10-roomkit-ui-neutts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+    { name = "transformers", version = "5.19.0", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.13' and extra != 'extra-10-roomkit-ui-neutts' and extra != 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-qwen3-tts') or (extra == 'extra-10-roomkit-ui-neutts' and extra == 'extra-10-roomkit-ui-smart-turn') or (extra == 'extra-10-roomkit-ui-qwen3-tts' and extra == 'extra-10-roomkit-ui-smart-turn')" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ff/23/f7c7adeda1b4abb06f7a1232afe813a1976672cb42dff29daa9433a76274/vui_tts-1.2.3.tar.gz", hash = "sha256:54b68e409be2212852aea055c3352d2a3de8c6d028703edff24ca0687810ce9c", size = 2335330, upload-time = "2026-10-10T11:01:34.419Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4a/5a/218d02725b22862a223225b1562b453019d8dc3863b1b7180a92112d64d0/vui_tts-1.2.3-py3-none-any.whl", hash = "sha256:2b16c1d1b8066d49a78fadcbcf1bc67e7c758d551e930222e4b3ebc94a637ba8", size = 2320762, upload-time = "2026-10-10T11:01:32.257Z" },
 ]
 
 [[package]]

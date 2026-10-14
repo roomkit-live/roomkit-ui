@@ -51,7 +51,7 @@ def test_aggregate_all_covers_every_installable_feature(declared_extras):
     The extras that pin conflicting transformers versions stay out: qwen3-tts
     and neutts (torch and perth, several GB for two optional voices) and
     smart-turn, which neither of them can share an environment with.
-    pocket-tts stays out too: it pulls torch.  Any *other* omission means a
+    pocket-tts and vui stay out too: they pull torch.  Any *other* omission means a
     user who installed ``roomkit-ui[all]`` still hits a missing backend, which
     is the exact failure this registry exists to prevent.
     """
@@ -69,7 +69,7 @@ def test_aggregate_all_covers_every_installable_feature(declared_extras):
             if req.startswith("roomkit-ui[") and req.endswith("]"):
                 frontier.extend(req[len("roomkit-ui[") : -1].split(","))
 
-    expected = {f.extra for f in FEATURES.values()} - EXCLUSIVE_EXTRAS - {"pocket-tts"}
+    expected = {f.extra for f in FEATURES.values()} - EXCLUSIVE_EXTRAS - {"pocket-tts", "vui"}
     assert expected <= reached, f"not reachable from [all]: {sorted(expected - reached)}"
 
 

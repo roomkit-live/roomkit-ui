@@ -13,7 +13,7 @@ system context in [architecture.md](architecture.md).
 |---|---|---|
 | Providers | Gemini Live, OpenAI Realtime, OpenAI GPT-Live, Deepgram Voice Agent, ElevenLabs ConvAI, xAI Grok | LLM: Anthropic, OpenAI, Gemini, local (vLLM/Ollama), llama.cpp |
 | STT | provider-native | sherpa-onnx (local), Gradium, Deepgram, Azure MAI-Transcribe, Meta Muse, Google Gemini |
-| TTS | provider-native | Piper and Pocket TTS (local), Qwen3-TTS & NeuTTS (voice clone), Gradium, ElevenLabs, Azure MAI-Voice, Google Gemini |
+| TTS | provider-native | Piper, Pocket TTS and Vui (local), Qwen3-TTS & NeuTTS (voice clone), Gradium, ElevenLabs, Azure MAI-Voice, Google Gemini |
 | Latency | lowest | depends on the three stages |
 | Offline capable | no | yes (local STT + local LLM + Piper or Pocket TTS) |
 | Usage shown | tokens | tokens + cost estimate (catalog pricing) |
@@ -86,6 +86,14 @@ kept, never replaced. Agent Skills reach realtime sessions as well as Voice Chan
   Spanish, Italian, Portuguese and Dutch (larger variants for all but English). By default
   it speaks the speech-recognition language (English when Pocket has no model for it); a
   pre-made voice or a WAV to clone (cloning needs the gated `kyutai/pocket-tts` weights).
+- **Vui** — Vui Nano (fluxions.ai), local on an NVIDIA GPU, English only, Python 3.12
+  only (the `vui` extra). Each reply is generated inside the conversation: the Voice
+  Channel hands Vui the dialogue, your voice included, and cuts it to what you heard after
+  a barge-in. One of its four voices (Maeve, Abraham, Rhian, Harry) or the clip in Ref
+  Audio and Ref Text. The session's prompt asks for replies in English; with audio tags
+  on, it lists the sounds Vui makes (`[laugh]`, `[sigh]`, `[breath]`…), and any other
+  bracketed word is kept from the voice. Changing its voice frees the previous model
+  before the next loads.
 - **Azure MAI-Transcribe / MAI-Voice** — Microsoft Foundry speech, one resource and one
   key for both. MAI-Transcribe finds no turns itself, so the session always gets a VAD
   (the chosen model, else an energy VAD) with an 800 ms end-of-turn silence by default.
@@ -615,8 +623,9 @@ sequenceDiagram
 - The Voice Channel agent's add-ons (speaking decision, thinking, background work) are
   Voice Channel only: a realtime model takes its own turns. A session ended while a
   background task runs cancels it.
-- The pre-built binaries carry neither Smart Turn, Pocket TTS, Qwen3-TTS nor NeuTTS
-  (outside the `all` extra); install their optional components from source.
+- The pre-built binaries carry neither Smart Turn, Pocket TTS, Vui, Qwen3-TTS nor NeuTTS
+  (outside the `all` extra); install their optional components from source. Vui needs
+  Python 3.12 and an NVIDIA GPU, and speaks English only.
 - Azure MAI-Transcribe, Meta Muse and Gemini STT are not offered for dictation.
 - MCP Apps require QtWebEngine (the tool's activity and text result remain available without it).
 - The main window stays compact; Settings is resizable. History searches conversation

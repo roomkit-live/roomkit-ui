@@ -26,9 +26,10 @@ uv run roomkit-ui --doctor   # which optional backends this environment carries
 ```
 
 The core already includes WebRTC echo cancellation (`roomkit[webrtc-aec]`). `all` leaves
-out `qwen3-tts`, `neutts`, `smart-turn` and `pocket-tts`; add at most one of the first
-three (they pin conflicting `transformers` versions), e.g.
-`uv sync --extra dev --extra smart-turn`.
+out `qwen3-tts`, `neutts`, `smart-turn`, `pocket-tts` and `vui`; add at most one of the
+first three (they pin conflicting `transformers` versions), e.g.
+`uv sync --extra dev --extra smart-turn`. `vui` needs a Python 3.12 environment:
+`uv sync --python 3.12 --extra dev --extra vui` (recreates `.venv`).
 
 First run: top-left history icon → **Settings** → **Providers & keys** → paste your API key → **Conversation** →
 pick your mode and provider → close Settings (other edits save on close, Esc included; themes apply immediately) → **Live waveform icon** at the right of the input →

@@ -45,6 +45,7 @@ VC_TTS_PROVIDERS: list[tuple[str, str]] = [
     ("Gradium", "gradium"),
     ("ElevenLabs", "elevenlabs"),
     ("Pocket TTS (local, voice clone)", "pocket"),
+    ("Vui (local, English, NVIDIA GPU)", "vui"),
     ("Azure MAI-Voice", "azure"),
     ("Google Gemini", "gemini"),
 ]
@@ -280,6 +281,7 @@ class VoiceSetup(QWidget):
             "qwen3": "Qwen3-TTS",
             "neutts": "NeuTTS",
             "pocket": "Pocket TTS",
+            "vui": "Vui",
             "azure": "Azure MAI",
             "gemini": "Gemini",
         }

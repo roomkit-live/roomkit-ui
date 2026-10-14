@@ -216,6 +216,7 @@ _DEFAULTS = {
     # "" = the STT language's model (English when Pocket has none) | english | french_24l…
     "vc_pocket_language": "",
     "vc_pocket_voice": "",  # pre-made voice or a clip to clone (empty = alba / estelle)
+    "vc_vui_voice": "maeve",  # tts/vui.py PRESETS, or "clone"
     # Azure / Microsoft Foundry speech (roomkit 0.96, public preview): one resource,
     # one key for MAI-Transcribe (endpoint) and Azure Speech TTS (region)
     "azure_speech_api_key": "",  # secret — keyring, never QSettings

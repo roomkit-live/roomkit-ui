@@ -36,9 +36,10 @@ roomkit-ui
   microphone pipeline, MCP and CLI tools), and add the backends you use, for example
   `"roomkit-ui[anthropic,meta-stt,elevenlabs]"`; `roomkit-ui --doctor` lists what this
   install carries.
-- Four extras stay out of `all`: `qwen3-tts`, `neutts` and `smart-turn` pin conflicting
+- Five extras stay out of `all`: `qwen3-tts`, `neutts` and `smart-turn` pin conflicting
   `transformers` versions, so take at most one of them (`"roomkit-ui[all,smart-turn]"`),
-  and `pocket-tts` pulls in torch.
+  and `pocket-tts` and `vui` pull in torch. `vui` installs on Python 3.12 only:
+  `uv tool install --python 3.12 "roomkit-ui[all,vui]"`.
 - Upgrade with `uv tool upgrade roomkit-ui`, remove with `uv tool uninstall roomkit-ui`.
   A backend the app installed itself (Settings → Models & components → Components) is
   not kept by an upgrade: name it in `uv tool install` instead, and it stays.
@@ -80,9 +81,9 @@ xattr -cr "RoomKit UI.app"
 - **Dictate a message** — speak into the input, edit the transcript, then send when ready
 - **Two conversation modes** — Speech-to-Speech (realtime) or Voice Channel (STT → LLM → TTS)
 - **Realtime providers** — Gemini Live (Gemini 3.8 Live options follow the selected model), OpenAI Realtime, OpenAI GPT-Live (full-duplex), Deepgram Voice Agent, ElevenLabs Conversational AI, xAI Grok
-- **Voice Channel providers** — LLM: Anthropic (Claude Sonnet 5.5 by default), OpenAI, Gemini, local vLLM / Ollama, or llama.cpp; STT: local sherpa-onnx, Deepgram, Gradium, Azure MAI-Transcribe, Meta Muse Voice Transcribe; TTS: Piper, Pocket TTS, Qwen3-TTS, NeuTTS, ElevenLabs, Gradium, Azure MAI-Voice. Model lists come from roomkit's catalogs
+- **Voice Channel providers** — LLM: Anthropic (Claude Sonnet 5.5 by default), OpenAI, Gemini, local vLLM / Ollama, or llama.cpp; STT: local sherpa-onnx, Deepgram, Gradium, Azure MAI-Transcribe, Meta Muse Voice Transcribe; TTS: Piper, Pocket TTS, Vui, Qwen3-TTS, NeuTTS, ElevenLabs, Gradium, Azure MAI-Voice. Model lists come from roomkit's catalogs
 - **Local LLM with nothing to install** — llama.cpp: roomkit downloads a pinned `llama-server` and the GGUF model at first use
-- **Local TTS** — offline text-to-speech with Piper, Pocket TTS (seven languages, voice clone), Qwen3-TTS (voice clone), and NeuTTS (voice clone)
+- **Local TTS** — offline text-to-speech with Piper, Pocket TTS (seven languages, voice clone), Vui (English, NVIDIA GPU, replies inside the conversation, voice clone), Qwen3-TTS (voice clone), and NeuTTS (voice clone)
 - **Who is speaking** — with Meta Muse as the STT, the voices are told apart live, no enrolment: click a speaker in the chat to name them, the assistant names those who introduce themselves, and "Listen only to primary speaker" follows your name. With local STT, enrolled voices are recognised offline
 - **Wake word** — say an enrolled phrase to open a session; detection runs locally and nothing leaves the machine until it fires. Optional hang-up once the conversation goes quiet
 - **Conversation history** — separate threads with automatic titles, 30 recent conversations, title search, rename and delete; reopen a thread with its own context, images and saved tool results
@@ -155,9 +156,10 @@ the dialog links to **System Settings → Privacy & Security → Camera**.
 | `telemetry` | OpenTelemetry / OTLP trace export |
 | `qwen3-tts`, `neutts` | Voice cloning — see the note below |
 | `pocket-tts` | Kyutai's Pocket TTS: local, CPU-friendly, seven languages, voice cloning from a clip |
+| `vui` | Vui Nano (fluxions.ai): local, English, an NVIDIA GPU, Python 3.12 only; replies generated inside the conversation, your voice included |
 | `smart-turn` | Smart Turn detector for the Voice Channel (end-of-turn from the audio) |
 | `cloud` | All eight cloud backends at once (`anthropic` to `typesafe`) |
-| `all` | Everything above except `qwen3-tts`, `neutts`, `pocket-tts` and `smart-turn` |
+| `all` | Everything above except `qwen3-tts`, `neutts`, `pocket-tts`, `vui` and `smart-turn` |
 
 ```bash
 pip install 'roomkit-ui[gemini,local-voice]'   # pick what you need
@@ -168,9 +170,10 @@ A plain `pip install roomkit-ui` installs the core only, with no AI backend.
 
 `qwen3-tts`, `neutts` and `smart-turn` **cannot be installed together** — they pin
 conflicting `transformers` versions (qwen-tts `4.57.3`, neutts `5.1.0`, Smart Turn
-`>=5.5`): pick at most one. `qwen3-tts`, `neutts` and `pocket-tts` also pull torch,
-several GB (Pocket TTS takes the CUDA build on Linux). None of the four is in `all`,
-so the pre-built binaries carry none of them.
+`>=5.5`): pick at most one. `qwen3-tts`, `neutts`, `pocket-tts` and `vui` also pull
+torch, several GB (Pocket TTS and Vui take the CUDA build on Linux). None of the five is
+in `all`, so the pre-built binaries carry none of them. `vui` installs on Python 3.12
+only (vui-tts refuses 3.13): on another Python, `--doctor` and Settings say so.
 
 To see what the current install carries and what completes it:
 
