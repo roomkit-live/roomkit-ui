@@ -57,6 +57,8 @@ Each released section is the source for that version's GitHub release notes.
   spoken length.
 
 ### Changed
+- **The button that ends a live conversation shows a hang-up handset** — its phone with a
+  cross sat off centre in the red circle; it is now the flat handset calls use, centred.
 - **A local voice replaced by another frees its model first** — changing the voice of a
   cached local TTS (Pocket, Vui, Qwen3-TTS, NeuTTS) closed nothing: the previous model
   stayed loaded until garbage collection, beside the new one on the same GPU.

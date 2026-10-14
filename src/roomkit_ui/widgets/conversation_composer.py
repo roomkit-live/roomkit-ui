@@ -334,13 +334,16 @@ class ConversationComposer(QWidget):
         self._live_button.setText(
             "Cancel" if connecting else "Ending…" if busy and stopping else ""
         )
-        self._live_button.setIconSize(QSize(24 if busy else 20, 24 if busy else 20))
+        # The flat handset is wide and short: at 24 it looked small beside the
+        # microphone and image glyphs.
+        icon = 28 if live else 24 if busy else 20
+        self._live_button.setIconSize(QSize(icon, icon))
 
         name, glyph = "Start a live conversation", "waveform"
         if connecting:
             name, glyph = "Cancel connection", "stop"
         elif live:
-            name, glyph = "End live conversation", "phone-x-mark"
+            name, glyph = "End live conversation", "phone-hang-up"
         elif stopping:
             name, glyph = "Ending live conversation", "stop"
         if text_busy:
