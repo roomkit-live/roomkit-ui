@@ -434,6 +434,14 @@ Each released section is the source for that version's GitHub release notes.
   without it and says so; Voice Channel mode is unchanged.
 
 ### Fixed
+- **Voice fixes from roomkit 0.101** — on a Mac's speakers, the start of an answer no
+  longer comes back through the microphone: the echo canceller is told the delay the
+  devices' clocks give, as browsers tell it, where it was told 296 ms for 42. With Meta
+  Muse telling voices apart, the assistant's own voice is no longer answered as someone
+  else's. An answer no longer cuts the one playing: it waits for it, and words taken for
+  an answer's echo no longer interrupt the next. The assistant no longer takes back a
+  right answer because the tool digest showed too little of the result, and says once
+  that background work is under way.
 - **The assistant says RoomKit UI runs on Windows too** — `get_roomkit_info` said Linux
   and macOS only.
 - **Checkboxes and number fields in Settings** — every plain checkbox (audio capture
