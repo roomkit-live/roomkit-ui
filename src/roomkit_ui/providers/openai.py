@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from roomkit_ui.missing_key import MissingKeyError
+
 
 def create(settings: dict) -> Any:
     """Create an OpenAI AI provider from settings."""
@@ -12,7 +14,7 @@ def create(settings: dict) -> Any:
 
     api_key = settings.get("openai_api_key", "")
     if not api_key:
-        raise ValueError("OpenAI API key is required. Open Settings to enter it.")
+        raise MissingKeyError("OpenAI API key is required. Open Settings to enter it.")
     return OpenAIAIProvider(
         OpenAIConfig(
             api_key=api_key,

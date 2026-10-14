@@ -12,6 +12,7 @@ import logging
 from typing import Any
 
 from roomkit_ui.features import REALTIME_PROVIDER_FEATURES, require
+from roomkit_ui.missing_key import MissingKeyError
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,7 @@ def build_realtime_provider(provider_name: str, settings: dict) -> tuple[Any, st
     if provider_name == "openai":
         api_key = settings.get("openai_api_key", "")
         if not api_key:
-            raise ValueError("OpenAI API key is required. Open Settings to enter it.")
+            raise MissingKeyError("OpenAI API key is required. Open Settings to enter it.")
         model = settings.get("openai_model", "gpt-realtime-2.1")
         voice = settings.get("openai_voice", "alloy")
         from roomkit.providers.openai.realtime import OpenAIRealtimeProvider
@@ -61,7 +62,7 @@ def build_realtime_provider(provider_name: str, settings: dict) -> tuple[Any, st
 
     api_key = settings.get("api_key", "")
     if not api_key:
-        raise ValueError("Google API key is required. Open Settings to enter it.")
+        raise MissingKeyError("Google API key is required. Open Settings to enter it.")
     model = settings.get("model", _GEMINI_DEFAULT_MODEL)
     voice = settings.get("voice", "Aoede")
     from roomkit.providers.gemini.realtime import GeminiLiveProvider
@@ -152,7 +153,7 @@ def _deepgram_speak_stage(settings: dict) -> tuple[str, dict | None, dict | None
     if vendor == "eleven_labs":
         api_key = settings.get("elevenlabs_api_key", "")
         if not api_key:
-            raise ValueError(
+            raise MissingKeyError(
                 "ElevenLabs TTS through Deepgram uses your ElevenLabs API key. "
                 "Open Settings and enter it under the ElevenLabs provider."
             )
@@ -171,7 +172,7 @@ def _deepgram_speak_stage(settings: dict) -> tuple[str, dict | None, dict | None
     if vendor == "open_ai":
         api_key = settings.get("openai_api_key", "")
         if not api_key:
-            raise ValueError(
+            raise MissingKeyError(
                 "OpenAI TTS through Deepgram uses your OpenAI API key. "
                 "Open Settings and enter it under the OpenAI provider."
             )
@@ -200,7 +201,7 @@ def _build_deepgram_agent(settings: dict) -> tuple[Any, str, str]:
     """Deepgram composes the agent from listen/think/speak stages."""
     api_key = settings.get("deepgram_api_key", "")
     if not api_key:
-        raise ValueError("Deepgram API key is required. Open Settings to enter it.")
+        raise MissingKeyError("Deepgram API key is required. Open Settings to enter it.")
     voice = settings.get("deepgram_agent_voice", "") or "aura-2-thalia-en"
     voice_label, speak_provider, speak_endpoint = _deepgram_speak_stage(settings)
     think_provider = settings.get("deepgram_agent_think_provider", "") or "open_ai"
@@ -251,7 +252,7 @@ def _build_elevenlabs_realtime(settings: dict) -> tuple[Any, str, str]:
     """ElevenLabs ConvAI drives a pre-configured agent — no model/voice here."""
     api_key = settings.get("elevenlabs_api_key", "")
     if not api_key:
-        raise ValueError("ElevenLabs API key is required. Open Settings to enter it.")
+        raise MissingKeyError("ElevenLabs API key is required. Open Settings to enter it.")
     agent_id = settings.get("elevenlabs_agent_id", "")
     if not agent_id:
         raise ValueError(
@@ -269,7 +270,7 @@ def _build_elevenlabs_realtime(settings: dict) -> tuple[Any, str, str]:
 def _build_xai_realtime(settings: dict) -> tuple[Any, str, str]:
     api_key = settings.get("xai_api_key", "")
     if not api_key:
-        raise ValueError("xAI API key is required. Open Settings to enter it.")
+        raise MissingKeyError("xAI API key is required. Open Settings to enter it.")
     model = settings.get("xai_model", "") or "grok-2-audio"
     voice = settings.get("xai_voice", "") or "eve"
 
@@ -300,7 +301,7 @@ def _build_openai_live(settings: dict) -> tuple[Any, str, str]:
     """
     api_key = settings.get("openai_api_key", "")
     if not api_key:
-        raise ValueError("OpenAI API key is required. Open Settings to enter it.")
+        raise MissingKeyError("OpenAI API key is required. Open Settings to enter it.")
     model = settings.get("openai_live_model", "") or "gpt-live-1"
     voice = settings.get("openai_live_voice", "") or "marin"
 

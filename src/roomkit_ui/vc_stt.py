@@ -13,6 +13,7 @@ from typing import Any
 
 from roomkit_ui.engine_vc_helpers import try_set_float, try_set_int
 from roomkit_ui.features import is_available
+from roomkit_ui.missing_key import MissingKeyError
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,7 @@ def build_gradium_stt(settings: dict, emit_status: Callable[[str], None]) -> Any
     emit_status("Connecting Gradium STT…")
     api_key = settings.get("gradium_api_key", "")
     if not api_key:
-        raise ValueError("Gradium API key is required for Gradium STT.")
+        raise MissingKeyError("Gradium API key is required for Gradium STT.")
     region = settings.get("gradium_region", "us")
     # Prefer Gradium-specific language, fall back to global
     stt_language = settings.get("gradium_language", "") or _stt_language(settings)
@@ -59,7 +60,7 @@ def build_deepgram_stt(settings: dict, emit_status: Callable[[str], None]) -> An
     emit_status("Connecting Deepgram STT…")
     api_key = settings.get("deepgram_api_key", "")
     if not api_key:
-        raise ValueError("Deepgram API key is required for Deepgram STT.")
+        raise MissingKeyError("Deepgram API key is required for Deepgram STT.")
     dg_model = settings.get("deepgram_model", "nova-3")
     stt_language = _stt_language(settings)
     dg_config = DeepgramConfig(api_key=api_key, model=dg_model, language=stt_language)
@@ -84,7 +85,7 @@ def build_azure_mai_stt(settings: dict, emit_status: Callable[[str], None]) -> A
     api_key = settings.get("azure_speech_api_key", "")
     endpoint = (settings.get("azure_mai_endpoint", "") or "").strip()
     if not api_key or not endpoint:
-        raise ValueError(
+        raise MissingKeyError(
             "Azure MAI-Transcribe needs the Foundry resource's key and endpoint "
             "(https://<resource>.services.ai.azure.com). Open Settings to enter them."
         )
@@ -152,7 +153,7 @@ def build_meta_stt(settings: dict, emit_status: Callable[[str], None]) -> Any:
     emit_status("Connecting Meta Muse STT…")
     api_key = str(settings.get("meta_api_key", "") or "").strip()
     if not api_key:
-        raise ValueError("Meta API key is required for Meta Muse STT.")
+        raise MissingKeyError("Meta API key is required for Meta Muse STT.")
     code = str(settings.get("stt_language", "") or "").strip()
     bias = _META_LANGUAGES.get(code)
     if code and bias is None:
@@ -201,7 +202,9 @@ def build_gemini_stt(settings: dict, emit_status: Callable[[str], None]) -> Any:
     emit_status("Connecting Gemini STT…")
     api_key = str(settings.get("api_key", "") or "").strip()
     if not api_key:
-        raise ValueError("Google API key is required for Gemini STT. Open Settings to enter it.")
+        raise MissingKeyError(
+            "Google API key is required for Gemini STT. Open Settings to enter it."
+        )
     language = str(settings.get("stt_language", "") or "").strip()
     vocabulary = [
         term.strip() for term in str(settings.get("gemini_stt_vocabulary", "") or "").split(",")

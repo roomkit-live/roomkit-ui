@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from roomkit_ui.missing_key import MissingKeyError
+
 
 def create(settings: dict) -> tuple[Any, int]:
     """Create an Azure Speech TTS provider. Returns (provider, 24000).
@@ -21,7 +23,7 @@ def create(settings: dict) -> tuple[Any, int]:
     api_key = settings.get("azure_speech_api_key", "")
     region = (settings.get("azure_speech_region", "") or "").strip()
     if not api_key or not region:
-        raise ValueError(
+        raise MissingKeyError(
             "Azure Speech TTS needs the resource's key and region (e.g. swedencentral). "
             "Open Settings to enter them."
         )

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from roomkit_ui.missing_key import MissingKeyError
+
 # Built for voice agents: about 0.7 s to the first audio, against 1.1-1.6 s
 # for 3.8 Flash, which has more acting range (roomkit, measured 2026-09-27).
 DEFAULT_MODEL = "gemini-3.8-flash-lite-tts"
@@ -21,7 +23,9 @@ def create(settings: dict) -> tuple[Any, int]:
 
     api_key = str(settings.get("api_key", "") or "").strip()
     if not api_key:
-        raise ValueError("Google API key is required for Gemini TTS. Open Settings to enter it.")
+        raise MissingKeyError(
+            "Google API key is required for Gemini TTS. Open Settings to enter it."
+        )
     config = GeminiTTSConfig(
         api_key=api_key,
         model=str(settings.get("gemini_tts_model", "") or "").strip() or DEFAULT_MODEL,

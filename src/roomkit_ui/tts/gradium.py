@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from roomkit_ui.missing_key import MissingKeyError
+
 
 def create(settings: dict) -> tuple[Any, int]:
     """Create a Gradium TTS provider. Returns (provider, sample_rate)."""
@@ -11,7 +13,7 @@ def create(settings: dict) -> tuple[Any, int]:
 
     api_key = settings.get("gradium_api_key", "")
     if not api_key:
-        raise ValueError("Gradium API key is required for Gradium TTS.")
+        raise MissingKeyError("Gradium API key is required for Gradium TTS.")
     voice_id = settings.get("vc_gradium_voice", "") or "default"
     region = settings.get("gradium_region", "us")
     output_format = "pcm_24000"

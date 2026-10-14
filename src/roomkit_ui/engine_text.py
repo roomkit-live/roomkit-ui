@@ -18,6 +18,7 @@ from roomkit_ui.engine_vc_helpers import reasoning_options, start_local_llm
 from roomkit_ui.features import FeatureUnavailableError
 from roomkit_ui.image_messages import ImageSessionWindow, message_content
 from roomkit_ui.images import ImageAttachment
+from roomkit_ui.missing_key import MissingKeyError
 from roomkit_ui.providers import create_ai_provider, has_own_llm, llm_settings
 from roomkit_ui.providers.llamacpp import context_overflow
 from roomkit_ui.text_chat import text_chat_unavailable
@@ -133,7 +134,9 @@ class TextMixin:
         except Exception as exc:
             logger.warning("Text session setup failed: %s", exc)
             await self._fail_start(  # type: ignore[attr-defined]
-                str(exc), missing=exc.feature if isinstance(exc, FeatureUnavailableError) else ""
+                str(exc),
+                missing=exc.feature if isinstance(exc, FeatureUnavailableError) else "",
+                key_missing=isinstance(exc, MissingKeyError),
             )
 
     async def _send_text_turn(self, text: str) -> None:

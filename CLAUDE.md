@@ -47,6 +47,7 @@ src/roomkit_ui/
 ├── camera_capture.py    # Isolated photo window entrypoint; pipe to parent, no settings or secret access
 ├── constants.py         # UI-independent constants (attitude presets, …)
 ├── features.py          # Optional-backend registry: extras ↔ import probes ↔ install commands, EXCLUSIVE_EXTRAS, --doctor
+├── missing_key.py       # MissingKeyError: a provider without its key — a start logs one line, no traceback — leaf
 ├── components.py        # One extra = one component; install_plan(): uv tool via its receipt, else uv/pip; checkout gets `uv sync`, frozen nothing
 ├── component_installer.py # The app's one installer (QProcess, no shell): components and app updates (UPDATE), restart_app()
 ├── install_env.py       # How the app was installed (InstallKind): uv tool receipt, pipx, checkout, Homebrew cask; uv_tool_install_argv — pure

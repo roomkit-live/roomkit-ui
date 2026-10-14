@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from roomkit_ui.missing_key import MissingKeyError
+
 # v4: as expressive as v3 (audio tags) and, unlike v3, it streams — each
 # sentence is spoken as soon as the model writes it.
 DEFAULT_MODEL = "eleven_v4"
@@ -20,7 +22,7 @@ def create(settings: dict) -> tuple[Any, int]:
 
     api_key = settings.get("elevenlabs_api_key", "")
     if not api_key:
-        raise ValueError("ElevenLabs API key is required for ElevenLabs TTS.")
+        raise MissingKeyError("ElevenLabs API key is required for ElevenLabs TTS.")
     voice_id = settings.get("elevenlabs_voice_id", "") or "21m00Tcm4TlvDq8ikWAM"
 
     # Streamed input: the reply is sent over a WebSocket sentence by sentence

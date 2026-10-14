@@ -136,6 +136,8 @@ class MainWindow(QMainWindow):
         self._engine.component_missing.connect(
             lambda feature, _msg: self._chat.add_install_offer(feature)
         )
+        # Likewise a key not entered yet: said in the chat, not logged again.
+        self._engine.key_missing.connect(self._chat.add_error)
         self._engine.tool_started.connect(self._on_tool_started)
         self._engine.tool_finished.connect(self._on_tool_finished)
         self._engine.image_generated.connect(self._on_image_generated)

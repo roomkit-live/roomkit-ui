@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from roomkit_ui.missing_key import MissingKeyError
+
 
 def create(settings: dict) -> Any:
     """Create an Anthropic AI provider from settings."""
@@ -12,7 +14,7 @@ def create(settings: dict) -> Any:
 
     api_key = settings.get("anthropic_api_key", "")
     if not api_key:
-        raise ValueError("Anthropic API key is required. Open Settings to enter it.")
+        raise MissingKeyError("Anthropic API key is required. Open Settings to enter it.")
     return AnthropicAIProvider(
         AnthropicConfig(
             api_key=api_key,

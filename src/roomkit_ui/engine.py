@@ -131,6 +131,7 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, TextMix
     text_reply_stopped = Signal()
     error_occurred = Signal(str)
     component_missing = Signal(str, str)  # feature key, what the chat says
+    key_missing = Signal(str)  # what the chat says: the provider's key is not set
     tool_started = Signal(object)  # ToolCall
     tool_finished = Signal(object)  # ToolResult, matched by invocation ID
     image_generated = Signal(object)  # tuple[ImageAttachment, ...] the assistant drew
@@ -640,7 +641,9 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, TextMix
             raise asyncio.CancelledError("the session start was stopped")
         self._set_state(EngineState.ACTIVE)
 
-    async def _fail_start(self, message: str, *, missing: str = "") -> None:
+    async def _fail_start(
+        self, message: str, *, missing: str = "", key_missing: bool = False
+    ) -> None:
         """Tear a failed start down, then report it.
 
         STOPPING holds through the teardown: nothing — Start, Reset, the wake
@@ -648,6 +651,7 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, TextMix
         one's resources are still being released.  ERROR only once they are.
         A start that needed a backend this install lacks (*missing*, a
         feature key) is reported as such: what is missing, not an error.
+        So is one whose provider has no key yet (*key_missing*).
         """
         self._set_state(EngineState.STOPPING)
         try:
@@ -657,6 +661,8 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, TextMix
         self._set_state(EngineState.ERROR)
         if missing:
             self.component_missing.emit(missing, message)
+        elif key_missing:
+            self.key_missing.emit(message)
         else:
             self.error_occurred.emit(message)
 

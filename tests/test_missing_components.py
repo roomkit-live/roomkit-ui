@@ -79,6 +79,31 @@ async def test_a_voice_channel_start_without_its_stt_says_so_without_a_traceback
     assert all(record.exc_info is None for record in caplog.records)
 
 
+@pytest.mark.parametrize(
+    ("start", "settings", "key"),
+    [
+        ("_start_realtime", {"provider": "gemini"}, "Google API key"),
+        ("_start_voice_channel", {"vc_stt_provider": "deepgram"}, "Deepgram API key"),
+    ],
+)
+async def test_a_start_without_its_key_says_so_without_a_traceback(
+    qapp, caplog, start, settings, key
+):
+    # Like a backend not installed: a state of the settings, not a fault.
+    engine = Engine()
+    missing_seen, errors = _signals(engine)
+    keys: list[str] = []
+    engine.key_missing.connect(keys.append)
+
+    with caplog.at_level(logging.WARNING):
+        await getattr(engine, start)(settings)
+
+    assert len(keys) == 1 and key in keys[0]
+    assert missing_seen == [] and errors == []
+    assert [r.getMessage() for r in caplog.records] == [f"Session not started: {keys[0]}"]
+    assert all(record.exc_info is None for record in caplog.records)
+
+
 def test_gtcrn_without_sherpa_onnx_leaves_the_session_without_a_denoiser(missing):
     missing("local-voice")
     notices: list[str] = []

@@ -120,6 +120,8 @@ async def test_nothing_starts_while_a_failed_start_is_torn_down(engine, monkeypa
 
     monkeypatch.setattr(engine, "_cleanup", slow_cleanup)
     failing = {**_SETTINGS, "api_key": ""}  # the provider refuses to build
+    keys_missing: list[str] = []
+    engine.key_missing.connect(keys_missing.append)
     start = asyncio.create_task(engine.start(failing))
     await _soon(in_cleanup.wait())
 
@@ -132,4 +134,6 @@ async def test_nothing_starts_while_a_failed_start_is_torn_down(engine, monkeypa
     await _soon(start)
     assert engine.state == EngineState.ERROR
     assert engine.states[-2:] == [EngineState.STOPPING, EngineState.ERROR]
-    assert len(engine.errors) == 1 and "API key" in engine.errors[0]
+    # Reported once, after the teardown: a key not entered, not an error.
+    assert engine.errors == []
+    assert len(keys_missing) == 1 and "API key" in keys_missing[0]

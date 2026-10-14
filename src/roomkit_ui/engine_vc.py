@@ -54,6 +54,7 @@ from roomkit_ui.features import (
 )
 from roomkit_ui.hooks import register_vc_hooks
 from roomkit_ui.memory import session_window
+from roomkit_ui.missing_key import MissingKeyError
 from roomkit_ui.providers import create_ai_provider, llm_settings
 from roomkit_ui.session_models import voice_channel_models
 from roomkit_ui.speaker_naming import (
@@ -272,6 +273,10 @@ class VoiceChannelMixin:
             # Not a fault: the backend is not installed, and the chat says how.
             logger.warning("Session not started: %s", e)
             await self._fail_start(str(e), missing=e.feature)  # type: ignore[attr-defined]
+        except MissingKeyError as e:
+            # Nor is a provider chosen before its key was entered.
+            logger.warning("Session not started: %s", e)
+            await self._fail_start(str(e), key_missing=True)  # type: ignore[attr-defined]
         except Exception as e:
             logger.exception("Failed to start voice channel session")
             await self._fail_start(str(e))  # type: ignore[attr-defined]
