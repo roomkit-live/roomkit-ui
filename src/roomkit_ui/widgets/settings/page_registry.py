@@ -207,6 +207,12 @@ PAGE_SPECS = (
                 (("tabs", 0),),
             ),
             SearchTarget(
+                "Join a call",
+                "call meeting Zoom Meet Teams appel réunion RoomKit Microphone",
+                "processing.join_call",
+                (("tabs", 0),),
+            ),
+            SearchTarget(
                 "Echo cancellation", "AEC écho webrtc speex", "processing.aec", (("tabs", 0),)
             ),
             SearchTarget(

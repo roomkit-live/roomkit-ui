@@ -160,6 +160,9 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, TextMix
             lambda text: self._safe_emit(self.session_notice, text),
         )
         self._mic_muted = False
+        # Join a call: the app's relay of the user's voice (set_call_relay), the call's apps.
+        self._call_relay: Any = None
+        self._call_apps: list[tuple[str, str]] = []
         self._state = EngineState.IDLE
         self._text_request: str | None = None
         self._text_images: tuple[ImageAttachment, ...] = ()
@@ -422,6 +425,31 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, TextMix
         Its lifecycle stays with the caller — the engine only subscribes.
         """
         self._capture_source = source
+
+    def set_call_relay(self, relay: Any) -> None:
+        """The ``call_mode.CallRelay`` carrying the user's voice into the call between
+        sessions. Its lifecycle stays with the caller: while it runs, a call session leaves
+        the user's voice to it."""
+        self._call_relay = relay
+
+    @property
+    def _call_relayed(self) -> bool:
+        return self._call_relay is not None and self._call_relay.running
+
+    @property
+    def in_call(self) -> bool:
+        """Whether this session joined a call (Join a call)."""
+        return bool(self._call_apps)
+
+    def _find_call(self, settings: dict) -> bool:
+        """Whether this session joins a call (``call_mode.find_call``). The relay is opened
+        for it first: the session leaves the user's voice to it once it runs."""
+        from roomkit_ui.call_mode import find_call
+
+        self._call_apps = find_call(settings)
+        if self._call_apps and self._call_relay is not None:
+            self._call_relay.poll()
+        return self.in_call
 
     async def start(
         self,
@@ -871,6 +899,7 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, TextMix
         self._kit = None
         self._transport = None
         self._backend = None
+        self._call_apps = []
         self._stt = None
         self._tts = None
         self._mcp = None

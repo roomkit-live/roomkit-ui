@@ -404,6 +404,8 @@ def main() -> None:
     dictation_log = _wire_tray_and_dictation(app, window, stt, tray)  # noqa: F841
     hotkeys = _start_hotkeys(settings, window, stt, tray)  # noqa: F841
     wake = _wire_wake_word(app, window, stt, tray, settings)  # noqa: F841
+    # The call stops hearing the user through RoomKit Microphone only when the app quits.
+    app.aboutToQuit.connect(window._call_relay.close)
     sigint_timer = _quit_on_sigint(app)  # noqa: F841
 
     with loop:

@@ -132,3 +132,27 @@ def test_theme_changes_keep_mute_and_ending_resets_it_without_an_extra_command(q
 
     composer.set_state(EngineState.ACTIVE)
     assert composer._mute_button.accessibleName() == "Mute microphone"
+
+
+def test_in_a_call_the_user_mutes_themselves_in_the_call_or_for_the_assistant(qtbot):
+    composer = ConversationComposer()
+    qtbot.addWidget(composer)
+    composer.show()
+    call_mute = []
+    composer.call_mute_toggled.connect(call_mute.append)
+    composer.set_state(EngineState.ACTIVE)
+    assert composer._call_mute_button.isHidden()  # no call: one microphone button
+
+    composer.set_in_call(True)
+    assert not composer._call_mute_button.isHidden()
+    assert composer._call_mute_button.accessibleName() == "Mute yourself in the call"
+    assert composer._mute_button.accessibleName() == "Mute microphone for the assistant"
+    composer._call_mute_button.click()
+    assert call_mute == [True]
+    assert composer._call_mute_button.accessibleName() == "Unmute yourself in the call"
+    assert not composer._mute_button.isChecked()
+
+    # The session ends: the call hears the user again, and the button goes.
+    composer.set_state(EngineState.IDLE)
+    assert call_mute == [True, False]
+    assert composer._call_mute_button.isHidden()

@@ -51,6 +51,8 @@ _DEFAULTS = {
     "denoise": "none",
     "input_device": None,
     "output_device": None,
+    # Join a call (call_mode): the app recording from RoomKit Microphone
+    "join_call": False,
     "stt_enabled": True,
     "stt_hotkey": _DEFAULT_HOTKEY,
     # The language the user speaks (General): every conversation's STT, and

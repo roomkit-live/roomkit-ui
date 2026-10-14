@@ -9,9 +9,10 @@ import os
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import QTimer, Signal
 from PySide6.QtWidgets import QMainWindow, QStackedWidget, QVBoxLayout
 
+from roomkit_ui.call_mode import CallRelay
 from roomkit_ui.engine import Engine
 from roomkit_ui.engine_state import EngineState
 from roomkit_ui.idle_hangup import IdleHangup
@@ -52,6 +53,15 @@ class MainWindow(QMainWindow):
 
         self._engine = Engine(self)
         self._stt = STTEngine(self)
+        # Join a call: the user's voice in the call, sessions or not, while a call records
+        # from RoomKit Microphone; polled, so joining or leaving the call is noticed.
+        self._call_relay = CallRelay()
+        self._engine.set_call_relay(self._call_relay)
+        self._call_relay.apply(load_settings())
+        self._call_poll = QTimer(self)
+        self._call_poll.setInterval(1000)
+        self._call_poll.timeout.connect(self._call_relay.poll)
+        self._call_poll.start()
 
         self._surface = ConversationSurface()
         central = self._surface
@@ -106,6 +116,7 @@ class MainWindow(QMainWindow):
         self._controls.stop_requested.connect(self._on_stop)
         self._controls.mute_toggled.connect(self._engine.set_mic_muted)
         self._controls.mute_toggled.connect(self._vu.set_muted)
+        self._controls.call_mute_toggled.connect(self._call_relay.set_muted)
         self._history.drawer.settings_requested.connect(self._open_settings)
 
         self._engine.state_changed.connect(self._on_state_changed)
@@ -166,6 +177,7 @@ class MainWindow(QMainWindow):
         # Built fresh on every open: without this each closed dialog stays
         # alive under the window, its pages, players and models included.
         dlg.deleteLater()
+        self._call_relay.apply(load_settings())
         self.settings_saved.emit()
 
     def _finish_text_session(self, then: Callable[[], None]) -> bool:
@@ -349,6 +361,12 @@ class MainWindow(QMainWindow):
             state not in (EngineState.IDLE, EngineState.ERROR, EngineState.READY)
         )
         text_mode = self._engine.is_text
+        self._controls.set_in_call(
+            state == EngineState.ACTIVE
+            and not text_mode
+            and self._engine.in_call
+            and self._call_relay.running
+        )
         self._controls.set_state(state, text_mode=text_mode)
         welcome_visible = state in (EngineState.IDLE, EngineState.ERROR)
         self._header.setVisible(welcome_visible)

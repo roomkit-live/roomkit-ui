@@ -31,6 +31,7 @@ class ConversationComposer(QWidget):
     send_requested = Signal(str)
     stop_requested = Signal()
     mute_toggled = Signal(bool)
+    call_mute_toggled = Signal(bool)  # Join a call: the user muted in the call alone
     dictation_requested = Signal()
     dictation_cancelled = Signal()
     draft_cleared = Signal()
@@ -45,6 +46,7 @@ class ConversationComposer(QWidget):
         self._expanded = False
         self._voice_controls = False
         self._images_unavailable = ""
+        self._in_call = False
         self._live_images_unavailable = ""
         self._dictation_unavailable = "Configure speech recognition in Settings → Dictation."
         self._dictation_state = DictationState.IDLE
@@ -99,11 +101,11 @@ class ConversationComposer(QWidget):
         self._dictation_button.clicked.connect(self.dictation_requested.emit)
         inner.addWidget(self._dictation_button, 0, Qt.AlignBottom)
 
-        self._mute_button = KeyboardButton()
-        self._mute_button.setCheckable(True)
-        self._mute_button.setFixedSize(56, 56)
-        self._mute_button.setIconSize(QSize(24, 24))
-        self._mute_button.setCursor(Qt.PointingHandCursor)
+        self._call_mute_button = self._round_toggle()
+        self._call_mute_button.toggled.connect(self._on_call_mute)
+        inner.addWidget(self._call_mute_button)
+
+        self._mute_button = self._round_toggle()
         self._mute_button.toggled.connect(self._on_mute)
         inner.addWidget(self._mute_button)
 
@@ -116,6 +118,15 @@ class ConversationComposer(QWidget):
         inner.addStretch(0)
         self._attachments.changed.connect(self._on_attachments_changed)
         bind_theme(self, self._refresh)
+
+    @staticmethod
+    def _round_toggle() -> KeyboardButton:
+        button = KeyboardButton()
+        button.setCheckable(True)
+        button.setFixedSize(56, 56)
+        button.setIconSize(QSize(24, 24))
+        button.setCursor(Qt.PointingHandCursor)
+        return button
 
     @staticmethod
     def _icon_button(name: str) -> KeyboardButton:
@@ -279,6 +290,15 @@ class ConversationComposer(QWidget):
             self._mute_button.blockSignals(True)
             self._mute_button.setChecked(False)
             self._mute_button.blockSignals(False)
+            # The call hears the user again once the session ends: no button says otherwise.
+            self._call_mute_button.setChecked(False)
+        self._refresh()
+
+    def set_in_call(self, in_call: bool) -> None:
+        """Whether this session joins a call through the app's relay: the user can then
+        mute themselves in the call alone, and the microphone button mutes them for the
+        assistant alone."""
+        self._in_call = in_call
         self._refresh()
 
     def _refresh(self) -> None:
@@ -410,23 +430,20 @@ class ConversationComposer(QWidget):
         self._mute_button.setVisible(live)
         self._mute_button.setEnabled(live)
         mute_name = "Unmute microphone" if muted else "Mute microphone"
-        self._mute_button.setAccessibleName(mute_name)
-        self._mute_button.setToolTip(mute_name)
-        self._mute_button.setIcon(
-            svg_icon(
-                "microphone-slash" if muted else "microphone",
-                c["ACCENT_RED"] if muted else c["TEXT_PRIMARY"],
-                24,
-            )
+        if self._in_call:
+            mute_name += " for the assistant"
+        self._style_toggle(
+            self._mute_button, c, mute_name, "microphone-slash" if muted else "microphone"
         )
-        self._mute_button.setStyleSheet(
-            f"QPushButton {{ background: {c['BG_SECONDARY']};"
-            f" border: 1px solid {c['BG_TERTIARY']};"
-            " border-radius: 28px; padding: 0; }"
-            f"QPushButton:hover {{ background: {c['BG_TERTIARY']}; }}"
-            f"QPushButton:checked {{ border-color: {c['ACCENT_RED']}; }}"
-            'QPushButton[keyboardFocus="true"] {'
-            f" border-color: {c['ACCENT_BRAND']}; }}"
+        in_call = live and self._in_call
+        self._call_mute_button.setVisible(in_call)
+        self._call_mute_button.setEnabled(in_call)
+        call_muted = self._call_mute_button.isChecked()
+        self._style_toggle(
+            self._call_mute_button,
+            c,
+            "Unmute yourself in the call" if call_muted else "Mute yourself in the call",
+            "phone-x-mark" if call_muted else "phone",
         )
         palette = self._input.palette()
         palette.setColor(QPalette.PlaceholderText, QColor(c["TEXT_SECONDARY"]))
@@ -462,9 +479,29 @@ class ConversationComposer(QWidget):
         if text or self.images:
             self.send_requested.emit(text)
 
+    @staticmethod
+    def _style_toggle(button: KeyboardButton, c: dict, name: str, icon: str) -> None:
+        checked = button.isChecked()
+        button.setAccessibleName(name)
+        button.setToolTip(name)
+        button.setIcon(svg_icon(icon, c["ACCENT_RED"] if checked else c["TEXT_PRIMARY"], 24))
+        button.setStyleSheet(
+            f"QPushButton {{ background: {c['BG_SECONDARY']};"
+            f" border: 1px solid {c['BG_TERTIARY']};"
+            " border-radius: 28px; padding: 0; }"
+            f"QPushButton:hover {{ background: {c['BG_TERTIARY']}; }}"
+            f"QPushButton:checked {{ border-color: {c['ACCENT_RED']}; }}"
+            'QPushButton[keyboardFocus="true"] {'
+            f" border-color: {c['ACCENT_BRAND']}; }}"
+        )
+
     def _on_mute(self, muted: bool) -> None:
         self._refresh()
         self.mute_toggled.emit(muted)
+
+    def _on_call_mute(self, muted: bool) -> None:
+        self._refresh()
+        self.call_mute_toggled.emit(muted)
 
     def _refresh_dictation(self, c: dict, blocked: bool) -> None:
         state = self._dictation_state

@@ -186,6 +186,11 @@ ignore_missing_imports = true
 module = ["AppKit"]
 ignore_missing_imports = true
 
+# Join a call: roomkit-devices is overlaid with --with-editable, no dependency yet
+[[tool.mypy.overrides]]
+module = ["roomkit_devices", "roomkit_devices.*"]
+ignore_missing_imports = true
+
 [[tool.mypy.overrides]]
 module = ["HIServices", "ApplicationServices"]
 ignore_missing_imports = true

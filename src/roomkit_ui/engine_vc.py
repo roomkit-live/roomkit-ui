@@ -17,6 +17,7 @@ from typing import Any
 
 from roomkit_ui.agent_hooks import register_agent_hooks
 from roomkit_ui.audio_tags import audio_tags_note
+from roomkit_ui.call_mode import build_call_backend, call_notice
 from roomkit_ui.engine_audio import (
     DSP_THREADS,
     VC_INPUT_SAMPLE_RATE,
@@ -171,6 +172,10 @@ class VoiceChannelMixin:
             )
             inference_device = settings.get("inference_device", "cpu")
             aec_mode = settings.get("aec_mode", "webrtc")
+            if self._find_call(settings):  # type: ignore[attr-defined]
+                # Before the providers are built; the voice never reaches the
+                # speakers, so there is no echo to cancel.
+                aec_mode = "none"
             denoise_mode = settings.get("denoise", "none")
 
             # 1-2. STT + TTS providers
@@ -205,6 +210,8 @@ class VoiceChannelMixin:
             notify_missing_denoiser(denoise_mode, denoiser, self.session_notice.emit)  # type: ignore[attr-defined]
             backend = self._build_vc_backend(settings, aec, output_sample_rate)
             self._backend = backend  # type: ignore[attr-defined]
+            if self._call_apps:
+                self.session_notice.emit(call_notice(self._call_apps))  # type: ignore[attr-defined]
             log_vc_audio_pipeline(aec, denoiser, input_sample_rate, output_sample_rate)
 
             # 6. VAD, diarization, interruption, turn detector → the pipeline
@@ -436,7 +443,18 @@ class VoiceChannelMixin:
 
         Subscribed to the shared source, the session can replay what was
         said before it existed — the request that followed the wake word.
+        Joining a call, the call's backend instead (``call_mode``).
         """
+        if self._call_apps:
+            return build_call_backend(
+                settings,
+                self._call_apps,
+                relayed=self._call_relayed,
+                input_sample_rate=VC_INPUT_SAMPLE_RATE,
+                output_sample_rate=output_sample_rate,
+                block_duration_ms=_BLOCK_MS,
+                source=usable_capture_source(self._capture_source, VC_INPUT_SAMPLE_RATE),
+            )
         return local_audio_backend(
             input_sample_rate=VC_INPUT_SAMPLE_RATE,
             output_sample_rate=output_sample_rate,

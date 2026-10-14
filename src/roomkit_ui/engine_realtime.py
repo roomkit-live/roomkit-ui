@@ -17,6 +17,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from roomkit_ui.call_mode import build_call_backend, call_notice
 from roomkit_ui.engine_audio import (
     DSP_THREADS,
     build_audio_processing,
@@ -94,7 +95,10 @@ class RealtimeMixin:
             # agent speaks, so there is no echo to cancel — no AEC, and its
             # absence arms the playback gate (see _build_realtime_media).
             aec_mode = settings.get("aec_mode", "webrtc")
-            if deepgram_half_duplex(provider_name, settings):
+            if self._find_call(settings):  # type: ignore[attr-defined]
+                # The voice goes into the call, never the speakers: no echo to cancel.
+                aec_mode = "none"
+            elif deepgram_half_duplex(provider_name, settings):
                 logger.info("Deepgram half-duplex: mic muted during playback, AEC skipped")
                 aec_mode = "none"
             denoise_mode = settings.get("denoise", "none")
@@ -114,6 +118,8 @@ class RealtimeMixin:
             # Built before the tools: a missing key fails before MCP connects.
             media = build_media()
             notify_missing_aec(aec_mode, media.aec, self.session_notice.emit)  # type: ignore[attr-defined]
+            if self._call_apps:
+                self.session_notice.emit(call_notice(self._call_apps))  # type: ignore[attr-defined]
 
             # -- MCP tools -------------------------------------------------------
             if has_enabled_mcp_servers(settings.get("mcp_servers", "[]")):
@@ -228,17 +234,29 @@ class RealtimeMixin:
         # realtime_voice_local_openai_live.py), where NATIVE_AEC correctly
         # makes the pipeline skip its own stage.  No AEC at all arms the
         # playback gate (half-duplex).
-        transport = LocalAudioBackend(
-            input_sample_rate=sample_rate,
-            output_sample_rate=sample_rate,
-            block_duration_ms=_BLOCK_MS,
-            mute_mic_during_playback=aec is None,
-            rt_prebuffer_ms=prebuffer_ms,
-            input_device=settings.get("input_device"),
-            output_device=settings.get("output_device"),
-            aec=transport_aec,
-            source=usable_capture_source(getattr(self, "_capture_source", None), sample_rate),
-        )
+        source = usable_capture_source(getattr(self, "_capture_source", None), sample_rate)
+        if self._call_apps:
+            transport = build_call_backend(
+                settings,
+                self._call_apps,
+                relayed=self._call_relayed,
+                input_sample_rate=sample_rate,
+                output_sample_rate=sample_rate,
+                block_duration_ms=_BLOCK_MS,
+                source=source,
+            )
+        else:
+            transport = LocalAudioBackend(
+                input_sample_rate=sample_rate,
+                output_sample_rate=sample_rate,
+                block_duration_ms=_BLOCK_MS,
+                mute_mic_during_playback=aec is None,
+                rt_prebuffer_ms=prebuffer_ms,
+                input_device=settings.get("input_device"),
+                output_device=settings.get("output_device"),
+                aec=transport_aec,
+                source=source,
+            )
         self._transport = transport
         # A mute pressed while connecting reaches the session once its
         # capture is live; the channel creates the session in start_session.

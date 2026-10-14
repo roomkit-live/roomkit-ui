@@ -12,6 +12,16 @@ Each released section is the source for that version's GitHub release notes.
 ## [Unreleased]
 
 ### Added
+- **Join a call** (preview, macOS, Settings → Audio & voice → Devices) — with
+  roomkit-devices and its RoomKit Microphone driver (not published yet: a run overlays
+  its checkout), choose RoomKit Microphone as the microphone in a call app: Live then
+  joins that call. The assistant hears the call and you, speaks into it, and you hear it
+  too. Your voice is relayed into the call while it uses RoomKit Microphone, Live or
+  not; without a call, Live is a conversation here as usual. The microphone button mutes
+  you for the assistant only, and a call button mutes you in the call only, the
+  assistant still speaking there. Off by default, and greyed out without
+  roomkit-devices; RoomKit Microphone never shows among the app's own microphones. Wear
+  headphones: on speakers, the call hears the assistant twice.
 - **A role for the speaking decision, and what it is asked** (Voice Channel → Agent) —
   the Role says what the assistant is there for and for whom; the model deciding when it
   speaks (Jev, OpenAI or the conversation model) reads it with every turn. "What it is

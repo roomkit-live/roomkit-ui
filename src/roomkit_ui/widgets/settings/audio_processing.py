@@ -10,8 +10,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from roomkit_ui.call_mode import unavailable_reason, virtual_microphone_name
 from roomkit_ui.features import TURN_DETECTOR_FEATURES
-from roomkit_ui.widgets.settings.controls import AdvancedSection, SettingsForm, SettingsSection
+from roomkit_ui.widgets.settings.controls import (
+    AdvancedSection,
+    SettingsForm,
+    SettingsSection,
+    SettingsToggle,
+)
 from roomkit_ui.widgets.settings.feature_hints import offer_install, populate_provider_combo
 
 _TURN_HINT = (
@@ -38,11 +44,13 @@ def _list_audio_devices() -> tuple[list[tuple[int, str]], list[tuple[int, str]]]
         import sounddevice as sd
 
         devices = sd.query_devices()
+        # The assistant speaks into RoomKit Microphone: listening to it, it hears itself.
+        virtual = virtual_microphone_name()
         inputs: list[tuple[int, str]] = []
         outputs: list[tuple[int, str]] = []
         for i, d in enumerate(devices):
             name = d["name"]
-            if d["max_input_channels"] > 0:
+            if d["max_input_channels"] > 0 and name != virtual:
                 inputs.append((i, name))
             if d["max_output_channels"] > 0:
                 outputs.append((i, name))
@@ -98,6 +106,7 @@ class AudioSettings(QWidget):
             if saved is not None and combo.findData(saved) < 0:
                 combo.addItem(f"Device {saved} (unavailable)", saved)
                 combo.setCurrentIndex(combo.count() - 1)
+        self._add_call_row(devices_section, settings)
 
         processing = SettingsSection(
             "Processing", "Echo cancellation and voice detection for clearer conversations."
@@ -195,6 +204,20 @@ class AudioSettings(QWidget):
         self._on_device_changed(self.inference_device.currentIndex())
 
         self.refresh_models(settings.get("vc_vad_model", ""), settings.get("vc_turn_detector", ""))
+
+    def _add_call_row(self, section: SettingsSection, settings: dict) -> None:
+        """Join a call: the app recording from RoomKit Microphone, when one does. Stays
+        switchable off when the mode is unavailable."""
+        self.join_call = SettingsToggle("Join a call", bool(settings.get("join_call")))
+        reason = unavailable_reason()
+        self.join_call.setEnabled(reason is None or self.join_call.isChecked())
+        description = reason or (
+            "In a call that uses RoomKit Microphone as its microphone, Live joins it: the "
+            "assistant hears the call and you, and speaks into it. Without a call, Live is a "
+            "conversation here. Your microphone is relayed into the call while it uses "
+            "RoomKit Microphone."
+        )
+        section.add_row("Join a call", description, self.join_call)
 
     def refresh_models(self, vad: str | None = None, turn: str | None = None) -> None:
         from roomkit_ui.model_manager import (
@@ -311,4 +334,5 @@ class AudioSettings(QWidget):
             "inference_device": self._inference_providers[self.inference_device.currentIndex()][1],
             "input_device": self.input_combo.currentData(),
             "output_device": self.output_combo.currentData(),
+            "join_call": self.join_call.isChecked(),
         }
