@@ -11,6 +11,8 @@ Each released section is the source for that version's GitHub release notes.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-13
+
 ### Added
 - **Join a call** (preview, macOS, Settings → Audio & voice → Devices) — with
   roomkit-devices and its RoomKit Microphone driver (not published yet: a run overlays
@@ -853,7 +855,8 @@ Each released section is the source for that version's GitHub release notes.
 - Initial release: RoomKit UI desktop voice assistant, with a cross-platform build
   script and a GitHub Actions workflow.
 
-[Unreleased]: https://github.com/roomkit-live/roomkit-ui/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/roomkit-live/roomkit-ui/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/roomkit-live/roomkit-ui/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/roomkit-live/roomkit-ui/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/roomkit-live/roomkit-ui/compare/v0.1.6...v0.2.0
 [0.1.6]: https://github.com/roomkit-live/roomkit-ui/compare/v0.1.5...v0.1.6
