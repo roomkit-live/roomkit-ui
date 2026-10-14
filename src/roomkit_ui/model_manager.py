@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import ctypes
+import dataclasses
 import sys
 
 # Names marked "noqa: F401" are re-exports: every symbol previously defined
@@ -122,8 +123,7 @@ def build_stt_config(
     # Offline-only transducers need model_type set so the provider knows
     # they don't support streaming (uses OfflineRecognizer instead).
     model_type = "nemo_transducer" if m.type == "offline" else ""
-    padding = {} if m.tail_padding_s is None else {"tail_padding_s": m.tail_padding_s}
-    return SherpaOnnxSTTConfig(
+    config = SherpaOnnxSTTConfig(
         mode="transducer",
         encoder=str(d / m.files[0]),
         decoder=str(d / m.files[1]),
@@ -132,8 +132,10 @@ def build_stt_config(
         language=language or "en",
         model_type=model_type,
         provider=provider,
-        **padding,
     )
+    if m.tail_padding_s is None:
+        return config
+    return dataclasses.replace(config, tail_padding_s=m.tail_padding_s)
 
 
 async def download_model(
