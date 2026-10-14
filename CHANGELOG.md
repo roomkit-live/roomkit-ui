@@ -49,6 +49,11 @@ Each released section is the source for that version's GitHub release notes.
   reopen a conversation still covers that conversation only.
 
 ### Fixed
+- **Vui starts on a machine with the system's cuDNN** — with torch 2.13 and its cuDNN
+  9.20, which lacks one engine library, cuDNN loaded that library from a system install
+  (9.27, as the sherpa-onnx CUDA guide sets up) and Vui failed with
+  `CUDNN_STATUS_SUBLIBRARY_VERSION_MISMATCH`. The lock moves to torch 2.14.1, whose
+  cuDNN 9.24 carries it.
 - **Components installed from the app survive `uv tool upgrade`** — in a uv tool install
   they were added with `uv pip install`, outside the tool's receipt, and the next upgrade
   removed them. They now go through `uv tool install`, so the receipt records them.
