@@ -21,6 +21,33 @@ This README and the screenshots describe the current `main` branch. Features und
 **Unreleased** in the changelog are coming in the next release; use a source checkout
 to try them today.
 
+## Install with uv (recommended)
+
+For now, the recommended install is [uv](https://docs.astral.sh/uv/)'s tool installer:
+RoomKit UI gets an environment of its own and a `roomkit-ui` command on your PATH, on
+macOS, Linux and Windows alike.
+
+```bash
+uv tool install --python 3.12 "roomkit-ui[all]"
+roomkit-ui
+```
+
+- `[all]` brings every AI backend. Without it you get the core alone (the window, the
+  microphone pipeline, MCP and CLI tools), and add the backends you use, for example
+  `"roomkit-ui[anthropic,meta-stt,elevenlabs]"`; `roomkit-ui --doctor` lists what this
+  install carries.
+- Four extras stay out of `all`: `qwen3-tts`, `neutts` and `smart-turn` pin conflicting
+  `transformers` versions, so take at most one of them (`"roomkit-ui[all,smart-turn]"`),
+  and `pocket-tts` pulls in torch.
+- Upgrade with `uv tool upgrade roomkit-ui`, remove with `uv tool uninstall roomkit-ui`.
+  A backend the app installed itself (Settings → Models & components → Components) is
+  not kept by an upgrade: name it in `uv tool install` instead, and it stays.
+- To try the `main` branch before it is released:
+  `uv tool install --python 3.12 "roomkit-ui[all] @ git+https://github.com/roomkit-live/roomkit-ui"`.
+- On macOS, the microphone permission goes to the terminal you start `roomkit-ui` from.
+
+Each release tag publishes the package to [PyPI](https://pypi.org/project/roomkit-ui/).
+
 ## Download
 
 Pre-built binaries are available for macOS, Linux, and Windows on the [Releases](https://github.com/roomkit-live/roomkit-ui/releases) page.
