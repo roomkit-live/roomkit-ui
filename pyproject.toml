@@ -192,6 +192,11 @@ ignore_missing_imports = true
 module = ["AppKit"]
 ignore_missing_imports = true
 
+# Only the vui and pocket-tts extras bring it (tts_weights fetches their weights).
+[[tool.mypy.overrides]]
+module = ["huggingface_hub", "huggingface_hub.*"]
+ignore_missing_imports = true
+
 # Join a call: roomkit-devices is overlaid with --with-editable, no dependency yet
 [[tool.mypy.overrides]]
 module = ["roomkit_devices", "roomkit_devices.*"]
