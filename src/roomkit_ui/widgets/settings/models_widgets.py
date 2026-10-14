@@ -39,8 +39,11 @@ class _ModelRow(QWidget):
         actions.addWidget(label(model.size, "settingsHint"))
         # A second, lasting fact beside the size (whether it fits this computer).
         self.badge = StatusBadge()
-        self.badge.setVisible(badge is not None)
-        if badge is not None:
+        # Hide only: its layout has no widget yet, and showing a parentless
+        # widget opens it as a window of its own (a flash on Windows).
+        if badge is None:
+            self.badge.hide()
+        else:
             self.badge.set_status(*badge)
         actions.addWidget(self.badge)
         actions.addStretch(1)

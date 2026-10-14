@@ -5,7 +5,7 @@ import sys
 
 import pytest
 import shiboken6
-from PySide6.QtWidgets import QApplication, QComboBox
+from PySide6.QtWidgets import QApplication, QComboBox, QVBoxLayout, QWidget
 
 from roomkit_ui import component_installer as ci
 from roomkit_ui import features
@@ -45,8 +45,10 @@ def _combo() -> QComboBox:
 
 
 def test_the_offer_shows_only_while_a_missing_provider_is_picked(gemini_missing):
+    page = QWidget()
     combo = _combo()
     offer = offer_install(combo, ENTRIES, FEATURE_MAP)
+    QVBoxLayout(page).addWidget(offer)
     try:
         assert offer.isHidden()  # Anthropic is installed
 
@@ -56,7 +58,24 @@ def test_the_offer_shows_only_while_a_missing_provider_is_picked(gemini_missing)
         assert offer._label.text() == "Google Gemini is not installed."
         assert offer._button.text() == "Install"
     finally:
-        shiboken6.delete(offer)
+        shiboken6.delete(page)
+        shiboken6.delete(combo)
+
+
+def test_an_offer_waits_for_its_layout_to_show(gemini_missing, window_shows):
+    combo = _combo()
+    combo.setCurrentIndex(1)
+    page = QWidget()
+    offer = offer_install(combo, ENTRIES, FEATURE_MAP)  # built hidden, then shown
+    try:
+        assert window_shows == []
+
+        QVBoxLayout(page).addWidget(offer)
+
+        assert offer.isVisibleTo(page)
+        assert window_shows == []
+    finally:
+        shiboken6.delete(page)
         shiboken6.delete(combo)
 
 

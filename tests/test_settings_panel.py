@@ -7,6 +7,7 @@ from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QLabel
 
 import roomkit_ui.widgets.settings.panel as panel_mod
+from roomkit_ui import features
 from roomkit_ui.settings import _SECRET_KEYS, load_settings, save_settings
 from roomkit_ui.widgets.settings.page_registry import PAGE_SPECS
 from roomkit_ui.widgets.settings.panel import SettingsPanel
@@ -40,6 +41,13 @@ def test_every_sidebar_label_has_a_page(panel):
     keys = [panel._sidebar.item(i).data(Qt.UserRole) for i in range(panel._sidebar.count())]
     assert [key for key in keys if key] == [spec.key for spec in PAGE_SPECS]
     assert panel._stack.count() == len(panel._pages)
+
+
+def test_building_settings_opens_no_window_of_its_own(open_panel, monkeypatch, window_shows):
+    # Every component missing: each provider combo shows its install offer.
+    monkeypatch.setattr(features, "missing_modules", lambda _key: ("absent",))
+    open_panel()
+    assert window_shows == []
 
 
 def test_integrations_groups_skills_servers_and_cli_tools(panel):

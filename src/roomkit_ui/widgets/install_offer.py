@@ -8,7 +8,7 @@ show the same install running.
 
 from __future__ import annotations
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import QEvent, Signal
 from PySide6.QtWidgets import QApplication, QHBoxLayout, QLabel, QPushButton, QWidget
 
 from roomkit_ui.component_installer import installer
@@ -35,6 +35,7 @@ class InstallOffer(QWidget):
         installer's message once the component is in ("Start the session again.")."""
         super().__init__(parent)
         self._component: Component | None = None
+        self._shown = False
         self._text = ""
         self._done_hint = done_hint
         layout = QHBoxLayout(self)
@@ -70,9 +71,25 @@ class InstallOffer(QWidget):
         self._text = text or (f"{FEATURES[feature].label} is not installed." if feature else "")
         self._show()
 
+    def _set_shown(self, shown: bool) -> None:
+        """setVisible, except that an offer not yet in a layout never opens as a window.
+
+        Callers build the offer before placing it, and showing a parentless
+        widget opens it as a window of its own (a flash on Windows): the
+        state waits for its parent (changeEvent).
+        """
+        self._shown = shown
+        if self.parentWidget() is not None or not shown:
+            self.setVisible(shown)
+
+    def changeEvent(self, event: QEvent) -> None:  # noqa: N802
+        if event.type() == QEvent.Type.ParentChange and self.parentWidget() is not None:
+            self.setVisible(self._shown)
+        super().changeEvent(event)
+
     def _show(self) -> None:
         component = self._component
-        self.setVisible(component is not None)
+        self._set_shown(component is not None)
         if component is None:
             return
         plan = install_plan(component)
@@ -115,7 +132,7 @@ class InstallOffer(QWidget):
             return
         if ok and component.installed():
             self._component = None
-            self.setVisible(True)
+            self._set_shown(True)
             self._label.setText(f"{message} {self._done_hint}".strip())
             self._button.setVisible(False)
             self.installed.emit(extra)

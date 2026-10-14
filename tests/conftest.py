@@ -1,7 +1,8 @@
 """Shared fixtures: isolated QSettings so tests never touch real user config."""
 
 import pytest
-from PySide6.QtCore import QCoreApplication, QSettings
+from PySide6.QtCore import QCoreApplication, QEvent, QObject, QSettings
+from PySide6.QtWidgets import QWidget
 
 from roomkit_ui.secret_store import (
     SecretStore,
@@ -50,3 +51,31 @@ class InlineJobs:
 @pytest.fixture
 def inline_jobs():
     return InlineJobs()
+
+
+class _WindowShows(QObject):
+    def __init__(self) -> None:
+        super().__init__()
+        self.shown: list[str] = []
+
+    def eventFilter(self, watched, event) -> bool:  # noqa: N802
+        if (
+            event.type() == QEvent.Type.Show
+            and isinstance(watched, QWidget)
+            and watched.isWindow()
+        ):
+            self.shown.append(type(watched).__name__)
+        return False
+
+
+@pytest.fixture
+def window_shows(qapp):
+    """Names of the widgets shown as windows of their own while the test runs.
+
+    A widget made visible before it has a parent opens as a window: on
+    Windows each one flashes on screen.
+    """
+    spy = _WindowShows()
+    qapp.installEventFilter(spy)
+    yield spy.shown
+    qapp.removeEventFilter(spy)
