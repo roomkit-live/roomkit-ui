@@ -182,6 +182,15 @@ def model_groups() -> tuple[ModelGroup, ...]:
                     models.delete_gtcrn,
                 ),
                 LibraryModel(
+                    models.DPDFNET_MODEL_ID,
+                    "DPDFNet",
+                    "Noise reduction · Voice Channel",
+                    models.DPDFNET_SIZE,
+                    models.is_dpdfnet_downloaded,
+                    models.download_dpdfnet,
+                    models.delete_dpdfnet,
+                ),
+                LibraryModel(
                     models.SMART_TURN_MODEL_ID,
                     "Smart Turn v3.2",
                     "Turn completion · CPU, int8",

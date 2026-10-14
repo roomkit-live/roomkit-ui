@@ -12,6 +12,12 @@ Each released section is the source for that version's GitHub release notes.
 ## [Unreleased]
 
 ### Added
+- **DPDFNet noise reduction** (Audio & voice → Denoise, Voice Channel) — a streaming
+  speech enhancer that removes more noise than GTCRN: on speech mixed with recorded noise
+  it scored 10.8 dB SI-SDR against GTCRN's 7.3 dB, for 2.4 ms of CPU per 20 ms of audio.
+  Its output trails the microphone by 50 ms. Download it once in Models & components
+  (10 MB, checked against the sha256 GitHub publishes). RoomKit UI now requires roomkit
+  0.103.
 - **Nemotron 3.5 Streaming** (Models & components → Transcription) — NVIDIA's multilingual
   streaming model (35 languages, French and English included), sherpa-onnx's int8 export
   with 560 ms chunks. It finds the language itself and transcribes while you speak, about

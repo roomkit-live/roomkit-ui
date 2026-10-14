@@ -14,6 +14,8 @@ from roomkit_ui.model_catalog import (
     _SPEAKER_MODELS_BY_ID,
     _TTS_MODELS_BY_ID,
     _VAD_MODELS_BY_ID,
+    DPDFNET_MODEL_ID,  # noqa: F401
+    DPDFNET_SIZE,  # noqa: F401
     GTCRN_MODEL_ID,  # noqa: F401
     GTCRN_SIZE,  # noqa: F401
     GTCRN_URL,  # noqa: F401
@@ -28,6 +30,7 @@ from roomkit_ui.model_catalog import (
     STTModel,  # noqa: F401
     TTSModel,  # noqa: F401
     VADModel,  # noqa: F401
+    delete_dpdfnet,  # noqa: F401
     delete_espeak_ng_data,  # noqa: F401
     delete_gtcrn,  # noqa: F401
     delete_model,  # noqa: F401
@@ -35,9 +38,11 @@ from roomkit_ui.model_catalog import (
     delete_speaker_model,  # noqa: F401
     delete_tts_model,  # noqa: F401
     delete_vad_model,  # noqa: F401
+    dpdfnet_model_path,  # noqa: F401
     espeak_ng_data_path,
     get_models_dir,  # noqa: F401
     gtcrn_model_path,  # noqa: F401
+    is_dpdfnet_downloaded,  # noqa: F401
     is_espeak_ng_downloaded,  # noqa: F401
     is_gtcrn_downloaded,  # noqa: F401
     is_model_downloaded,  # noqa: F401
@@ -53,6 +58,7 @@ from roomkit_ui.model_catalog import (
 )
 from roomkit_ui.model_download import (
     ProgressCallback,
+    _download_dpdfnet_sync,
     _download_espeak_ng_sync,
     _download_file,  # noqa: F401
     _download_gtcrn_sync,
@@ -149,6 +155,11 @@ async def download_model(
 async def download_gtcrn(progress: ProgressCallback | None = None) -> None:
     """Download the GTCRN model in a background thread."""
     await asyncio.to_thread(_download_gtcrn_sync, progress)
+
+
+async def download_dpdfnet(progress: ProgressCallback | None = None) -> None:
+    """Download the DPDFNet model in a background thread."""
+    await asyncio.to_thread(_download_dpdfnet_sync, progress)
 
 
 async def download_vad_model(

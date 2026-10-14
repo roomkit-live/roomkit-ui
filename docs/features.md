@@ -21,7 +21,7 @@ system context in [architecture.md](architecture.md).
 
 Both modes share: echo cancellation (WebRTC/Speex), barge-in interruption, optional WAV
 recording, MCP + CLI + built-in tools, skills, attitudes, conversation memory, and the
-wake word. Voice Channel only: noise suppression (RNNoise/GTCRN), VAD (TEN/Silero),
+wake word. Voice Channel only: noise suppression (RNNoise/GTCRN/DPDFNet), VAD (TEN/Silero),
 speaker diarization, the Smart Turn detector, barge-in modes and TTS filtering. A
 realtime session started with diarization enabled runs without it and says so in the chat.
 
@@ -404,7 +404,7 @@ offers Save image…. The file is the image as the chat keeps it (PNG or JPEG).
 
 Settings → Models & components → Local models manages local models: STT (Whisper, Parakeet, Zipformer,
 Kroko FR and EN, Nemotron 3.5 streaming in 35 languages), TTS (3 Piper French voices, espeak-ng data), VAD (TEN, Silero), speaker
-embeddings (TitaNet, WeSpeaker, CAM++), GTCRN denoiser, Smart Turn v3.2 and the wake-word
+embeddings (TitaNet, WeSpeaker, CAM++), GTCRN and DPDFNet denoisers, Smart Turn v3.2 and the wake-word
 encoder. Vui's weights (model, codec, four voices; and the speaker encoder it clones a clip
 with) and Pocket TTS's (the model and voice of the saved language) download here too,
 into the Hugging Face cache those libraries read, so a session no longer fetches

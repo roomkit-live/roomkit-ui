@@ -277,10 +277,14 @@ def notify_missing_aec(aec_mode: str, aec: Any, emit_notice: Any) -> None:
     )
 
 
+# Denoise modes sherpa-onnx runs, by roomkit's model_type: the mode's own name.
+_SHERPA_DENOISERS = {"gtcrn": "GTCRN", "dpdfnet": "DPDFNet"}
+
+
 def notify_missing_denoiser(denoise_mode: str, denoiser: Any, emit_notice: Any) -> None:
-    """Say in the chat when the GTCRN denoiser is off for want of sherpa-onnx:
-    the session runs without noise suppression, and the user chose some."""
-    reason = unavailable_reason("local-voice") if denoise_mode == "gtcrn" else None
+    """Say in the chat when GTCRN or DPDFNet is off for want of sherpa-onnx: the
+    session runs without noise suppression, and the user chose some."""
+    reason = unavailable_reason("local-voice") if denoise_mode in _SHERPA_DENOISERS else None
     if denoiser is None and reason is not None:
         emit_notice(f"No noise suppression this session: {reason}")
 
@@ -301,25 +305,37 @@ def build_denoiser(denoise_mode: str, sample_rate: int) -> Any:
             return RNNoiseDenoiserProvider(sample_rate=sample_rate)
         except ImportError:
             logger.warning("RNNoise denoiser not available")
-    elif denoise_mode == "gtcrn":
-        from roomkit_ui.model_manager import gtcrn_model_path, is_gtcrn_downloaded
-
-        reason = unavailable_reason("local-voice")
-        if reason is not None:
-            # The model runs on sherpa-onnx (notify_missing_denoiser says so).
-            logger.warning("GTCRN denoiser off: %s", reason)
-            return None
-        if is_gtcrn_downloaded():
-            from roomkit.voice.pipeline.denoiser.sherpa_onnx import (
-                SherpaOnnxDenoiserConfig,
-                SherpaOnnxDenoiserProvider,
-            )
-
-            return SherpaOnnxDenoiserProvider(
-                SherpaOnnxDenoiserConfig(model=str(gtcrn_model_path()))
-            )
-        logger.warning("GTCRN model not downloaded — denoiser disabled")
+    elif denoise_mode in _SHERPA_DENOISERS:
+        return _sherpa_denoiser(denoise_mode)
     return None
+
+
+def _sherpa_denoiser(model_type: str) -> Any:
+    """GTCRN or DPDFNet on sherpa-onnx, from the model file the app downloads.
+
+    The file follows from the mode, so the model_type roomkit loads it as always
+    matches the model: sherpa-onnx ends the process on a mismatch.
+    """
+    from roomkit_ui.model_manager import dpdfnet_model_path, gtcrn_model_path
+
+    label = _SHERPA_DENOISERS[model_type]
+    reason = unavailable_reason("local-voice")
+    if reason is not None:
+        # The model runs on sherpa-onnx (notify_missing_denoiser says so).
+        logger.warning("%s denoiser off: %s", label, reason)
+        return None
+    path = dpdfnet_model_path() if model_type == "dpdfnet" else gtcrn_model_path()
+    if not path.is_file():
+        logger.warning("%s model not downloaded — denoiser disabled", label)
+        return None
+    from roomkit.voice.pipeline.denoiser.sherpa_onnx import (
+        SherpaOnnxDenoiserConfig,
+        SherpaOnnxDenoiserProvider,
+    )
+
+    return SherpaOnnxDenoiserProvider(
+        SherpaOnnxDenoiserConfig(model_type=model_type, model=str(path))
+    )
 
 
 # ---------------------------------------------------------------------------

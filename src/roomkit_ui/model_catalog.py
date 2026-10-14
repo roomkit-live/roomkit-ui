@@ -178,6 +178,36 @@ def delete_gtcrn() -> None:
 
 
 # ---------------------------------------------------------------------------
+# DPDFNet denoiser model (the same sherpa-onnx release as GTCRN)
+# ---------------------------------------------------------------------------
+
+DPDFNET_MODEL_ID = "dpdfnet2-denoiser"
+DPDFNET_URL = "https://github.com/k2-fsa/sherpa-onnx/releases/download/speech-enhancement-models/dpdfnet2.onnx"
+# The sha256 GitHub publishes for the asset, checked against the file itself.
+# dpdfnet2 is the 16 kHz model: the Voice Channel's input rate.
+DPDFNET_SHA256 = "ce35d6025fc71df0ef10d1540e1b7916837bbfe5f6896deb744508d2cad487a9"
+DPDFNET_SIZE = "~10 MB"
+_DPDFNET_FILENAME = "dpdfnet2.onnx"
+
+
+def dpdfnet_model_path() -> Path:
+    """Return the path to the DPDFNet ONNX model file."""
+    return get_models_dir() / DPDFNET_MODEL_ID / _DPDFNET_FILENAME
+
+
+def is_dpdfnet_downloaded() -> bool:
+    """Check whether the DPDFNet model file exists."""
+    return dpdfnet_model_path().is_file()
+
+
+def delete_dpdfnet() -> None:
+    """Remove the DPDFNet model directory."""
+    d = get_models_dir() / DPDFNET_MODEL_ID
+    if d.exists():
+        shutil.rmtree(d)
+
+
+# ---------------------------------------------------------------------------
 # Wake word encoder (whisper-tiny's encoder alone)
 # ---------------------------------------------------------------------------
 # Only the encoder: it turns a speech segment into a comparable acoustic

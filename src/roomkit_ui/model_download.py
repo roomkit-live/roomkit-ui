@@ -15,6 +15,7 @@ from typing import Any
 
 from roomkit_ui.download_flight import single_flight
 from roomkit_ui.model_catalog import (
+    _DPDFNET_FILENAME,
     _GTCRN_FILENAME,
     _MODELS_BY_ID,
     _SMART_TURN_FILENAME,
@@ -24,6 +25,9 @@ from roomkit_ui.model_catalog import (
     _TTS_MODELS_BY_ID,
     _VAD_MODELS_BY_ID,
     _VAD_REPO_PATHS,
+    DPDFNET_MODEL_ID,
+    DPDFNET_SHA256,
+    DPDFNET_URL,
     ESPEAK_NG_INCOMPLETE_MARKER,
     GTCRN_MODEL_ID,
     GTCRN_SHA256,
@@ -254,6 +258,17 @@ def _download_gtcrn_sync(progress: ProgressCallback | None = None) -> None:
     if target.is_file():
         return
     _download_sized(GTCRN_URL, target, progress, expected_sha256=GTCRN_SHA256)
+
+
+@single_flight
+def _download_dpdfnet_sync(progress: ProgressCallback | None = None) -> None:
+    """Download the DPDFNet ONNX model (blocking)."""
+    dest = get_models_dir() / DPDFNET_MODEL_ID
+    dest.mkdir(parents=True, exist_ok=True)
+    target = dest / _DPDFNET_FILENAME
+    if target.is_file():
+        return
+    _download_sized(DPDFNET_URL, target, progress, expected_sha256=DPDFNET_SHA256)
 
 
 @single_flight

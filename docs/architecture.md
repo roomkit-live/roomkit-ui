@@ -308,9 +308,8 @@ match the project version (see [technical.md — Testing](technical.md#testing-s
 - **Session recordings** are plain WAV files in a folder the user picks; the settings say they are not encrypted.
 - Input boundaries: tool arguments arrive as JSON and are passed to MCP servers verbatim; built-in tools validate their own inputs.
 
-Known gaps (documented honestly): GitHub release-asset models (GTCRN, speaker embeddings)
-publish no digest and are only checked against their size; MCP stdio servers and CLI tools
-run with the user's full trust. See [technical.md — Technical debt](technical.md#known-technical-debt).
+Known gaps (documented honestly): MCP stdio servers and CLI tools run with the user's full
+trust. See [technical.md — Technical debt](technical.md#known-technical-debt).
 
 ## Scalability considerations & current limits
 

@@ -3981,15 +3981,15 @@ wheels = [
 
 [[package]]
 name = "roomkit"
-version = "0.102.0"
+version = "0.103.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic" },
     { name = "pyyaml" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/8c/ce/ff620adad74e7aa70e7eafcbb86072abf907f47f35edd4ce95ac65e2f1cd/roomkit-0.102.0.tar.gz", hash = "sha256:2d3901f46df47f910fdb7ac6b0cdc80d3ff2af55e22508896ec6af1148f8668a", size = 4463132, upload-time = "2026-10-14T15:18:17.901Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a8/6b/b7a29f28dcd7586ea60e28798dbcc24fb4d4c01a5be187c2cc8abefc4e0f/roomkit-0.103.0.tar.gz", hash = "sha256:d20ab20a720b7afd19e8ec454295364faff16950d450dc71aadb32c567c55230", size = 4479684, upload-time = "2026-10-14T18:27:18.35Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/97/76/d6033072137e28a90427c8f730f14336bda97796f9005a929d233cc32de4/roomkit-0.102.0-py3-none-any.whl", hash = "sha256:1b7cbecab7015dd881e8f3295bc166aa494bab3344bf46a9c5de83f07a2b327c", size = 2828757, upload-time = "2026-10-14T15:18:15.485Z" },
+    { url = "https://files.pythonhosted.org/packages/d0/84/a8e7c62096541341aeb70bfbfd8d30b6c09cc450a3247a6195093729e85d/roomkit-0.103.0-py3-none-any.whl", hash = "sha256:16f19845e74ea798874171b922ccc3117487f7c5705661d00816fe3c46ed89fe", size = 2834890, upload-time = "2026-10-14T18:27:15.967Z" },
 ]
 
 [package.optional-dependencies]
@@ -4207,23 +4207,23 @@ requires-dist = [
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24" },
     { name = "pytest-qt", marker = "extra == 'dev'", specifier = ">=4.4" },
     { name = "qasync", specifier = ">=0.27" },
-    { name = "roomkit", extras = ["anthropic"], marker = "extra == 'anthropic'", specifier = ">=0.102.0" },
-    { name = "roomkit", extras = ["azure-speech"], marker = "extra == 'azure-speech'", specifier = ">=0.102.0" },
-    { name = "roomkit", extras = ["deepgram", "realtime-deepgram"], marker = "extra == 'deepgram'", specifier = ">=0.102.0" },
-    { name = "roomkit", extras = ["elevenlabs", "realtime-elevenlabs"], marker = "extra == 'elevenlabs'", specifier = ">=0.102.0" },
-    { name = "roomkit", extras = ["gemini", "realtime-gemini"], marker = "extra == 'gemini'", specifier = ">=0.102.0" },
-    { name = "roomkit", extras = ["gradium"], marker = "extra == 'gradium'", specifier = ">=0.102.0" },
-    { name = "roomkit", extras = ["llamacpp"], marker = "extra == 'llamacpp'", specifier = ">=0.102.0" },
-    { name = "roomkit", extras = ["local-audio", "webrtc-aec"], specifier = ">=0.102.0" },
-    { name = "roomkit", extras = ["meta-stt"], marker = "extra == 'meta-stt'", specifier = ">=0.102.0" },
-    { name = "roomkit", extras = ["neutts"], marker = "extra == 'neutts'", specifier = ">=0.102.0" },
-    { name = "roomkit", extras = ["openai", "realtime-openai"], marker = "extra == 'openai'", specifier = ">=0.102.0" },
-    { name = "roomkit", extras = ["pocket-tts"], marker = "extra == 'pocket-tts'", specifier = ">=0.102.0" },
-    { name = "roomkit", extras = ["qwen-tts"], marker = "extra == 'qwen3-tts'", specifier = ">=0.102.0" },
-    { name = "roomkit", extras = ["sherpa-onnx"], marker = "extra == 'local-voice'", specifier = ">=0.102.0" },
-    { name = "roomkit", extras = ["smart-turn"], marker = "extra == 'smart-turn'", specifier = ">=0.102.0" },
-    { name = "roomkit", extras = ["typesafe"], marker = "extra == 'typesafe'", specifier = ">=0.102.0" },
-    { name = "roomkit", extras = ["vui"], marker = "extra == 'vui'", specifier = ">=0.102.0" },
+    { name = "roomkit", extras = ["anthropic"], marker = "extra == 'anthropic'", specifier = ">=0.103.0" },
+    { name = "roomkit", extras = ["azure-speech"], marker = "extra == 'azure-speech'", specifier = ">=0.103.0" },
+    { name = "roomkit", extras = ["deepgram", "realtime-deepgram"], marker = "extra == 'deepgram'", specifier = ">=0.103.0" },
+    { name = "roomkit", extras = ["elevenlabs", "realtime-elevenlabs"], marker = "extra == 'elevenlabs'", specifier = ">=0.103.0" },
+    { name = "roomkit", extras = ["gemini", "realtime-gemini"], marker = "extra == 'gemini'", specifier = ">=0.103.0" },
+    { name = "roomkit", extras = ["gradium"], marker = "extra == 'gradium'", specifier = ">=0.103.0" },
+    { name = "roomkit", extras = ["llamacpp"], marker = "extra == 'llamacpp'", specifier = ">=0.103.0" },
+    { name = "roomkit", extras = ["local-audio", "webrtc-aec"], specifier = ">=0.103.0" },
+    { name = "roomkit", extras = ["meta-stt"], marker = "extra == 'meta-stt'", specifier = ">=0.103.0" },
+    { name = "roomkit", extras = ["neutts"], marker = "extra == 'neutts'", specifier = ">=0.103.0" },
+    { name = "roomkit", extras = ["openai", "realtime-openai"], marker = "extra == 'openai'", specifier = ">=0.103.0" },
+    { name = "roomkit", extras = ["pocket-tts"], marker = "extra == 'pocket-tts'", specifier = ">=0.103.0" },
+    { name = "roomkit", extras = ["qwen-tts"], marker = "extra == 'qwen3-tts'", specifier = ">=0.103.0" },
+    { name = "roomkit", extras = ["sherpa-onnx"], marker = "extra == 'local-voice'", specifier = ">=0.103.0" },
+    { name = "roomkit", extras = ["smart-turn"], marker = "extra == 'smart-turn'", specifier = ">=0.103.0" },
+    { name = "roomkit", extras = ["typesafe"], marker = "extra == 'typesafe'", specifier = ">=0.103.0" },
+    { name = "roomkit", extras = ["vui"], marker = "extra == 'vui'", specifier = ">=0.103.0" },
     { name = "roomkit-ui", extras = ["all"], marker = "extra == 'dev'" },
     { name = "roomkit-ui", extras = ["anthropic"], marker = "extra == 'cloud'" },
     { name = "roomkit-ui", extras = ["azure-speech"], marker = "extra == 'cloud'" },

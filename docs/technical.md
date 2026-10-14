@@ -325,9 +325,10 @@ Settings dialog (destroyed on close) checks its widget still exists before touch
   clones into a staging folder. Well-known installs are https only, redirects included,
   streamed under a 5 MB per-file and 50 MB per-skill cap.
 - **Model downloads** — every request gives up after 30 s without a byte; Git LFS files
-  are checked against their OID (SHA-256), Smart Turn and the wake-word encoder against
-  a pinned SHA-256, espeak-ng data against git blob ids; one download per model at a time
-  (`download_flight.py`), joined by a second request.
+  are checked against their OID (SHA-256); Smart Turn, the wake-word encoder and the
+  sherpa-onnx release assets (GTCRN, DPDFNet, the speaker models, the Kokoro and Nemotron
+  archives) against a pinned SHA-256; espeak-ng data against git blob ids; one download
+  per model at a time (`download_flight.py`), joined by a second request.
 
 ## Configuration management
 
@@ -399,10 +400,9 @@ QT_QPA_PLATFORM=offscreen uv run pytest -q
 | # | Item | Where | Recommendation |
 |---|---|---|---|
 | 1 | No end-to-end coverage with real devices and providers | engine workflows, audio | Scripted smoke sessions against the providers' sandboxes |
-| 2 | GitHub release-asset models publish no digest — size-checked only | `model_download.py` (GTCRN, speaker models) | Pin SHA-256 per asset in the catalog |
-| 3 | SecretStore can fall back to QSettings when no OS keyring backend is available | `secret_store.py`, `settings_secrets.py`, `mcp_auth.py` | Surface backend status in Settings and docs |
-| 4 | Largest modules: `realtime_section.py` (~750 l), `engine.py` (~660 l), `engine_vc.py` (~570 l), `mcp_page.py` (~540 l), `models_page.py` (~530 l) | - | Split by responsibility when they next grow; Audio Debug has been replaced by focused Diagnostics pages |
-| 5 | Repeated stylesheet f-strings (~200 `setStyleSheet` calls) | `widgets/` | Shared style helpers per pattern |
-| 6 | `cleanup.py` depends on qasync name-mangled internals | `cleanup.py` | Re-verify on every qasync upgrade; upstream a fix |
-| 7 | MCP stdio and CLI tool execution trust is user-configured | `mcp_manager.py`, `cli_tools.py` | Consider per-call confirmation for sensitive tools |
-| 8 | Realtime sessions run without diarization. roomkit 0.97.0 forwards pipeline speaker changes at the provider's rate; primary-speaker gating still drops frames before the pipeline | `engine_realtime.py` | Gate after diarization, then bring speaker labels and primary-speaker mode back |
+| 2 | SecretStore can fall back to QSettings when no OS keyring backend is available | `secret_store.py`, `settings_secrets.py`, `mcp_auth.py` | Surface backend status in Settings and docs |
+| 3 | Largest modules: `realtime_section.py` (~750 l), `engine.py` (~660 l), `engine_vc.py` (~570 l), `mcp_page.py` (~540 l), `models_page.py` (~530 l) | - | Split by responsibility when they next grow; Audio Debug has been replaced by focused Diagnostics pages |
+| 4 | Repeated stylesheet f-strings (~200 `setStyleSheet` calls) | `widgets/` | Shared style helpers per pattern |
+| 5 | `cleanup.py` depends on qasync name-mangled internals | `cleanup.py` | Re-verify on every qasync upgrade; upstream a fix |
+| 6 | MCP stdio and CLI tool execution trust is user-configured | `mcp_manager.py`, `cli_tools.py` | Consider per-call confirmation for sensitive tools |
+| 7 | Realtime sessions run without diarization. roomkit 0.97.0 forwards pipeline speaker changes at the provider's rate; primary-speaker gating still drops frames before the pipeline | `engine_realtime.py` | Gate after diarization, then bring speaker labels and primary-speaker mode back |

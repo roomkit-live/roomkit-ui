@@ -35,6 +35,7 @@ DENOISE_MODES = [
     ("None", "none"),
     ("RNNoise (Linux/macOS)", "rnnoise"),
     ("GTCRN (cross-platform)", "gtcrn"),
+    ("DPDFNet (cross-platform, removes more noise)", "dpdfnet"),
 ]
 
 

@@ -233,6 +233,13 @@ def test_failed_deletion_keeps_files_and_explains_the_failure(library):
         ),
         (models.GTCRN_MODEL_ID, "is_gtcrn_downloaded", "download_gtcrn", "delete_gtcrn", ()),
         (
+            models.DPDFNET_MODEL_ID,
+            "is_dpdfnet_downloaded",
+            "download_dpdfnet",
+            "delete_dpdfnet",
+            (),
+        ),
+        (
             models.SMART_TURN_MODEL_ID,
             "is_smart_turn_downloaded",
             "download_smart_turn",

@@ -269,6 +269,7 @@ def test_an_stt_model_writes_small_files_and_downloads_lfs_ones_with_one_total(
     ("download", "expected"),
     [
         (lambda: md._download_gtcrn_sync(), catalog.GTCRN_SHA256),
+        (lambda: md._download_dpdfnet_sync(), catalog.DPDFNET_SHA256),
         *(
             (lambda model_id=model_id: md._download_speaker_model_sync(model_id), digest)
             for model_id, digest in catalog._SPEAKER_ASSET_SHA256.items()
@@ -279,7 +280,7 @@ def test_release_assets_are_checked_against_their_published_sha256(
     models_dir, monkeypatch, download, expected
 ):
     """GTCRN and the speaker models were held to their size alone: a damaged or
-    replaced file of the right size would have been kept."""
+    replaced file of the right size would have been kept.  DPDFNet came after."""
     checked = []
 
     def fake_download(url, target, expected_size=0, on_bytes=None, expected_sha256=None):

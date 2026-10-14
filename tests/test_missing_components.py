@@ -104,12 +104,13 @@ async def test_a_start_without_its_key_says_so_without_a_traceback(
     assert all(record.exc_info is None for record in caplog.records)
 
 
-def test_gtcrn_without_sherpa_onnx_leaves_the_session_without_a_denoiser(missing):
+@pytest.mark.parametrize("mode", ["gtcrn", "dpdfnet"])
+def test_a_sherpa_denoiser_without_sherpa_onnx_leaves_the_session_without_one(missing, mode):
     missing("local-voice")
     notices: list[str] = []
 
-    denoiser = build_denoiser("gtcrn", 16000)
-    notify_missing_denoiser("gtcrn", denoiser, notices.append)
+    denoiser = build_denoiser(mode, 16000)
+    notify_missing_denoiser(mode, denoiser, notices.append)
 
     assert denoiser is None
     assert len(notices) == 1

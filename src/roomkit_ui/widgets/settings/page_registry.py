@@ -217,7 +217,7 @@ PAGE_SPECS = (
             ),
             SearchTarget(
                 "Noise reduction",
-                "denoise rnnoise gtcrn bruit",
+                "denoise rnnoise gtcrn dpdfnet bruit",
                 "processing.denoise",
                 (("tabs", 0),),
             ),

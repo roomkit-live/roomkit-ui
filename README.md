@@ -100,7 +100,7 @@ xattr -cr "RoomKit UI.app"
 - **MCP Apps** — interactive tool UIs inline in the chat; saved results reopen with the conversation without running tools again
 - **CLI tools** — declare a local command-line binary and the assistant can run it
 - **Echo cancellation** — WebRTC or Speex AEC for hands-free use
-- **Noise suppression** — RNNoise or GTCRN denoiser for noisy environments
+- **Noise suppression** — RNNoise, GTCRN or DPDFNet denoiser for noisy environments
 - **GPU inference** — optional CUDA (NVIDIA) or CoreML (Apple) acceleration for local STT models
 - **Audio device selection** — pick your microphone and speaker from settings
 - **Dark & Light themes** — Apple-inspired UI with theme switcher
