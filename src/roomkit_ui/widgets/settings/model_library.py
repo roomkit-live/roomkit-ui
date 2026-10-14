@@ -73,8 +73,18 @@ def model_groups() -> tuple[ModelGroup, ...]:
         ModelGroup(
             "speech",
             "Speech & voices",
-            "Piper voices run locally. Download the shared pronunciation data once.",
+            "Piper and Kokoro voices run locally. Piper needs the shared pronunciation "
+            "data once; Kokoro carries its own.",
             (
+                LibraryModel(
+                    catalog.KOKORO_MODEL_ID,
+                    "Kokoro",
+                    "Text to speech · 37 voices: English, French, Spanish, Italian, Portuguese",
+                    catalog.KOKORO_SIZE,
+                    catalog.is_kokoro_downloaded,
+                    models.download_kokoro,
+                    catalog.delete_kokoro,
+                ),
                 LibraryModel(
                     "espeak-ng-data",
                     "espeak-ng data",

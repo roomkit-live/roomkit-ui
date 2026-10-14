@@ -1,4 +1,5 @@
-"""Voice Channel local provider fields: local STT, Piper TTS, voice clone, Pocket, Vui.
+"""Voice Channel local provider fields: local STT, Piper and Kokoro TTS, voice clone,
+Pocket, Vui.
 
 A local LLM's fields are ``llm_fields.LLMFields``, as in every place a model is
 chosen."""
@@ -78,6 +79,7 @@ class VCLocalFields:
         self._vc_ref_text_label = QLabel("Ref Text")
         form.addRow(self._vc_ref_text_label, self.vc_tts_ref_text)
 
+        self._add_kokoro_fields(form)
         self._add_pocket_fields(form)
         self._add_vui_fields(form)
 
@@ -112,6 +114,23 @@ class VCLocalFields:
         voice_row.addWidget(self._vc_pocket_browse)
         self._vc_pocket_voice_label = QLabel("Voice")
         form.addRow(self._vc_pocket_voice_label, voice_row)
+
+    def _add_kokoro_fields(self, form: QFormLayout) -> None:
+        """Kokoro: a voice, whose language it speaks; by default the STT language's."""
+        from roomkit_ui.tts.kokoro import VOICES
+
+        self.vc_kokoro_voice = QComboBox()
+        self.vc_kokoro_voice.addItem("Same language as speech recognition", "")
+        for label, name in VOICES:
+            self.vc_kokoro_voice.addItem(label, name)
+        index = self.vc_kokoro_voice.findData(self._settings.get("vc_kokoro_voice", ""))
+        self.vc_kokoro_voice.setCurrentIndex(max(index, 0))
+        self._vc_kokoro_voice_label = QLabel("Voice")
+        form.addRow(self._vc_kokoro_voice_label, self.vc_kokoro_voice)
+        self._vc_kokoro_missing = QLabel("Download Kokoro in Models & components.")
+        self._vc_kokoro_missing.setWordWrap(True)
+        self._vc_kokoro_missing.setObjectName("settingsHint")
+        form.addRow("", self._vc_kokoro_missing)
 
     def _add_vui_fields(self, form: QFormLayout) -> None:
         """Vui: one of its voices, or the clip in Ref Audio and Ref Text."""
@@ -182,6 +201,14 @@ class VCLocalFields:
             widget.setVisible(is_pocket)
         self._vc_vui_voice_label.setVisible(is_vui)
         self.vc_vui_voice.setVisible(is_vui)
+        self._update_kokoro_visibility(provider == "kokoro")
+
+    def _update_kokoro_visibility(self, is_kokoro: bool) -> None:
+        from roomkit_ui.model_catalog import is_kokoro_downloaded
+
+        self._vc_kokoro_voice_label.setVisible(is_kokoro)
+        self.vc_kokoro_voice.setVisible(is_kokoro)
+        self._vc_kokoro_missing.setVisible(is_kokoro and not is_kokoro_downloaded())
 
     # -- Model combos --
 
@@ -254,4 +281,5 @@ class VCLocalFields:
             "vc_pocket_language": self.vc_pocket_language.currentData() or "",
             "vc_pocket_voice": self.vc_pocket_voice.text().strip(),
             "vc_vui_voice": self.vc_vui_voice.currentData() or "",
+            "vc_kokoro_voice": self.vc_kokoro_voice.currentData() or "",
         }

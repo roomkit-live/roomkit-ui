@@ -11,6 +11,7 @@ _REGISTRY: dict[str, str] = {
     "qwen3": "roomkit_ui.tts.qwen3",
     "neutts": "roomkit_ui.tts.neutts",
     "piper": "roomkit_ui.tts.piper",
+    "kokoro": "roomkit_ui.tts.kokoro",
     "gradium": "roomkit_ui.tts.gradium",
     "elevenlabs": "roomkit_ui.tts.elevenlabs",
     "pocket": "roomkit_ui.tts.pocket",
@@ -22,7 +23,7 @@ _REGISTRY: dict[str, str] = {
 # Local models, expensive to load: the engine keeps the last one built for
 # the next session while nothing it was built from changes.  Cloud TTS is a
 # connection, closed with its session.
-_CACHED: frozenset[str] = frozenset({"piper", "qwen3", "neutts", "pocket", "vui"})
+_CACHED: frozenset[str] = frozenset({"piper", "kokoro", "qwen3", "neutts", "pocket", "vui"})
 
 
 def create_tts_provider(name: str, settings: dict) -> tuple[Any, int]:

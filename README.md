@@ -81,9 +81,9 @@ xattr -cr "RoomKit UI.app"
 - **Dictate a message** — speak into the input, edit the transcript, then send when ready
 - **Two conversation modes** — Speech-to-Speech (realtime) or Voice Channel (STT → LLM → TTS)
 - **Realtime providers** — Gemini Live (Gemini 3.8 Live options follow the selected model), OpenAI Realtime, OpenAI GPT-Live (full-duplex), Deepgram Voice Agent, ElevenLabs Conversational AI, xAI Grok
-- **Voice Channel providers** — LLM: Anthropic (Claude Sonnet 5.5 by default), OpenAI, Gemini, local vLLM / Ollama, or llama.cpp; STT: local sherpa-onnx, Deepgram, Gradium, Azure MAI-Transcribe, Meta Muse Voice Transcribe; TTS: Piper, Pocket TTS, Vui, Qwen3-TTS, NeuTTS, ElevenLabs, Gradium, Azure MAI-Voice. Model lists come from roomkit's catalogs
+- **Voice Channel providers** — LLM: Anthropic (Claude Sonnet 5.5 by default), OpenAI, Gemini, local vLLM / Ollama, or llama.cpp; STT: local sherpa-onnx, Deepgram, Gradium, Azure MAI-Transcribe, Meta Muse Voice Transcribe; TTS: Piper, Kokoro, Pocket TTS, Vui, Qwen3-TTS, NeuTTS, ElevenLabs, Gradium, Azure MAI-Voice. Model lists come from roomkit's catalogs
 - **Local LLM with nothing to install** — llama.cpp: roomkit downloads a pinned `llama-server` and the GGUF model at first use
-- **Local TTS** — offline text-to-speech with Piper, Pocket TTS (seven languages, voice clone), Vui (English, NVIDIA GPU, replies inside the conversation, voice clone), Qwen3-TTS (voice clone), and NeuTTS (voice clone)
+- **Local TTS** — offline text-to-speech with Piper, Kokoro (37 voices in five languages), Pocket TTS (seven languages, voice clone), Vui (English, NVIDIA GPU, replies inside the conversation, voice clone), Qwen3-TTS (voice clone), and NeuTTS (voice clone)
 - **Who is speaking** — with Meta Muse as the STT, the voices are told apart live, no enrolment: click a speaker in the chat to name them, the assistant names those who introduce themselves, and "Listen only to primary speaker" follows your name. With local STT, enrolled voices are recognised offline
 - **Wake word** — say an enrolled phrase to open a session; detection runs locally and nothing leaves the machine until it fires. Optional hang-up once the conversation goes quiet
 - **Conversation history** — separate threads with automatic titles, 30 recent conversations, title search, rename and delete; reopen a thread with its own context, images and saved tool results
@@ -110,7 +110,7 @@ xattr -cr "RoomKit UI.app"
 
 - Python 3.12+
 - [uv](https://docs.astral.sh/uv/) (recommended) or pip
-- An API key for your chosen provider — none for an all-local Voice Channel (local STT, a local LLM, Piper or Pocket TTS)
+- An API key for your chosen provider — none for an all-local Voice Channel (local STT, a local LLM, Piper, Kokoro or Pocket TTS)
 - PortAudio (`libportaudio2` on Linux, included on macOS)
 - **Linux dictation deps** — `xclip` + `xdotool` (X11) or `wl-copy` + `wtype` (Wayland) for the system-wide STT dictation feature. macOS and Windows need no extra program: Windows pastes through the Win32 API
 

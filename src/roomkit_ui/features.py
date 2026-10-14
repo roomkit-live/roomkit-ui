@@ -169,6 +169,7 @@ STT_PROVIDER_FEATURES: dict[str, str] = {
 
 TTS_PROVIDER_FEATURES: dict[str, str] = {
     "piper": "local-voice",
+    "kokoro": "local-voice",
     "qwen3": "qwen3-tts",
     "neutts": "neutts",
     "gradium": "gradium",

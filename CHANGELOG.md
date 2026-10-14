@@ -12,6 +12,12 @@ Each released section is the source for that version's GitHub release notes.
 ## [Unreleased]
 
 ### Added
+- **Kokoro, a local voice in five languages** (Conversation → Speak) — Kokoro-82M through
+  sherpa-onnx, on the CPU, with nothing to install beyond the core. Download it once in
+  Models & components (126 MB, checked against the sha256 GitHub publishes before it is
+  unpacked). 37 voices in American and British English, French, Spanish, Italian and
+  Brazilian Portuguese; by default it speaks the speech-recognition language. First audio
+  about 0.7 s on a desktop CPU.
 - **Vui, a local voice that answers inside the conversation** (Conversation → Speak) —
   Vui Nano by fluxions.ai, on an NVIDIA GPU, in English. It hears the dialogue, your
   voice included, so a reply sounds like an answer to how you said it, and a barge-in

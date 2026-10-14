@@ -40,6 +40,7 @@ VC_STT_PROVIDERS: list[tuple[str, str]] = [
 
 VC_TTS_PROVIDERS: list[tuple[str, str]] = [
     ("Piper (sherpa-onnx)", "piper"),
+    ("Kokoro (local, five languages)", "kokoro"),
     ("Qwen3-TTS (voice clone)", "qwen3"),
     ("NeuTTS (voice clone)", "neutts"),
     ("Gradium", "gradium"),
@@ -278,6 +279,7 @@ class VoiceSetup(QWidget):
         llm = {"local": "Local", "llamacpp": "llama.cpp", "gemini": "Gemini"}
         tts = {
             "piper": "Piper",
+            "kokoro": "Kokoro",
             "qwen3": "Qwen3-TTS",
             "neutts": "NeuTTS",
             "pocket": "Pocket TTS",

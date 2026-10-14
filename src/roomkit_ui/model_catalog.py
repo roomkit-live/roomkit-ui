@@ -220,6 +220,49 @@ def delete_vad_model(model_id: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Kokoro (Kokoro-82M v1.0, int8, as sherpa-onnx packages it)
+# ---------------------------------------------------------------------------
+
+KOKORO_MODEL_ID = "kokoro-int8-multi-lang-v1_0"
+# A sherpa-onnx release asset, held to the size and sha256 GitHub publishes
+# for it (uploaded 2026-09-08). Its voices.bin order is tts/kokoro.py's.
+KOKORO_URL = (
+    "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/"
+    "kokoro-int8-multi-lang-v1_0.tar.bz2"
+)
+KOKORO_SHA256 = "4c3052abaa60943a341f193888cf6abd68787dae6ab8ae5c925a706caa247e4e"
+KOKORO_ARCHIVE_BYTES = 132_303_094
+KOKORO_SIZE = "~126 MB"
+# What a session loads; espeak-ng-data (a folder) comes with them.
+_KOKORO_FILES = (
+    "model.int8.onnx",
+    "voices.bin",
+    "tokens.txt",
+    "lexicon-us-en.txt",
+    "lexicon-gb-en.txt",
+    "lexicon-zh.txt",
+)
+
+
+def kokoro_model_path() -> Path:
+    """Return the folder the Kokoro archive unpacks to."""
+    return get_models_dir() / "kokoro" / KOKORO_MODEL_ID
+
+
+def is_kokoro_downloaded() -> bool:
+    """Check whether every file a Kokoro session loads is there."""
+    d = kokoro_model_path()
+    return all((d / name).is_file() for name in _KOKORO_FILES) and (d / "espeak-ng-data").is_dir()
+
+
+def delete_kokoro() -> None:
+    """Remove the unpacked Kokoro model."""
+    d = kokoro_model_path()
+    if d.exists():
+        shutil.rmtree(d)
+
+
+# ---------------------------------------------------------------------------
 # Smart Turn model (pipecat-ai/smart-turn ONNX)
 # ---------------------------------------------------------------------------
 

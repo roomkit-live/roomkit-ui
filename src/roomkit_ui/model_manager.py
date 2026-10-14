@@ -55,6 +55,7 @@ from roomkit_ui.model_download import (
     _download_espeak_ng_sync,
     _download_file,  # noqa: F401
     _download_gtcrn_sync,
+    _download_kokoro_sync,
     _download_model_sync,
     _download_smart_turn_sync,
     _download_speaker_model_sync,
@@ -195,6 +196,11 @@ def build_vad_config(
                     pass
 
     return SherpaOnnxVADConfig(**kwargs)
+
+
+async def download_kokoro(progress: ProgressCallback | None = None) -> None:
+    """Download and unpack the Kokoro model in a background thread."""
+    await asyncio.to_thread(_download_kokoro_sync, progress)
 
 
 async def download_smart_turn(progress: ProgressCallback | None = None) -> None:

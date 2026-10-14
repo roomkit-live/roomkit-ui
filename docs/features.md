@@ -13,9 +13,9 @@ system context in [architecture.md](architecture.md).
 |---|---|---|
 | Providers | Gemini Live, OpenAI Realtime, OpenAI GPT-Live, Deepgram Voice Agent, ElevenLabs ConvAI, xAI Grok | LLM: Anthropic, OpenAI, Gemini, local (vLLM/Ollama), llama.cpp |
 | STT | provider-native | sherpa-onnx (local), Gradium, Deepgram, Azure MAI-Transcribe, Meta Muse, Google Gemini |
-| TTS | provider-native | Piper, Pocket TTS and Vui (local), Qwen3-TTS & NeuTTS (voice clone), Gradium, ElevenLabs, Azure MAI-Voice, Google Gemini |
+| TTS | provider-native | Piper, Kokoro, Pocket TTS and Vui (local), Qwen3-TTS & NeuTTS (voice clone), Gradium, ElevenLabs, Azure MAI-Voice, Google Gemini |
 | Latency | lowest | depends on the three stages |
-| Offline capable | no | yes (local STT + local LLM + Piper or Pocket TTS) |
+| Offline capable | no | yes (local STT + local LLM + Piper, Kokoro or Pocket TTS) |
 | Usage shown | tokens | tokens + cost estimate (catalog pricing) |
 | Code | `engine_realtime.py`, `realtime_providers.py` | `engine_vc.py`, `engine_vc_helpers.py`, `vc_stt.py` |
 
@@ -86,6 +86,13 @@ kept, never replaced. Agent Skills reach realtime sessions as well as Voice Chan
   Spanish, Italian, Portuguese and Dutch (larger variants for all but English). By default
   it speaks the speech-recognition language (English when Pocket has no model for it); a
   pre-made voice or a WAV to clone (cloning needs the gated `kyutai/pocket-tts` weights).
+- **Kokoro** — Kokoro-82M through sherpa-onnx, local on the CPU (or CUDA), in the core
+  install. One download in Models & components (126 MB, held to the sha256 GitHub
+  publishes, unpacked to 183 MB). 37 voices in American and British English, French,
+  Spanish, Italian and Brazilian Portuguese — the languages a transcription read back
+  cleanly; Hindi, Japanese and Mandarin did not and are not offered. By default it speaks
+  the speech-recognition language; a voice speaks its own language with its accent.
+  First audio about 0.7 s on a desktop CPU.
 - **Vui** — Vui Nano (fluxions.ai), local on an NVIDIA GPU, English only, Python 3.12
   only (the `vui` extra). Each reply is generated inside the conversation: the Voice
   Channel hands Vui the dialogue, your voice included, and cuts it to what you heard after
@@ -630,8 +637,8 @@ sequenceDiagram
 - MCP Apps require QtWebEngine (the tool's activity and text result remain available without it).
 - The main window stays compact; Settings is resizable. History searches conversation
   titles, not message contents; transcript export is not available yet.
-- French-centric Piper catalog (all three Piper voices are French); Pocket TTS covers six
-  more languages.
+- French-centric Piper catalog (all three Piper voices are French); Kokoro and Pocket TTS
+  cover more languages (Kokoro has one French voice).
 
 ## Potential enhancements
 

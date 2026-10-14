@@ -11,6 +11,7 @@ from roomkit_ui import features
 from roomkit_ui.settings import _SECRET_KEYS, load_settings, save_settings
 from roomkit_ui.widgets.settings.page_registry import PAGE_SPECS
 from roomkit_ui.widgets.settings.panel import SettingsPanel
+from roomkit_ui.widgets.settings.voice_setup import VC_TTS_PROVIDERS
 
 
 @pytest.fixture
@@ -858,7 +859,8 @@ def test_pipeline_summary_follows_all_three_provider_choices(panel):
     assert [item.text() for item in voice.pipeline.providers] == ["Local", "Anthropic", "Piper"]
     voice.vc_stt_provider.setCurrentIndex(2)
     voice.llm.provider.setCurrentIndex(4)
-    voice.vc_tts_provider.setCurrentIndex(4)
+    tts_ids = [value for _label, value in VC_TTS_PROVIDERS]
+    voice.vc_tts_provider.setCurrentIndex(tts_ids.index("elevenlabs"))
     assert [item.text() for item in voice.pipeline.providers] == [
         "Deepgram",
         "llama.cpp",

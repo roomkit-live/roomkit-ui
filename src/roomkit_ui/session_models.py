@@ -117,6 +117,11 @@ def _tts_model(settings: dict, tts: Any) -> SessionModel:
     extra = ""
     if provider == "piper":
         model = settings.get("vc_tts_model", "")
+    elif provider == "kokoro":
+        from roomkit_ui.tts.kokoro import voice_label
+
+        model = "Kokoro 82M (int8)"
+        voice = voice_label(voice)
     elif provider == "pocket":
         model = _text(config, "language")
         voices = getattr(config, "voices", {})

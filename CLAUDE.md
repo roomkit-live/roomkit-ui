@@ -122,7 +122,7 @@ src/roomkit_ui/
 ├── theme.py             # Dark/Light theme stylesheets
 ├── providers/           # LLM factories, lazy registry: anthropic, openai, gemini, local (vLLM/Ollama), llamacpp;
 │                        #  llm_settings(): a role's own model (background tasks, text chat) over Think · LLM's
-├── tts/                 # TTS factories, lazy registry: piper, qwen3, neutts, pocket, vui, gradium, elevenlabs, azure, gemini, _util
+├── tts/                 # TTS factories, lazy registry: piper, kokoro, qwen3, neutts, pocket, vui, gradium, elevenlabs, azure, gemini, _util
 ├── wakeword/            # controller (shared mic + listener lifetime), listener, capture (mic → VAD → segments),
 │                        #  resample, jobs (SerialWorker), detector, features (whisper encoder), dtw, fingerprint,
 │                        #  enroller, encoder_download, page_sensitivity

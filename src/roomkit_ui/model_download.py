@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
+import tarfile
+import tempfile
 import urllib.error
 import urllib.request
 from collections.abc import Callable
@@ -23,12 +26,18 @@ from roomkit_ui.model_catalog import (
     ESPEAK_NG_INCOMPLETE_MARKER,
     GTCRN_MODEL_ID,
     GTCRN_URL,
+    KOKORO_ARCHIVE_BYTES,
+    KOKORO_MODEL_ID,
+    KOKORO_SHA256,
+    KOKORO_URL,
     SMART_TURN_MODEL_ID,
     SMART_TURN_SHA256,
     SMART_TURN_URL,
     espeak_ng_data_path,
     get_models_dir,
     is_espeak_ng_downloaded,
+    is_kokoro_downloaded,
+    kokoro_model_path,
     model_path,
     speaker_model_path,
     tts_model_path,
@@ -276,6 +285,52 @@ def _download_smart_turn_sync(progress: ProgressCallback | None = None) -> None:
     if target.is_file():
         return
     _download_sized(SMART_TURN_URL, target, progress, expected_sha256=SMART_TURN_SHA256)
+
+
+@single_flight
+def _download_kokoro_sync(progress: ProgressCallback | None = None) -> None:
+    """Download sherpa-onnx's Kokoro archive, check it, unpack it (blocking).
+
+    The archive is held to its published size and sha256 before a byte of it
+    is unpacked, and removed once unpacked.
+    """
+    if is_kokoro_downloaded():
+        return
+    dest = kokoro_model_path()
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    archive = dest.parent / f"{KOKORO_MODEL_ID}.tar.bz2"
+    try:
+        _download_file(
+            KOKORO_URL,
+            archive,
+            expected_size=KOKORO_ARCHIVE_BYTES,
+            on_bytes=_progress_sink(progress, KOKORO_ARCHIVE_BYTES),
+            expected_sha256=KOKORO_SHA256,
+        )
+        _unpack_kokoro(archive, dest)
+    finally:
+        archive.unlink(missing_ok=True)
+
+
+def _unpack_kokoro(archive: Path, dest: Path) -> None:
+    """Unpack *archive*'s one top folder to *dest*, all or nothing.
+
+    tarfile's "data" filter refuses links, devices and any path leaving the
+    staging folder. The folder is unpacked beside *dest* and renamed into
+    place, so a cut-off unpack never looks downloaded.
+    """
+    staging = Path(tempfile.mkdtemp(prefix=".kokoro-", dir=dest.parent))
+    try:
+        with tarfile.open(archive, "r:bz2") as tar:
+            tar.extractall(staging, filter="data")  # nosec B202 - "data" filter
+        unpacked = staging / KOKORO_MODEL_ID
+        if not unpacked.is_dir():
+            raise RuntimeError(f"{archive.name} holds no {KOKORO_MODEL_ID} folder")
+        if dest.exists():
+            shutil.rmtree(dest)
+        unpacked.rename(dest)
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
 
 
 def _generate_tokens_txt(onnx_json_path: Path, tokens_path: Path) -> None:
