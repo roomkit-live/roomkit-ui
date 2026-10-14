@@ -8,6 +8,7 @@ from roomkit_ui.stt_sessions import dictation_language
 from roomkit_ui.widgets.settings.conversation_page import ConversationPage
 from roomkit_ui.widgets.settings.dictation_page import _DictationPage
 from roomkit_ui.widgets.settings.general_page import _GeneralPage
+from roomkit_ui.widgets.settings.page_registry import PAGE_SPECS
 from roomkit_ui.widgets.settings.panel import SettingsPanel
 
 
@@ -54,7 +55,7 @@ def test_each_language_has_one_page_owner(qapp):
     panel = SettingsPanel()
     try:
         owners: dict[str, list[str]] = {}
-        for key, page in panel._page_widgets.items():
+        for key, page in ((spec.key, panel.page(spec.key)) for spec in PAGE_SPECS):
             for name in getattr(page, "get_settings", dict)():
                 owners.setdefault(name, []).append(key)
         assert owners["stt_language"] == ["general"]

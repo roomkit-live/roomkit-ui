@@ -36,12 +36,13 @@ class SettingsPanel(QDialog):
         self.setWindowTitle("Settings — RoomKit")
         self.setModal(True)
         self._restore_size()
-        settings = load_settings()
+        self._settings = load_settings()
         bind_theme(self, self._apply_style)
         self._specs = {spec.key: spec for spec in PAGE_SPECS}
         self._current_page_key = "general"
         self._stack = QStackedWidget()
-        self._page_widgets: dict[str, QWidget] = {}
+        self._page_widgets: dict[str, QWidget] = {}  # the pages built so far
+        self._page_layouts: dict[str, QVBoxLayout] = {}
         self._scrolls: dict[str, QScrollArea] = {}
         self._sidebar = SettingsNavigation(PAGE_SPECS)
         self._breadcrumb = label("", "settingsBreadcrumb", wrap=False)
@@ -79,9 +80,7 @@ class SettingsPanel(QDialog):
         content.setSpacing(0)
         content.addWidget(self._build_sidebar())
         content.addWidget(self._build_workspace(), 1)
-        # Pages last, each straight into its place in the dialog (_build_pages).
-        self._build_pages(settings)
-        self._general.theme_picker.theme_changed.connect(apply_theme)
+        self._build_page_frames()
         self._sidebar.page_selected.connect(self._on_page_changed)
         self._sidebar.itemClicked.connect(lambda _: self._search.clear())
         self._search.textChanged.connect(self._search_changed)
@@ -92,9 +91,6 @@ class SettingsPanel(QDialog):
             shortcut = QShortcut(sequence, self)
             shortcut.setContext(Qt.WidgetWithChildrenShortcut)
             shortcut.activated.connect(self._focus_search)
-        for page in self._pages:
-            if hasattr(page, "navigate_requested"):
-                page.navigate_requested.connect(self._navigate)
         self._sidebar.select_page("general")
 
     def _apply_style(self) -> None:
@@ -103,14 +99,15 @@ class SettingsPanel(QDialog):
     def _navigate(self, key: str) -> None:
         key, _, section = key.partition(":")
         self._sidebar.select_page(key)
+        page = self.page(key)
         if key == "conversation" and section == "personality":
-            self._conversation.tabs.bar.setCurrentIndex(3)
+            page.tabs.bar.setCurrentIndex(3)
         if key == "diagnostics":
-            self._diagnostics.tabs.bar.setCurrentIndex(2 if section == "telemetry" else 0)
-            self._diagnostics.reveal_search_target()
+            page.tabs.bar.setCurrentIndex(2 if section == "telemetry" else 0)
+            page.reveal_search_target()
         if key == "models":
-            self._models.tabs.bar.setCurrentIndex({"llms": 1, "components": 2}.get(section, 0))
-            self._models.models.clear_filters()
+            page.tabs.bar.setCurrentIndex({"llms": 1, "components": 2}.get(section, 0))
+            page.models.clear_filters()
 
     def _restore_size(self) -> None:
         screen = self.screen()
@@ -121,11 +118,8 @@ class SettingsPanel(QDialog):
         size = saved if isinstance(saved, QSize) and saved.isValid() else QSize(1060, 820)
         self.resize(size.expandedTo(minimum).boundedTo(available))
 
-    def _build_pages(self, settings: dict) -> None:
-        # Under the app's stylesheet every widget that changes parent is restyled
-        # with all it holds: a page built first and then moved scroll by scroll
-        # into the dialog was restyled at each level (4 s to open on Windows).
-        # The empty frame goes in first, each page moves once.
+    def _build_page_frames(self) -> None:
+        """An empty scroll area per page, in the dialog before any page (``page``)."""
         for spec in PAGE_SPECS:
             scroll = QScrollArea()
             scroll.setWidgetResizable(True)
@@ -137,17 +131,46 @@ class SettingsPanel(QDialog):
             layout.setContentsMargins(32, 28, 32, 28)
             scroll.setWidget(container)
             self._scrolls[spec.key] = scroll
-            page = spec.create(settings)
-            setattr(self, f"_{spec.key}", page)
-            self._page_widgets[spec.key] = page
-            layout.addWidget(page)
-        self._pages = tuple(self._page_widgets.values())
-        self._privacy.recording_directory_changed.connect(
-            self._diagnostics.set_recording_directory
-        )
-        # A token typed in Providers & keys serves downloads before Settings saves it.
-        token = self._providers.fields["huggingface_token"]
-        self._models.llms.token = lambda: token.text().strip()
+            self._page_layouts[spec.key] = layout
+
+    def page(self, key: str) -> QWidget:
+        """The page *key*, built the first time it is asked for.
+
+        Under the app's stylesheet Qt restyles a widget, with all it holds,
+        each time it changes parent: building every page made Settings take
+        seconds to open on Windows.  It now builds the page it shows, and the
+        others when navigation, search or a link reaches them, each straight
+        into its frame already in the dialog, so it moves only once.
+        """
+        page = self._page_widgets.get(key)
+        if page is not None:
+            return page
+        page = self._specs[key].create(self._settings)
+        self._page_widgets[key] = page
+        self._page_layouts[key].addWidget(page)
+        if hasattr(page, "navigate_requested"):
+            page.navigate_requested.connect(self._navigate)
+        self._link_pages(key, page)
+        return page
+
+    def _link_pages(self, key: str, page: QWidget) -> None:
+        """What a page takes from another's pending edits, whichever is built first."""
+        if key == "general":
+            page.theme_picker.theme_changed.connect(apply_theme)
+        if key == "models":
+            # A token typed in Providers & keys serves downloads before Settings saves it.
+            page.llms.token = self._huggingface_token
+        privacy = self._page_widgets.get("privacy")
+        diagnostics = self._page_widgets.get("diagnostics")
+        if key in ("privacy", "diagnostics") and privacy and diagnostics:
+            privacy.recording_directory_changed.connect(diagnostics.set_recording_directory)
+            diagnostics.set_recording_directory(privacy.output_dir.text())
+
+    def _huggingface_token(self) -> str:
+        providers = self._page_widgets.get("providers")
+        if providers is None:
+            return str(self._settings.get("huggingface_token", "") or "").strip()
+        return str(providers.fields["huggingface_token"].text()).strip()
 
     def _build_sidebar(self) -> QWidget:
         sidebar = QWidget()
@@ -209,14 +232,18 @@ class SettingsPanel(QDialog):
         self._search_notice.hide()
         self._clear_highlight()
         spec = self._specs[key]
+        page = self.page(key)
         self._stack.setCurrentWidget(self._scrolls[key])
         self._breadcrumb.setText(f"Settings  /  {spec.group}  /  {spec.title}")
         if key == "wakeword":
-            self._wakeword.set_capture_settings(
-                {**self._audio.get_settings(), **self._conversation.get_settings()}
-            )
+            # Pending choices only: a page never opened still holds the saved ones.
+            pending: dict = {}
+            for source in ("audio", "conversation"):
+                if (built := self._page_widgets.get(source)) is not None:
+                    pending.update(built.get_settings())
+            page.set_capture_settings(pending)
         if spec.refresh:
-            getattr(self._page_widgets[key], spec.refresh)()
+            getattr(page, spec.refresh)()
 
     def _focus_search(self) -> None:
         self._search.setFocus(Qt.ShortcutFocusReason)
@@ -245,7 +272,7 @@ class SettingsPanel(QDialog):
     def _open_search_result(self, result: SearchResult) -> None:
         self._search.clear()
         self._sidebar.select_page(result.page)
-        page = self._page_widgets[result.page]
+        page = self.page(result.page)
         target = result.target
         for path, index in target.tabs:
             self._resolve(page, path).bar.setCurrentIndex(index)
@@ -341,9 +368,9 @@ class SettingsPanel(QDialog):
         super().done(result)
 
     def _save(self) -> None:
-        # Collect settings from each page that has them
+        # Collect settings from each page built: one never opened changed nothing.
         settings: dict = {}
-        for page in self._pages:
+        for page in self._page_widgets.values():
             if hasattr(page, "get_settings"):
                 settings.update(page.get_settings())
 

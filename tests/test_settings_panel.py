@@ -41,24 +41,37 @@ def panel(open_panel):
 def test_every_sidebar_label_has_a_page(panel):
     keys = [panel._sidebar.item(i).data(Qt.UserRole) for i in range(panel._sidebar.count())]
     assert [key for key in keys if key] == [spec.key for spec in PAGE_SPECS]
-    assert panel._stack.count() == len(panel._pages)
+    assert panel._stack.count() == len(PAGE_SPECS)
 
 
 def test_building_settings_opens_no_window_of_its_own(open_panel, monkeypatch, window_shows):
     # Every component missing: each provider combo shows its install offer.
     monkeypatch.setattr(features, "missing_modules", lambda _key: ("absent",))
-    open_panel()
+    panel = open_panel()
+    for spec in PAGE_SPECS:
+        panel.page(spec.key)
     assert window_shows == []
 
 
+def test_opening_builds_only_the_page_it_shows(panel):
+    # Every page costs its restyling under the app's stylesheet: seconds on Windows.
+    assert list(panel._page_widgets) == ["general"]
+
+    panel._sidebar.select_page("audio")
+
+    assert list(panel._page_widgets) == ["general", "audio"]
+    assert panel._stack.currentWidget() is panel._scrolls["audio"]
+    assert panel._scrolls["audio"].isAncestorOf(panel.page("audio"))
+
+
 def test_integrations_groups_skills_servers_and_cli_tools(panel):
-    tabs = panel._integrations.tabs.bar
+    tabs = panel.page("integrations").tabs.bar
     assert [tabs.tabText(i) for i in range(tabs.count())] == [
         "MCP servers",
         "CLI tools",
         "Skills",
     ]
-    assert not {"skills", "mcp", "cli_tools"} & panel._page_widgets.keys()
+    assert not {"skills", "mcp", "cli_tools"} & {spec.key for spec in PAGE_SPECS}
 
 
 @pytest.mark.parametrize("key", [spec.key for spec in PAGE_SPECS])
@@ -90,7 +103,7 @@ def test_keyboard_navigation_skips_group_headings(panel):
 def test_general_dictation_link_navigates_without_saving(panel, monkeypatch):
     saves = []
     monkeypatch.setattr(panel_mod, "save_settings", saves.append)
-    panel._general.dictation_link.click()
+    panel.page("general").dictation_link.click()
     assert panel._stack.currentWidget() is panel._scrolls["dictation"]
     assert saves == []
 
@@ -126,12 +139,12 @@ def test_theme_choices_apply_immediately_from_the_keyboard(panel, qapp):
     from roomkit_ui.theme import get_stylesheet
 
     panel.show()
-    light = panel._general.theme_picker.options["light"]
+    light = panel.page("general").theme_picker.options["light"]
     light.setFocus()
     QTest.keyClick(light, Qt.Key_Space)
 
-    assert panel._general.theme_picker.value() == "light"
-    assert not panel._general.theme_picker.options["dark"].isChecked()
+    assert panel.page("general").theme_picker.value() == "light"
+    assert not panel.page("general").theme_picker.options["dark"].isChecked()
     assert load_settings()["theme"] == "light"
     assert qapp.styleSheet() == get_stylesheet("light")
     assert panel.isVisible()
@@ -145,14 +158,14 @@ def test_live_theme_keeps_pending_edits_and_existing_widgets(panel, qapp):
     from roomkit_ui.widgets.settings.style import settings_colors
 
     panel.show()
-    prompt = panel._conversation.prompt
+    prompt = panel.page("conversation").prompt
     prompt.setPlainText("A pending instruction.")
-    panel._providers.fields["openai_api_key"].setText("unsaved-key")
-    local_hint = panel._conversation.voice._local._vc_stt_no_models
+    panel.page("providers").fields["openai_api_key"].setText("unsaved-key")
+    local_hint = panel.page("conversation").voice._local._vc_stt_no_models
     for theme in ("light", "dark", "light"):
-        panel._general.theme_picker.options[theme].click()
+        panel.page("general").theme_picker.options[theme].click()
         qapp.processEvents()
-        assert panel._conversation.prompt is prompt
+        assert panel.page("conversation").prompt is prompt
         assert prompt.toPlainText() == "A pending instruction."
         assert (
             local_hint.palette().color(QPalette.WindowText).name()
@@ -169,7 +182,7 @@ def test_search_shortcut_and_escape_leave_pending_edits_untouched(panel, qapp):
     panel.show()
     panel.activateWindow()
     qapp.processEvents()
-    panel._conversation.prompt.setPlainText("Pending.")
+    panel.page("conversation").prompt.setPlainText("Pending.")
     QTest.keyClick(panel, Qt.Key_K, Qt.ControlModifier)
     assert panel._search.hasFocus()
     QTest.keyClicks(panel._search, "no-such-setting")
@@ -178,7 +191,7 @@ def test_search_shortcut_and_escape_leave_pending_edits_untouched(panel, qapp):
     assert panel.isVisible()
     assert panel._content_stack.currentWidget() is panel._stack
     assert panel._search.text() == ""
-    assert panel._conversation.prompt.toPlainText() == "Pending."
+    assert panel.page("conversation").prompt.toPlainText() == "Pending."
     assert load_settings()["system_prompt"] != "Pending."
 
 
@@ -187,7 +200,7 @@ def test_search_keys_do_not_steal_a_shortcut_being_recorded(panel, qapp, key):
     panel.show()
     panel.activateWindow()
     qapp.processEvents()
-    button = panel._general.assistant_hotkey
+    button = panel.page("general").assistant_hotkey
     button.click()
     assert button.hasFocus()
     QTest.keyClick(button, key, Qt.ControlModifier)
@@ -215,14 +228,14 @@ def test_search_opens_personality_and_focuses_instructions(panel, qapp):
     QTest.keyClick(panel._search_results.list, Qt.Key_Return)
     qapp.processEvents()
     assert panel._stack.currentWidget() is panel._scrolls["conversation"]
-    assert panel._conversation.tabs.bar.currentIndex() == 3
-    assert panel._conversation.prompt.hasFocus()
-    assert panel._conversation.prompt.property("settingsSearchHit") is True
+    assert panel.page("conversation").tabs.bar.currentIndex() == 3
+    assert panel.page("conversation").prompt.hasFocus()
+    assert panel.page("conversation").prompt.property("settingsSearchHit") is True
 
 
 def test_search_finds_credentials_by_french_alias_without_indexing_their_values(panel, qapp):
     panel.show()
-    page = panel._providers
+    page = panel.page("providers")
     page.fields["azure_speech_api_key"].setText("unique-private-value")
     panel._search.setText("unique-private-value")
     assert panel._search_results.list.count() == 0
@@ -240,8 +253,8 @@ def test_search_never_changes_conversation_mode_to_reveal_a_setting(panel, qapp)
     panel._search.setText("barge-in")
     panel._search_results.activate_current()
     qapp.processEvents()
-    assert panel._conversation.voice.get_settings()["conversation_mode"] == "realtime"
-    assert panel._conversation.voice.mode_picker.options["realtime"].hasFocus()
+    assert panel.page("conversation").voice.get_settings()["conversation_mode"] == "realtime"
+    assert panel.page("conversation").voice.mode_picker.options["realtime"].hasFocus()
     assert "Select Voice Channel" in panel._search_notice.text()
 
 
@@ -252,7 +265,7 @@ def test_search_lands_on_claude_thinking_in_the_llm_tab(open_panel, qapp):
     panel._search.setText("effort")
     panel._search_results.activate_current()
     qapp.processEvents()
-    voice = panel._conversation.voice
+    voice = panel.page("conversation").voice
     assert voice.pipeline_tabs.bar.currentIndex() == 1
     assert voice.llm.fields["anthropic_thinking"].hasFocus()
     assert panel._search_notice.text() == "Found: Thinking & effort"
@@ -265,7 +278,7 @@ def test_search_for_thinking_with_openai_says_where_it_applies(open_panel, qapp)
     panel._search.setText("thinking")
     panel._search_results.activate_current()
     qapp.processEvents()
-    assert panel._conversation.voice.get_settings()["vc_llm_provider"] == "openai"
+    assert panel.page("conversation").voice.get_settings()["vc_llm_provider"] == "openai"
     assert "Claude or Gemini" in panel._search_notice.text()
 
 
@@ -279,7 +292,7 @@ def test_search_expands_advanced_voice_detection_when_available(open_panel, monk
     panel._search.setText("VAD threshold")
     panel._search_results.activate_current()
     qapp.processEvents()
-    processing = panel._audio.processing
+    processing = panel.page("audio").processing
     assert processing.vad_advanced.button.isChecked()
     assert processing.vad_threshold.hasFocus()
 
@@ -288,7 +301,7 @@ def test_all_search_destinations_resolve_to_live_controls(panel):
     from PySide6.QtWidgets import QWidget
 
     for spec in PAGE_SPECS:
-        page = panel._page_widgets[spec.key]
+        page = panel.page(spec.key)
         for target in spec.search:
             for path in (target.control, target.fallback, target.disclosure):
                 if path:
@@ -300,8 +313,8 @@ def test_all_search_destinations_resolve_to_live_controls(panel):
 
 def test_disabling_the_shortcut_preserves_its_value(panel):
     panel.show()
-    toggle = panel._general.assistant_hotkey_enabled
-    shortcut = panel._general.assistant_hotkey
+    toggle = panel.page("general").assistant_hotkey_enabled
+    shortcut = panel.page("general").assistant_hotkey
     original = shortcut.value()
     toggle.setFocus()
     QTest.keyClick(toggle, Qt.Key_Space)
@@ -316,7 +329,7 @@ def test_disabling_the_shortcut_preserves_its_value(panel):
 
 def test_escape_during_shortcut_capture_does_not_close_settings(panel):
     panel.show()
-    shortcut = panel._general.assistant_hotkey
+    shortcut = panel.page("general").assistant_hotkey
     original = shortcut.value()
     shortcut.click()
     QTest.keyClick(shortcut, Qt.Key_Escape)
@@ -349,15 +362,13 @@ def test_unvisited_audio_and_privacy_pages_still_contribute_to_the_save(open_pan
 @pytest.mark.parametrize("key", [spec.key for spec in PAGE_SPECS if spec.refresh])
 def test_navigation_refreshes_the_correct_page(panel, monkeypatch, key):
     refreshed = []
-    monkeypatch.setattr(
-        panel._page_widgets[key], panel._specs[key].refresh, lambda: refreshed.append(key)
-    )
+    monkeypatch.setattr(panel.page(key), panel._specs[key].refresh, lambda: refreshed.append(key))
     panel._sidebar.select_page(key)
     assert refreshed == [key]
 
 
 def test_integrations_contributes_each_nested_page_once(panel):
-    assert set(panel._integrations.get_settings()) == {
+    assert set(panel.page("integrations").get_settings()) == {
         "cli_tools",
         "mcp_servers",
         "skill_sources",
@@ -375,7 +386,7 @@ def test_integrations_contributes_each_nested_page_once(panel):
 def test_escape_keeps_the_changes(panel):
     """Esc rejects the dialog without any QCloseEvent — it must still save."""
     panel.show()
-    panel._conversation.prompt.setPlainText("Answer like a pirate.")
+    panel.page("conversation").prompt.setPlainText("Answer like a pirate.")
 
     QTest.keyClick(panel, Qt.Key_Escape)
 
@@ -402,20 +413,20 @@ def test_every_way_out_saves_exactly_once(panel, monkeypatch, close):
 def test_provider_keys_can_be_updated_and_removed(open_panel, key):
     save_settings({key: "old-value"})
     panel = open_panel()
-    field = panel._providers.fields[key]
+    field = panel.page("providers").fields[key]
     assert field.text() == "old-value"
     field.setText("new-value")
     panel.reject()
     assert load_settings()[key] == "new-value"
     reopened = open_panel()
-    reopened._providers.fields[key].clear()
+    reopened.page("providers").fields[key].clear()
     reopened.reject()
     assert load_settings()[key] == ""
 
 
 def test_every_setting_has_only_one_owner(panel):
     owners = {}
-    for key, page in panel._page_widgets.items():
+    for key, page in ((spec.key, panel.page(spec.key)) for spec in PAGE_SPECS):
         if not hasattr(page, "get_settings"):
             continue
         for setting in page.get_settings():
@@ -445,7 +456,7 @@ def test_provider_search_keeps_edits_and_remasks_keys_when_leaving(panel):
 
     panel.show()
     panel._sidebar.select_page("providers")
-    providers = panel._providers
+    providers = panel.page("providers")
     field = providers.fields["openai_api_key"]
     field.setText("sk-test")
     providers.cards["openai_api_key"].manage.click()
@@ -480,7 +491,7 @@ def test_context_links_open_the_new_destination_without_saving(
 ):
     saves = []
     monkeypatch.setattr(panel_mod, "save_settings", saves.append)
-    panel._resolve(panel._page_widgets[page], link).click()
+    panel._resolve(panel.page(page), link).click()
     assert panel._stack.currentWidget() is panel._scrolls[destination]
     assert saves == []
 
@@ -488,19 +499,19 @@ def test_context_links_open_the_new_destination_without_saving(
 def test_context_links_open_personality_and_telemetry_tabs_without_saving(panel, monkeypatch):
     saves = []
     monkeypatch.setattr(panel_mod, "save_settings", saves.append)
-    panel._general.personality_link.click()
+    panel.page("general").personality_link.click()
     assert panel._current_page_key == "conversation"
-    assert panel._conversation.tabs.bar.currentIndex() == 3
-    panel._privacy.telemetry_link.click()
+    assert panel.page("conversation").tabs.bar.currentIndex() == 3
+    panel.page("privacy").telemetry_link.click()
     assert panel._current_page_key == "diagnostics"
-    assert panel._diagnostics.tabs.bar.currentIndex() == 2
+    assert panel.page("diagnostics").tabs.bar.currentIndex() == 2
     assert saves == []
 
 
 def test_personality_can_be_viewed_with_enter_without_closing_settings(panel, qapp):
     panel.show()
-    panel._general.personality_link.click()
-    page = panel._conversation.attitudes
+    panel.page("general").personality_link.click()
+    page = panel.page("conversation").attitudes
     page._att_list.setCurrentRow(0)
     QTest.keyClick(page._att_list, Qt.Key_Return)
     assert panel.isVisible()
@@ -514,7 +525,7 @@ def test_personality_can_be_viewed_with_enter_without_closing_settings(panel, qa
 
 
 def test_custom_personality_preview_tracks_edits_as_plain_text(panel):
-    page = panel._conversation
+    page = panel.page("conversation")
     page.attitudes._add_attitude()
     page.attitudes._name_edit.setText("Personal")
     page.attitude_combo.setCurrentIndex(page.attitude_combo.findData("Personal"))
@@ -529,15 +540,20 @@ def test_custom_personality_preview_tracks_edits_as_plain_text(panel):
 
 def test_search_reveals_speaker_tuning_without_changing_its_value(panel, qapp):
     panel.show()
-    slider = panel._audio.speakers._threshold_slider
+    slider = panel.page("audio").speakers._threshold_slider
     value = slider.value()
     panel._search.setText("Recognition threshold")
     panel._search_results.activate_current()
     qapp.processEvents()
-    assert panel._audio.tabs.bar.currentIndex() == 1
+    assert panel.page("audio").tabs.bar.currentIndex() == 1
     assert slider.isVisible()
     assert slider.hasFocus()
     assert slider.value() == value
+
+
+def test_a_folder_typed_before_diagnostics_is_opened_reaches_it(panel, tmp_path):
+    panel.page("privacy").output_dir.setText(str(tmp_path))
+    assert panel.page("diagnostics").recordings._recording_dir == str(tmp_path)
 
 
 def test_recording_browser_uses_the_unsaved_privacy_folder(panel, tmp_path):
@@ -549,11 +565,11 @@ def test_recording_browser_uses_the_unsaved_privacy_folder(panel, tmp_path):
         audio.setsampwidth(2)
         audio.setframerate(16000)
         audio.writeframes(b"\x00\x00" * 160)
-    panel._diagnostics.capture.directory.setText(str(tmp_path / "debug"))
-    panel._privacy.recording_enabled.setChecked(True)
-    panel._privacy.output_dir.setText(str(tmp_path))
-    panel._privacy.files_link.click()
-    assert [row.entry.path for row in panel._diagnostics.recordings._rows] == [recording]
+    panel.page("diagnostics").capture.directory.setText(str(tmp_path / "debug"))
+    panel.page("privacy").recording_enabled.setChecked(True)
+    panel.page("privacy").output_dir.setText(str(tmp_path))
+    panel.page("privacy").files_link.click()
+    assert [row.entry.path for row in panel.page("diagnostics").recordings._rows] == [recording]
     assert load_settings()["recording_output_dir"] == ""
     panel.reject()
     assert load_settings()["recording_output_dir"] == str(tmp_path)
@@ -568,8 +584,8 @@ def test_disabling_recording_preserves_its_configuration(open_panel):
     }
     save_settings(saved)
     panel = open_panel()
-    panel._privacy.recording_enabled.setChecked(False)
-    assert not panel._privacy.mode.isEnabled()
+    panel.page("privacy").recording_enabled.setChecked(False)
+    assert not panel.page("privacy").mode.isEnabled()
     panel.reject()
     result = load_settings()
     assert {key: result[key] for key in saved} == {**saved, "recording_enabled": False}
@@ -578,7 +594,7 @@ def test_disabling_recording_preserves_its_configuration(open_panel):
 def test_new_personality_can_be_selected_and_saved_without_leaving_conversation(panel):
     import json
 
-    page = panel._conversation
+    page = panel.page("conversation")
     page.tabs.bar.setCurrentIndex(1)
     page.attitudes._add_attitude()
     page.attitudes._name_edit.setText("Calm")
@@ -607,8 +623,8 @@ def test_temporarily_missing_devices_and_models_are_not_cleared(open_panel, monk
     save_settings(saved)
     panel = open_panel()
     panel._sidebar.select_page("audio")
-    assert "unavailable" in panel._audio.processing.input_combo.currentText()
-    assert "unavailable" in panel._audio.processing.vad_model.currentText()
+    assert "unavailable" in panel.page("audio").processing.input_combo.currentText()
+    assert "unavailable" in panel.page("audio").processing.vad_model.currentText()
     panel.reject()
     result = load_settings()
     assert {key: result[key] for key in saved} == saved
@@ -654,7 +670,7 @@ def _pick(combo, data) -> None:
 def test_revisiting_conversation_keeps_the_picked_attitude(open_panel):
     save_settings({"selected_attitude": "Professional"})
     panel = open_panel()
-    combo = panel._conversation.attitude_combo
+    combo = panel.page("conversation").attitude_combo
     panel._sidebar.select_page("conversation")
 
     combo.setCurrentIndex(combo.findText("Concise"))
@@ -677,8 +693,8 @@ def test_revisiting_conversation_keeps_the_picked_vc_models(open_panel, all_mode
     panel = open_panel()
     panel._sidebar.select_page("conversation")
 
-    _pick(panel._conversation.voice._local.vc_stt_model, stt_models[1].id)
-    _pick(panel._conversation.voice._local.vc_tts_model, tts_models[1].id)
+    _pick(panel.page("conversation").voice._local.vc_stt_model, stt_models[1].id)
+    _pick(panel.page("conversation").voice._local.vc_tts_model, tts_models[1].id)
     _leave_and_come_back(panel, "conversation")
     panel.reject()
 
@@ -693,7 +709,7 @@ def test_revisiting_the_dictation_tab_keeps_the_picked_model(open_panel, all_mod
     panel = open_panel()
     panel._sidebar.select_page("dictation")
 
-    _pick(panel._dictation._model_combo, stt_models[1].id)
+    _pick(panel.page("dictation")._model_combo, stt_models[1].id)
     _leave_and_come_back(panel, "dictation")
     panel.reject()
 
@@ -712,7 +728,7 @@ def test_library_search_clears_filters_and_opens_the_exact_item(panel, qapp, que
     panel.show()
     panel.activateWindow()
     qapp.processEvents()
-    library = panel._models
+    library = panel.page("models")
     library.models.search.setText("hidden model")
     library.models.category.setCurrentIndex(2)
     library.models.availability.setCurrentIndex(1)
@@ -731,14 +747,14 @@ def test_library_search_clears_filters_and_opens_the_exact_item(panel, qapp, que
 
 @pytest.mark.parametrize("source", ["conversation", "audio", "dictation"])
 def test_model_library_links_keep_pending_edits_and_restore_the_model_tab(panel, source):
-    panel._conversation.prompt.setPlainText("Still pending.")
-    panel._models.tabs.bar.setCurrentIndex(1)
-    panel._models.models.search.setText("no result")
-    panel._page_widgets[source].models_link.click()
+    panel.page("conversation").prompt.setPlainText("Still pending.")
+    panel.page("models").tabs.bar.setCurrentIndex(1)
+    panel.page("models").models.search.setText("no result")
+    panel.page(source).models_link.click()
     assert panel._stack.currentWidget() is panel._scrolls["models"]
-    assert panel._models.tabs.bar.currentIndex() == 0
-    assert panel._models.models.search.text() == ""
-    assert panel._conversation.prompt.toPlainText() == "Still pending."
+    assert panel.page("models").tabs.bar.currentIndex() == 0
+    assert panel.page("models").models.search.text() == ""
+    assert panel.page("conversation").prompt.toPlainText() == "Still pending."
     assert load_settings()["system_prompt"] != "Still pending."
 
 
@@ -747,7 +763,7 @@ def test_library_fits_the_minimum_window_width(panel, qapp, tab):
     panel.show()
     panel.resize(panel.minimumSize())
     panel._sidebar.select_page("models")
-    panel._models.tabs.bar.setCurrentIndex(tab)
+    panel.page("models").tabs.bar.setCurrentIndex(tab)
     qapp.processEvents()
     assert panel._scrolls["models"].horizontalScrollBar().maximum() == 0
 
@@ -763,14 +779,14 @@ def test_library_fits_the_minimum_window_width(panel, qapp, tab):
 )
 def test_diagnostics_search_opens_the_matching_tab(panel, qapp, query, tab, control):
     panel.show()
-    before = panel._diagnostics.get_settings()
+    before = panel.page("diagnostics").get_settings()
     panel._search.setText(query)
     panel._search_results.activate_current()
     qapp.processEvents()
     assert panel._stack.currentWidget() is panel._scrolls["diagnostics"]
-    assert panel._diagnostics.tabs.bar.currentIndex() == tab
-    assert panel._resolve(panel._diagnostics, control).hasFocus()
-    assert panel._diagnostics.get_settings() == before
+    assert panel.page("diagnostics").tabs.bar.currentIndex() == tab
+    assert panel._resolve(panel.page("diagnostics"), control).hasFocus()
+    assert panel.page("diagnostics").get_settings() == before
 
 
 def test_collector_search_explains_disabled_export_without_enabling_it(panel, qapp):
@@ -778,18 +794,18 @@ def test_collector_search_explains_disabled_export_without_enabling_it(panel, qa
     panel._search.setText("Collector endpoint")
     panel._search_results.activate_current()
     qapp.processEvents()
-    assert panel._diagnostics.tabs.bar.currentIndex() == 2
-    assert panel._diagnostics.telemetry.provider.hasFocus()
-    assert panel._diagnostics.get_settings()["telemetry_provider"] == "none"
+    assert panel.page("diagnostics").tabs.bar.currentIndex() == 2
+    assert panel.page("diagnostics").telemetry.provider.hasFocus()
+    assert panel.page("diagnostics").get_settings()["telemetry_provider"] == "none"
     assert "Choose OpenTelemetry" in panel._search_notice.text()
 
 
 def test_privacy_link_returns_to_recordings_after_visiting_telemetry(panel):
-    panel._diagnostics.tabs.bar.setCurrentIndex(2)
-    panel._diagnostics.recordings.search.setText("no match")
-    panel._privacy.files_link.click()
-    assert panel._diagnostics.tabs.bar.currentIndex() == 0
-    assert panel._diagnostics.recordings.search.text() == ""
+    panel.page("diagnostics").tabs.bar.setCurrentIndex(2)
+    panel.page("diagnostics").recordings.search.setText("no match")
+    panel.page("privacy").files_link.click()
+    assert panel.page("diagnostics").tabs.bar.currentIndex() == 0
+    assert panel.page("diagnostics").recordings.search.text() == ""
 
 
 def test_license_search_expands_the_license(panel, qapp):
@@ -797,8 +813,8 @@ def test_license_search_expands_the_license(panel, qapp):
     panel._search.setText("MIT license")
     panel._search_results.activate_current()
     qapp.processEvents()
-    assert panel._about.license.button.isChecked()
-    assert panel._about.license.button.hasFocus()
+    assert panel.page("about").license.button.isChecked()
+    assert panel.page("about").license.button.hasFocus()
 
 
 def test_long_recording_names_fit_narrow_settings_and_confirmation(panel, qapp, tmp_path):
@@ -809,13 +825,13 @@ def test_long_recording_names_fit_narrow_settings_and_confirmation(panel, qapp, 
     with wave.open(str(path), "wb") as audio:
         audio.setparams((1, 2, 16000, 0, "NONE", "not compressed"))
         audio.writeframes(b"\x00\x00" * 160)
-    panel._diagnostics.capture.directory.setText(str(tmp_path / "debug"))
-    panel._privacy.output_dir.setText(str(tmp_path))
+    panel.page("diagnostics").capture.directory.setText(str(tmp_path / "debug"))
+    panel.page("privacy").output_dir.setText(str(tmp_path))
     panel.show()
     panel.resize(panel.minimumSize())
-    panel._privacy.files_link.click()
+    panel.page("privacy").files_link.click()
     qapp.processEvents()
-    browser = panel._diagnostics.recordings
+    browser = panel.page("diagnostics").recordings
     assert panel._scrolls["diagnostics"].horizontalScrollBar().maximum() == 0
     browser.delete_shown.click()
     qapp.processEvents()
@@ -835,7 +851,7 @@ def test_long_recording_names_fit_narrow_settings_and_confirmation(panel, qapp, 
 def test_conversation_mode_cards_support_clicks_and_arrow_keys(panel, qapp):
     panel.show()
     panel._sidebar.select_page("conversation")
-    voice = panel._conversation.voice
+    voice = panel.page("conversation").voice
     realtime = voice.mode_picker.options["realtime"]
     channel = voice.mode_picker.options["voice_channel"]
     # The whole card is clickable, including the whitespace below the description.
@@ -855,7 +871,7 @@ def test_conversation_mode_cards_support_clicks_and_arrow_keys(panel, qapp):
 
 
 def test_pipeline_summary_follows_all_three_provider_choices(panel):
-    voice = panel._conversation.voice
+    voice = panel.page("conversation").voice
     assert [item.text() for item in voice.pipeline.providers] == ["Local", "Anthropic", "Piper"]
     voice.vc_stt_provider.setCurrentIndex(2)
     voice.llm.provider.setCurrentIndex(4)
@@ -873,7 +889,7 @@ def test_mode_navigation_and_live_theme_preserve_pending_conversation_edits(pane
 
     panel.show()
     panel._sidebar.select_page("conversation")
-    voice = panel._conversation.voice
+    voice = panel.page("conversation").voice
     voice.llm.fields["openai_model"].setCurrentText("custom-model")
     voice._realtime.openai_voice.setCurrentIndex(1)
     voice.llm.provider.setCurrentIndex(1)
@@ -882,8 +898,8 @@ def test_mode_navigation_and_live_theme_preserve_pending_conversation_edits(pane
     for theme in ("light", "dark"):
         voice.mode_picker.options["realtime"].click()
         apply_theme(theme)
-        panel._conversation.tabs.bar.setCurrentIndex(1)
-        panel._conversation.tabs.bar.setCurrentIndex(0)
+        panel.page("conversation").tabs.bar.setCurrentIndex(1)
+        panel.page("conversation").tabs.bar.setCurrentIndex(0)
         voice.mode_picker.options["voice_channel"].click()
         qapp.processEvents()
         assert voice.get_settings() == before
@@ -898,7 +914,7 @@ def test_conversation_cards_fit_minimum_window_width(panel, qapp):
     panel.show()
     panel.resize(panel.minimumSize())
     panel._sidebar.select_page("conversation")
-    voice = panel._conversation.voice
+    voice = panel.page("conversation").voice
     for mode in ("realtime", "voice_channel"):
         voice.mode_picker.set_value(mode)
         qapp.processEvents()
@@ -917,7 +933,7 @@ def test_mode_cards_preserve_missing_local_models_until_replaced(open_panel, mon
     monkeypatch.setattr(models, "is_tts_model_downloaded", lambda _id: False)
     save_settings({"vc_stt_model": "missing-stt", "vc_tts_model": "missing-tts"})
     panel = open_panel()
-    voice = panel._conversation.voice
+    voice = panel.page("conversation").voice
     for mode in ("voice_channel", "realtime", "voice_channel"):
         voice.mode_picker.set_value(mode)
         assert voice.get_settings()["vc_stt_model"] == "missing-stt"
@@ -938,7 +954,7 @@ def test_provider_management_keeps_one_editor_open_and_masks_collapsed_keys(pane
 
     panel.show()
     panel._navigate("providers")
-    page = panel._providers
+    page = panel.page("providers")
     assert all(not field.isVisible() for field in page.fields.values())
     page.cards["openai_api_key"].manage.click()
     page.fields["openai_api_key"].setText("pending-secret")
@@ -956,7 +972,7 @@ def test_provider_management_keeps_one_editor_open_and_masks_collapsed_keys(pane
 def test_provider_component_and_key_status_are_distinct(panel, monkeypatch):
     import roomkit_ui.widgets.settings.providers_page as providers_mod
 
-    page = panel._providers
+    page = panel.page("providers")
     monkeypatch.setattr(providers_mod, "unavailable_reason", lambda _: None)
     page.refresh()
     assert page.cards["api_key"].status.text() == "No key"
@@ -969,13 +985,22 @@ def test_provider_component_and_key_status_are_distinct(panel, monkeypatch):
     assert "not tested" in page.cards["api_key"].status.toolTip()
 
 
-def test_downloads_use_the_hugging_face_token_before_settings_saves_it(panel):
-    panel._providers.fields["huggingface_token"].setText(" hf_typed_now ")
-    assert panel._models.llms.token() == "hf_typed_now"
+@pytest.mark.parametrize("first", ["providers", "models"])
+def test_downloads_use_the_hugging_face_token_before_settings_saves_it(panel, first):
+    panel.page(first)  # either page may be opened first
+    panel.page("providers").fields["huggingface_token"].setText(" hf_typed_now ")
+    assert panel.page("models").llms.token() == "hf_typed_now"
     assert load_settings()["huggingface_token"] == ""
 
 
+def test_downloads_use_the_saved_token_while_providers_was_never_opened(open_panel):
+    save_settings({"huggingface_token": "hf_saved"})
+    panel = open_panel()
+    assert panel.page("models").llms.token() == "hf_saved"
+    assert "providers" not in panel._page_widgets
+
+
 def test_the_llama_cpp_provider_row_opens_the_llm_tab(panel):
-    panel._providers.llamacpp.manage.click()
+    panel.page("providers").llamacpp.manage.click()
     assert panel._stack.currentWidget() is panel._scrolls["models"]
-    assert panel._models.tabs.bar.currentIndex() == 1
+    assert panel.page("models").tabs.bar.currentIndex() == 1

@@ -91,7 +91,7 @@ def test_existing_cli_fields_stay_readable_after_the_skills_tab_was_rendered(qap
         panel._sidebar.select_page("integrations")
         qapp.processEvents()
         panel.grab()
-        group = panel._integrations
+        group = panel.page("integrations")
         group.tabs.bar.setCurrentIndex(1)
         group.cli._show_edit(0)
         qapp.processEvents()
@@ -123,7 +123,7 @@ def test_global_search_opens_each_integration_destination(panel, qapp, query, ta
     panel.show()
     panel.activateWindow()
     qapp.processEvents()
-    group = panel._integrations
+    group = panel.page("integrations")
     group.mcp._add_server()
     group.mcp._name_edit.setText("Unsaved server")
     group.skills._add_source()
@@ -145,7 +145,7 @@ def test_global_search_opens_each_integration_destination(panel, qapp, query, ta
 
 
 def test_all_integration_edits_survive_tabs_live_theme_and_close(panel, qapp):
-    group = panel._integrations
+    group = panel.page("integrations")
     group.mcp._add_server()
     group.mcp._name_edit.setText("Knowledge")
     group.mcp._transport_combo.setCurrentIndex(2)
@@ -216,7 +216,7 @@ def test_lists_and_editors_keep_fields_readable_after_rendering(panel, qapp, tab
     panel.show()
     panel.resize(panel.minimumSize() if minimum else panel.sizeHint().expandedTo(panel.size()))
     panel._sidebar.select_page("integrations")
-    group = panel._integrations
+    group = panel.page("integrations")
     qapp.processEvents()
     panel.grab()  # Render the initial tab before revealing a hidden editor.
     group.tabs.bar.setCurrentIndex(tab)
@@ -348,7 +348,7 @@ def test_empty_integration_actions_open_the_matching_editor(panel, qapp):
     panel.activateWindow()
     panel._navigate("integrations")
     qapp.processEvents()
-    group = panel._integrations
+    group = panel.page("integrations")
     assert group.tabs.bar.currentIndex() == 0
     for index, page in enumerate((group.mcp, group.cli)):
         group.tabs.bar.setCurrentIndex(index)
@@ -392,10 +392,10 @@ def test_skills_sh_is_reachable_without_scrolling(
         panel.show()
         panel.activateWindow()
         panel._navigate("integrations")
-        panel._integrations.tabs.bar.setCurrentIndex(2)
+        panel.page("integrations").tabs.bar.setCurrentIndex(2)
         qapp.processEvents()
         panel.grab()
-        skills = panel._integrations.skills
+        skills = panel.page("integrations").skills
         before = skills.get_settings()
         browse = skills._my_skills_tab.browse_marketplace
         scroll = panel._scrolls["integrations"]
@@ -451,8 +451,8 @@ async def test_skills_sh_search_install_and_return_to_installed_skills(
     try:
         panel.show()
         panel._navigate("integrations")
-        panel._integrations.tabs.bar.setCurrentIndex(2)
-        skills = panel._integrations.skills
+        panel.page("integrations").tabs.bar.setCurrentIndex(2)
+        skills = panel.page("integrations").skills
         skills._my_skills_tab.browse_marketplace.click()
         marketplace = skills._marketplace_tab
         before = asyncio.all_tasks()

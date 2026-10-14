@@ -230,15 +230,18 @@ def test_encoder_deletion_only_removes_its_model_file(world):
 def test_search_explains_prerequisites_without_enabling_them(world, qapp, query, page_key, field):
     save_settings({"stt_enabled": False, "stt_provider": "openai", "idle_hangup_enabled": False})
     panel = world.open(SettingsPanel)
-    before = {**panel._dictation.get_settings(), **panel._wakeword.get_settings()}
+    before = {**panel.page("dictation").get_settings(), **panel.page("wakeword").get_settings()}
     panel.show()
     panel.activateWindow()
     panel._search.setText(query)
     panel._search_results.activate_current()
     qapp.processEvents()
-    page = panel._page_widgets[page_key]
+    page = panel.page(page_key)
     assert panel._resolve(page, field).hasFocus()
-    assert {**panel._dictation.get_settings(), **panel._wakeword.get_settings()} == before
+    assert {
+        **panel.page("dictation").get_settings(),
+        **panel.page("wakeword").get_settings(),
+    } == before
     assert not panel._search_notice.text().startswith("Found:")
 
 
@@ -252,7 +255,7 @@ def test_voice_pages_fit_at_minimum_width_and_keep_edits_through_theme_changes(
     panel.show()
     panel.resize(panel.minimumSize())
     panel._sidebar.select_page(page_key)
-    page = panel._page_widgets[page_key]
+    page = panel.page(page_key)
     before = page.get_settings()
     apply_theme(theme)
     qapp.processEvents()
@@ -283,12 +286,12 @@ def test_wakeword_wizard_uses_pending_audio_settings(world, monkeypatch):
     monkeypatch.setattr(wakeword_wizard, "WakeWordWizard", Wizard)
     save_settings({"input_device": None, "provider": "openai", "conversation_mode": "realtime"})
     panel = world.open(SettingsPanel)
-    panel._audio.processing.input_combo.addItem("Pending microphone", 42)
-    panel._audio.processing.input_combo.setCurrentIndex(
-        panel._audio.processing.input_combo.count() - 1
+    panel.page("audio").processing.input_combo.addItem("Pending microphone", 42)
+    panel.page("audio").processing.input_combo.setCurrentIndex(
+        panel.page("audio").processing.input_combo.count() - 1
     )
     panel._sidebar.select_page("wakeword")
-    panel._wakeword._open_wizard()
+    panel.page("wakeword")._open_wizard()
     assert opened["input_device"] == 42
     assert opened["capture_rate"] == 24000
     assert load_settings()["input_device"] is None
