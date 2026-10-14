@@ -1,6 +1,7 @@
 """Real RoomKit text routing and streaming, with an in-process test provider."""
 
 import asyncio
+import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -289,6 +290,31 @@ async def test_saved_room_excludes_old_turns_from_current_request(setup_text):
     assert text.count("Bonjour !") == 2
     assert {b.channel_id for b in await kit.store.list_bindings("saved")} == {"text", "ai"}
     await kit.close()
+
+
+async def test_recall_finds_other_threads_and_never_this_session(setup_text):
+    from roomkit_ui.conversations import Conversation, ConversationStore
+
+    settings = {**SETTINGS, "conversation_memory": True}
+    engine = setup_text(TestProvider())
+    await engine.start(settings, text="Plant tulips in the garden", conversation_id="garden")
+    await engine.stop()
+    setup_text(TestProvider(), engine)
+    await engine.start(settings, text="What did I say about the garden?", conversation_id="today")
+    # The next typed turn reuses the session: what it said first is still this session.
+    await engine.start(settings, text="The garden, I mean", conversation_id="today")
+    catalogue = ConversationStore()
+    for thread, title in (("garden", "Spring planting"), ("today", "Today")):
+        entry = {"kind": "message", "role": "user", "text": title, "speaker": ""}
+        catalogue.save(Conversation(id=thread, title=title, entries=[entry]))
+
+    found = json.loads(
+        await engine._handle_engine_tool("recall_conversations", {"query": "garden"})
+    )
+
+    assert [(r["conversation"], r["text"]) for r in found["results"]] == [
+        ("Spring planting", "Plant tulips in the garden")
+    ]
 
 
 async def test_cancel_response_can_continue_on_the_same_channel(setup_text):

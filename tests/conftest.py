@@ -1,5 +1,8 @@
 """Shared fixtures: isolated QSettings so tests never touch real user config."""
 
+import os
+import time
+
 import pytest
 from PySide6.QtCore import QCoreApplication, QEvent, QObject, QSettings
 from PySide6.QtWidgets import QWidget
@@ -79,3 +82,19 @@ def window_shows(qapp):
     qapp.installEventFilter(spy)
     yield spy.shown
     qapp.removeEventFilter(spy)
+
+
+@pytest.fixture
+def utc_minus_4():
+    """This computer's clock four hours behind UTC (Montréal in summer), for one test."""
+    if not hasattr(time, "tzset"):
+        pytest.skip("setting the local time zone needs time.tzset (POSIX)")
+    previous = os.environ.get("TZ")
+    os.environ["TZ"] = "<-04>4"
+    time.tzset()
+    yield
+    if previous is None:
+        os.environ.pop("TZ", None)
+    else:
+        os.environ["TZ"] = previous
+    time.tzset()

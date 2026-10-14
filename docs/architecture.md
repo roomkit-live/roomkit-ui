@@ -96,7 +96,7 @@ graph TB
 | **Watchdog** | `watchdog.py` | Detects unanswered speech (8 s, 90 s when tools are pending) and nudges the model |
 | **Idle hang-up** | `idle_hangup.py` | Ends a session once the conversation goes quiet (never mid-tool-call, while a background task runs or while the assistant speaks) |
 | **Cleanup** | `cleanup.py` | Purge of orphaned qasync/anyio timers and of the FD notifiers a session registered (prevents 100 % CPU) |
-| **Conversations** | `conversations.py`, `memory.py`, `widgets/conversation_history.py` | One RoomKit room per thread, local catalogue and transcript snapshots, selected-thread recap and recall, sliding history panel |
+| **Conversations** | `conversations.py`, `memory.py`, `widgets/conversation_history.py` | One RoomKit room per thread, local catalogue and transcript snapshots, selected-thread recap, recall across threads, sliding history panel |
 | **Navigation panels** | `widgets/sliding_panel.py`, `widgets/conversation_drawer.py`, `widgets/session_drawer.py`, `session_models.py` | Shared branded shell, animation and focus restoration; history or current session details over the unchanged transcript layout. Session signals carry the active models by role (resolved STT/LLM/TTS, decision, thinker, Realtime stages), tools, skills, usage and personality. Model metadata reads only named safe fields from SDK configurations; hangup clears the panel. |
 | **Wake word** | `wakeword/`, `widgets/wakeword_wizard.py` | Shared microphone lifetime, VAD-gated capture, whisper-encoder embeddings matched by DTW against an enrolled fingerprint |
 | **Dictation** | `stt_engine.py`, `stt_sessions.py`, `dictation_stream.py`, `hotkey.py`, `paste.py`, `paste_windows.py`, `tray.py` | Composer or global hotkey → STT recording (OpenAI/local/Deepgram) → draft insertion or paste into the focused app |
@@ -222,11 +222,18 @@ While enabled, `WakeWordController` keeps a shared roomkit `LocalMicSource` runn
 With **Remember conversations** on (default), each conversation has its own durable
 RoomKit room. `Engine.start(conversation_id=..., resume_context=...)` either resumes
 that room or generates a new ID. Live calls within a thread share a room; unrelated
-threads never share context or recall results. Both modes receive a fenced recap in
-`Engine._session_prompt` (user prompt, recap, attitude). The Voice Channel's AIChannel
-reads only the current call's events through `memory.session_window`, avoiding duplicate
-history and treating old requests as quoted context. Recap input is bounded to 50
-messages and 24,000 characters. `recall_conversations` searches the selected room.
+threads never share context. Both modes receive a fenced recap of the selected thread
+only in `Engine._session_prompt` (user prompt, recap, attitude). The Voice Channel's
+AIChannel reads only the current call's events through `memory.session_window`, avoiding
+duplicate history and treating old requests as quoted context. Recap input is bounded
+to 50 messages and 24,000 characters.
+
+`recall_conversations` is the one path across threads, when the model asks: it searches
+every room the catalogue lists (a background task's own room is none), leaves out what
+the selected room stored since `Engine._session_since` (when the session started; a
+reused text session keeps it), and names each hit by its conversation's title. When
+nothing matches, it lists the five most recent other conversations, marked as not
+matches. Recap and recall give times on the computer's clock with their UTC offset.
 
 `ConversationStore` owns the `ui_conversations` table alongside RoomKit's tables in
 `conversations.db`. It saves titles, their source (fallback/generated/manual), timestamps

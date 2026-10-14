@@ -2,6 +2,7 @@
 
 import json
 import stat
+from datetime import UTC, datetime
 
 import pytest
 
@@ -178,17 +179,81 @@ async def test_an_archive_with_only_technical_events_leaves_no_empty_conversatio
     assert store.list() == []
 
 
-async def test_roomkit_recap_and_search_are_scoped_to_the_selected_room():
+async def _recall(kit, query, room_id, *, since=None, catalogue=None):
+    """The tool as the engine calls it: the saved catalogue, this session's start."""
+    result = await memory.recall_conversations(
+        kit,
+        {"query": query},
+        room_id,
+        since=since or datetime.now(UTC),
+        catalogue=ConversationStore().list() if catalogue is None else catalogue,
+    )
+    return json.loads(result)
+
+
+async def test_the_recap_stays_in_its_thread_and_recall_reaches_every_thread():
     from roomkit import RoomKit
 
+    catalogue = ConversationStore()
     kit = RoomKit(store=memory.build_store({"conversation_memory": True}))
-    for room, text in (("one", "My project is a garden"), ("two", "My project is a library")):
+    for room, title, text in (
+        ("one", "Spring planting", "My project is a garden"),
+        ("two", "Reading corner", "My project is a library"),
+    ):
+        catalogue.save(Conversation(id=room, title=title, entries=[message(text)]))
         await memory.ensure_room(kit, room, channels=())
         await _append(kit, room, text)
     recap = await memory.memory_recap(kit, "one")
     assert "garden" in recap and "library" not in recap
-    result = json.loads(await memory.recall_conversations(kit, {"query": "project"}, "two"))
-    assert [r["text"] for r in result["results"]] == ["My project is a library"]
+    # A session in thread "two" finds what thread "one" said, named by its title.
+    result = await _recall(kit, "garden", "two")
+    assert [(r["conversation"], r["text"]) for r in result["results"]] == [
+        ("Spring planting", "My project is a garden")
+    ]
+    await kit.close()
+
+
+async def test_recall_leaves_this_session_out_and_finds_the_threads_earlier_ones():
+    from roomkit import RoomKit
+
+    ConversationStore().save(Conversation(id="trip", title="Porto trip", entries=[message("x")]))
+    kit = RoomKit(store=memory.build_store({"conversation_memory": True}))
+    await memory.ensure_room(kit, "trip", channels=())
+    earlier = datetime(2026, 10, 1, 18, 0, tzinfo=UTC)
+    await _append(kit, "trip", "We booked the hotel in Porto", created_at=earlier)
+    started = datetime(2026, 10, 14, 4, 19, tzinfo=UTC)
+    # A realtime transcript is stored before the tool runs: the question finds itself.
+    await _append(kit, "trip", "What did we decide about Porto?", created_at=started)
+    result = await _recall(kit, "Porto", "trip", since=started)
+    assert [r["text"] for r in result["results"]] == ["We booked the hotel in Porto"]
+    await kit.close()
+
+
+async def test_a_question_nothing_matches_gets_the_recent_conversations(utc_minus_4):
+    from roomkit import RoomKit
+
+    store = ConversationStore()
+    for day in range(1, 8):
+        store.save(
+            Conversation(
+                id=f"day-{day}",
+                title=f"Day {day}",
+                updated_at=f"2026-10-0{day}T04:19:00+00:00",
+                entries=[message("x")],
+            )
+        )
+    kit = RoomKit(store=memory.build_store({"conversation_memory": True}))
+    await memory.ensure_room(kit, "day-7", channels=())
+    started = datetime.now(UTC)
+    await _append(kit, "day-7", "Tu peux rechercher dans nos conversations, on a parlé de quoi ?")
+    result = await _recall(kit, "conversations", "day-7", since=started)
+    assert result["results"] == []
+    assert "not matches" in result["note"]
+    # The five most recent but the open one, last activity on the user's clock.
+    assert result["recent_conversations"] == [
+        {"conversation": f"Day {day}", "last_activity": f"2026-10-0{day} 00:19 UTC-04:00"}
+        for day in (6, 5, 4, 3, 2)
+    ]
     await kit.close()
 
 
@@ -220,7 +285,8 @@ async def test_deleting_a_conversation_leaves_nothing_of_it_on_disk():
     assert await kit.store.get_room(gone.id) is None
     assert await kit.store.get_room(task_room) is None
     assert len(await kit.store.list_events(kept.id)) == 1
-    found = json.loads(await memory.recall_conversations(kit, {"query": "garden"}, gone.id))
+    # Still listed here, so only the search index could find it.
+    found = await _recall(kit, "garden", kept.id, catalogue=[gone, kept])
     assert not found.get("results")
     await kit.close()
     # Not even in the file's free pages or its WAL.

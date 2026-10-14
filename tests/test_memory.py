@@ -21,6 +21,11 @@ from roomkit_ui.memory import (
 )
 
 ROOM_ID = "test-conversation"
+# This session began after every event the fakes store: all are earlier sessions.
+SINCE = datetime(2026, 10, 14, tzinfo=UTC)
+CATALOGUE = [
+    SimpleNamespace(id=ROOM_ID, title="Weekend plans", updated_at="2026-08-01T10:05:00+00:00")
+]
 
 
 def _sqlite_available() -> bool:
@@ -33,6 +38,7 @@ def _sqlite_available() -> bool:
 
 def _event(text: str, role: str, when: str = "2026-08-01 10:00") -> SimpleNamespace:
     return SimpleNamespace(
+        room_id=ROOM_ID,
         content=SimpleNamespace(body=text),
         metadata={"role": role},
         source=SimpleNamespace(channel_id="voice"),
@@ -45,6 +51,7 @@ class _FakeStore:
         self._events = list(events)
         self._hits = list(hits)
         self.search_queries: list[str] = []
+        self.search_rooms: list[str | None] = []
 
     async def get_conversation(self, room_id, *, limit=50):
         assert room_id == ROOM_ID
@@ -52,11 +59,18 @@ class _FakeStore:
 
     async def search_events(self, query, *, room_id=None, limit=20):
         self.search_queries.append(query)
+        self.search_rooms.append(room_id)
         return self._hits[:limit]
 
 
 def _kit(store) -> SimpleNamespace:
     return SimpleNamespace(store=store)
+
+
+async def _recall(kit, query: str) -> str:
+    return await recall_conversations(
+        kit, {"query": query}, ROOM_ID, since=SINCE, catalogue=CATALOGUE
+    )
 
 
 def test_memory_disabled_by_setting():
@@ -71,7 +85,7 @@ def test_memory_availability_follows_roomkit(tmp_path, monkeypatch):
     assert (store is not None) is _sqlite_available()
 
 
-async def test_recap_formats_roles_dates_and_truncates():
+async def test_recap_formats_roles_local_dates_and_truncates(utc_minus_4):
     events = [
         _event("on a parlé du chantier AEC", "user", "2026-08-01 10:00"),
         _event("x" * 500, "assistant", "2026-08-01 10:01"),
@@ -79,13 +93,15 @@ async def test_recap_formats_roles_dates_and_truncates():
     ]
     recap = await memory_recap(_kit(_FakeStore(events=events)), ROOM_ID, max_line_chars=200)
     assert "## This conversation so far" in recap
-    assert "- [2026-08-01 10:00] user: on a parlé du chantier AEC" in recap
+    # Stored in UTC, read on the user's clock with its offset: 10:00 UTC was 06:00 here.
+    assert "- [2026-08-01 06:00 UTC-04:00] user: on a parlé du chantier AEC" in recap
     assert "assistant: " + "x" * 199 + "…" in recap
     assert recap.count("\n- ") == 2  # the empty event is dropped
 
 
 def _stored(text, *, channel, metadata, when="2026-08-01 10:00"):
     return SimpleNamespace(
+        room_id=ROOM_ID,
         content=SimpleNamespace(body=text),
         metadata=metadata,
         source=SimpleNamespace(channel_id=channel),
@@ -130,9 +146,7 @@ async def test_recall_labels_a_cut_answer_as_the_assistant_and_skips_unheard_one
         ),
         _stored("Sunny.", channel="ai", metadata={"cancellation_reason": "superseded"}),
     ]
-    out = json.loads(
-        await recall_conversations(_kit(_FakeStore(hits=hits)), {"query": "rain"}, ROOM_ID)
-    )
+    out = json.loads(await _recall(_kit(_FakeStore(hits=hits)), "rain"))
 
     assert [r["speaker"] for r in out["results"]] == ["assistant (interrupted)"]
 
@@ -169,13 +183,19 @@ async def test_recap_empty_history_is_empty_string():
     assert await memory_recap(_kit(_FakeStore()), ROOM_ID) == ""
 
 
-async def test_recall_returns_hits_as_json():
+async def test_recall_returns_hits_with_their_conversation_and_local_time(utc_minus_4):
     hits = [_event("le projet dont tu parlais", "assistant", "2026-07-30 18:22")]
     store = _FakeStore(hits=hits)
-    out = json.loads(await recall_conversations(_kit(store), {"query": "projet"}, ROOM_ID))
+    out = json.loads(await _recall(_kit(store), "projet"))
     assert store.search_queries == ["projet"]
+    assert store.search_rooms == [None]  # every conversation, not the open one only
     assert out["results"] == [
-        {"when": "2026-07-30 18:22", "speaker": "assistant", "text": "le projet dont tu parlais"}
+        {
+            "conversation": "Weekend plans",
+            "when": "2026-07-30 14:22 UTC-04:00",
+            "speaker": "assistant",
+            "text": "le projet dont tu parlais",
+        }
     ]
 
 
@@ -189,7 +209,7 @@ async def test_technical_and_refused_events_never_enter_recap_or_recall():
     recap = await memory_recap(_kit(store), ROOM_ID)
     assert "Channel voice attached" not in recap and "Refused message" not in recap
     assert "What we actually said" in recap
-    recalled = json.loads(await recall_conversations(_kit(store), {"query": "voice"}, ROOM_ID))
+    recalled = json.loads(await _recall(_kit(store), "voice"))
     assert [e["text"] for e in recalled["results"]] == ["What we actually said"]
 
 
@@ -198,19 +218,18 @@ async def test_recall_without_store_or_query_raises_what_the_model_reads():
     from roomkit import ToolFailedError, ToolRefusedError
 
     with pytest.raises(ToolFailedError, match="not enabled"):
-        await recall_conversations(None, {"query": "x"}, ROOM_ID)
+        await _recall(None, "x")
     with pytest.raises(ToolFailedError, match="not enabled"):
-        await recall_conversations(_kit(object()), {"query": "x"}, ROOM_ID)
+        await _recall(_kit(object()), "x")
     with pytest.raises(ToolRefusedError, match="query is required"):
-        await recall_conversations(_kit(_FakeStore()), {"query": " "}, ROOM_ID)
+        await _recall(_kit(_FakeStore()), " ")
 
 
-async def test_recall_no_match_says_so():
-    out = json.loads(
-        await recall_conversations(_kit(_FakeStore()), {"query": "introuvable"}, ROOM_ID)
-    )
+async def test_recall_no_match_and_no_other_conversation_says_so():
+    out = json.loads(await _recall(_kit(_FakeStore()), "introuvable"))
     assert out["results"] == []
     assert "note" in out
+    assert "recent_conversations" not in out  # the open one is never listed
 
 
 @pytest.mark.skipif(not _sqlite_available(), reason="installed roomkit has no SQLiteStore")

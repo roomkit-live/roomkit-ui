@@ -2,7 +2,8 @@
 
 Each conversation has its own durable room backed by roomkit's ``SQLiteStore``.
 Several Live sessions can use that room. A resume context quotes earlier turns
-from the selected conversation; ``recall_conversations`` searches only that room.
+from the selected conversation only; ``recall_conversations`` searches every
+conversation, minus what the current session said.
 The voice channel's current-turn window excludes earlier sessions, already
 provided in the quoted context, so old goodbye/tool requests are not replayed.
 
@@ -16,10 +17,10 @@ from __future__ import annotations
 import json
 import logging
 import os
-from collections.abc import Collection
+from collections.abc import Collection, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 from roomkit.memory.base import MemoryResult
 from roomkit.memory.sliding_window import SlidingWindowMemory
@@ -33,26 +34,50 @@ LEGACY_ROOM_ID = "main"
 # FENCED_TAGS its cut-aware helpers know).
 RECAP_TAG = "conversation_summary"
 
+# Exchanges recall gives the model, read from a wider search: the current
+# session's own lines and rooms that are no conversation are set aside first.
+_RECALL_RESULTS = 8
+_RECALL_SEARCH = 40
+# Conversations listed when nothing matches.
+_RECENT_CONVERSATIONS = 5
+
 RECALL_TOOL: dict = {
     "type": "function",
     "name": "recall_conversations",
     "description": (
-        "Search earlier exchanges in the selected conversation (full-text, previous "
-        "sessions). Call this when the user refers to something discussed "
-        "earlier — 'last week', 'the other day', 'remember when'. Returns "
-        "matching exchanges with their dates."
+        "Search the user's past conversations with you: every earlier conversation, and "
+        "earlier sessions of this one. What was said in this session is not searched; "
+        "you have it already. Call this when the user refers to something discussed "
+        "before — 'last week', 'the other day', 'remember when', 'what did we talk "
+        "about'. Returns matching exchanges with their conversation's title and the "
+        "user's local date and time. When nothing matches, returns the most recent "
+        "conversations instead (title, last activity): they are not matches."
     ),
     "parameters": {
         "type": "object",
         "properties": {
             "query": {
                 "type": "string",
-                "description": "Words to search for in this conversation's earlier exchanges.",
+                "description": (
+                    "One or two topic words that would appear in what was said: a name, "
+                    "a place, a subject. Every word must appear as written (no "
+                    "synonyms or plural forms), in the language the conversation was "
+                    "held in. Not the user's question, and not words like "
+                    "'conversation'."
+                ),
             }
         },
         "required": ["query"],
     },
 }
+
+
+class CatalogueEntry(Protocol):
+    """A conversation as the history lists it (``conversations.Conversation``)."""
+
+    id: str
+    title: str
+    updated_at: str  # ISO 8601
 
 
 def conversations_db_path() -> Path:
@@ -184,6 +209,17 @@ def _created_at(event: Any) -> datetime:
     return when if when.tzinfo is not None else when.replace(tzinfo=UTC)
 
 
+def _local_time(when: datetime) -> str:
+    """*when* on this computer's clock, its UTC offset given.
+
+    roomkit stores UTC: a bare "04:19" read as the user's time put the
+    model off by the time zone ("04:19" was 00:19 in Montréal).
+    """
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=UTC)
+    return when.astimezone().strftime("%Y-%m-%d %H:%M UTC%:z")
+
+
 def _event_metadata(event: Any) -> dict:
     return getattr(event, "metadata", None) or {}
 
@@ -254,8 +290,7 @@ async def memory_recap(
             continue
         if len(text) > max_line_chars:
             text = text[: max_line_chars - 1] + "…"
-        stamp = event.created_at.strftime("%Y-%m-%d %H:%M")
-        lines.append(f"- [{stamp}] {speaker}: {text}")
+        lines.append(f"- [{_local_time(event.created_at)}] {speaker}: {text}")
     if not lines:
         return ""
     return resume_context(lines)
@@ -285,8 +320,23 @@ def resume_context(lines: list[str]) -> str:
     )
 
 
-async def recall_conversations(kit: Any, arguments: dict, room_id: str) -> str:
+async def recall_conversations(
+    kit: Any,
+    arguments: dict,
+    room_id: str,
+    *,
+    since: datetime,
+    catalogue: Sequence[CatalogueEntry],
+) -> str:
     """Handle the recall_conversations tool call. Returns a JSON string.
+
+    Searches every conversation of *catalogue* (the history, most recent
+    first), each hit named by its title. What *room_id* stored from *since*
+    on is the current session: the model has it already, and the question
+    just asked would find itself. A room the catalogue does not list (a
+    background task's own) is no conversation. When nothing matches, the
+    most recent conversations come instead, so "what did we talk about?"
+    gets an answer.
 
     A refusal or failure raises (``ToolRefusedError`` / ``ToolFailedError``)
     with the words the model should read: Gemini reads any returned body as
@@ -301,21 +351,47 @@ async def recall_conversations(kit: Any, arguments: dict, room_id: str) -> str:
     if not query:
         raise ToolRefusedError("A search query is required.")
     try:
-        events = await store.search_events(query, room_id=room_id, limit=8)
+        events = await store.search_events(query, limit=_RECALL_SEARCH)
     except Exception as exc:
         logger.exception("recall_conversations search failed")
         raise ToolFailedError("The conversation search failed.") from exc
+    titles = {conversation.id: conversation.title for conversation in catalogue}
     results = [
         {
-            "when": event.created_at.strftime("%Y-%m-%d %H:%M"),
+            "conversation": titles[event.room_id],
+            "when": _local_time(event.created_at),
             "speaker": speaker,
             "text": _event_text(event),
         }
         for event in events
-        if (speaker := _recap_speaker(event)) is not None
+        if event.room_id in titles
+        and not (event.room_id == room_id and _created_at(event) >= since)
+        and (speaker := _recap_speaker(event)) is not None
     ]
     if not results:
-        return json.dumps(
-            {"results": [], "note": "No earlier exchange in this conversation matches this query."}
-        )
-    return json.dumps({"results": results}, ensure_ascii=False)
+        return json.dumps(_no_match(room_id, catalogue), ensure_ascii=False)
+    return json.dumps({"results": results[:_RECALL_RESULTS]}, ensure_ascii=False)
+
+
+def _no_match(room_id: str, catalogue: Sequence[CatalogueEntry]) -> dict:
+    """The answer when nothing matches: the latest other conversations, said
+    not to be matches, so the model neither invents nor quotes them as found."""
+    recent = [
+        {
+            "conversation": conversation.title,
+            "last_activity": _local_time(datetime.fromisoformat(conversation.updated_at)),
+        }
+        for conversation in catalogue
+        if conversation.id != room_id
+    ][:_RECENT_CONVERSATIONS]
+    note = "No earlier exchange in any conversation matches this query."
+    if not recent:
+        return {"results": [], "note": note}
+    return {
+        "results": [],
+        "note": (
+            f"{note} The most recent conversations are listed instead: they are not "
+            "matches. Search again with a word from one of their titles, or ask the user."
+        ),
+        "recent_conversations": recent,
+    }

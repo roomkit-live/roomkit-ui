@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import sqlite3
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
@@ -18,6 +19,8 @@ from roomkit_ui.cleanup import cleanup_stale_fds
 from roomkit_ui.tool_events import ToolCall, ToolResult
 
 if TYPE_CHECKING:
+    from datetime import datetime
+
     from roomkit_ui.cli_tools import CliToolManager
     from roomkit_ui.mcp_manager import MCPManager
 
@@ -74,6 +77,7 @@ class ToolMixin:
     _attitude_name: str
     _base_system_prompt: str
     _room_id: str
+    _session_since: datetime
     _resume_context: str
     _memory_recap: str
     _session_settings: dict
@@ -211,13 +215,32 @@ class ToolMixin:
         if name == "generate_image":
             return await self._generate_image(arguments)
         if name == "recall_conversations":
-            # Past-conversation search needs the session's kit and store.
-            from roomkit_ui.memory import recall_conversations
-
-            return await recall_conversations(
-                getattr(self, "_kit", None), arguments, self._room_id
-            )
+            return await self._recall_conversations(arguments)
         return None
+
+    async def _recall_conversations(self, arguments: dict[str, Any]) -> str:
+        """Search every conversation in the history but this session's words
+        (``memory.recall_conversations``), with the session's kit and store.
+
+        The history's titles are read off the loop, where a session's audio runs.
+        """
+        from roomkit import ToolFailedError
+
+        from roomkit_ui.conversations import ConversationStore
+        from roomkit_ui.memory import recall_conversations
+
+        try:
+            catalogue = await asyncio.to_thread(ConversationStore().list)
+        except sqlite3.Error as exc:
+            logger.exception("Could not read the conversation history")
+            raise ToolFailedError("The conversation search failed.") from exc
+        return await recall_conversations(
+            getattr(self, "_kit", None),
+            arguments,
+            self._room_id,
+            since=self._session_since,
+            catalogue=catalogue,
+        )
 
     async def _generate_image(self, arguments: dict[str, Any]) -> list[Any]:
         """Draw, show the image in the chat, and give the model what it drew:

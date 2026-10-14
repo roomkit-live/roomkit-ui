@@ -19,6 +19,7 @@ import asyncio
 import collections
 import logging
 import weakref
+from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
@@ -172,6 +173,8 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, TextMix
         self._cancelling_text_response = False
         self._session_generation = 0
         self._room_id = f"conversation-{uuid4().hex}"
+        # When this session began in its room (UTC): recall leaves out what it said since.
+        self._session_since = datetime.now(UTC)
         self._resume_context = ""
         self._attitude: str = ""  # full description text (injected into prompt)
         self._attitude_name: str = ""  # short display name for the header
@@ -512,6 +515,7 @@ class Engine(CallbackMixin, ToolMixin, RealtimeMixin, VoiceChannelMixin, TextMix
         self._session_generation += 1
         self._room_id = conversation_id or f"conversation-{uuid4().hex}"
         if not reuse:
+            self._session_since = datetime.now(UTC)
             self._resume_context = resume_context
             self._resume_image_entries = list(resume_image_entries or [])
         # Claimed before any await: from here a second start() is refused.
