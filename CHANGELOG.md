@@ -419,6 +419,8 @@ Each released section is the source for that version's GitHub release notes.
   without it and says so; Voice Channel mode is unchanged.
 
 ### Fixed
+- **The assistant says RoomKit UI runs on Windows too** — `get_roomkit_info` said Linux
+  and macOS only.
 - **Checkboxes and number fields in Settings** — every plain checkbox (audio capture
   stages, barge-in, tool use, ElevenLabs streaming, the Agent tab, CLI tools) is now the
   same switch as the rest of Settings, dimmed when unavailable and ringed with the

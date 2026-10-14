@@ -148,7 +148,7 @@ def handle_builtin_tool(name: str) -> str | None:
                     "It lets you have real-time voice conversations with AI, configure multiple "
                     "AI providers, connect MCP servers to give the assistant external tools, "
                     "and includes a system-wide speech-to-text dictation feature. "
-                    "It runs on Linux and macOS."
+                    "It runs on macOS, Linux and Windows."
                 ),
                 "website": "https://www.roomkit.live",
             }
