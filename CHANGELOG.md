@@ -18,6 +18,14 @@ Each released section is the source for that version's GitHub release notes.
   unpacked). 37 voices in American and British English, French, Spanish, Italian and
   Brazilian Portuguese; by default it speaks the speech-recognition language. First audio
   about 0.7 s on a desktop CPU.
+- **Update check** — shortly after startup, then at most once a day, RoomKit UI looks up
+  the latest release (PyPI for a Python install, GitHub for the built app). A newer one
+  shows one line on the home screen, never during a session: Update, or Dismiss to keep
+  that version quiet. Settings → About shows it with the release notes and Check now, and
+  turns the check off. Update runs `uv tool upgrade`, `pipx upgrade` or pip in the app's
+  own environment, then offers a restart; a source checkout and Homebrew get the command
+  to copy, the built app the release page. On Windows, copy the command and run it once
+  the app has quit.
 - **Vui, a local voice that answers inside the conversation** (Conversation → Speak) —
   Vui Nano by fluxions.ai, on an NVIDIA GPU, in English. It hears the dialogue, your
   voice included, so a reply sounds like an answer to how you said it, and a barge-in
@@ -41,6 +49,10 @@ Each released section is the source for that version's GitHub release notes.
   reopen a conversation still covers that conversation only.
 
 ### Fixed
+- **Components installed from the app survive `uv tool upgrade`** — in a uv tool install
+  they were added with `uv pip install`, outside the tool's receipt, and the next upgrade
+  removed them. They now go through `uv tool install`, so the receipt records them.
+  Components an earlier version installed are recorded on the next install or update.
 - **Images shared during a Gemini Live conversation are seen** — with Gemini 3.8 Live the
   assistant answered that it saw no picture (roomkit 0.102 sends it as a video frame).
 - **Times the assistant reads from past conversations are on your clock** — recalled

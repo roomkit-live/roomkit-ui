@@ -40,9 +40,11 @@ roomkit-ui
   `transformers` versions, so take at most one of them (`"roomkit-ui[all,smart-turn]"`),
   and `pocket-tts` and `vui` pull in torch. `vui` installs on Python 3.12 only:
   `uv tool install --python 3.12 "roomkit-ui[all,vui]"`.
-- Upgrade with `uv tool upgrade roomkit-ui`, remove with `uv tool uninstall roomkit-ui`.
-  A backend the app installed itself (Settings → Models & components → Components) is
-  not kept by an upgrade: name it in `uv tool install` instead, and it stays.
+- Upgrade from the app (it tells you when a release is out; Settings → About) or with
+  `uv tool upgrade roomkit-ui`; remove with `uv tool uninstall roomkit-ui`. A backend the
+  app installs (Settings → Models & components → Components) is recorded in the tool's
+  receipt, so upgrades keep it. One installed by an earlier version is recorded on the
+  next component install or update from the app.
 - To try the `main` branch before it is released:
   `uv tool install --python 3.12 "roomkit-ui[all] @ git+https://github.com/roomkit-live/roomkit-ui"`.
 - On macOS, the microphone permission goes to the terminal you start `roomkit-ui` from.

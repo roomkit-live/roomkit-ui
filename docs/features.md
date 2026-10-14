@@ -435,6 +435,8 @@ The Components tab lists the dependencies separately, with name and installation
 It preserves automatic installation, command copying in a source checkout, bundled-build
 restrictions, conflict confirmation and cancellation. Installation output is expandable;
 the last outcome and any required restart remain visible after reopening Settings.
+In a uv tool install a component goes through the tool's receipt (`uv tool install`
+with the environment's own Python), so `uv tool upgrade` keeps it.
 
 ### Diagnostics
 
@@ -455,6 +457,14 @@ are plain, unencrypted WAV files. Settings → Diagnostics groups three tabs:
 
 About shows the installed application version and runtime, copies those details for
 support, links to the project website and keeps the complete MIT license in a disclosure.
+Its Updates section turns the daily update check off (on by default, never in a source
+checkout), says when a newer release is out with Update, Release notes and Check now, and
+offers Restart now once updated. A newer release also shows one line on the home screen,
+never during a session, with Update and Dismiss. Update runs `uv tool upgrade`, `pipx
+upgrade` or pip in the app's own environment and refuses while a session is open; a
+source checkout and Homebrew get the command to copy, the built app the release page, and
+on Windows the command is copied to run once the app has quit (its files stay locked
+while it runs).
 
 ### UI
 
