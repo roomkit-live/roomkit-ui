@@ -107,13 +107,77 @@ def test_an_exclusive_extra_names_the_one_it_would_break(environment):
     assert install_plan(component_of("gemini")).conflicts == ()
 
 
-def test_a_uv_tool_install_is_told_an_upgrade_leaves_it_out(environment, tmp_path):
-    (tmp_path / "uv-receipt.toml").write_text("[tool]\n")
-    environment.setattr(comp.sys, "prefix", str(tmp_path))
+RECEIPT = """\
+[tool]
+requirements = [{ name = "roomkit-ui", extras = ["all", "smart-turn"] }, { name = "rich" }]
+python = "3.12"
+"""
+
+
+@pytest.fixture
+def tool_env(environment, tmp_path):
+    """A uv tool environment the app runs in, on Linux."""
+    env = tmp_path / "tools" / "roomkit-ui"
+    env.mkdir(parents=True)
+    (env / "uv-receipt.toml").write_text(RECEIPT)
+    environment.setattr(comp.sys, "prefix", str(env))
+    environment.setattr(comp.sys, "platform", "linux")
+    environment.setattr(comp, "kept_extras", lambda recorded: tuple(recorded))
+    return env
+
+
+def test_a_uv_tool_install_goes_through_its_receipt_so_upgrades_keep_it(tool_env):
+    plan = install_plan(component_of("gemini"))
+
+    assert plan.how is Installer.APP
+    # Every extra the receipt records, plus this one; the environment's Python; no pin.
+    assert plan.argv == (
+        "/usr/bin/uv",
+        "tool",
+        "install",
+        "--python",
+        "3.12",
+        "--with",
+        "rich",
+        "roomkit-ui[all,smart-turn,gemini]",
+    )
+    assert ("UV_TOOL_DIR", str(tool_env.parent)) in plan.env
+    assert plan.note == ""
+
+
+def test_an_exclusive_component_replaces_the_receipts_other_one(tool_env):
+    plan = install_plan(component_of("neutts"))
+
+    assert plan.argv[-1] == "roomkit-ui[all,neutts]"
+
+
+def test_components_an_older_version_added_join_the_receipt(tool_env, environment):
+    environment.setattr(comp, "kept_extras", lambda recorded: (*recorded, "anthropic"))
 
     plan = install_plan(component_of("gemini"))
 
+    assert plan.argv[-1] == "roomkit-ui[all,smart-turn,anthropic,gemini]"
+
+
+def test_on_windows_a_uv_tool_install_keeps_uv_pip_and_says_an_upgrade_drops_it(
+    tool_env, environment
+):
+    # uv tool install would rewrite roomkit-ui.exe, which Windows keeps locked.
+    environment.setattr(comp.sys, "platform", "win32")
+
+    plan = install_plan(component_of("gemini"))
+
+    assert plan.argv[1:3] == ("pip", "install")
+    assert plan.argv[-1] == f"roomkit-ui[gemini]=={VERSION}"
     assert "uv tool install 'roomkit-ui[gemini]'" in plan.note
+
+
+def test_a_receipt_the_app_cannot_rebuild_keeps_uv_pip(tool_env):
+    (tool_env / "uv-receipt.toml").write_text(RECEIPT + "[tool.options]\nindex-url = 'x'\n")
+
+    plan = install_plan(component_of("gemini"))
+
+    assert plan.argv[1:3] == ("pip", "install")
 
 
 def test_heavy_components_say_so_and_some_need_a_restart():

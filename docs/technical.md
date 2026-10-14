@@ -125,12 +125,28 @@ as the command that installs it. Extras that pin conflicting `transformers` vers
 A missing backend is a state, not a fault: `require()` raises `FeatureUnavailableError`
 (with the feature key) before anything imports it, and a session start reports it as
 `component_missing` without a traceback. `components.py` groups the features by extra and
-says how this install takes one (`install_plan`): in a plain environment the app runs
-`uv pip install --python <this interpreter> 'roomkit-ui[<extra>]==<version>'` (or this
-environment's pip) through `component_installer.py`, one install at a time for the whole
-app; a source checkout gets `uv sync --inexact --extra <extra>`; a frozen build nothing.
+says how this install takes one (`install_plan`), run through `component_installer.py`, one
+install at a time for the whole app:
+
+- a uv tool environment (`install_env.uv_tool_receipt`): `uv tool install --python <the
+  receipt's, else this X.Y> 'roomkit-ui[<extras>]'`, where the extras are the receipt's, those
+  the environment carries beyond it (`env_extras.kept_extras`: components an older version
+  added with `uv pip`) and the new one, an exclusive extra replacing the other. The receipt
+  then records it, so `uv tool upgrade` keeps it. No version pin: it would go into the
+  receipt and block every later upgrade. `UV_TOOL_DIR` points uv at this environment;
+- any other plain environment (and a uv tool one on Windows, where `uv tool install`
+  rewrites the running `roomkit-ui.exe`, or one whose receipt a reinstall would lose part
+  of): `uv pip install --python <this interpreter> 'roomkit-ui[<extra>]==<version>'` (or
+  this environment's pip);
+- a source checkout gets `uv sync --inexact --extra <extra>`; a frozen build nothing.
+
 Settings → Models & components → Components, the line under a combo whose choice is missing
 (`widgets/install_offer.py`) and the chat after a failed start all use it.
+
+Which extras an environment carries is read from its installed distributions
+(`env_extras`): an extra counts when every distribution it names is installed and one of
+them is not something the core pulls in anyway; at most one exclusive extra. Module probes
+say whether a feature works, not which extra brought it.
 
 ### Tool calls
 

@@ -8,9 +8,12 @@ depends on how the app itself was installed:
   there is nothing to run;
 * a source checkout (an editable install) belongs to ``uv sync``, which
   would undo anything pip added: the user gets the command to run there;
-* any other environment (pip, pipx, uv tool): the app runs the install, with
-  uv when it is on the PATH, else pip, pinned to the running version so the
-  app itself never moves.  Only the app's own extras are ever installed.
+* a uv tool environment: the app runs ``uv tool install`` with the extras its
+  receipt records plus this one, so ``uv tool upgrade`` keeps it
+  (``install_env``);
+* any other environment (pip, pipx): the app runs the install, with uv when
+  it is on the PATH, else pip, pinned to the running version so the app
+  itself never moves.  Only the app's own extras are ever installed.
 
 Pure logic: the runner (``component_installer``) and the pages call in.
 """
@@ -19,15 +22,18 @@ from __future__ import annotations
 
 import importlib.metadata
 import importlib.util
-import json
+import shlex
 import shutil
+import subprocess  # nosec B404 — list2cmdline only: nothing is run here
 import sys
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from urllib.parse import unquote, urlsplit
 
+from roomkit_ui.env_extras import kept_extras
 from roomkit_ui.features import DISTRIBUTION, EXCLUSIVE_EXTRAS, FEATURES, is_available
+from roomkit_ui.install_env import UvToolReceipt, uv_tool_install_argv, uv_tool_receipt, with_extra
+from roomkit_ui.install_env import editable_checkout as _editable_checkout
 
 # What a user should know before installing one: its weight.
 _NOTES = {
@@ -88,6 +94,7 @@ class InstallPlan:
     command: str = ""  # what the user runs (COMMAND), or what the app runs, shown
     conflicts: tuple[str, ...] = ()  # installed components it would break
     note: str = ""
+    env: tuple[tuple[str, str], ...] = ()  # set for what the app runs (APP)
 
 
 def components() -> list[Component]:
@@ -133,17 +140,67 @@ def install_plan(component: Component) -> InstallPlan:
             conflicts=conflicts,
             note=f"A source checkout: run it in {checkout}.",
         )
+    receipt = _rebuildable_receipt()
+    if receipt is not None:
+        return _uv_tool_plan(component, receipt, conflicts)
     spec = _spec(component.extra)
-    argv = _installer_argv(spec)
+    argv = installer_argv(spec)
     if argv is None:
         return InstallPlan(Installer.COMMAND, command=f"pip install '{spec}'", conflicts=conflicts)
     return InstallPlan(
         Installer.APP,
         argv=argv,
-        command=" ".join(argv[:-1] + (f"'{spec}'",)),
+        command=shown_command(argv),
         conflicts=conflicts,
         note=_environment_note(component),
     )
+
+
+def _rebuildable_receipt() -> UvToolReceipt | None:
+    """The receipt a component install goes through, None for ``uv pip``.
+
+    Not on Windows: ``uv tool install`` rewrites roomkit-ui.exe, which Windows
+    keeps locked while the app runs, so the install would fail.  There the
+    component goes in with ``uv pip`` and the next upgrade leaves it out
+    (``_environment_note`` says so).
+    """
+    if sys.platform == "win32":
+        return None
+    receipt = uv_tool_receipt()
+    return receipt if receipt is not None and receipt.rebuildable else None
+
+
+def _uv_tool_plan(
+    component: Component, receipt: UvToolReceipt, conflicts: tuple[str, ...]
+) -> InstallPlan:
+    """``uv tool install`` with the receipt's extras and *component*'s: the
+    receipt then records it, and ``uv tool upgrade`` keeps it."""
+    extras = with_extra(kept_extras(receipt.extras), component.extra)
+    uv = uv_path()
+    argv = uv_tool_install_argv(uv or "uv", receipt, extras)
+    if uv is None:
+        return InstallPlan(Installer.COMMAND, command=shown_command(argv), conflicts=conflicts)
+    return InstallPlan(
+        Installer.APP,
+        argv=argv,
+        command=shown_command(argv),
+        conflicts=conflicts,
+        env=receipt.environment(),
+    )
+
+
+def uv_path() -> str | None:
+    """uv, looked for where a Dock-started app's PATH does not reach too."""
+    from roomkit_ui.cli_exec import search_path
+
+    return shutil.which("uv", path=search_path())
+
+
+def shown_command(argv: tuple[str, ...]) -> str:
+    """*argv* as the user would type it in this system's shell."""
+    if sys.platform == "win32":
+        return subprocess.list2cmdline(argv)
+    return shlex.join(argv)
 
 
 def _conflicts(component: Component) -> tuple[str, ...]:
@@ -167,36 +224,18 @@ def _spec(extra: str) -> str:
     return f"{DISTRIBUTION}[{extra}]=={version}"
 
 
-def _installer_argv(spec: str) -> tuple[str, ...] | None:
+def installer_argv(spec: str, *, upgrade: bool = False) -> tuple[str, ...] | None:
     """uv when it is on the PATH (it targets this interpreter's environment),
     else this environment's pip; None when neither is there (a uv-made venv
-    carries no pip)."""
-    from roomkit_ui.cli_exec import search_path
-
-    uv = shutil.which("uv", path=search_path())
+    carries no pip).  *upgrade* lets the app itself move, and nothing else
+    that need not."""
+    uv = uv_path()
     if uv:
-        return (uv, "pip", "install", "--python", sys.executable, spec)
+        flags = ("--upgrade-package", DISTRIBUTION) if upgrade else ()
+        return (uv, "pip", "install", "--python", sys.executable, *flags, spec)
     if importlib.util.find_spec("pip") is not None:
-        return (sys.executable, "-m", "pip", "install", spec)
+        return (sys.executable, "-m", "pip", "install", *(("--upgrade",) if upgrade else ()), spec)
     return None
-
-
-def _editable_checkout() -> Path | None:
-    """The source tree the app runs from, when it is installed editable."""
-    try:
-        raw = importlib.metadata.distribution(DISTRIBUTION).read_text("direct_url.json")
-    except importlib.metadata.PackageNotFoundError:
-        return None
-    if not raw:
-        return None
-    try:
-        data = json.loads(raw)
-    except ValueError:
-        return None
-    if not (data.get("dir_info") or {}).get("editable"):
-        return None
-    url = urlsplit(str(data.get("url") or ""))
-    return Path(unquote(url.path)) if url.scheme == "file" else None
 
 
 def _environment_note(component: Component) -> str:

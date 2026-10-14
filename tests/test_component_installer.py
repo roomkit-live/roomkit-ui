@@ -239,3 +239,19 @@ def test_component_filters_survive_refresh_and_clear_to_the_same_rows(qapp, monk
         assert not page.empty.isVisibleTo(page)
     finally:
         shiboken6.delete(page)
+
+
+def test_the_plan_points_the_installer_at_this_environment(runner, qtbot, monkeypatch):
+    plan = InstallPlan(
+        Installer.APP,
+        argv=(sys.executable, "-c", "import os; print(os.environ['UV_TOOL_DIR'])"),
+        command="uv tool install x",
+        env=(("UV_TOOL_DIR", "/opt/tools"),),
+    )
+    monkeypatch.setattr(ci, "install_plan", lambda _c: plan)
+
+    with qtbot.waitSignal(runner.finished, timeout=10000):
+        runner.install(component_of("gemini"))
+
+    assert "/opt/tools" in runner.log()
+

@@ -15,7 +15,7 @@ import sys
 
 from PySide6.QtCore import QCoreApplication, QObject, QProcess, QProcessEnvironment, Signal
 
-from roomkit_ui import features
+from roomkit_ui import env_extras, features
 from roomkit_ui.components import Component, Installer, install_plan
 
 logger = logging.getLogger(__name__)
@@ -64,6 +64,8 @@ class ComponentInstaller(QObject):
         env = QProcessEnvironment.systemEnvironment()
         # pip buffers what it prints into a pipe: the user would see it in bursts.
         env.insert("PYTHONUNBUFFERED", "1")
+        for name, value in plan.env:
+            env.insert(name, value)
         process.setProcessEnvironment(env)
         process.readyReadStandardOutput.connect(self._read)
         process.finished.connect(self._done)
@@ -115,6 +117,7 @@ class ComponentInstaller(QObject):
         self._process = None
         process.deleteLater()
         features.refresh()
+        env_extras.refresh()
         message = self._outcome(component, ok, exit_code)
         logger.info("Install of %s: %s", component.extra, message)
         self.last_result = (component.extra, ok and not self._cancelled, message)
