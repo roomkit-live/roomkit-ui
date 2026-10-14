@@ -20,6 +20,7 @@ from roomkit_ui.settings import load_settings
 from roomkit_ui.stt_engine import STTEngine
 from roomkit_ui.text_chat import image_chat_unavailable, text_chat_unavailable
 from roomkit_ui.tool_events import ToolCall, ToolResult
+from roomkit_ui.update_check import update_service
 from roomkit_ui.widgets.chat_view import ChatView
 from roomkit_ui.widgets.composer_dictation import ComposerDictation
 from roomkit_ui.widgets.conversation_composer import ConversationComposer
@@ -30,6 +31,7 @@ from roomkit_ui.widgets.session_info import SessionInfoBar
 from roomkit_ui.widgets.session_loading import SessionLoading
 from roomkit_ui.widgets.settings import SettingsPanel
 from roomkit_ui.widgets.skill_approval_dialog import show_skill_approval
+from roomkit_ui.widgets.update_notice import UpdateNotice
 from roomkit_ui.widgets.voice_name_dialog import ask_voice_name
 from roomkit_ui.widgets.vu_meter import VUMeter
 
@@ -72,6 +74,8 @@ class MainWindow(QMainWindow):
 
         self._header = ConversationHeader()
         root.addWidget(self._header)
+        self._update_notice = UpdateNotice(central)  # parented: never a window of its own
+        root.addWidget(self._update_notice)
 
         # ── Session info bar ──
         self._info_bar = SessionInfoBar()
@@ -120,6 +124,7 @@ class MainWindow(QMainWindow):
         self._history.drawer.settings_requested.connect(self._open_settings)
 
         self._engine.state_changed.connect(self._on_state_changed)
+        self._engine.state_changed.connect(self._follow_session_for_updates)
         self._engine.transcription.connect(self._on_transcription)
         self._engine.text_reply_stopped.connect(self._chat.stop_text_reply)
         self._engine.mic_audio_level.connect(self._vu.set_mic_level)
@@ -340,6 +345,12 @@ class MainWindow(QMainWindow):
         except Exception as e:
             logger.exception("Failed to schedule engine stop")
             self._chat.add_error(str(e))
+
+    def _follow_session_for_updates(self, state: str) -> None:
+        """No update runs, and none is offered, while a session is open."""
+        session_open = state not in (EngineState.IDLE, EngineState.ERROR)
+        update_service().set_session_open(session_open)
+        self._update_notice.set_session_open(session_open)
 
     def _apply_idle_hangup_settings(self) -> None:
         settings = load_settings()

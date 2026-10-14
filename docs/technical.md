@@ -148,6 +148,23 @@ Which extras an environment carries is read from its installed distributions
 them is not something the core pulls in anyway; at most one exclusive extra. Module probes
 say whether a feature works, not which extra brought it.
 
+### Updates
+
+`update_check.UpdateService` (one per app) checks shortly after startup, then at most once a
+day, unless the About page's switch is off; never in a source checkout. `updates.fetch_latest`
+asks PyPI's JSON (Python installs) or GitHub's latest release (built apps) with httpx, a 10 s
+timeout and the last ETag; only a final X.Y.Z counts. Any failure is a log line. What it
+found persists (`update_latest`, `update_etag`, `update_checked_at`), and a dismissed version
+(`update_dismissed`) keeps the home-screen notice (`widgets/update_notice.py`) quiet. The
+notice shows only while no session is open. `updates.update_plan` follows the install kind
+(`install_env.install_kind`): uv tool → `uv tool upgrade`, or `uv tool install --upgrade`
+when components sit outside the receipt; pipx → `pipx upgrade`; pip → an upgrade of the app
+alone with the extras it carries; checkout → `git pull && uv sync --inexact`; Homebrew →
+`brew upgrade --cask roomkit-ui` (never run by the app: the cask's uninstall quits it); a
+built app → the release page. On Windows the user runs the command after quitting (the
+program's files are locked). The app runs the update on the component installer (`UPDATE`
+key), refuses it under an open session, then offers a restart.
+
 ### Tool calls
 
 Tools are grouped by source (`ToolSet`: built-in, CLI, MCP). Every channel built with tools

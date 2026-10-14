@@ -537,9 +537,14 @@ PAGE_SPECS = (
         "About",
         "System",
         "information-circle",
-        lambda _: _AboutPage(),
+        _AboutPage,
         search=(
             SearchTarget("About RoomKit", "credits à propos version", "copy_info"),
+            SearchTarget(
+                "Check for updates automatically",
+                "update upgrade new version mise à jour nouvelle version",
+                "update_check",
+            ),
             SearchTarget(
                 "MIT license", "licence copyright", "license.button", disclosure="license"
             ),

@@ -353,6 +353,16 @@ def _wire_wake_word(
     return wake
 
 
+def _start_update_check(window: MainWindow) -> None:
+    """Look for a newer release soon after startup, then at most once a day;
+    a save of Settings may have switched the check on."""
+    from roomkit_ui.update_check import update_service
+
+    service = update_service()
+    service.start()
+    window.settings_saved.connect(service.check_if_due)
+
+
 def _quit_on_sigint(app: QApplication) -> QTimer:
     """Let Ctrl+C quit cleanly instead of being swallowed by the Qt loop.
 
@@ -409,6 +419,7 @@ def main() -> None:
     wake = _wire_wake_word(app, window, stt, tray, settings)  # noqa: F841
     # The call stops hearing the user through RoomKit Microphone only when the app quits.
     app.aboutToQuit.connect(window._call_relay.close)
+    _start_update_check(window)
     sigint_timer = _quit_on_sigint(app)  # noqa: F841
 
     with loop:

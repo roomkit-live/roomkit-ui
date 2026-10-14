@@ -311,6 +311,14 @@ _DEFAULTS = {
         for provider in ("openai", "gemini", "xai", "meta")
         for field in ("size", "aspect_ratio", "resolution", "quality", "thinking")
     },
+    # Update check (update_check.py): the About page's switch; then what the
+    # last check found, when (epoch seconds, at most one a day) and the
+    # endpoint's ETag, and the version whose notice the user dismissed
+    "update_check": True,
+    "update_checked_at": "",
+    "update_latest": "",
+    "update_etag": "",
+    "update_dismissed": "",
 }
 
 # Keys renamed since a release shipped: new key → (old key, old value → new value).
@@ -452,7 +460,8 @@ def load_setting(key: str) -> Any:
     """
     if key in _SECRET_KEYS:
         raise ValueError(f"{key} is a secret: read it with load_settings()")
-    return QSettings().value(f"room/{key}", _DEFAULTS[key])
+    default = _DEFAULTS[key]
+    return _coerce_loaded(key, default, QSettings().value(f"room/{key}", default))
 
 
 def save_settings(settings: dict) -> None:

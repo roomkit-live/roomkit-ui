@@ -103,7 +103,7 @@ class InstallOffer(QWidget):
         self._button.setVisible(plan.how is not Installer.NONE)
         self._button.setText("Install" if plan.how is Installer.APP else "Copy command")
         self._button.setToolTip(plan.command)
-        self._button.setEnabled(plan.how is not Installer.APP or running is None)
+        self._button.setEnabled(plan.how is not Installer.APP or not installer().busy)
 
     def _act(self) -> None:
         if self._component is None:

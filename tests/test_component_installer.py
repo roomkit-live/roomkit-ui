@@ -255,3 +255,20 @@ def test_the_plan_points_the_installer_at_this_environment(runner, qtbot, monkey
 
     assert "/opt/tools" in runner.log()
 
+
+def test_an_app_update_stays_out_of_the_components_tab(runner, qtbot, monkeypatch):
+    plan = InstallPlan(Installer.APP, argv=(sys.executable, "-c", "print('Updated')"), command="u")
+    monkeypatch.setattr(ci, "current_version", lambda: "0.3.1")
+    page = components_page._ComponentsPage({})
+    try:
+        with qtbot.waitSignal(runner.finished, timeout=10000):
+            assert runner.update(plan)
+            assert not runner.install(component_of("gemini"))  # one job at a time
+
+        assert "Updated" in runner.log()
+        assert page._log.toPlainText() == ""
+        assert not page._activity.isVisibleTo(page)
+        page.refresh()
+        assert page._log.toPlainText() == ""
+    finally:
+        shiboken6.delete(page)

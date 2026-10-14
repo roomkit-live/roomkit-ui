@@ -87,6 +87,7 @@ graph TB
 |---|---|---|
 | **App bootstrap** | `app.py` | Graphics environment decided before PySide6 loads (Linux-only OpenGL probe, Chromium flags), `--doctor`, QApplication + qasync loop, logging, hotkeys, tray, wake word |
 | **Optional backends** | `features.py`, `components.py`, `component_installer.py`, `install_env.py`, `env_extras.py`, `widgets/install_offer.py` | Extras ↔ import probes ↔ install commands; a missing backend is reported, not raised as a fault, and offered for install: Settings → Models & components → Components, under the combo that picks it, in the chat after a failed start. The app installs only its own extras, and only where it may (not a source checkout, not a frozen build): in a uv tool environment through its receipt, so an upgrade keeps them; elsewhere pinned to its version |
+| **Updates** | `updates.py`, `update_check.py`, `widgets/update_notice.py`, `widgets/settings/about_page.py` | A daily check for a newer final release (PyPI, or GitHub for the built app), opt-out in About; a notice on the home screen outside sessions; the update the install takes (uv tool, pipx, pip run by the app's installer; a command for a checkout, Homebrew and Windows; the release page for the built app), then a restart |
 | **Engine shell** | `engine.py`, `engine_state.py` | Session lifecycle (`start` as its own task, `stop` cancels it), state machine (`idle/connecting/active/stopping/error`), model caching across sessions, kit build, ordered teardown |
 | **Engine mixins** | `engine_vc.py`, `engine_realtime.py`, `engine_tools.py`, `engine_callbacks.py` | Mode-specific session builders, tool dispatch, provider→Qt callbacks. Mixins hold no state — all attributes live on `Engine` |
 | **Session builders** | `engine_vc_helpers.py`, `vc_stt.py`, `realtime_providers.py`, `engine_audio.py` | Stateless builders: VC STT (and the turn VAD a turnless one needs)/LLM/barge-in/TTS filter/Smart Turn; realtime provider configs and per-provider audio wiring; AEC/denoiser/VAD/diarization/recorder pipelines |
@@ -283,6 +284,7 @@ their ordinary tool row and text result. Private conversations keep the HTML in 
   install through explicit git sources, while well-known results are downloaded over
   https into local skill folders after index/path validation.
 - **edge-ai-models (GitHub)**: model distribution repo; downloads resolve Git LFS pointers to S3 URLs. Hugging Face serves the Smart Turn model and the wake-word encoder, each pinned to a commit and a SHA-256.
+- **Update check**: PyPI's JSON (`/pypi/roomkit-ui/json`) for a Python install, GitHub's latest release for the built app; at most once a day, with an ETag, a 10 s timeout and no other data than the app's version in the User-Agent. Off in About.
 
 ## Infrastructure & deployment
 

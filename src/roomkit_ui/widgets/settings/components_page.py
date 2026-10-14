@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from roomkit_ui.component_installer import installer, restart_app
+from roomkit_ui.component_installer import UPDATE, installer, restart_app
 from roomkit_ui.components import Component, Installer, components, install_plan
 from roomkit_ui.theme import fixed_font_family
 from roomkit_ui.widgets.settings.controls import (
@@ -76,7 +76,7 @@ class _ComponentRow(QWidget):
         self.action.setText("Install" if plan.how is Installer.APP else "Copy command")
         self.action.setAccessibleName(f"{self.action.text()} for {self.component.title}")
         self.action.setToolTip(plan.command)
-        self.action.setEnabled(plan.how is not Installer.APP or running is None)
+        self.action.setEnabled(plan.how is not Installer.APP or not installer().busy)
         note = ""
         if not self.installed:
             if plan.how is Installer.NONE:
@@ -216,7 +216,9 @@ class _ComponentsPage(QWidget):
     def refresh(self) -> None:
         runner = installer()
         running = runner.running
-        self._log.setPlainText("\n".join(runner.log()))
+        # An app update runs on the same installer: its output is the About page's.
+        log = runner.log() if runner.current != UPDATE else []
+        self._log.setPlainText("\n".join(log))
         self._cancel.setVisible(running is not None)
         self._restart.setVisible(False)
         message = f"Installing {running.title}…" if running else ""
@@ -227,8 +229,8 @@ class _ComponentsPage(QWidget):
                 installed and (component.needs_restart or not component.installed())
             )
         self._progress.setText(message)
-        self._activity.setVisible(bool(message or runner.log()))
-        self._details.setVisible(bool(runner.log()))
+        self._activity.setVisible(bool(message or log))
+        self._details.setVisible(bool(log))
         for row in self._rows:
             row.refresh()
         self._filter()
@@ -237,6 +239,8 @@ class _ComponentsPage(QWidget):
         self.refresh()
 
     def _append_output(self, text: str) -> None:
+        if installer().running is None:
+            return  # an app update's
         self._log.appendPlainText(text)
         self._details.show()
         self._activity.show()
