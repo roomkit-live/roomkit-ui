@@ -242,7 +242,11 @@ next message is closed first; Live must end before. (`ConversationStore.delete`,
 `memory.delete_room`)
 
 Both modes receive a fenced recap of only the selected thread (up to 50 messages and
-24,000 characters), and `recall_conversations` searches only its room. Earlier requests
+24,000 characters). `recall_conversations` searches every saved conversation, earlier
+sessions of the open one included, but never what the current session said; each hit
+gives its conversation's title and the local time with its UTC offset, and when nothing
+matches it returns the five most recent other conversations, marked as not matches.
+Times in the recap are local too, with their offset. Earlier requests
 are context rather than new commands; cut answers are marked interrupted. Voice Channel
 uses `session_window` for the current Live call, so older calls do not enter context
 twice. The recap survives attitude changes. With history saving off, new exchanges

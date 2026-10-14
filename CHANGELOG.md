@@ -33,6 +33,19 @@ Each released section is the source for that version's GitHub release notes.
 - **A local voice replaced by another frees its model first** — changing the voice of a
   cached local TTS (Pocket, Vui, Qwen3-TTS, NeuTTS) closed nothing: the previous model
   stayed loaded until garbage collection, beside the new one on the same GPU.
+- **Asking what you talked about searches every conversation** — the assistant's
+  conversation search looked only in the open conversation, and found the question just
+  asked. It now searches your past conversations (earlier sessions of this one included),
+  never what was said in this session, and names each result's conversation; when nothing
+  matches, it gets your most recent conversations instead. The context replayed when you
+  reopen a conversation still covers that conversation only.
+
+### Fixed
+- **Images shared during a Gemini Live conversation are seen** — with Gemini 3.8 Live the
+  assistant answered that it saw no picture (roomkit 0.102 sends it as a video frame).
+- **Times the assistant reads from past conversations are on your clock** — recalled
+  exchanges and the resumed-conversation recap gave unlabelled UTC times; they now carry
+  your local time and its UTC offset.
 
 ## [0.3.1] - 2026-10-13
 
