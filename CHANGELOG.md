@@ -11,6 +11,8 @@ Each released section is the source for that version's GitHub release notes.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-14
+
 ### Added
 - **DPDFNet noise reduction** (Audio & voice → Denoise, Voice Channel) — a streaming
   speech enhancer that removes more noise than GTCRN: on speech mixed with recorded noise
@@ -949,7 +951,8 @@ Each released section is the source for that version's GitHub release notes.
 - Initial release: RoomKit UI desktop voice assistant, with a cross-platform build
   script and a GitHub Actions workflow.
 
-[Unreleased]: https://github.com/roomkit-live/roomkit-ui/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/roomkit-live/roomkit-ui/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/roomkit-live/roomkit-ui/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/roomkit-live/roomkit-ui/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/roomkit-live/roomkit-ui/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/roomkit-live/roomkit-ui/compare/v0.2.0...v0.2.1

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "roomkit-ui"
-version = "0.3.1"
+version = "0.4.0"
 description = "Voice Assistant — PySide6 desktop app wrapping roomkit"
 requires-python = ">=3.12"
 # The core is what it takes to open the window, capture the mic and talk to a
