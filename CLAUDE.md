@@ -111,7 +111,7 @@ src/roomkit_ui/
 ├── speaker_manager.py   # Speaker profile JSON persistence (<data dir>/speakers)
 ├── enrollment.py        # Speaker embedding recording/extraction (sherpa-onnx)
 ├── model_catalog.py     # Downloadable local models + on-disk locations
-├── model_download.py    # Download plumbing: raw GitHub, Git LFS (oid-checked), release assets; 30 s timeouts
+├── model_download.py    # Download plumbing: raw GitHub, Git LFS (oid-checked), release assets and archives (sha256-checked, safe unpack); 30 s timeouts
 ├── gguf_models.py       # llama.cpp models from Hugging Face: search, repo files, HF-cache downloads, resolve, fit — leaf
 ├── tts_weights.py       # Vui's and Pocket's Hugging Face weights fetched ahead of a session (TODO RMK-745: roomkit prefetch)
 ├── model_manager.py     # Download/delete entry points per model kind (edge-ai-models)

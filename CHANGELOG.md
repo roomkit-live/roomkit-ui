@@ -12,6 +12,11 @@ Each released section is the source for that version's GitHub release notes.
 ## [Unreleased]
 
 ### Added
+- **Nemotron 3.5 Streaming** (Models & components → Transcription) — NVIDIA's multilingual
+  streaming model (35 languages, French and English included), sherpa-onnx's int8 export
+  with 560 ms chunks. It finds the language itself and transcribes while you speak, about
+  five times faster than real time on four CPU threads. 475 MB, downloaded from
+  sherpa-onnx's release and checked against the sha256 GitHub publishes.
 - **Kroko Streaming (EN)** (Models & components → Transcription) — the English Kroko,
   streaming like the French one: it transcribes while you speak, on the CPU. 154 MB.
 - **Vui and Pocket TTS download ahead of a conversation** (Models & components → Speech

@@ -97,3 +97,13 @@ def test_kroko_gets_the_trailing_silence_its_last_words_need(model_id, padding):
     from roomkit_ui.model_manager import build_stt_config
 
     assert build_stt_config(model_id).tail_padding_s == padding
+
+
+def test_nemotron_streams_and_finds_its_language_itself():
+    from roomkit_ui.model_manager import build_stt_config, is_streaming_model
+
+    config = build_stt_config("nemotron-streaming")
+
+    assert is_streaming_model("nemotron-streaming")
+    assert (config.mode, config.model_type) == ("transducer", "")  # streaming, not offline
+    assert config.encoder.endswith("nemotron-streaming/v1/encoder.int8.onnx")

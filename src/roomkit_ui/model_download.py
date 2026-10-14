@@ -28,13 +28,11 @@ from roomkit_ui.model_catalog import (
     GTCRN_MODEL_ID,
     GTCRN_SHA256,
     GTCRN_URL,
-    KOKORO_ARCHIVE_BYTES,
-    KOKORO_MODEL_ID,
-    KOKORO_SHA256,
-    KOKORO_URL,
+    KOKORO_ARCHIVE,
     SMART_TURN_MODEL_ID,
     SMART_TURN_SHA256,
     SMART_TURN_URL,
+    ReleaseArchive,
     espeak_ng_data_path,
     get_models_dir,
     is_espeak_ng_downloaded,
@@ -228,6 +226,10 @@ def _download_model_sync(
         raise ValueError(f"Unknown model: {model_id}")
 
     dest = model_path(model_id)
+    if m.archive is not None:
+        if not all((dest / name).is_file() for name in m.files):
+            _download_archive(m.archive, dest, progress)
+        return
     dest.mkdir(parents=True, exist_ok=True)
 
     # Small files are written as they come; LFS ones are downloaded after,
@@ -291,43 +293,49 @@ def _download_smart_turn_sync(progress: ProgressCallback | None = None) -> None:
 
 @single_flight
 def _download_kokoro_sync(progress: ProgressCallback | None = None) -> None:
-    """Download sherpa-onnx's Kokoro archive, check it, unpack it (blocking).
-
-    The archive is held to its published size and sha256 before a byte of it
-    is unpacked, and removed once unpacked.
-    """
+    """Download and unpack sherpa-onnx's Kokoro archive (blocking)."""
     if is_kokoro_downloaded():
         return
-    dest = kokoro_model_path()
+    _download_archive(KOKORO_ARCHIVE, kokoro_model_path(), progress)
+
+
+def _download_archive(
+    archive: ReleaseArchive, dest: Path, progress: ProgressCallback | None
+) -> None:
+    """Download *archive*, check it, unpack its folder to *dest* (blocking).
+
+    It is held to its published size and sha256 before a byte of it is
+    unpacked, and removed once unpacked.
+    """
     dest.parent.mkdir(parents=True, exist_ok=True)
-    archive = dest.parent / f"{KOKORO_MODEL_ID}.tar.bz2"
+    path = dest.parent / f".{dest.name}.tar.bz2"
     try:
         _download_file(
-            KOKORO_URL,
-            archive,
-            expected_size=KOKORO_ARCHIVE_BYTES,
-            on_bytes=_progress_sink(progress, KOKORO_ARCHIVE_BYTES),
-            expected_sha256=KOKORO_SHA256,
+            archive.url,
+            path,
+            expected_size=archive.size,
+            on_bytes=_progress_sink(progress, archive.size),
+            expected_sha256=archive.sha256,
         )
-        _unpack_kokoro(archive, dest)
+        _unpack_archive(path, dest, archive.folder)
     finally:
-        archive.unlink(missing_ok=True)
+        path.unlink(missing_ok=True)
 
 
-def _unpack_kokoro(archive: Path, dest: Path) -> None:
-    """Unpack *archive*'s one top folder to *dest*, all or nothing.
+def _unpack_archive(path: Path, dest: Path, folder: str) -> None:
+    """Unpack *path*'s top *folder* to *dest*, all or nothing.
 
     tarfile's "data" filter refuses links, devices and any path leaving the
     staging folder. The folder is unpacked beside *dest* and renamed into
     place, so a cut-off unpack never looks downloaded.
     """
-    staging = Path(tempfile.mkdtemp(prefix=".kokoro-", dir=dest.parent))
+    staging = Path(tempfile.mkdtemp(prefix=".unpack-", dir=dest.parent))
     try:
-        with tarfile.open(archive, "r:bz2") as tar:
+        with tarfile.open(path, "r:bz2") as tar:
             tar.extractall(staging, filter="data")  # nosec B202 - "data" filter
-        unpacked = staging / KOKORO_MODEL_ID
+        unpacked = staging / folder
         if not unpacked.is_dir():
-            raise RuntimeError(f"{archive.name} holds no {KOKORO_MODEL_ID} folder")
+            raise RuntimeError(f"{path.name} holds no {folder} folder")
         if dest.exists():
             shutil.rmtree(dest)
         unpacked.rename(dest)

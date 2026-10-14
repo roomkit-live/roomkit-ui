@@ -10,6 +10,17 @@ from roomkit_ui.paths import data_dir
 
 
 @dataclass(frozen=True)
+class ReleaseArchive:
+    """A model sherpa-onnx publishes as a .tar.bz2 release asset with one top
+    folder, held to the size and sha256 GitHub publishes for it."""
+
+    url: str
+    sha256: str
+    size: int
+    folder: str
+
+
+@dataclass(frozen=True)
 class STTModel:
     id: str
     name: str
@@ -20,6 +31,8 @@ class STTModel:
     # roomkit's 0.66 s.  Kroko needs 1.5: with less it dropped the last words
     # ("demain à ne", "the lights" for "the lights in the kitchen").
     tail_padding_s: float | None = None
+    # Downloaded from a sherpa-onnx release rather than edge-ai-models.
+    archive: ReleaseArchive | None = None
 
 
 STT_MODELS: list[STTModel] = [
@@ -67,6 +80,27 @@ STT_MODELS: list[STTModel] = [
             "tokens.txt",
         ),
         tail_padding_s=1.5,
+    ),
+    STTModel(
+        id="nemotron-streaming",
+        name="Nemotron 3.5 Streaming (multilingual)",
+        type="streaming",
+        size="~475 MB",
+        files=(
+            "encoder.int8.onnx",
+            "decoder.int8.onnx",
+            "joiner.int8.onnx",
+            "tokens.txt",
+        ),
+        # NVIDIA's 35-language streaming model, sherpa-onnx's int8 export with
+        # 560 ms chunks; it detects the language itself ("auto").
+        archive=ReleaseArchive(
+            "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/"
+            "sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11.tar.bz2",
+            "c6bf5e0df765f9d5b43bc9e0536d4b4b3e7d40bdf5ecf13e45f134c51c05ae3a",
+            475_271_763,
+            "sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11",
+        ),
     ),
     STTModel(
         id="zipformer-streaming",
@@ -254,6 +288,7 @@ KOKORO_URL = (
 KOKORO_SHA256 = "4c3052abaa60943a341f193888cf6abd68787dae6ab8ae5c925a706caa247e4e"
 KOKORO_ARCHIVE_BYTES = 132_303_094
 KOKORO_SIZE = "~126 MB"
+KOKORO_ARCHIVE = ReleaseArchive(KOKORO_URL, KOKORO_SHA256, KOKORO_ARCHIVE_BYTES, KOKORO_MODEL_ID)
 # What a session loads; espeak-ng-data (a folder) comes with them.
 _KOKORO_FILES = (
     "model.int8.onnx",

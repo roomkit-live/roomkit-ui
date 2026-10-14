@@ -403,7 +403,7 @@ offers Save image…. The file is the image as the chat keeps it (PNG or JPEG).
 ### Local model management
 
 Settings → Models & components → Local models manages local models: STT (Whisper, Parakeet, Zipformer,
-Kroko FR and EN), TTS (3 Piper French voices, espeak-ng data), VAD (TEN, Silero), speaker
+Kroko FR and EN, Nemotron 3.5 streaming in 35 languages), TTS (3 Piper French voices, espeak-ng data), VAD (TEN, Silero), speaker
 embeddings (TitaNet, WeSpeaker, CAM++), GTCRN denoiser, Smart Turn v3.2 and the wake-word
 encoder. Vui's weights (model, codec, four voices; and the speaker encoder it clones a clip
 with) and Pocket TTS's (the model and voice of the saved language) download here too,

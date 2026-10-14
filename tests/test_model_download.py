@@ -292,3 +292,32 @@ def test_release_assets_are_checked_against_their_published_sha256(
     download()
 
     assert checked == [expected]
+
+
+# -- a model from a sherpa-onnx release archive -------------------------------------
+
+
+def test_nemotron_comes_from_its_checked_release_archive(models_dir, monkeypatch):
+    import io
+    import tarfile
+
+    model = catalog._MODELS_BY_ID["nemotron-streaming"]
+    fetched = []
+
+    def fake_download(url, target, expected_size=0, on_bytes=None, expected_sha256=None):
+        fetched.append((url, expected_size, expected_sha256))
+        with tarfile.open(target, "w:bz2") as tar:
+            for name in (*model.files, "test_wavs/fr.wav"):
+                info = tarfile.TarInfo(f"{model.archive.folder}/{name}")
+                info.size = 1
+                tar.addfile(info, io.BytesIO(b"x"))
+
+    monkeypatch.setattr(md, "_download_file", fake_download)
+
+    md._download_model_sync("nemotron-streaming")
+
+    assert fetched == [(model.archive.url, model.archive.size, model.archive.sha256)]
+    assert catalog.is_model_downloaded("nemotron-streaming")
+    assert [p.name for p in (models_dir / "nemotron-streaming").iterdir()] == ["v1"]
+    md._download_model_sync("nemotron-streaming")  # already there: nothing fetched
+    assert len(fetched) == 1
