@@ -7,6 +7,7 @@ import pytest
 from PySide6.QtCore import QCoreApplication, QEvent, QObject, QSettings
 from PySide6.QtWidgets import QWidget
 
+from roomkit_ui import components
 from roomkit_ui.secret_store import (
     SecretStore,
     reset_secret_store_for_tests,
@@ -29,6 +30,15 @@ def isolated_qsettings(tmp_path, monkeypatch):
     set_secret_store_for_tests(SecretStore(keyring_backend=None))
     yield
     reset_secret_store_for_tests()
+
+
+@pytest.fixture(autouse=True)
+def fresh_install_lookups():
+    """What ``components`` keeps of the environment (uv, the version, a
+    checkout) is looked up again: tests stand up environments of their own."""
+    components.refresh()
+    yield
+    components.refresh()
 
 
 class InlineJobs:

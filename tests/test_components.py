@@ -22,6 +22,31 @@ def environment(monkeypatch):
     return monkeypatch
 
 
+def test_the_environment_is_looked_up_once_for_every_component(environment):
+    # Settings asks for each one; on Windows each PATH search costs ~6 ms.
+    lookups = []
+    environment.setattr(comp.shutil, "which", lambda *a, **_k: lookups.append(a) or "/usr/bin/uv")
+
+    plans = [install_plan(c) for c in components()]
+
+    assert len(lookups) == 1
+    assert all(p.argv[0] == "/usr/bin/uv" for p in plans if p.how is Installer.APP)
+
+
+def test_after_a_refresh_the_new_version_is_the_one_pinned(environment):
+    installed = {"roomkit-ui": "1.0.0"}
+    real = importlib.metadata.version
+    environment.setattr(
+        importlib.metadata, "version", lambda name: installed.get(name) or real(name)
+    )
+    assert install_plan(component_of("gemini")).argv[-1] == "roomkit-ui[gemini]==1.0.0"
+
+    installed["roomkit-ui"] = "1.1.0"  # an app update ran
+    comp.refresh()
+
+    assert install_plan(component_of("gemini")).argv[-1] == "roomkit-ui[gemini]==1.1.0"
+
+
 def test_each_feature_comes_with_exactly_one_component():
     found = [key for c in components() for key in c.features]
 

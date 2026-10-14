@@ -20,6 +20,7 @@ Pure logic: the runner (``component_installer``) and the pages call in.
 
 from __future__ import annotations
 
+import functools
 import importlib.metadata
 import importlib.util
 import shlex
@@ -132,7 +133,7 @@ def install_plan(component: Component) -> InstallPlan:
             note=f"{component.title} is not part of this build: it needs a Python install "
             "of RoomKit UI (see the README).",
         )
-    checkout = _editable_checkout()
+    checkout = _checkout()
     if checkout is not None:
         return InstallPlan(
             Installer.COMMAND,
@@ -189,8 +190,22 @@ def _uv_tool_plan(
     )
 
 
+def refresh() -> None:
+    """Forget what was looked up of this environment: an install ran (an
+    update moves the version every component is pinned to)."""
+    uv_path.cache_clear()
+    _version.cache_clear()
+    _checkout.cache_clear()
+
+
+@functools.cache
 def uv_path() -> str | None:
-    """uv, looked for where a Dock-started app's PATH does not reach too."""
+    """uv, looked for where a Dock-started app's PATH does not reach too.
+
+    Looked up once, and again after each install (``refresh``): Settings asks
+    for every component, and on Windows each lookup tries each PATH folder
+    with each executable extension.
+    """
     from roomkit_ui.cli_exec import search_path
 
     return shutil.which("uv", path=search_path())
@@ -217,11 +232,21 @@ def _conflicts(component: Component) -> tuple[str, ...]:
 
 def _spec(extra: str) -> str:
     """The extra, pinned to the running version: installing it never moves the app."""
+    version = _version()
+    return f"{DISTRIBUTION}[{extra}]=={version}" if version else f"{DISTRIBUTION}[{extra}]"
+
+
+@functools.cache
+def _version() -> str | None:
     try:
-        version = importlib.metadata.version(DISTRIBUTION)
+        return importlib.metadata.version(DISTRIBUTION)
     except importlib.metadata.PackageNotFoundError:
-        return f"{DISTRIBUTION}[{extra}]"
-    return f"{DISTRIBUTION}[{extra}]=={version}"
+        return None
+
+
+@functools.cache
+def _checkout() -> Path | None:
+    return _editable_checkout()
 
 
 def installer_argv(spec: str, *, upgrade: bool = False) -> tuple[str, ...] | None:

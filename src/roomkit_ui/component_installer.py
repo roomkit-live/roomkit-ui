@@ -17,7 +17,7 @@ import sys
 
 from PySide6.QtCore import QCoreApplication, QObject, QProcess, QProcessEnvironment, Signal
 
-from roomkit_ui import env_extras, features
+from roomkit_ui import components, env_extras, features
 from roomkit_ui.components import Component, Installer, InstallPlan, install_plan
 from roomkit_ui.features import DISTRIBUTION
 from roomkit_ui.updates import current_version
@@ -150,6 +150,7 @@ class ComponentInstaller(QObject):
         process.deleteLater()
         features.refresh()
         env_extras.refresh()
+        components.refresh()
         if component is None:
             self.last_update = self._update_outcome(ok, exit_code)
             logger.info("Update: %s", self.last_update[1])

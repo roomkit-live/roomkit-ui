@@ -53,6 +53,17 @@ def test_an_install_reports_its_output_and_success(runner, qtbot):
     assert runner.log() == lines
 
 
+def test_an_install_forgets_what_was_looked_up_of_the_environment(runner, qtbot, monkeypatch):
+    # An update moves the version every component is pinned to.
+    forgotten: list[bool] = []
+    monkeypatch.setattr(ci.components, "refresh", lambda: forgotten.append(True))
+
+    with qtbot.waitSignal(runner.finished, timeout=10000):
+        runner.install(component_of("anthropic"))
+
+    assert forgotten == [True]
+
+
 def test_a_failed_install_says_why(runner, qtbot):
     runner.script["code"] = "import sys; print('No matching distribution'); sys.exit(3)"
 
