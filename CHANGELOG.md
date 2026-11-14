@@ -23,6 +23,13 @@ Each released section is the source for that version's GitHub release notes.
   person and the turns lost their "Alice: …" labels. Each voice is now a participant of
   the conversation: its turns carry its name, the assistant is told who takes part, and
   two voices the user gave one name are one person.
+- **A local llama.cpp model's conversation is held to its context window** — roomkit
+  0.112 replays every earlier tool call of the session in full, which a 32k window
+  could not hold for long; the oldest turns now give way first.
+- **A recordings or debug-audio folder written with `..` or `~`** no longer stops a
+  session from starting (debug audio) or from being recorded (recordings).
+- **Stopping a typed reply never shows an error**, and a noise-suppression model roomkit
+  refuses leaves the session without noise suppression instead of failing it.
 
 ## [0.4.0] - 2026-10-14
 

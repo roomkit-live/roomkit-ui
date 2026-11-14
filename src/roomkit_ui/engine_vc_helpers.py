@@ -116,6 +116,17 @@ _CLOUD_MAX_TOKENS = 16_000
 _CLAUDE_DEEP_MAX_TOKENS = 64_000
 
 
+def local_window(provider: Any) -> int | None:
+    """The context window of a llama.cpp model, the server the app sized
+    (``memory.within_window`` holds the session's history to it).  None for
+    any other model: a cloud model's window is far beyond a session's
+    history, and a vLLM/Ollama server's is not known here."""
+    if getattr(provider, "name", "") != "llamacpp":
+        return None
+    window = getattr(provider, "context_window", None)
+    return window if isinstance(window, int) and window > 0 else None
+
+
 def reasoning_options(settings: dict, llm_provider: str) -> dict[str, Any]:
     """The ``AIChannel`` reasoning arguments for the session's LLM, and the
     room its turn gets.

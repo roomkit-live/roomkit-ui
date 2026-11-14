@@ -169,8 +169,9 @@ async def ensure_room(kit: Any, room_id: str, *, channels: Collection[str]) -> N
     """Create the durable room once; later sessions reuse it, bound to the
     *channels* this session serves only.
 
-    ``create_room`` on an existing id would reset the room row (counters,
-    metadata) over a kept timeline — reuse must go through ``room_exists``.
+    ``create_room`` on an existing id raises ``RoomAlreadyExistsError``
+    (roomkit 0.108; it used to reset the room row over a kept timeline) —
+    reuse goes through ``room_exists``.
     The bindings outlive a session like the room: a Voice Channel session
     left its LLM channel ("ai") bound, and every event of a realtime session
     after it, which has none, was routed to it ("Channel ai not found in
@@ -199,15 +200,36 @@ class _SessionWindow(SlidingWindowMemory):
         return result
 
 
-def session_window(since: datetime, *, max_events: int = 50) -> Any:
+def session_window(
+    since: datetime, *, max_events: int = 50, context_window: int | None = None
+) -> Any:
     """The voice channel AI's conversation: this session's events only.
 
     Previous sessions in this conversation reach the model as quoted resume
     context. Keep them out of the current-turn window to avoid duplicating
     the context or replaying old requests at the user's next "hello".
     *max_events* is roomkit's own window (``AIChannel.max_context_events``).
+    *context_window*: see :func:`within_window`.
     """
-    return _SessionWindow(since, max_events)
+    return within_window(_SessionWindow(since, max_events), context_window)
+
+
+def within_window(memory: Any, context_window: int | None) -> Any:
+    """*memory*, its oldest turns left out once the model's *context_window*
+    (tokens, None: unknown) would no longer hold them with the turn's prompt
+    and tools.
+
+    Since roomkit 0.112 every earlier round of tool calls in the window is
+    replayed whole (it was a digest): on a local model's 32k, beside its tool
+    declarations, a session that calls tools can outgrow the window.
+    ``BudgetAwareMemory`` reads what the turn measured and trims from the
+    oldest, a turn with its rounds.
+    """
+    if not context_window:
+        return memory
+    from roomkit.memory.budget_aware import BudgetAwareMemory
+
+    return BudgetAwareMemory(memory, max_context_tokens=context_window)
 
 
 def _created_at(event: Any) -> datetime:

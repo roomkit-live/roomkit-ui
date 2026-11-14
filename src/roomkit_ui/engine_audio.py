@@ -167,13 +167,24 @@ def build_debug_taps(settings: dict):
 
     from roomkit.voice.pipeline.debug_taps import PipelineDebugTaps
 
-    output_dir = settings.get("debug_output_dir", "").strip()
-    if not output_dir:
-        output_dir = str(data_dir() / "debug_audio")
+    output_dir = _output_folder(settings.get("debug_output_dir", ""), "debug_audio")
     stages_str = settings.get("debug_taps_stages", "all")
     stages = [s.strip() for s in stages_str.split(",") if s.strip()]
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     return PipelineDebugTaps(output_dir=output_dir, stages=stages)
+
+
+def _output_folder(typed: str, default: str) -> str:
+    """The folder the user typed, as an absolute path, else *default* in the
+    data dir.  roomkit refuses a folder written with ``..`` (0.109: the debug
+    taps fail the session's start, the recorder records nothing), and ``~``
+    is the user's home, as they meant it."""
+    from pathlib import Path
+
+    typed = (typed or "").strip()
+    if not typed:
+        return str(data_dir() / default)
+    return str(Path(typed).expanduser().resolve())
 
 
 def build_recorder(settings: dict):
@@ -200,9 +211,7 @@ def build_recorder(settings: dict):
     )
     from roomkit.voice.pipeline.recorder.wav import WavFileRecorder
 
-    output_dir = settings.get("recording_output_dir", "").strip()
-    if not output_dir:
-        output_dir = str(data_dir() / "recordings")
+    output_dir = _output_folder(settings.get("recording_output_dir", ""), "recordings")
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     config = RecordingConfig(
         mode=RecordingMode(settings.get("recording_mode", "both")),
@@ -313,8 +322,10 @@ def build_denoiser(denoise_mode: str, sample_rate: int) -> Any:
 def _sherpa_denoiser(model_type: str) -> Any:
     """GTCRN or DPDFNet on sherpa-onnx, from the model file the app downloads.
 
-    The file follows from the mode, so the model_type roomkit loads it as always
-    matches the model: sherpa-onnx ends the process on a mismatch.
+    The file follows from the mode, so the model_type roomkit loads it as
+    matches the model.  A file roomkit still refuses (another family, a
+    damaged download: a ``ValueError`` since roomkit 0.104, where sherpa-onnx
+    ended the process) leaves the session without noise suppression.
     """
     from roomkit_ui.model_manager import dpdfnet_model_path, gtcrn_model_path
 
@@ -333,9 +344,13 @@ def _sherpa_denoiser(model_type: str) -> Any:
         SherpaOnnxDenoiserProvider,
     )
 
-    return SherpaOnnxDenoiserProvider(
-        SherpaOnnxDenoiserConfig(model_type=model_type, model=str(path))
-    )
+    try:
+        return SherpaOnnxDenoiserProvider(
+            SherpaOnnxDenoiserConfig(model_type=model_type, model=str(path))
+        )
+    except ValueError as exc:
+        logger.warning("%s denoiser off: %s", label, exc)
+        return None
 
 
 # ---------------------------------------------------------------------------

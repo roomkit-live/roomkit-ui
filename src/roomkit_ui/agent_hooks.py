@@ -59,12 +59,14 @@ def _register_speaking_hooks(kit: Any) -> None:
     async def _on_speak_decision(event, context):
         decision = event.decision
         log = logger.warning if decision.reason == "fallback" else logger.info
+        # A late decision (roomkit 0.108) came after its turn: none runs on it.
         log(
-            "Speak decision: %s (%s, %d ms%s)",
+            "Speak decision: %s (%s, %d ms%s%s)",
             decision.mode,
             decision.reason,
             event.duration_ms,
             ", asked again" if event.asked_again else "",
+            ", late: no turn" if getattr(event, "late", False) else "",
         )
 
     @kit.hook(HookTrigger.ON_THOUGHT, HookExecution.ASYNC)

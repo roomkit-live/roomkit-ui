@@ -39,3 +39,16 @@ async def test_a_session_with_recording_enabled_writes_a_wav(tmp_path):
     with wave.open(str(files[0])) as wav:  # plain WAV, playable as is
         assert wav.getframerate() == 16000
         assert wav.getnframes() == 5 * 320
+
+
+def test_a_folder_typed_with_dot_dot_still_takes_the_recordings_and_debug_audio(tmp_path):
+    from roomkit_ui.engine_audio import build_debug_taps
+
+    # roomkit refuses a folder written with ".." (0.109): the debug taps failed
+    # the session's start, the recorder recorded nothing.
+    typed = str(tmp_path / "sub" / ".." / "out")
+    _recorder, config = build_recorder({"recording_enabled": True, "recording_output_dir": typed})
+    taps = build_debug_taps({"debug_taps_enabled": True, "debug_output_dir": typed})
+
+    assert config.storage == str((tmp_path / "out").resolve())
+    assert taps.output_dir == config.storage

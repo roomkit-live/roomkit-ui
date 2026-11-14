@@ -111,6 +111,24 @@ def test_the_context_window_reaches_the_server_and_garbage_falls_back():
     assert _FakeServer.instances[-1].config.context_size == 32768
 
 
+def test_the_session_history_is_held_to_the_servers_window():
+    from datetime import UTC, datetime
+
+    from roomkit.memory.budget_aware import BudgetAwareMemory
+
+    from roomkit_ui.engine_vc_helpers import local_window
+    from roomkit_ui.memory import session_window
+
+    # roomkit replays every earlier tool round whole (0.112): unbounded, a
+    # session that calls tools can outgrow a 32k window.
+    window = local_window(_provider(vc_llamacpp_context="24576"))
+    memory = session_window(datetime.now(UTC), context_window=window)
+
+    assert window == 24576
+    assert isinstance(memory, BudgetAwareMemory)
+    assert local_window(create_ai_provider("openai", {"openai_api_key": "k"})) is None
+
+
 async def _request_body(monkeypatch, **settings) -> dict:
     """The JSON body a one-line turn sends to llama-server."""
     from roomkit.providers.openai.ai import OpenAIAIProvider

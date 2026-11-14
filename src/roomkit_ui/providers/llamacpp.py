@@ -68,6 +68,12 @@ def create(settings: dict, *, role: str = "conversation") -> Any:
             # Only the HTTP client: LlamaCppAIProvider.close() stops the server.
             await super(LlamaCppAIProvider, self).close()
 
+        @property
+        def context_window(self) -> int | None:
+            # roomkit knows no local model's window (an empty catalog): the
+            # server's is this one, and the session's memory is held to it.
+            return server.context_size
+
     return _SessionLlamaCpp(
         LlamaCppConfig(
             model=model,

@@ -14,10 +14,11 @@ from typing import Any
 
 from roomkit_ui.engine_state import EngineState
 from roomkit_ui.engine_vc import LOCAL_LLMS, _model_pricing
-from roomkit_ui.engine_vc_helpers import reasoning_options, start_local_llm
+from roomkit_ui.engine_vc_helpers import local_window, reasoning_options, start_local_llm
 from roomkit_ui.features import FeatureUnavailableError
 from roomkit_ui.image_messages import ImageSessionWindow, message_content
 from roomkit_ui.images import ImageAttachment
+from roomkit_ui.memory import within_window
 from roomkit_ui.missing_key import MissingKeyError
 from roomkit_ui.providers import create_ai_provider, has_own_llm, llm_settings
 from roomkit_ui.providers.llamacpp import context_overflow
@@ -78,8 +79,9 @@ class TextMixin:
                     "ai",
                     provider=provider,
                     system_prompt=prompt,
-                    memory=ImageSessionWindow(
-                        self._resume_image_entries, vision=self._text_vision
+                    memory=within_window(
+                        ImageSessionWindow(self._resume_image_entries, vision=self._text_vision),
+                        local_window(provider),
                     ),
                     tool_handler=self._handle_tool_call,  # type: ignore[attr-defined]
                     config_provider=toolset.turn_config(),
@@ -179,9 +181,15 @@ class TextMixin:
             raise
         except Exception as exc:
             self._safe_emit(self.text_reply_stopped)  # type: ignore[attr-defined]
-            logger.warning("Text response failed: %s", exc)
-            message = context_overflow(str(exc)) or str(exc)
-            self._safe_emit(self.error_occurred, message)  # type: ignore[attr-defined]
+            if self._cancelling_text_response:  # type: ignore[attr-defined]
+                # Stop was pressed: a delivery roomkit abandons may end in an
+                # error of its own (a TimeoutError when its turn outlives the
+                # cleanup, 0.107), which is no failure to show.
+                logger.info("Text response stopped: %s", exc)
+            else:
+                logger.warning("Text response failed: %s", exc)
+                message = context_overflow(str(exc)) or str(exc)
+                self._safe_emit(self.error_occurred, message)  # type: ignore[attr-defined]
         # Reply completion is not a session teardown: apps may still load or run tools.
         if self.state == EngineState.ACTIVE:  # type: ignore[attr-defined]
             self._set_state(EngineState.READY)  # type: ignore[attr-defined]

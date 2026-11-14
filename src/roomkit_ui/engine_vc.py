@@ -37,6 +37,7 @@ from roomkit_ui.engine_vc_helpers import (
     build_interruption,
     build_tts_filter,
     build_turn_detector,
+    local_window,
     log_vc_audio_pipeline,
     mcp_servers_configured,
     reasoning_options,
@@ -348,7 +349,7 @@ class VoiceChannelMixin:
             system_prompt=system_prompt,
             # Earlier Live calls in this room reach the model through the
             # resume context; the rolling window contains this call only.
-            memory=session_window(datetime.now(UTC)),
+            memory=session_window(datetime.now(UTC), context_window=local_window(ai_provider)),
             tool_handler=self._handle_tool_call,  # type: ignore[attr-defined]
             config_provider=self._vc_turn_config(toolset),
             skills=skills_registry,
