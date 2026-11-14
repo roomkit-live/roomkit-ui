@@ -154,6 +154,10 @@ class SpeakerRoster:
         """Every voice of the session, in the order they first spoke."""
         return list(self._seen)
 
+    def names(self) -> set[str]:
+        """What the voices heard go by now: each one's name, else its label."""
+        return {self.display(key) for key in self._seen}
+
     def prompt_note(self) -> str | None:
         """What the model should know of who is who; None while one voice speaks.
 

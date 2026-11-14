@@ -11,6 +11,19 @@ Each released section is the source for that version's GitHub release notes.
 
 ## [Unreleased]
 
+### Changed
+- **RoomKit UI now requires roomkit 0.114.** The conversation history migrates to
+  roomkit's new database schema the first time it opens; an earlier RoomKit UI release
+  can no longer open it afterwards.
+
+### Fixed
+- **The assistant reads who said what again when several people speak** (Voice Channel,
+  with Meta Muse or the enrolled-voice identification) — roomkit 0.112 counts a
+  conversation's speakers by participant, so every voice of the microphone read as one
+  person and the turns lost their "Alice: …" labels. Each voice is now a participant of
+  the conversation: its turns carry its name, the assistant is told who takes part, and
+  two voices the user gave one name are one person.
+
 ## [0.4.0] - 2026-10-14
 
 ### Added

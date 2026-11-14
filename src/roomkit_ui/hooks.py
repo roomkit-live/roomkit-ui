@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from roomkit_ui.engine_state import EngineState
@@ -9,6 +10,9 @@ from roomkit_ui.engine_vc_helpers import LOCAL_TOOL_REFUSAL
 from roomkit_ui.providers.llamacpp import context_overflow
 from roomkit_ui.speaker_naming import labelled_turn
 from roomkit_ui.vc_agent import BACKGROUND_WORKER
+from roomkit_ui.voice_participants import VoiceParticipants
+
+logger = logging.getLogger(__name__)
 
 
 def register_audio_hooks(kit: Any, engine: Any) -> None:
@@ -55,6 +59,8 @@ def _register_vc_user_hooks(kit: Any, engine: Any) -> None:
     """The user's side: who speaks, what they said, when they talk."""
     from roomkit.models.enums import HookExecution, HookTrigger
 
+    voices = VoiceParticipants(kit)
+
     @kit.hook(HookTrigger.ON_SPEAKER_CHANGE, HookExecution.ASYNC)
     async def _on_speaker_change(event, context):
         try:
@@ -71,33 +77,8 @@ def _register_vc_user_hooks(kit: Any, engine: Any) -> None:
     # the diarization stage heard the longest over that utterance.
     @kit.hook(HookTrigger.ON_TRANSCRIPTION, HookExecution.SYNC)
     async def _on_user_transcription(event, context):
-        from roomkit import HookResult
-
-        if engine._speakers is not None:
-            # The STT labels the voices itself (Muse): speaker_naming names them.
-            return labelled_turn(engine, event)
-
-        # roomkit passes a TranscriptionEvent (with .text) to VC-mode
-        # ON_TRANSCRIPTION hooks, not the raw string it used to hand them.
-        text = str(event.text)
-        speaker = _utterance_speaker(event)
-
-        # Primary speaker mode: only the primary speaker triggers the AI.
-        # Everyone else (other enrolled speakers AND unknown voices) is blocked.
-        if not _primary_may_speak(engine, event):
-            try:
-                engine.transcription.emit(text, "other", True, speaker or _UNKNOWN)
-            except Exception:
-                pass
-            return HookResult.block("non-primary speaker")
-
-        # A user turn leaves the reply being spoken open: its end (AFTER_TTS)
-        # or a barge-in closes it.
-        try:
-            engine.transcription.emit(text, "user", True, speaker)
-        except Exception:
-            pass
-        return _named_after_the_voice(event)
+        result = _user_transcription(engine, event)
+        return await _as_its_voice(engine, voices, event, result, context)
 
     @kit.hook(HookTrigger.ON_PARTIAL_TRANSCRIPTION, HookExecution.ASYNC)
     async def _on_partial_transcription(event, context):
@@ -245,6 +226,73 @@ def _register_vc_error_hooks(kit: Any, engine: Any) -> None:
 
 
 _UNKNOWN = "Unknown"
+
+
+def _user_transcription(engine: Any, event: Any) -> Any:
+    """ON_TRANSCRIPTION's verdict on a final: shown in the chat, then let
+    through under its voice's name or held back from the assistant."""
+    from roomkit import HookResult
+
+    if engine._speakers is not None:
+        # The STT labels the voices itself (Muse): speaker_naming names them.
+        return labelled_turn(engine, event)
+
+    # roomkit passes a TranscriptionEvent (with .text) to VC-mode
+    # ON_TRANSCRIPTION hooks, not the raw string it used to hand them.
+    text = str(event.text)
+    speaker = _utterance_speaker(event)
+
+    # Primary speaker mode: only the primary speaker triggers the AI.
+    # Everyone else (other enrolled speakers AND unknown voices) is blocked.
+    if not _primary_may_speak(engine, event):
+        try:
+            engine.transcription.emit(text, "other", True, speaker or _UNKNOWN)
+        except Exception:
+            pass
+        return HookResult.block("non-primary speaker")
+
+    # A user turn leaves the reply being spoken open: its end (AFTER_TTS)
+    # or a barge-in closes it.
+    try:
+        engine.transcription.emit(text, "user", True, speaker)
+    except Exception:
+        pass
+    return _named_after_the_voice(event)
+
+
+async def _as_its_voice(
+    engine: Any, voices: VoiceParticipants, event: Any, result: Any, context: Any
+) -> Any:
+    """*result*, its words now the room participant their voice is.
+
+    roomkit counts the speakers of a conversation by source: without this,
+    every voice of the microphone's stream is one person to the assistant,
+    whatever name it carries (``voice_participants``).  Words held back, or
+    attributed to no voice, are left as they are.
+    """
+    import dataclasses
+
+    from roomkit import HookResult
+
+    if result.action == "block" or getattr(event, "speaker", None) is None:
+        return result
+    said = result.event if result.action == "modify" else event
+    name = getattr(said, "sender_name", None)
+    if not name:
+        return result
+    roster = engine._speakers
+    try:
+        pid = await voices.match(
+            context.room.id,
+            event.session.id,
+            name,
+            names=roster.names() if roster is not None else (),
+        )
+    except Exception:
+        # The words still reach the assistant, under the stream's participant.
+        logger.warning("Could not match the voice %r to a participant", name, exc_info=True)
+        return result
+    return HookResult.modify(dataclasses.replace(said, participant_id=pid))
 
 
 def _utterance_speaker(event: Any) -> str:

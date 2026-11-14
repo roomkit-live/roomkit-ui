@@ -136,12 +136,13 @@ async def _request_body(monkeypatch, **settings) -> dict:
             },
         )
 
-    real = OpenAIAIProvider._sdk_http_client
-    monkeypatch.setattr(
-        OpenAIAIProvider,
-        "_sdk_http_client",
-        staticmethod(lambda module, _transport: real(module, httpx.MockTransport(answer))),
-    )
+    # roomkit's own seam: every request the SDK makes goes through `transport=`.
+    real_init = OpenAIAIProvider.__init__
+
+    def init(self, config, *, transport=None):
+        real_init(self, config, transport=httpx.MockTransport(answer))
+
+    monkeypatch.setattr(OpenAIAIProvider, "__init__", init)
     provider = _provider(**settings)
     try:
         await provider.generate(AIContext(messages=[AIMessage(role="user", content="Say hi.")]))

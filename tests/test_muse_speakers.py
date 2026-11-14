@@ -142,12 +142,21 @@ class _Session:
         return self.engine.finals("user") + self.engine.finals("other")
 
     async def senders(self) -> list[str]:
+        """Who each voice message is from: the participant its voice is,
+        whose record names it, else the name the message carries."""
         events = await self.kit.store.list_events(self.room_id, offset=0, limit=50)
+        members = {
+            p.id: p.display_name for p in await self.kit.store.list_participants(self.room_id)
+        }
         return [
-            e.metadata.get("sender_name")
+            members.get(e.source.participant_id) or e.metadata.get("sender_name")
             for e in events
             if e.type == EventType.MESSAGE and e.source.channel_id == "voice"
         ]
+
+    async def members(self) -> list[str]:
+        """Who takes part in the room now, as the assistant is told."""
+        return [m.display_name for m in await self.kit.list_members(self.room_id)]
 
 
 @pytest.fixture
@@ -310,6 +319,21 @@ async def test_a_voice_named_mid_session_carries_its_name_from_then_on(labelled)
     prompt = vc.ai.contexts[-1].system_prompt
     assert prompt.startswith("Be brief.")
     assert '- Speaker B is "Julie".' in prompt
+    # Julie takes part; "Speaker B", a name no voice goes by any more, left.
+    assert await vc.members() == ["Speaker A", "Julie"]
+
+
+async def test_two_voices_the_user_named_alike_are_one_person(labelled):
+    vc = await labelled([("A", "salut"), ("B", "c'est moi"), ("B", "encore moi")], ai=True)
+
+    await vc.say(2)
+    name_voice(vc.engine, "Speaker A", "Sylvain")
+    name_voice(vc.engine, "Speaker B", "Sylvain")  # Muse split one voice in two
+    await vc.say_more(1)
+    await until(lambda: len(vc.ai.contexts) >= 3)
+
+    assert await vc.members() == ["Sylvain"]
+    assert await vc.senders() == ["Speaker A", "Speaker B", "Sylvain"]
 
 
 def test_naming_a_voice_nobody_heard_does_nothing():

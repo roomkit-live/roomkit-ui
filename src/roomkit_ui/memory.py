@@ -25,6 +25,8 @@ from typing import Any, Protocol
 from roomkit.memory.base import MemoryResult
 from roomkit.memory.sliding_window import SlidingWindowMemory
 
+from roomkit_ui.voice_participants import release_voices
+
 logger = logging.getLogger(__name__)
 
 # The shared room from before conversations were individually selectable.
@@ -180,6 +182,8 @@ async def ensure_room(kit: Any, room_id: str, *, channels: Collection[str]) -> N
     for binding in await kit.store.list_bindings(room_id):
         if binding.channel_id not in channels:
             await kit.detach_channel(room_id, binding.channel_id)
+    # The voices an earlier session told apart are not this one's people.
+    await release_voices(kit, room_id)
 
 
 class _SessionWindow(SlidingWindowMemory):

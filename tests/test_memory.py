@@ -289,6 +289,25 @@ async def test_a_session_unbinds_the_llm_channel_another_mode_left(tmp_path):
     await realtime.close()
 
 
+@pytest.mark.skipif(not _sqlite_available(), reason="installed roomkit has no SQLiteStore")
+async def test_the_voices_of_an_earlier_session_are_not_this_ones_people(tmp_path):
+    from roomkit import RoomKit
+    from roomkit.store.sqlite import SQLiteStore
+
+    from roomkit_ui.voice_participants import VoiceParticipants
+
+    before = RoomKit(store=SQLiteStore(tmp_path / "m.db"))
+    await ensure_room(before, ROOM_ID, channels=("voice", "ai"))
+    await VoiceParticipants(before).match(ROOM_ID, "s1", "Alice")
+    await before.add_member(ROOM_ID, "voice", "someone-else")
+    await before.close()
+
+    now = RoomKit(store=SQLiteStore(tmp_path / "m.db"))
+    await ensure_room(now, ROOM_ID, channels=("voice", "ai"))
+    assert [m.id for m in await now.list_members(ROOM_ID)] == ["someone-else"]
+    await now.close()
+
+
 def _mode(path) -> int:
     return stat.S_IMODE(os.stat(path).st_mode)
 
