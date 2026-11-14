@@ -15,6 +15,11 @@ from collections import deque
 from types import SimpleNamespace
 
 import pytest
+
+# jeepney is declared for Linux alone: elsewhere the module is skipped, not an
+# error that stops the whole run before a test starts.
+pytest.importorskip("jeepney")
+
 from jeepney import HeaderFields
 from jeepney.wrappers import new_error, new_method_return
 
